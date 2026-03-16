@@ -11,7 +11,6 @@ const BROWSER_ORIGIN_PATTERNS = [
   /^https?:\/\/localhost(:\d+)?$/,
   /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
 ];
-];
 
 function isDesktopOrigin(origin) {
   return Boolean(origin) && DESKTOP_ORIGIN_PATTERNS.some(p => p.test(origin));

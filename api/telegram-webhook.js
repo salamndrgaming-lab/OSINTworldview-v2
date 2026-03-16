@@ -453,35 +453,34 @@ export default async function handler(req) {
         report = ps.join('\n');
         break;
       }
-      case '/seed': case '/refresh': {
+     case '/seed': case '/refresh': {
         const ghToken = process.env.GITHUB_TOKEN;
         const ghRepo = process.env.GITHUB_REPO;
         if (!ghToken || !ghRepo) {
-          report = '⚠️ Seed not configured. Add GITHUB_TOKEN and GITHUB_REPO to Vercel env vars.';
+          report = 'Seed not configured. Add GITHUB_TOKEN and GITHUB_REPO to Vercel env vars.';
           break;
         }
         try {
-          const triggerResp = await fetch(
-            `https://api.github.com/repos/${ghRepo}/actions/workflows/seed.yml/dispatches`,
-            {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${ghToken}`,
-                Accept: 'application/vnd.github.v3+json',
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ ref: 'main' }),
-            }
-          );
+          const seedUrl = 'https://api.github.com/repos/' + ghRepo + '/actions/workflows/seed.yml/dispatches';
+          const triggerResp = await fetch(seedUrl, {
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer ' + ghToken,
+              Accept: 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ ref: 'main' }),
+          });
           if (triggerResp.status === 204 || triggerResp.ok) {
-            report = '🔄 <b>Seed triggered!</b>\n\nRefreshing all data sources via GitHub Actions.\nTakes 3-5 minutes. You will be notified when complete.\n\nUse /status to check.';
+            report = 'Seed triggered! Refreshing all data sources. Takes 3-5 min. You will be notified when complete.';
           } else {
-            report = `❌ Trigger failed: HTTP ${triggerResp.status}`;
+            report = 'Trigger failed: HTTP ' + triggerResp.status;
           }
         } catch (err) {
-          report = `❌ Seed error: ${esc(String(err.message || err))}`;
+          report = 'Seed error: ' + String(err.message || err);
         }
         break;
+      }
       } 
       default: {
         report = `Unknown command: <code>${esc(command)}</code>\n\nType /help for available commands.`;

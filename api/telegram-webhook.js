@@ -366,7 +366,9 @@ async function sendTelegramMessage(botToken, chatId, html) {
     if (buf.trim()) chunks.push(buf.trim());
   }
   for (let i = 0; i < chunks.length; i++) {
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    a const triggerResp = await fetch(
+            `https://api.github.com/repos/${ghRepo}/actions/workflows/seed.yml/dispatches`,
+            {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text: chunks[i], parse_mode: 'HTML', disable_web_page_preview: true }),

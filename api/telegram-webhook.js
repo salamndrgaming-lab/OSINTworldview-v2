@@ -1,10 +1,10 @@
 /**
- * Telegram Bot Webhook Handler v2
+ * Telegram Bot Webhook Handler v3
  * 
  * Reads directly from Upstash Redis, unwraps nested data formats,
  * and sends formatted intelligence reports via Telegram.
  * 
- * Commands: /report /markets /threats /quakes /status /help
+ * Commands: /report /markets /threats /quakes /poi /seed /status /help
  * 
  * Location: api/telegram-webhook.js
  */
@@ -21,10 +21,10 @@ function timeAgo(ts) {
   const diffMs = Date.now() - ts;
   const mins = Math.floor(diffMs / 60000);
   if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) return mins + 'm ago';
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return hours + 'h ago';
+  return Math.floor(hours / 24) + 'd ago';
 }
 
 function asArray(val) {
@@ -32,18 +32,9 @@ function asArray(val) {
   return [];
 }
 
-/**
- * Unwrap nested data from Redis.
- * Seed scripts store data as { earthquakes: [...] } or { events: [...] } etc.
- * This function extracts the inner array from the wrapper object.
- */
-function unwrap(raw, ...keys) {
+function unwrap(raw) {
   if (Array.isArray(raw)) return raw;
   if (raw && typeof raw === 'object') {
-    for (const key of keys) {
-      if (Array.isArray(raw[key])) return raw[key];
-    }
-    // Try any array value in the object
     for (const val of Object.values(raw)) {
       if (Array.isArray(val)) return val;
     }
@@ -54,11 +45,11 @@ function unwrap(raw, ...keys) {
 // ── Redis ──
 
 async function getBootstrapData() {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  var url = process.env.UPSTASH_REDIS_REST_URL;
+  var token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return { _error: 'Redis not configured' };
 
-  const keyMap = {
+  var keyMap = {
     earthquakes:     'seismology:earthquakes:v1',
     marketQuotes:    'market:stocks-bootstrap:v1',
     commodityQuotes: 'market:commodities-bootstrap:v1',
@@ -77,182 +68,178 @@ async function getBootstrapData() {
     poi:             'intelligence:poi:v1',
   };
 
-  const names = Object.keys(keyMap);
-  const keys = Object.values(keyMap);
-  const pipeline = keys.map((k) => ['GET', k]);
+  var names = Object.keys(keyMap);
+  var keys = Object.values(keyMap);
+  var pipeline = keys.map(function(k) { return ['GET', k]; });
 
   try {
-    const resp = await fetch(`${url}/pipeline`, {
+    var resp = await fetch(url + '/pipeline', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify(pipeline),
       signal: AbortSignal.timeout(5000),
     });
-    if (!resp.ok) return { _error: `Redis HTTP ${resp.status}` };
+    if (!resp.ok) return { _error: 'Redis HTTP ' + resp.status };
 
-    const results = await resp.json();
-    const data = { _keysFound: 0, _keysTotal: keys.length };
+    var results = await resp.json();
+    var data = { _keysFound: 0, _keysTotal: keys.length };
 
-    for (let i = 0; i < names.length; i++) {
-      const raw = results[i]?.result;
+    for (var i = 0; i < names.length; i++) {
+      var raw = results[i] && results[i].result ? results[i].result : null;
       if (raw) {
         try {
-          const parsed = JSON.parse(raw);
+          var parsed = JSON.parse(raw);
           if (parsed !== NEG_SENTINEL) {
             data[names[i]] = parsed;
             data._keysFound++;
           }
-        } catch { /* skip */ }
+        } catch (e) { /* skip */ }
       }
     }
     return data;
   } catch (err) {
-    return { _error: `Redis fetch failed: ${err.message}` };
+    return { _error: 'Redis fetch failed: ' + err.message };
   }
 }
 
 // ── Reports ──
 
 function generateFullReport(data) {
-  const ts = new Date().toLocaleString('en-US', {
+  var ts = new Date().toLocaleString('en-US', {
     weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
     hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
   });
 
-  const s = [];
-  s.push('<b>🌐 INTELLIGENCE BRIEF</b>');
-  s.push(`<i>${ts} UTC</i>`);
-  s.push(`<i>Redis: ${data._keysFound ?? 0}/${data._keysTotal ?? 0} data sources loaded</i>`);
+  var s = [];
+  s.push('<b>INTELLIGENCE BRIEF</b>');
+  s.push('<i>' + ts + ' UTC</i>');
+  s.push('<i>Redis: ' + (data._keysFound || 0) + '/' + (data._keysTotal || 0) + ' sources</i>');
   s.push('');
 
-  let hasData = false;
+  var hasData = false;
 
-  // Insights — stored as array or { insights: [...] }
-  const insights = unwrap(data.insights, 'insights');
+  var insights = unwrap(data.insights);
   if (insights.length > 0) {
     hasData = true;
-    s.push('<b>━━ 🧠 EXECUTIVE SUMMARY ━━</b>');
-    for (const i of insights.slice(0, 5)) {
-      const sev = i.severity ? ` [${String(i.severity).toUpperCase()}]` : '';
-      s.push(`▸ ${esc(i.title)}${sev}`);
-      if (i.summary) s.push(`  <i>${esc(String(i.summary).slice(0, 150))}</i>`);
+    s.push('<b>EXECUTIVE SUMMARY</b>');
+    for (var ii = 0; ii < Math.min(insights.length, 5); ii++) {
+      var ins = insights[ii];
+      var sev = ins.severity ? ' [' + String(ins.severity).toUpperCase() + ']' : '';
+      s.push('> ' + esc(ins.title || '') + sev);
+      if (ins.summary) s.push('  <i>' + esc(String(ins.summary).slice(0, 150)) + '</i>');
     }
     s.push('');
   }
 
-  // Earthquakes — stored as { earthquakes: [...] }
-  const quakes = unwrap(data.earthquakes, 'earthquakes')
-    .filter(q => (q.magnitude ?? q.mag ?? 0) >= 4.5).slice(0, 5);
+  var quakes = unwrap(data.earthquakes).filter(function(q) { return (q.magnitude || q.mag || 0) >= 4.5; }).slice(0, 5);
   if (quakes.length > 0) {
     hasData = true;
-    s.push('<b>━━ 🌍 SEISMIC ACTIVITY ━━</b>');
-    for (const q of quakes) {
-      const mag = q.magnitude ?? q.mag ?? 0;
-      const place = q.place ?? 'Unknown';
-      const time = q.occurredAt ? timeAgo(q.occurredAt) : '';
-      s.push(`▸ <b>M${Number(mag).toFixed(1)}</b> — ${esc(place)} ${time}`);
+    s.push('<b>SEISMIC ACTIVITY</b>');
+    for (var qi = 0; qi < quakes.length; qi++) {
+      var q = quakes[qi];
+      var mag = q.magnitude || q.mag || 0;
+      var place = q.place || 'Unknown';
+      var time = q.occurredAt ? timeAgo(q.occurredAt) : '';
+      s.push('> M' + Number(mag).toFixed(1) + ' - ' + esc(place) + ' ' + time);
     }
     s.push('');
   }
 
-  // Markets — stored as { quotes: [...] }
-  const mktQuotes = unwrap(data.marketQuotes, 'quotes', 'marketQuotes');
-  const cmdQuotes = unwrap(data.commodityQuotes, 'quotes', 'commodityQuotes');
-  const allQuotes = [...mktQuotes, ...cmdQuotes];
-  if (allQuotes.length > 0) {
+  var mktQ = unwrap(data.marketQuotes);
+  var cmdQ = unwrap(data.commodityQuotes);
+  var allQ = mktQ.concat(cmdQ);
+  if (allQ.length > 0) {
     hasData = true;
-    s.push('<b>━━ 📊 MARKETS ━━</b>');
-    const sorted = allQuotes.filter(q => q.changePercent != null)
-      .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent)).slice(0, 8);
-    for (const q of sorted) {
-      const pct = q.changePercent;
-      const emoji = pct >= 0 ? '🟢' : '🔴';
-      const sign = pct >= 0 ? '+' : '';
-      const price = Number(q.price);
-      const priceStr = price >= 1000 ? price.toLocaleString(undefined, { maximumFractionDigits: 0 }) : price.toFixed(2);
-      s.push(`${emoji} <b>${esc(q.symbol)}</b> ${priceStr} (${sign}${pct.toFixed(2)}%)`);
+    s.push('<b>MARKETS</b>');
+    var sorted = allQ.filter(function(q) { return q.changePercent != null; })
+      .sort(function(a, b) { return Math.abs(b.changePercent) - Math.abs(a.changePercent); }).slice(0, 8);
+    for (var mi = 0; mi < sorted.length; mi++) {
+      var mq = sorted[mi];
+      var pct = mq.changePercent;
+      var emoji = pct >= 0 ? '+' : '';
+      var price = Number(mq.price);
+      var priceStr = price >= 1000 ? Math.round(price).toLocaleString() : price.toFixed(2);
+      s.push(esc(mq.symbol) + ' ' + priceStr + ' (' + emoji + pct.toFixed(2) + '%)');
     }
     s.push('');
   }
 
-  // Conflicts — stored as { events: [...] } or plain array
-  const ucdp = unwrap(data.ucdpEvents, 'events', 'ucdpEvents');
-  const unrest = unwrap(data.unrestEvents, 'events', 'unrestEvents');
-  const conflicts = [...ucdp, ...unrest];
+  var ucdp = unwrap(data.ucdpEvents);
+  var unrest = unwrap(data.unrestEvents);
+  var conflicts = ucdp.concat(unrest);
   if (conflicts.length > 0) {
     hasData = true;
-    s.push('<b>━━ ⚔️ CONFLICT &amp; UNREST ━━</b>');
-    for (const c of conflicts.slice(0, 5)) {
-      const type = c.event_type ?? c.type ?? 'Event';
-      const loc = c.location ? `${c.location}, ${c.country ?? ''}` : (c.country ?? 'Unknown');
-      const fat = (c.fatalities > 0) ? ` — <b>${c.fatalities} fatalities</b>` : '';
-      s.push(`▸ <b>${esc(type)}</b>: ${esc(String(loc).trim())}${fat}`);
+    s.push('<b>CONFLICT AND UNREST</b>');
+    for (var ci = 0; ci < Math.min(conflicts.length, 5); ci++) {
+      var c = conflicts[ci];
+      var ctype = c.event_type || c.type || 'Event';
+      var cloc = c.location ? c.location + ', ' + (c.country || '') : (c.country || 'Unknown');
+      var fat = (c.fatalities > 0) ? ' - ' + c.fatalities + ' fatalities' : '';
+      s.push('> ' + esc(ctype) + ': ' + esc(cloc.trim()) + fat);
     }
     s.push('');
   }
 
-  // Cyber — stored as { threats: [...] }
-  const cyber = unwrap(data.cyberThreats, 'threats', 'cyberThreats')
-    .filter(t => ['critical', 'high'].includes(String(t.severity ?? '').toLowerCase()));
+  var cyber = unwrap(data.cyberThreats).filter(function(t) {
+    var sev = String(t.severity || '').toLowerCase();
+    return sev === 'critical' || sev === 'high';
+  });
   if (cyber.length > 0) {
     hasData = true;
-    s.push('<b>━━ 🛡️ CYBER THREATS ━━</b>');
-    for (const t of cyber.slice(0, 4)) {
-      s.push(`▸ [${String(t.severity ?? '').toUpperCase()}] <b>${esc(t.name)}</b>`);
+    s.push('<b>CYBER THREATS</b>');
+    for (var cyi = 0; cyi < Math.min(cyber.length, 4); cyi++) {
+      s.push('> [' + String(cyber[cyi].severity || '').toUpperCase() + '] ' + esc(cyber[cyi].name || ''));
     }
     s.push('');
   }
 
-  // Predictions — stored as { markets: [...] } or array
-  const preds = unwrap(data.predictions, 'markets', 'predictions');
+  var preds = unwrap(data.predictions);
   if (preds.length > 0) {
     hasData = true;
-    s.push('<b>━━ 🔮 PREDICTIONS ━━</b>');
-    for (const p of preds.slice(0, 5)) {
-      const prob = p.probability > 1 ? p.probability : (p.probability ?? 0) * 100;
-      const bar = prob >= 70 ? '🟢' : prob >= 40 ? '🟡' : '🔴';
-      s.push(`${bar} <b>${prob.toFixed(0)}%</b> — ${esc(p.title)}`);
+    s.push('<b>PREDICTIONS</b>');
+    for (var pi = 0; pi < Math.min(preds.length, 5); pi++) {
+      var p = preds[pi];
+      var prob = p.probability > 1 ? p.probability : (p.probability || 0) * 100;
+      s.push(prob.toFixed(0) + '% - ' + esc(p.title || ''));
     }
     s.push('');
   }
 
-  // Infrastructure
-  const outages = unwrap(data.outages, 'outages');
-  const fires = unwrap(data.wildfires, 'fireDetections', 'wildfires', 'fires');
-  const weather = unwrap(data.weatherAlerts, 'alerts', 'weatherAlerts');
+  var outages = unwrap(data.outages);
+  var fires = unwrap(data.wildfires);
+  var weather = unwrap(data.weatherAlerts);
   if (outages.length > 0 || fires.length > 0 || weather.length > 0) {
     hasData = true;
-    s.push('<b>━━ ⚡ INFRASTRUCTURE ━━</b>');
-    if (outages.length > 0) s.push(`▸ <b>${outages.length}</b> active outages`);
-    if (fires.length > 0) s.push(`▸ <b>${fires.length}</b> wildfires detected`);
-    if (weather.length > 0) s.push(`▸ <b>${weather.length}</b> weather alerts`);
+    s.push('<b>INFRASTRUCTURE</b>');
+    if (outages.length > 0) s.push('> ' + outages.length + ' active outages');
+    if (fires.length > 0) s.push('> ' + fires.length + ' wildfires detected');
+    if (weather.length > 0) s.push('> ' + weather.length + ' weather alerts');
     s.push('');
   }
 
-  // Natural events — stored as { events: [...] }
-  const natural = unwrap(data.naturalEvents, 'events', 'naturalEvents');
+  var natural = unwrap(data.naturalEvents);
   if (natural.length > 0) {
     hasData = true;
-    s.push('<b>━━ 🌋 NATURAL EVENTS ━━</b>');
-    for (const e of natural.slice(0, 4)) {
-      const title = e.title ?? e.name ?? e.type ?? 'Event';
-      s.push(`▸ ${esc(title)}`);
+    s.push('<b>NATURAL EVENTS</b>');
+    for (var ni = 0; ni < Math.min(natural.length, 4); ni++) {
+      var ne = natural[ni];
+      s.push('> ' + esc(ne.title || ne.name || ne.type || 'Event'));
     }
     s.push('');
   }
 
-  // GDELT — stored as { topics: [...] }
-  const gdelt = unwrap(data.gdeltIntel, 'topics', 'gdeltIntel');
+  var gdelt = unwrap(data.gdeltIntel);
   if (gdelt.length > 0) {
     hasData = true;
-    s.push('<b>━━ 🔍 INTELLIGENCE ━━</b>');
-    for (const topic of gdelt.slice(0, 3)) {
-      const articles = asArray(topic.articles ?? topic.events);
+    s.push('<b>INTELLIGENCE</b>');
+    for (var gi = 0; gi < Math.min(gdelt.length, 3); gi++) {
+      var topic = gdelt[gi];
+      var articles = asArray(topic.articles || topic.events);
       if (articles.length > 0) {
-        const topicName = topic.topic ?? topic.name ?? 'Intel';
-        s.push(`<b>${esc(topicName)}:</b>`);
-        for (const a of articles.slice(0, 2)) {
-          s.push(`  ▸ ${esc(a.title ?? a.headline ?? '')}`);
+        var topicName = topic.topic || topic.name || 'Intel';
+        s.push('<b>' + esc(topicName) + ':</b>');
+        for (var ai = 0; ai < Math.min(articles.length, 2); ai++) {
+          s.push('  > ' + esc(articles[ai].title || articles[ai].headline || ''));
         }
       }
     }
@@ -260,56 +247,53 @@ function generateFullReport(data) {
   }
 
   if (!hasData) {
-    s.push('⚠️ No data in Redis cache. Run seed scripts on your local machine to populate:');
-    s.push('<code>node scripts/seed-earthquakes.mjs</code>');
-    s.push('<code>node scripts/seed-unrest-events.mjs</code>');
-    s.push('<code>node scripts/seed-prediction-markets.mjs</code>');
-    s.push('<code>node scripts/seed-gdelt-intel.mjs</code>');
+    s.push('No data in Redis. Run seed scripts to populate.');
     s.push('');
   }
 
-  s.push('<i>— World Monitor Intelligence Brief</i>');
+  s.push('<i>World Monitor Intelligence Brief</i>');
   return s.join('\n');
 }
 
 function generateMarketsReport(data) {
-  const mkt = unwrap(data.marketQuotes, 'quotes', 'marketQuotes');
-  const cmd = unwrap(data.commodityQuotes, 'quotes', 'commodityQuotes');
-  const crypto = unwrap(data.cryptoQuotes, 'quotes', 'cryptoQuotes');
-  const all = [...mkt, ...cmd, ...crypto];
-  if (all.length === 0) return '📊 <b>MARKETS</b>\n\nNo market data in Redis. Run <code>node scripts/seed-market-quotes.mjs</code>';
+  var mkt = unwrap(data.marketQuotes);
+  var cmd = unwrap(data.commodityQuotes);
+  var crypto = unwrap(data.cryptoQuotes);
+  var all = mkt.concat(cmd).concat(crypto);
+  if (all.length === 0) return 'MARKETS\n\nNo market data in Redis.';
 
-  const s = ['📊 <b>MARKET REPORT</b>', ''];
-  const sorted = all.filter(q => q.changePercent != null)
-    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent)).slice(0, 15);
-  for (const q of sorted) {
-    const pct = q.changePercent;
-    const emoji = pct >= 0 ? '🟢' : '🔴';
-    const sign = pct >= 0 ? '+' : '';
-    const price = Number(q.price);
-    const priceStr = price >= 1000 ? price.toLocaleString(undefined, { maximumFractionDigits: 0 }) : price.toFixed(2);
-    s.push(`${emoji} <b>${esc(q.symbol)}</b> ${priceStr} (${sign}${pct.toFixed(2)}%)`);
+  var s = ['<b>MARKET REPORT</b>', ''];
+  var sorted = all.filter(function(q) { return q.changePercent != null; })
+    .sort(function(a, b) { return Math.abs(b.changePercent) - Math.abs(a.changePercent); }).slice(0, 15);
+  for (var i = 0; i < sorted.length; i++) {
+    var q = sorted[i];
+    var pct = q.changePercent;
+    var sign = pct >= 0 ? '+' : '';
+    var price = Number(q.price);
+    var priceStr = price >= 1000 ? Math.round(price).toLocaleString() : price.toFixed(2);
+    s.push(esc(q.symbol) + ' ' + priceStr + ' (' + sign + pct.toFixed(2) + '%)');
   }
   return s.join('\n');
 }
 
 function generateThreatsReport(data) {
-  const s = ['⚔️ <b>THREAT REPORT</b>', ''];
-  const conflicts = [...unwrap(data.ucdpEvents, 'events'), ...unwrap(data.unrestEvents, 'events')];
+  var s = ['<b>THREAT REPORT</b>', ''];
+  var conflicts = unwrap(data.ucdpEvents).concat(unwrap(data.unrestEvents));
   if (conflicts.length > 0) {
     s.push('<b>Conflict Events:</b>');
-    for (const c of conflicts.slice(0, 8)) {
-      const type = c.event_type ?? c.type ?? 'Event';
-      const loc = c.location ? `${c.location}, ${c.country ?? ''}` : (c.country ?? 'Unknown');
-      s.push(`▸ ${esc(type)} — ${esc(String(loc).trim())}`);
+    for (var i = 0; i < Math.min(conflicts.length, 8); i++) {
+      var c = conflicts[i];
+      var type = c.event_type || c.type || 'Event';
+      var loc = c.location ? c.location + ', ' + (c.country || '') : (c.country || 'Unknown');
+      s.push('> ' + esc(type) + ' - ' + esc(loc.trim()));
     }
     s.push('');
   }
-  const cyber = unwrap(data.cyberThreats, 'threats');
+  var cyber = unwrap(data.cyberThreats);
   if (cyber.length > 0) {
     s.push('<b>Cyber Threats:</b>');
-    for (const t of cyber.slice(0, 6)) {
-      s.push(`▸ [${String(t.severity ?? '?').toUpperCase()}] ${esc(t.name)}`);
+    for (var j = 0; j < Math.min(cyber.length, 6); j++) {
+      s.push('> [' + String(cyber[j].severity || '?').toUpperCase() + '] ' + esc(cyber[j].name || ''));
     }
   }
   if (conflicts.length === 0 && cyber.length === 0) s.push('No threat data in Redis.');
@@ -317,63 +301,82 @@ function generateThreatsReport(data) {
 }
 
 function generateQuakesReport(data) {
-  const quakes = unwrap(data.earthquakes, 'earthquakes').slice(0, 10);
-  if (quakes.length === 0) return '🌍 <b>SEISMOLOGY</b>\n\nNo earthquake data in Redis.';
-  const s = ['🌍 <b>SEISMIC ACTIVITY</b>', ''];
-  for (const q of quakes) {
-    const mag = q.magnitude ?? q.mag ?? 0;
-    const depth = q.depthKm ?? q.depth ?? 0;
-    const time = q.occurredAt ? timeAgo(q.occurredAt) : '';
-    const tsunami = q.tsunami ? ' ⚠️ TSUNAMI' : '';
-    s.push(`▸ <b>M${Number(mag).toFixed(1)}</b> — ${esc(q.place ?? 'Unknown')} (${Number(depth).toFixed(0)}km) ${time}${tsunami}`);
+  var quakes = unwrap(data.earthquakes).slice(0, 10);
+  if (quakes.length === 0) return '<b>SEISMOLOGY</b>\n\nNo earthquake data in Redis.';
+  var s = ['<b>SEISMIC ACTIVITY</b>', ''];
+  for (var i = 0; i < quakes.length; i++) {
+    var q = quakes[i];
+    var mag = q.magnitude || q.mag || 0;
+    var depth = q.depthKm || q.depth || 0;
+    var time = q.occurredAt ? timeAgo(q.occurredAt) : '';
+    var tsunami = q.tsunami ? ' TSUNAMI' : '';
+    s.push('> M' + Number(mag).toFixed(1) + ' - ' + esc(q.place || 'Unknown') + ' (' + Number(depth).toFixed(0) + 'km) ' + time + tsunami);
+  }
+  return s.join('\n');
+}
+
+function generatePoiReport(data) {
+  var persons = unwrap(data.poi);
+  if (persons.length === 0) return '<b>PERSONS OF INTEREST</b>\n\nNo POI data. Run seed-persons-of-interest.mjs';
+  var s = ['<b>PERSONS OF INTEREST</b>', ''];
+  for (var i = 0; i < Math.min(persons.length, 10); i++) {
+    var p = persons[i];
+    var risk = p.riskLevel === 'critical' ? '[!!!]' : p.riskLevel === 'high' ? '[!!]' : p.riskLevel === 'elevated' ? '[!]' : '[ok]';
+    s.push(risk + ' <b>' + esc(p.name) + '</b> - ' + esc(p.role || ''));
+    s.push('   Location: ' + esc(p.lastKnownLocation || 'Unknown') + ' (' + (p.locationConfidence || '?') + ')');
+    if (p.recentActivity) s.push('   Activity: <i>' + esc(String(p.recentActivity).slice(0, 120)) + '</i>');
+    s.push('   Mentions: ' + (p.mentionCount || 0) + ' | Score: ' + (p.activityScore || 0));
+    s.push('');
   }
   return s.join('\n');
 }
 
 function generateHelpMessage() {
   return [
-    '<b>🌐 World Monitor Bot</b>', '',
-    '<b>Intelligence:</b>',
-    '/report — Full intelligence brief',
-    '/poi — Persons of interest profiles',
-    '/threats — Conflicts + cyber threats',
+    '<b>World Monitor Bot</b>', '',
+    'Intelligence:',
+    '/report - Full intelligence brief',
+    '/poi - Persons of interest',
+    '/threats - Conflicts + cyber',
     '',
-    '<b>Data:</b>',
-    '/markets — Market overview',
-    '/quakes — Seismic activity',
+    'Data:',
+    '/markets - Market overview',
+    '/quakes - Seismic activity',
     '',
-    '<b>System:</b>',
-    '/seed — Refresh all data sources',
-    '/status — Bot health check',
-    '/help — This message',
+    'System:',
+    '/seed - Refresh all data',
+    '/status - Health check',
+    '/help - This message',
   ].join('\n');
 }
-```
 
 // ── Telegram send ──
 
 async function sendTelegramMessage(botToken, chatId, html) {
-  const MAX = 4000;
-  const chunks = [];
-  if (html.length <= MAX) { chunks.push(html); }
-  else {
-    const parts = html.split('\n\n');
-    let buf = '';
-    for (const part of parts) {
-      if ((buf + '\n\n' + part).length > MAX && buf.length > 0) { chunks.push(buf.trim()); buf = part; }
-      else { buf = buf ? buf + '\n\n' + part : part; }
+  var MAX = 4000;
+  var chunks = [];
+  if (html.length <= MAX) {
+    chunks.push(html);
+  } else {
+    var parts = html.split('\n\n');
+    var buf = '';
+    for (var i = 0; i < parts.length; i++) {
+      if ((buf + '\n\n' + parts[i]).length > MAX && buf.length > 0) {
+        chunks.push(buf.trim());
+        buf = parts[i];
+      } else {
+        buf = buf ? buf + '\n\n' + parts[i] : parts[i];
+      }
     }
     if (buf.trim()) chunks.push(buf.trim());
   }
-  for (let i = 0; i < chunks.length; i++) {
-    a const triggerResp = await fetch(
-            `https://api.github.com/repos/${ghRepo}/actions/workflows/seed.yml/dispatches`,
-            {
+  for (var j = 0; j < chunks.length; j++) {
+    await fetch('https://api.telegram.org/bot' + botToken + '/sendMessage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: chunks[i], parse_mode: 'HTML', disable_web_page_preview: true }),
+      body: JSON.stringify({ chat_id: chatId, text: chunks[j], parse_mode: 'HTML', disable_web_page_preview: true }),
     });
-    if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 1100));
+    if (j < chunks.length - 1) await new Promise(function(r) { setTimeout(r, 1100); });
   }
 }
 
@@ -382,87 +385,67 @@ async function sendTelegramMessage(botToken, chatId, html) {
 export default async function handler(req) {
   if (req.method !== 'POST') return new Response('OK', { status: 200 });
 
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  var botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) return new Response(JSON.stringify({ error: 'TELEGRAM_BOT_TOKEN not set' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
 
-  let body;
-  try { body = await req.json(); } catch { return new Response('OK', { status: 200 }); }
+  var body;
+  try { body = await req.json(); } catch (e) { return new Response('OK', { status: 200 }); }
 
-  const message = body.message;
+  var message = body.message;
   if (!message || !message.text) return new Response('OK', { status: 200 });
 
-  const chatId = message.chat.id;
-  const text = message.text.trim().toLowerCase();
-  const command = text.split(' ')[0].split('@')[0];
+  var chatId = message.chat.id;
+  var text = message.text.trim().toLowerCase();
+  var command = text.split(' ')[0].split('@')[0];
 
-  const allowedChat = process.env.TELEGRAM_CHAT_ID;
+  var allowedChat = process.env.TELEGRAM_CHAT_ID;
   if (allowedChat && String(chatId) !== String(allowedChat)) {
-    await sendTelegramMessage(botToken, chatId, '⛔ Unauthorized.');
+    await sendTelegramMessage(botToken, chatId, 'Unauthorized.');
     return new Response('OK', { status: 200 });
   }
 
   try {
-    let report;
+    var report;
     switch (command) {
-      case '/report': case '/brief': {
-        const data = await getBootstrapData();
-        if (data._error) { report = `❌ ${data._error}`; break; }
-        report = generateFullReport(data);
+      case '/report':
+      case '/brief': {
+        var rdata = await getBootstrapData();
+        if (rdata._error) { report = 'Error: ' + rdata._error; break; }
+        report = generateFullReport(rdata);
         break;
       }
       case '/markets': {
-        const data = await getBootstrapData();
-        report = generateMarketsReport(data);
+        var mdata = await getBootstrapData();
+        report = generateMarketsReport(mdata);
         break;
       }
       case '/threats': {
-        const data = await getBootstrapData();
-        report = generateThreatsReport(data);
+        var tdata = await getBootstrapData();
+        report = generateThreatsReport(tdata);
         break;
       }
-      case '/quakes': case '/earthquakes': {
-        const data = await getBootstrapData();
-        report = generateQuakesReport(data);
+      case '/quakes':
+      case '/earthquakes': {
+        var qdata = await getBootstrapData();
+        report = generateQuakesReport(qdata);
         break;
       }
-      case '/status': {
-        const data = await getBootstrapData();
-        report = `✅ <b>World Monitor Bot Online</b>\n\nTime: ${new Date().toISOString()}\nRedis: ${data._error ? '❌ ' + data._error : '✅ connected (' + (data._keysFound ?? 0) + '/' + (data._keysTotal ?? 0) + ' keys populated)'}`;
+      case '/poi': {
+        var pdata = await getBootstrapData();
+        report = generatePoiReport(pdata);
         break;
       }
-      case '/help': case '/start': {
-        report = generateHelpMessage();
-        break;
-      }
-       case '/poi': {
-        const data = await getBootstrapData();
-        const persons = unwrap(data.poi, 'persons', 'poi');
-        if (persons.length === 0) {
-          report = '🎯 <b>PERSONS OF INTEREST</b>\n\nNo POI data. Run:\n<code>node scripts/seed-persons-of-interest.mjs</code>';
-          break;
-        }
-        const ps = ['🎯 <b>PERSONS OF INTEREST</b>', ''];
-        for (const p of persons.slice(0, 10)) {
-          const risk = p.riskLevel === 'critical' ? '🔴' : p.riskLevel === 'high' ? '🟠' : p.riskLevel === 'elevated' ? '🟡' : '🟢';
-          ps.push(`${risk} <b>${esc(p.name)}</b> — ${esc(p.role)}`);
-          ps.push(`   📍 ${esc(p.lastKnownLocation || 'Unknown')} (${p.locationConfidence || '?'})`);
-          if (p.recentActivity) ps.push(`   📰 <i>${esc(String(p.recentActivity).slice(0, 120))}</i>`);
-          ps.push(`   💬 ${p.mentionCount || 0} mentions | Activity: ${p.activityScore || 0}`);
-          ps.push('');
-        }
-        report = ps.join('\n');
-        break;
-      }
-     case '/seed': case '/refresh': {
-        const ghToken = process.env.GITHUB_TOKEN;
-        const ghRepo = process.env.GITHUB_REPO;
+      case '/seed':
+      case '/refresh': {
+        var ghToken = process.env.GITHUB_TOKEN;
+        var ghRepo = process.env.GITHUB_REPO;
         if (!ghToken || !ghRepo) {
           report = 'Seed not configured. Add GITHUB_TOKEN and GITHUB_REPO to Vercel env vars.';
           break;
         }
         try {
-          const seedUrl = 'https://api.github.com/repos/' + ghRepo + '/actions/workflows/seed.yml/dispatches';
-          const triggerResp = await fetch(seedUrl, {
+          var seedUrl = 'https://api.github.com/repos/' + ghRepo + '/actions/workflows/seed.yml/dispatches';
+          var triggerResp = await fetch(seedUrl, {
             method: 'POST',
             headers: {
               Authorization: 'Bearer ' + ghToken,
@@ -472,24 +455,34 @@ export default async function handler(req) {
             body: JSON.stringify({ ref: 'main' }),
           });
           if (triggerResp.status === 204 || triggerResp.ok) {
-            report = 'Seed triggered! Refreshing all data sources. Takes 3-5 min. You will be notified when complete.';
+            report = 'Seed triggered! Refreshing all data. Takes 3-5 min. You will be notified when complete.';
           } else {
             report = 'Trigger failed: HTTP ' + triggerResp.status;
           }
-        } catch (err) {
-          report = 'Seed error: ' + String(err.message || err);
+        } catch (seedErr) {
+          report = 'Seed error: ' + String(seedErr.message || seedErr);
         }
         break;
       }
-      } 
+      case '/status': {
+        var sdata = await getBootstrapData();
+        var redisStatus = sdata._error ? 'Error: ' + sdata._error : 'Connected (' + (sdata._keysFound || 0) + '/' + (sdata._keysTotal || 0) + ' keys)';
+        report = '<b>World Monitor Bot Online</b>\n\nTime: ' + new Date().toISOString() + '\nRedis: ' + redisStatus;
+        break;
+      }
+      case '/help':
+      case '/start': {
+        report = generateHelpMessage();
+        break;
+      }
       default: {
-        report = `Unknown command: <code>${esc(command)}</code>\n\nType /help for available commands.`;
+        report = 'Unknown command: ' + esc(command) + '\n\nType /help for commands.';
         break;
       }
     }
     await sendTelegramMessage(botToken, chatId, report);
   } catch (err) {
-    await sendTelegramMessage(botToken, chatId, `❌ Error: ${esc(String(err.message || err))}`);
+    await sendTelegramMessage(botToken, chatId, 'Error: ' + esc(String(err.message || err)));
   }
   return new Response('OK', { status: 200 });
 }

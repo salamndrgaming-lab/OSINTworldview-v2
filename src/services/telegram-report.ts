@@ -1,12 +1,14 @@
 /**
- * Telegram Intelligence Report Service
+ * Telegram Intelligence Report Service (browser-side)
  *
- * Aggregates data from all dashboard panels (bootstrap cache),
- * generates a formatted intelligence brief with context, predictions,
- * and market impact analysis, then sends it via Telegram Bot API.
+ * Aggregates data from the bootstrap API endpoint,
+ * generates a formatted intelligence brief, and sends via Telegram.
  *
  * Location in repo: src/services/telegram-report.ts
  */
+
+// Use the same API URL resolution as the rest of the app
+import { toApiUrl } from '@/services/runtime';
 
 // --- Types ---
 
@@ -51,7 +53,7 @@ export function isTelegramConfigured(): boolean {
 
 async function fetchBootstrapTier(tier: string): Promise<Record<string, unknown>> {
   try {
-    const resp = await fetch(`/api/bootstrap?tier=${tier}`, {
+    const resp = await fetch(toApiUrl(`/api/bootstrap?tier=${tier}`), {
       signal: AbortSignal.timeout(8000),
     });
     if (!resp.ok) return {};
@@ -62,7 +64,6 @@ async function fetchBootstrapTier(tier: string): Promise<Record<string, unknown>
   }
 }
 
-/** Fetch both fast + slow bootstrap tiers and merge */
 async function fetchAllBootstrapData(): Promise<Record<string, unknown>> {
   const [fast, slow] = await Promise.all([
     fetchBootstrapTier('fast'),
@@ -71,13 +72,11 @@ async function fetchAllBootstrapData(): Promise<Record<string, unknown>> {
   return { ...slow, ...fast };
 }
 
-// --- HTML Escaping (Telegram HTML mode) ---
+// --- HTML Escaping ---
 
 function esc(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
-
-// --- Time Helpers ---
 
 function timeAgo(ts: number): string {
   const diffMs = Date.now() - ts;
@@ -89,13 +88,13 @@ function timeAgo(ts: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-// --- Report Generation ---
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function asArray(val: unknown): any[] {
   if (Array.isArray(val)) return val;
   return [];
 }
+
+// --- Report Generation ---
 
 export async function generateIntelligenceReport(): Promise<string> {
   const data = await fetchAllBootstrapData();
@@ -107,62 +106,46 @@ export async function generateIntelligenceReport(): Promise<string> {
 
   const sections: string[] = [];
 
-  // Header
   sections.push('<b>🌐 INTELLIGENCE BRIEF</b>');
   sections.push(`<i>${timestamp} UTC</i>`);
-  sections.push('<i>Covering the last 60 minutes of global activity</i>');
   sections.push('');
 
-  // --- EXECUTIVE SUMMARY (AI Insights) ---
+  // Insights
   const insights = asArray(data.insights);
   if (insights.length > 0) {
     sections.push('<b>━━ 🧠 EXECUTIVE SUMMARY ━━</b>');
-    const recent = insights.slice(0, 6);
-    for (const i of recent) {
+    for (const i of insights.slice(0, 6)) {
       const sev = i.severity ? ` [${String(i.severity).toUpperCase()}]` : '';
       const cat = i.category ? ` <i>(${esc(String(i.category))})</i>` : '';
       sections.push(`▸ ${esc(String(i.title ?? ''))}${sev}${cat}`);
-      if (i.summary) {
-        const summary = String(i.summary).slice(0, 200);
-        sections.push(`  <i>${esc(summary)}</i>`);
-      }
+      if (i.summary) sections.push(`  <i>${esc(String(i.summary).slice(0, 150))}</i>`);
     }
     sections.push('');
   }
 
-  // --- SEISMOLOGY ---
+  // Earthquakes
   const earthquakes = asArray(data.earthquakes);
-  const recentQuakes = earthquakes
-    .filter((q: Record<string, unknown>) => (q.magnitude as number ?? q.mag as number ?? 0) >= 4.5)
-    .slice(0, 6);
-  if (recentQuakes.length > 0) {
+  const quakes = earthquakes.filter((q: Record<string, unknown>) => ((q.magnitude as number) ?? (q.mag as number) ?? 0) >= 4.5).slice(0, 6);
+  if (quakes.length > 0) {
     sections.push('<b>━━ 🌍 SEISMIC ACTIVITY ━━</b>');
-    for (const q of recentQuakes) {
-      const mag = (q.magnitude ?? q.mag ?? 0) as number;
-      const place = (q.place ?? 'Unknown location') as string;
-      const depth = (q.depthKm ?? q.depth ?? 0) as number;
-      const tsunami = q.tsunami ? ' ⚠️ TSUNAMI WARNING' : '';
+    for (const q of quakes) {
+      const mag = ((q.magnitude ?? q.mag ?? 0) as number);
+      const place = (q.place ?? 'Unknown') as string;
+      const depth = ((q.depthKm ?? q.depth ?? 0) as number);
       const time = q.occurredAt ? timeAgo(q.occurredAt as number) : '';
-      sections.push(`▸ <b>M${Number(mag).toFixed(1)}</b> — ${esc(String(place))} (${Number(depth).toFixed(0)}km deep) ${time}${tsunami}`);
-    }
-    const maxMag = Math.max(...recentQuakes.map((q: Record<string, unknown>) => (q.magnitude ?? q.mag ?? 0) as number));
-    if (maxMag >= 6.0) {
-      sections.push(`\n⚠️ <b>Context:</b> M${maxMag.toFixed(1)}+ event detected. Regional infrastructure disruption possible.`);
+      const tsunami = q.tsunami ? ' ⚠️ TSUNAMI' : '';
+      sections.push(`▸ <b>M${mag.toFixed(1)}</b> — ${esc(place)} (${depth.toFixed(0)}km) ${time}${tsunami}`);
     }
     sections.push('');
   }
 
-  // --- MARKETS ---
-  const markets = asArray(data.marketQuotes);
-  const commodities = asArray(data.commodityQuotes);
-  const allQuotes = [...markets, ...commodities];
-  if (allQuotes.length > 0) {
-    sections.push('<b>━━ 📊 MARKET OVERVIEW ━━</b>');
-    const sorted = [...allQuotes]
-      .filter((q: Record<string, unknown>) => q.changePercent != null)
-      .sort((a: Record<string, unknown>, b: Record<string, unknown>) => Math.abs(b.changePercent as number) - Math.abs(a.changePercent as number));
-    const topMovers = sorted.slice(0, 10);
-    for (const q of topMovers) {
+  // Markets
+  const markets = [...asArray(data.marketQuotes), ...asArray(data.commodityQuotes)];
+  if (markets.length > 0) {
+    sections.push('<b>━━ 📊 MARKETS ━━</b>');
+    const sorted = markets.filter((q: Record<string, unknown>) => q.changePercent != null)
+      .sort((a: Record<string, unknown>, b: Record<string, unknown>) => Math.abs(b.changePercent as number) - Math.abs(a.changePercent as number)).slice(0, 8);
+    for (const q of sorted) {
       const pct = q.changePercent as number;
       const sign = pct >= 0 ? '+' : '';
       const emoji = pct >= 0 ? '🟢' : '🔴';
@@ -170,53 +153,38 @@ export async function generateIntelligenceReport(): Promise<string> {
       const priceStr = price >= 1000 ? price.toLocaleString(undefined, { maximumFractionDigits: 0 }) : price.toFixed(2);
       sections.push(`${emoji} <b>${esc(String(q.symbol))}</b> ${priceStr} (${sign}${pct.toFixed(2)}%)`);
     }
-    const upCount = allQuotes.filter((q: Record<string, unknown>) => ((q.changePercent as number) ?? 0) > 0).length;
-    const downCount = allQuotes.filter((q: Record<string, unknown>) => ((q.changePercent as number) ?? 0) < 0).length;
-    const avg = allQuotes.reduce((sum: number, q: Record<string, unknown>) => sum + ((q.changePercent as number) ?? 0), 0) / (allQuotes.length || 1);
-    sections.push(`\n📈 <b>Market Impact:</b> ${upCount} advancing, ${downCount} declining. Average move: ${avg >= 0 ? '+' : ''}${avg.toFixed(2)}%.`);
-    const bigMovers = sorted.filter((q: Record<string, unknown>) => Math.abs(q.changePercent as number) > 3);
-    if (bigMovers.length > 0) {
-      sections.push(`⚠️ <b>${bigMovers.length} asset(s) moved 3%+</b> — elevated volatility.`);
-    }
     sections.push('');
   }
 
-  // --- CONFLICTS ---
-  const conflicts = asArray(data.ucdpEvents).concat(asArray(data.unrestEvents));
+  // Conflicts
+  const conflicts = [...asArray(data.ucdpEvents), ...asArray(data.unrestEvents)];
   if (conflicts.length > 0) {
-    sections.push('<b>━━ ⚔️ CONFLICT &amp; UNREST ━━</b>');
+    sections.push('<b>━━ ⚔️ CONFLICT & UNREST ━━</b>');
     for (const c of conflicts.slice(0, 6)) {
       const type = (c.event_type ?? c.type ?? 'Event') as string;
       const loc = c.location ? `${c.location}, ${c.country ?? ''}` : ((c.country ?? 'Unknown') as string);
       const fat = (c.fatalities && c.fatalities > 0) ? ` — <b>${c.fatalities} fatalities</b>` : '';
-      sections.push(`▸ <b>${esc(String(type))}</b>: ${esc(String(loc).trim())}${fat}`);
-    }
-    const totalFat = conflicts.reduce((sum: number, c: Record<string, unknown>) => sum + ((c.fatalities as number) ?? 0), 0);
-    if (totalFat > 0) {
-      sections.push(`\n💀 <b>Context:</b> ${totalFat} total reported fatalities across ${conflicts.length} events.`);
+      sections.push(`▸ <b>${esc(type)}</b>: ${esc(String(loc).trim())}${fat}`);
     }
     sections.push('');
   }
 
-  // --- CYBER THREATS ---
-  const cyber = asArray(data.cyberThreats);
-  const criticalCyber = cyber.filter((t: Record<string, unknown>) =>
-    ['critical', 'high'].includes(String(t.severity ?? '').toLowerCase())
-  );
-  if (criticalCyber.length > 0) {
+  // Cyber
+  const cyber = asArray(data.cyberThreats).filter((t: Record<string, unknown>) =>
+    ['critical', 'high'].includes(String(t.severity ?? '').toLowerCase()));
+  if (cyber.length > 0) {
     sections.push('<b>━━ 🛡️ CYBER THREATS ━━</b>');
-    for (const t of criticalCyber.slice(0, 5)) {
+    for (const t of cyber.slice(0, 5)) {
       sections.push(`▸ [${String(t.severity ?? '').toUpperCase()}] <b>${esc(String(t.name ?? ''))}</b>`);
-      if (t.type) sections.push(`  Type: ${esc(String(t.type))}`);
     }
     sections.push('');
   }
 
-  // --- PREDICTIONS ---
+  // Predictions
   const predictions = asArray(data.predictions);
   if (predictions.length > 0) {
-    sections.push('<b>━━ 🔮 PREDICTION MARKETS ━━</b>');
-    for (const p of predictions.slice(0, 6)) {
+    sections.push('<b>━━ 🔮 PREDICTIONS ━━</b>');
+    for (const p of predictions.slice(0, 5)) {
       const prob = (p.probability as number) > 1 ? (p.probability as number) : ((p.probability as number) ?? 0) * 100;
       const bar = prob >= 70 ? '🟢' : prob >= 40 ? '🟡' : '🔴';
       sections.push(`${bar} <b>${prob.toFixed(0)}%</b> — ${esc(String(p.title ?? ''))}`);
@@ -224,7 +192,7 @@ export async function generateIntelligenceReport(): Promise<string> {
     sections.push('');
   }
 
-  // --- INFRASTRUCTURE ---
+  // Infrastructure
   const outages = asArray(data.outages);
   const wildfires = asArray(data.wildfires);
   if (outages.length > 0 || wildfires.length > 0) {
@@ -234,14 +202,8 @@ export async function generateIntelligenceReport(): Promise<string> {
     sections.push('');
   }
 
-  // --- SUPPLY CHAIN ---
-  const chokepoints = asArray(data.chokepoints);
-  const disrupted = chokepoints.filter((cp: Record<string, unknown>) => cp.status && cp.status !== 'normal');
-  if (disrupted.length > 0) {
-    sections.push('<b>━━ 🚢 SUPPLY CHAIN ━━</b>');
-    for (const cp of disrupted) {
-      sections.push(`▸ <b>${esc(String(cp.name))}</b>: ${String(cp.status ?? 'disrupted').toUpperCase()}`);
-    }
+  if (sections.length <= 3) {
+    sections.push('⚠️ No data available. Run seed scripts and check API keys.');
     sections.push('');
   }
 
@@ -252,71 +214,46 @@ export async function generateIntelligenceReport(): Promise<string> {
 // --- Sending ---
 
 export async function sendTelegramMessage(
-  botToken: string,
-  chatId: string,
-  html: string
+  botToken: string, chatId: string, html: string
 ): Promise<{ ok: boolean; error?: string }> {
   const MAX = 4000;
   const chunks: string[] = [];
-
-  if (html.length <= MAX) {
-    chunks.push(html);
-  } else {
+  if (html.length <= MAX) { chunks.push(html); }
+  else {
     const parts = html.split('\n\n');
     let buf = '';
     for (const part of parts) {
-      if ((buf + '\n\n' + part).length > MAX && buf.length > 0) {
-        chunks.push(buf.trim());
-        buf = part;
-      } else {
-        buf = buf ? buf + '\n\n' + part : part;
-      }
+      if ((buf + '\n\n' + part).length > MAX && buf.length > 0) { chunks.push(buf.trim()); buf = part; }
+      else { buf = buf ? buf + '\n\n' + part : part; }
     }
     if (buf.trim()) chunks.push(buf.trim());
   }
-
   for (let i = 0; i < chunks.length; i++) {
     try {
       const resp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: chunks[i],
-          parse_mode: 'HTML',
-          disable_web_page_preview: true,
-        }),
+        body: JSON.stringify({ chat_id: chatId, text: chunks[i], parse_mode: 'HTML', disable_web_page_preview: true }),
       });
       const result = (await resp.json()) as { ok: boolean; description?: string };
-      if (!result.ok) {
-        return { ok: false, error: result.description ?? `Telegram error on chunk ${i + 1}` };
-      }
+      if (!result.ok) return { ok: false, error: result.description ?? `Telegram error on chunk ${i + 1}` };
       if (i < chunks.length - 1) await new Promise((r) => setTimeout(r, 1100));
-    } catch (err) {
-      return { ok: false, error: (err as Error).message };
-    }
+    } catch (err) { return { ok: false, error: (err as Error).message }; }
   }
   return { ok: true };
 }
 
-export async function sendReport(
-  config?: TelegramConfig
-): Promise<{ ok: boolean; error?: string }> {
+export async function sendReport(config?: TelegramConfig): Promise<{ ok: boolean; error?: string }> {
   const cfg = config ?? getTelegramConfig();
   if (!cfg) return { ok: false, error: 'Telegram not configured.' };
-
-  let report: string;
   try {
-    report = await generateIntelligenceReport();
-  } catch (err) {
-    return { ok: false, error: `Report generation failed: ${(err as Error).message}` };
-  }
-  return sendTelegramMessage(cfg.botToken, cfg.chatId, report);
+    const report = await generateIntelligenceReport();
+    return sendTelegramMessage(cfg.botToken, cfg.chatId, report);
+  } catch (err) { return { ok: false, error: `Report generation failed: ${(err as Error).message}` }; }
 }
 
 export async function testTelegramConnection(
-  botToken: string,
-  chatId: string
+  botToken: string, chatId: string
 ): Promise<{ ok: boolean; error?: string }> {
   return sendTelegramMessage(botToken, chatId, '✅ <b>World Monitor</b> connected successfully!');
 }

@@ -74,6 +74,7 @@ async function getBootstrapData() {
     naturalEvents:   'natural:events:v1',
     cryptoQuotes:    'market:crypto:v1',
     gdeltIntel:      'intelligence:gdelt-intel:v1',
+    poi:             'intelligence:poi:v1',
   };
 
   const names = Object.keys(keyMap);
@@ -332,14 +333,22 @@ function generateQuakesReport(data) {
 function generateHelpMessage() {
   return [
     '<b>🌐 World Monitor Bot</b>', '',
+    '<b>Intelligence:</b>',
     '/report — Full intelligence brief',
-    '/markets — Market overview',
+    '/poi — Persons of interest profiles',
     '/threats — Conflicts + cyber threats',
+    '',
+    '<b>Data:</b>',
+    '/markets — Market overview',
     '/quakes — Seismic activity',
+    '',
+    '<b>System:</b>',
+    '/seed — Refresh all data sources',
     '/status — Bot health check',
     '/help — This message',
   ].join('\n');
 }
+```
 
 // ── Telegram send ──
 
@@ -423,6 +432,55 @@ export default async function handler(req) {
         report = generateHelpMessage();
         break;
       }
+       case '/poi': {
+        const data = await getBootstrapData();
+        const persons = unwrap(data.poi, 'persons', 'poi');
+        if (persons.length === 0) {
+          report = '🎯 <b>PERSONS OF INTEREST</b>\n\nNo POI data. Run:\n<code>node scripts/seed-persons-of-interest.mjs</code>';
+          break;
+        }
+        const ps = ['🎯 <b>PERSONS OF INTEREST</b>', ''];
+        for (const p of persons.slice(0, 10)) {
+          const risk = p.riskLevel === 'critical' ? '🔴' : p.riskLevel === 'high' ? '🟠' : p.riskLevel === 'elevated' ? '🟡' : '🟢';
+          ps.push(`${risk} <b>${esc(p.name)}</b> — ${esc(p.role)}`);
+          ps.push(`   📍 ${esc(p.lastKnownLocation || 'Unknown')} (${p.locationConfidence || '?'})`);
+          if (p.recentActivity) ps.push(`   📰 <i>${esc(String(p.recentActivity).slice(0, 120))}</i>`);
+          ps.push(`   💬 ${p.mentionCount || 0} mentions | Activity: ${p.activityScore || 0}`);
+          ps.push('');
+        }
+        report = ps.join('\n');
+        break;
+      }
+      case '/seed': case '/refresh': {
+        const ghToken = process.env.GITHUB_TOKEN;
+        const ghRepo = process.env.GITHUB_REPO;
+        if (!ghToken || !ghRepo) {
+          report = '⚠️ Seed not configured. Add GITHUB_TOKEN and GITHUB_REPO to Vercel env vars.';
+          break;
+        }
+        try {
+          const triggerResp = await fetch(
+            `https://api.github.com/repos/${ghRepo}/actions/workflows/seed.yml/dispatches`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${ghToken}`,
+                Accept: 'application/vnd.github.v3+json',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ ref: 'main' }),
+            }
+          );
+          if (triggerResp.status === 204 || triggerResp.ok) {
+            report = '🔄 <b>Seed triggered!</b>\n\nRefreshing all data sources via GitHub Actions.\nTakes 3-5 minutes. You will be notified when complete.\n\nUse /status to check.';
+          } else {
+            report = `❌ Trigger failed: HTTP ${triggerResp.status}`;
+          }
+        } catch (err) {
+          report = `❌ Seed error: ${esc(String(err.message || err))}`;
+        }
+        break;
+      } 
       default: {
         report = `Unknown command: <code>${esc(command)}</code>\n\nType /help for available commands.`;
         break;

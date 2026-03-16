@@ -1,0 +1,44 @@
+name: Seed Data
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts
+            shared
+            package.json
+            package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - run: npm ci --ignore-scripts
+      - run: node scripts/seed-earthquakes.mjs
+      - run: node scripts/seed-natural-events.mjs
+      - run: node scripts/seed-weather-alerts.mjs
+      - run: node scripts/seed-commodity-quotes.mjs
+      - run: node scripts/seed-unrest-events.mjs
+      - run: node scripts/seed-prediction-markets.mjs
+      - run: node scripts/seed-gdelt-intel.mjs
+      - run: node scripts/seed-service-statuses.mjs
+      - run: node scripts/seed-climate-anomalies.mjs
+      - run: node scripts/seed-cyber-threats.mjs
+      - run: node scripts/seed-gulf-quotes.mjs
+      - run: node scripts/seed-etf-flows.mjs
+      - run: node scripts/seed-correlation.mjs
+    env:
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+      FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+      ACLED_EMAIL: ${{ secrets.ACLED_EMAIL }}
+      ACLED_PASSWORD: ${{ secrets.ACLED_PASSWORD }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      NASA_FIRMS_API_KEY: ${{ secrets.NASA_FIRMS_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}

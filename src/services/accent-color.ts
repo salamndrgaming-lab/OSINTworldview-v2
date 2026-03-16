@@ -28,7 +28,7 @@ export const ACCENT_PRESETS: AccentPreset[] = [
   { name: 'White',    color: '#ffffff', dim: '#555555' },
 ];
 
-const DEFAULT_ACCENT: AccentPreset = ACCENT_PRESETS[0];
+const DEFAULT_ACCENT: AccentPreset = ACCENT_PRESETS[0] as AccentPreset;
 
 /** Read stored accent or return default green */
 export function getStoredAccent(): AccentPreset {

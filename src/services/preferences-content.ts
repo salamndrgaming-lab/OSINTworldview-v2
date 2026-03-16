@@ -10,8 +10,7 @@ import { escapeHtml } from '@/utils/sanitize';
 import { trackLanguageChange } from '@/services/analytics';
 import { exportSettings, importSettings, type ImportResult } from '@/utils/settings-persistence';
 import { createAccentColorPicker } from '@/services/accent-color';
-import { isTelegramConfigured, getTelegramConfig, saveTelegramConfig, clearTelegramConfig, testTelegramConnection, sendReport } from '@/services/telegram-report';
-
+import { getTelegramConfig, saveTelegramConfig, clearTelegramConfig, testTelegramConnection, sendReport } from '@/services/telegram-report';
 const DESKTOP_RELEASES_URL = 'https://github.com/koala73/worldmonitor/releases';
 
 export interface PreferencesHost {

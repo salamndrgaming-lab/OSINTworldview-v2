@@ -52,7 +52,6 @@ import {
 import type { CorrelationPanel } from '@/components/CorrelationPanel';
 
 import { initAccentColor } from '@/services/accent-color';
-import { isTelegramConfigured, sendReport, getTelegramConfig, saveTelegramConfig, clearTelegramConfig, testTelegramConnection } from '@/services/telegram-report';
 
 const CYBER_LAYER_ENABLED = import.meta.env.VITE_ENABLE_CYBER_LAYER === 'true';
 

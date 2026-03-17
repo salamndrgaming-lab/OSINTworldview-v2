@@ -5545,7 +5545,7 @@ export class DeckGLMap {
     this.container.innerHTML = '';
   }
 }
-import { POIPanel } from './components/POIPanel';
+import ... from './POIPanel';
 
 // When the POI panel becomes active:
 const poiContainer = document.getElementById('panel-poi');

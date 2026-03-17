@@ -2,6 +2,7 @@ import type { AppContext, AppModule } from '@/app/app-context';
 import { replayPendingCalls, clearAllPendingCalls } from '@/app/pending-panel-data';
 import type { RelatedAsset } from '@/types';
 import type { TheaterPostureSummary } from '@/services/military-surge';
+import { POIPanel } from '@/components/POIPanel';
 import {
   MapContainer,
   NewsPanel,
@@ -740,6 +741,7 @@ export class PanelLayoutManager implements AppModule {
     }
 
     this.createPanel('insights', () => new InsightsPanel());
+    this.createPanel('poi', () => new POIPanel());
 
     // Global Giving panel (all variants)
     this.lazyPanel('giving', () =>

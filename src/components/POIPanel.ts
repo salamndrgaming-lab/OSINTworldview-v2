@@ -186,7 +186,6 @@ export class POIPanel {
   private searchQuery = '';
   private riskFilter: string | null = null;
   private sortBy: 'activity' | 'mentions' | 'risk' | 'name' = 'activity';
-  private _selectedPerson: POIPerson | null = null;
   private drawerEl: HTMLElement | null = null;
   private overlayEl: HTMLElement | null = null;
 

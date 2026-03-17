@@ -1,14 +1,7 @@
 /**
  * POIMapLayer.ts — POI Location Pins for DeckGL Map & Globe
- * World Monitor OSINT Platform
- *
- * Provides a reusable layer that geocodes POI lastKnownLocation strings
- * and renders pulsing, risk-colored pins on the map.
- *
  * Drop into: src/components/POIMapLayer.ts
  */
-
-// ── Types ────────────────────────────────────────────────────────────────────
 
 interface GeocodedPOI {
   name: string;
@@ -30,8 +23,6 @@ interface POIPersonMinimal {
   locationConfidence: number;
   activityScore: number;
 }
-
-// ── Known location coordinates ───────────────────────────────────────────────
 
 const KNOWN_LOCATIONS: Record<string, [number, number]> = {
   'washington': [38.8977, -77.0365],
@@ -86,6 +77,8 @@ const KNOWN_LOCATIONS: Record<string, [number, number]> = {
   'the hague': [52.0705, 4.3007],
 };
 
+const DEFAULT_RISK_COLOR: [number, number, number, number] = [234, 179, 8, 200];
+
 const RISK_RGBA: Record<string, [number, number, number, number]> = {
   low: [34, 197, 94, 200],
   medium: [234, 179, 8, 200],
@@ -95,16 +88,13 @@ const RISK_RGBA: Record<string, [number, number, number, number]> = {
 
 function geocodeLocal(location: string): [number, number] | null {
   const normalized = location.toLowerCase().trim();
-  if (KNOWN_LOCATIONS[normalized]) return KNOWN_LOCATIONS[normalized];
+  const direct = KNOWN_LOCATIONS[normalized];
+  if (direct) return direct;
   for (const [key, coords] of Object.entries(KNOWN_LOCATIONS)) {
-    if (normalized.includes(key) || key.includes(normalized)) {
-      return coords;
-    }
+    if (normalized.includes(key) || key.includes(normalized)) return coords;
   }
   return null;
 }
-
-// ── POI Map Layer Class ──────────────────────────────────────────────────────
 
 export class POIMapLayer {
   private pins: GeocodedPOI[] = [];
@@ -117,7 +107,6 @@ export class POIMapLayer {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const persons: POIPersonMinimal[] = data.persons || [];
-
       this.pins = [];
       for (const p of persons) {
         const coords = geocodeLocal(p.lastKnownLocation);
@@ -129,12 +118,11 @@ export class POIMapLayer {
           riskLevel: p.riskLevel,
           lat: coords[0],
           lng: coords[1],
-          riskColor: RISK_RGBA[p.riskLevel] || RISK_RGBA.medium,
+          riskColor: RISK_RGBA[p.riskLevel] || DEFAULT_RISK_COLOR,
           confidence: p.locationConfidence,
           activityScore: p.activityScore,
         });
       }
-
       console.log(`[POIMapLayer] Geocoded ${this.pins.length}/${persons.length} persons`);
     } catch (err) {
       console.error('[POIMapLayer] Failed to load POI data:', err);
@@ -161,36 +149,21 @@ export class POIMapLayer {
       pickable: true,
       autoHighlight: true,
       highlightColor: [255, 255, 255, 60],
-      updateTriggers: {
-        getRadius: [this.animationFrame],
-      },
+      updateTriggers: { getRadius: [this.animationFrame] },
     };
   }
 
   getGlobePoints(): Array<{ lat: number; lng: number; name: string; role: string; riskLevel: string; color: string; size: number }> {
     return this.pins.map((p) => ({
-      lat: p.lat,
-      lng: p.lng,
-      name: p.name,
-      role: p.role,
-      riskLevel: p.riskLevel,
+      lat: p.lat, lng: p.lng, name: p.name, role: p.role, riskLevel: p.riskLevel,
       color: `rgba(${p.riskColor.join(',')})`,
       size: p.riskLevel === 'critical' ? 0.8 : p.riskLevel === 'high' ? 0.6 : 0.4,
     }));
   }
 
-  tick(): void {
-    this.animationFrame++;
-  }
-
-  getPins(): GeocodedPOI[] {
-    return this.pins;
-  }
-
-  destroy(): void {
-    this.tooltipEl?.remove();
-    this.tooltipEl = null;
-  }
+  tick(): void { this.animationFrame++; }
+  getPins(): GeocodedPOI[] { return this.pins; }
+  destroy(): void { this.tooltipEl?.remove(); this.tooltipEl = null; }
 }
 
 export default POIMapLayer;

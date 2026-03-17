@@ -7,30 +7,32 @@
  * activity scores, sentiment gauges, and a detail drawer.
  *
  * Drop into: src/components/POIPanel.ts
- * Register in: src/config/panels.ts
+ *
+ * Register in src/config/panels.ts → inside FULL_PANELS add:
+ *   poi: { name: 'Persons of Interest', enabled: true, priority: 1 },
  */
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types (local only, not exported to avoid conflicts with @/types) ─────────
 
-export interface POIPerson {
+interface POIPerson {
   name: string;
   role: string;
   region: string;
   tags: string[];
   lastKnownLocation: string;
-  locationConfidence: number; // 0-1
+  locationConfidence: number;
   riskLevel: 'low' | 'medium' | 'high' | 'critical';
   summary: string;
   recentActivity: string[];
   recentArticles: { title: string; url: string; date: string }[];
   mentionCount: number;
-  activityScore: number; // 0-100
-  averageTone: number; // -1 to 1
+  activityScore: number;
+  averageTone: number;
   associatedEntities: string[];
   sentiment: 'positive' | 'neutral' | 'negative';
 }
 
-export interface POIData {
+interface POIData {
   persons: POIPerson[];
 }
 
@@ -152,7 +154,6 @@ function injectStyles(): void {
       font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
     }
 
-    /* ── Toolbar ── */
     .poi-toolbar {
       display: flex;
       align-items: center;
@@ -177,9 +178,7 @@ function injectStyles(): void {
       outline: none;
       transition: border-color var(--poi-transition);
     }
-    .poi-search:focus {
-      border-color: var(--poi-accent);
-    }
+    .poi-search:focus { border-color: var(--poi-accent); }
     .poi-search-wrap {
       position: relative;
       flex: 1;
@@ -209,10 +208,7 @@ function injectStyles(): void {
       letter-spacing: 0.5px;
       transition: all var(--poi-transition);
     }
-    .poi-filter-btn:hover {
-      border-color: var(--poi-border-accent);
-      color: var(--poi-text);
-    }
+    .poi-filter-btn:hover { border-color: var(--poi-border-accent); color: var(--poi-text); }
     .poi-filter-btn.active {
       background: var(--poi-accent-dim);
       border-color: var(--poi-accent);
@@ -238,7 +234,6 @@ function injectStyles(): void {
       white-space: nowrap;
     }
 
-    /* ── Grid ── */
     .poi-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -251,14 +246,9 @@ function injectStyles(): void {
     }
 
     @media (max-width: 768px) {
-      .poi-grid {
-        grid-template-columns: 1fr;
-        padding: 12px;
-        gap: 10px;
-      }
+      .poi-grid { grid-template-columns: 1fr; padding: 12px; gap: 10px; }
     }
 
-    /* ── Card ── */
     .poi-card {
       background: var(--poi-surface);
       border: 1px solid var(--poi-border);
@@ -268,6 +258,7 @@ function injectStyles(): void {
       transition: all var(--poi-transition);
       position: relative;
       overflow: hidden;
+      animation: poi-card-in 0.3s ease both;
     }
     .poi-card::before {
       content: '';
@@ -284,424 +275,101 @@ function injectStyles(): void {
       transform: translateY(-1px);
       box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
-    .poi-card:hover::before {
-      opacity: 1;
-    }
+    .poi-card:hover::before { opacity: 1; }
 
-    .poi-card-header {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
+    .poi-card-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
 
     .poi-avatar {
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
+      width: 44px; height: 44px; border-radius: 50%;
       background: var(--poi-muted);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--poi-accent);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700; color: var(--poi-accent);
       flex-shrink: 0;
       border: 2px solid var(--card-risk-color, var(--poi-border));
     }
 
-    .poi-card-info {
-      flex: 1;
-      min-width: 0;
-    }
-    .poi-card-name {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--poi-text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      line-height: 1.2;
-    }
-    .poi-card-role {
-      font-size: 11px;
-      color: var(--poi-text-dim);
-      margin-top: 2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .poi-card-region {
-      font-size: 10px;
-      color: var(--poi-text-muted);
-      margin-top: 2px;
-    }
+    .poi-card-info { flex: 1; min-width: 0; }
+    .poi-card-name { font-size: 14px; font-weight: 700; color: var(--poi-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+    .poi-card-role { font-size: 11px; color: var(--poi-text-dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .poi-card-region { font-size: 10px; color: var(--poi-text-muted); margin-top: 2px; }
 
-    .poi-card-badges {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-      flex-shrink: 0;
-    }
+    .poi-card-badges { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
 
     .poi-risk-badge {
-      padding: 3px 8px;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px;
       background: color-mix(in srgb, var(--badge-color) 15%, transparent);
       color: var(--badge-color);
       border: 1px solid color-mix(in srgb, var(--badge-color) 30%, transparent);
     }
 
-    .poi-sentiment-icon {
-      font-size: 12px;
-      line-height: 1;
-    }
+    .poi-sentiment-icon { font-size: 12px; line-height: 1; }
 
-    /* Card body metrics */
-    .poi-card-metrics {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-    .poi-metric {
-      text-align: center;
-    }
-    .poi-metric-label {
-      font-size: 9px;
-      color: var(--poi-text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 4px;
-    }
-    .poi-metric-value {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--poi-text);
-    }
+    .poi-card-metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .poi-metric { text-align: center; }
+    .poi-metric-label { font-size: 9px; color: var(--poi-text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .poi-metric-value { font-size: 16px; font-weight: 700; color: var(--poi-text); }
 
-    .poi-card-location {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 0;
-      border-top: 1px solid var(--poi-border);
-      font-size: 11px;
-      color: var(--poi-text-dim);
-    }
-    .poi-card-location-icon {
-      color: var(--poi-accent);
-    }
-    .poi-card-location-name {
-      flex: 1;
-      min-width: 0;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+    .poi-card-location { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--poi-border); font-size: 11px; color: var(--poi-text-dim); }
+    .poi-card-location-icon { color: var(--poi-accent); }
+    .poi-card-location-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    .poi-confidence-bar {
-      width: 60px;
-      height: 6px;
-      background: var(--poi-muted);
-      border-radius: 3px;
-      overflow: hidden;
-      position: relative;
-      flex-shrink: 0;
-    }
-    .poi-confidence-fill {
-      height: 100%;
-      border-radius: 3px;
-      transition: width 0.6s ease;
-    }
-    .poi-confidence-label {
-      position: absolute;
-      right: -28px;
-      top: -3px;
-      font-size: 9px;
-      color: var(--poi-text-muted);
-    }
+    .poi-confidence-bar { width: 60px; height: 6px; background: var(--poi-muted); border-radius: 3px; overflow: hidden; position: relative; flex-shrink: 0; }
+    .poi-confidence-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+    .poi-confidence-label { position: absolute; right: -28px; top: -3px; font-size: 9px; color: var(--poi-text-muted); }
 
-    .poi-card-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin-top: 8px;
-    }
-    .poi-tag {
-      padding: 2px 6px;
-      background: var(--poi-muted);
-      border-radius: 3px;
-      font-size: 9px;
-      color: var(--poi-text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-    }
+    .poi-card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .poi-tag { padding: 2px 6px; background: var(--poi-muted); border-radius: 3px; font-size: 9px; color: var(--poi-text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
 
-    .poi-card-summary {
-      font-size: 11px;
-      color: var(--poi-text-dim);
-      line-height: 1.5;
-      margin-top: 8px;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
+    .poi-card-summary { font-size: 11px; color: var(--poi-text-dim); line-height: 1.5; margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-    /* ── Detail Drawer ── */
-    .poi-drawer-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.6);
-      backdrop-filter: blur(4px);
-      z-index: 9998;
-      opacity: 0;
-      transition: opacity 300ms ease;
-      pointer-events: none;
-    }
-    .poi-drawer-overlay.open {
-      opacity: 1;
-      pointer-events: auto;
-    }
+    .poi-drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 9998; opacity: 0; transition: opacity 300ms ease; pointer-events: none; }
+    .poi-drawer-overlay.open { opacity: 1; pointer-events: auto; }
 
-    .poi-drawer {
-      position: fixed;
-      top: 0; right: 0; bottom: 0;
-      width: min(520px, 90vw);
-      background: var(--poi-bg);
-      border-left: 1px solid var(--poi-border);
-      z-index: 9999;
-      transform: translateX(100%);
-      transition: transform 300ms cubic-bezier(.4,0,.2,1);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .poi-drawer.open {
-      transform: translateX(0);
-    }
+    .poi-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 90vw); background: var(--poi-bg); border-left: 1px solid var(--poi-border); z-index: 9999; transform: translateX(100%); transition: transform 300ms cubic-bezier(.4,0,.2,1); display: flex; flex-direction: column; overflow: hidden; }
+    .poi-drawer.open { transform: translateX(0); }
 
-    .poi-drawer-header {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 20px 24px;
-      background: var(--poi-surface);
-      border-bottom: 1px solid var(--poi-border);
-      flex-shrink: 0;
-    }
+    .poi-drawer-header { display: flex; align-items: center; gap: 16px; padding: 20px 24px; background: var(--poi-surface); border-bottom: 1px solid var(--poi-border); flex-shrink: 0; }
 
-    .poi-drawer-avatar {
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      background: var(--poi-muted);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--poi-accent);
-      border: 2px solid var(--card-risk-color, var(--poi-border));
-      flex-shrink: 0;
-    }
+    .poi-drawer-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--poi-muted); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; color: var(--poi-accent); border: 2px solid var(--card-risk-color, var(--poi-border)); flex-shrink: 0; }
 
-    .poi-drawer-title {
-      flex: 1;
-      min-width: 0;
-    }
-    .poi-drawer-name {
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--poi-text);
-    }
-    .poi-drawer-role {
-      font-size: 12px;
-      color: var(--poi-text-dim);
-      margin-top: 2px;
-    }
+    .poi-drawer-title { flex: 1; min-width: 0; }
+    .poi-drawer-name { font-size: 18px; font-weight: 700; color: var(--poi-text); }
+    .poi-drawer-role { font-size: 12px; color: var(--poi-text-dim); margin-top: 2px; }
 
-    .poi-drawer-close {
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
-      background: var(--poi-muted);
-      border: 1px solid var(--poi-border);
-      color: var(--poi-text-dim);
-      font-size: 18px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all var(--poi-transition);
-      flex-shrink: 0;
-    }
-    .poi-drawer-close:hover {
-      background: var(--poi-surface-hover);
-      color: var(--poi-text);
-    }
+    .poi-drawer-close { width: 36px; height: 36px; border-radius: 8px; background: var(--poi-muted); border: 1px solid var(--poi-border); color: var(--poi-text-dim); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--poi-transition); flex-shrink: 0; }
+    .poi-drawer-close:hover { background: var(--poi-surface-hover); color: var(--poi-text); }
 
-    .poi-drawer-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 24px;
-      scrollbar-width: thin;
-      scrollbar-color: var(--poi-border) transparent;
-    }
+    .poi-drawer-body { flex: 1; overflow-y: auto; padding: 24px; scrollbar-width: thin; scrollbar-color: var(--poi-border) transparent; }
 
-    .poi-drawer-section {
-      margin-bottom: 24px;
-    }
-    .poi-drawer-section-title {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--poi-text-muted);
-      margin-bottom: 12px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .poi-drawer-section-title::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--poi-border);
-    }
+    .poi-drawer-section { margin-bottom: 24px; }
+    .poi-drawer-section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--poi-text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .poi-drawer-section-title::after { content: ''; flex: 1; height: 1px; background: var(--poi-border); }
 
-    .poi-drawer-metrics-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 12px;
-    }
-    .poi-drawer-metric {
-      background: var(--poi-surface);
-      border: 1px solid var(--poi-border);
-      border-radius: var(--poi-radius);
-      padding: 12px;
-      text-align: center;
-    }
-    .poi-drawer-metric-label {
-      font-size: 9px;
-      color: var(--poi-text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 6px;
-    }
-    .poi-drawer-metric-value {
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--poi-text);
-    }
+    .poi-drawer-metrics-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .poi-drawer-metric { background: var(--poi-surface); border: 1px solid var(--poi-border); border-radius: var(--poi-radius); padding: 12px; text-align: center; }
+    .poi-drawer-metric-label { font-size: 9px; color: var(--poi-text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .poi-drawer-metric-value { font-size: 20px; font-weight: 700; color: var(--poi-text); }
 
-    .poi-drawer-summary {
-      font-size: 13px;
-      color: var(--poi-text-dim);
-      line-height: 1.7;
-      background: var(--poi-surface);
-      border: 1px solid var(--poi-border);
-      border-radius: var(--poi-radius);
-      padding: 14px;
-    }
+    .poi-drawer-summary { font-size: 13px; color: var(--poi-text-dim); line-height: 1.7; background: var(--poi-surface); border: 1px solid var(--poi-border); border-radius: var(--poi-radius); padding: 14px; }
 
-    .poi-drawer-activity-item {
-      display: flex;
-      gap: 10px;
-      padding: 10px 0;
-      border-bottom: 1px solid var(--poi-border);
-      font-size: 12px;
-      color: var(--poi-text-dim);
-      line-height: 1.5;
-    }
-    .poi-drawer-activity-item:last-child {
-      border-bottom: none;
-    }
-    .poi-drawer-activity-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--poi-accent);
-      margin-top: 6px;
-      flex-shrink: 0;
-    }
+    .poi-drawer-activity-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--poi-border); font-size: 12px; color: var(--poi-text-dim); line-height: 1.5; }
+    .poi-drawer-activity-item:last-child { border-bottom: none; }
+    .poi-drawer-activity-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--poi-accent); margin-top: 6px; flex-shrink: 0; }
 
-    .poi-drawer-article {
-      display: block;
-      padding: 10px 12px;
-      background: var(--poi-surface);
-      border: 1px solid var(--poi-border);
-      border-radius: var(--poi-radius);
-      margin-bottom: 8px;
-      text-decoration: none;
-      transition: all var(--poi-transition);
-    }
-    .poi-drawer-article:hover {
-      border-color: var(--poi-accent);
-      background: var(--poi-surface-hover);
-    }
-    .poi-drawer-article-title {
-      font-size: 12px;
-      color: var(--poi-text);
-      line-height: 1.4;
-    }
-    .poi-drawer-article-date {
-      font-size: 10px;
-      color: var(--poi-text-muted);
-      margin-top: 4px;
-    }
+    .poi-drawer-article { display: block; padding: 10px 12px; background: var(--poi-surface); border: 1px solid var(--poi-border); border-radius: var(--poi-radius); margin-bottom: 8px; text-decoration: none; transition: all var(--poi-transition); }
+    .poi-drawer-article:hover { border-color: var(--poi-accent); background: var(--poi-surface-hover); }
+    .poi-drawer-article-title { font-size: 12px; color: var(--poi-text); line-height: 1.4; }
+    .poi-drawer-article-date { font-size: 10px; color: var(--poi-text-muted); margin-top: 4px; }
 
-    .poi-drawer-entities {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .poi-entity-chip {
-      padding: 4px 10px;
-      background: var(--poi-accent-dim);
-      border: 1px solid color-mix(in srgb, var(--poi-accent) 30%, transparent);
-      border-radius: 20px;
-      font-size: 11px;
-      color: var(--poi-accent);
-    }
+    .poi-drawer-entities { display: flex; flex-wrap: wrap; gap: 6px; }
+    .poi-entity-chip { padding: 4px 10px; background: var(--poi-accent-dim); border: 1px solid color-mix(in srgb, var(--poi-accent) 30%, transparent); border-radius: 20px; font-size: 11px; color: var(--poi-accent); }
 
-    /* ── Loading / Empty ── */
-    .poi-loading, .poi-empty {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      color: var(--poi-text-muted);
-      text-align: center;
-      gap: 12px;
-    }
-    .poi-loading-spinner {
-      width: 32px;
-      height: 32px;
-      border: 3px solid var(--poi-border);
-      border-top-color: var(--poi-accent);
-      border-radius: 50%;
-      animation: poi-spin 0.8s linear infinite;
-    }
-    @keyframes poi-spin {
-      to { transform: rotate(360deg); }
-    }
+    .poi-loading, .poi-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; color: var(--poi-text-muted); text-align: center; gap: 12px; }
+    .poi-loading-spinner { width: 32px; height: 32px; border: 3px solid var(--poi-border); border-top-color: var(--poi-accent); border-radius: 50%; animation: poi-spin 0.8s linear infinite; }
+    @keyframes poi-spin { to { transform: rotate(360deg); } }
     .poi-empty-icon { font-size: 32px; opacity: 0.5; }
-
-    /* ── Card entrance animation ── */
-    @keyframes poi-card-in {
-      from { opacity: 0; transform: translateY(12px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .poi-card {
-      animation: poi-card-in 0.3s ease both;
-    }
+    @keyframes poi-card-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
   `;
   document.head.appendChild(style);
 }
@@ -714,24 +382,14 @@ export class POIPanel {
   private filtered: POIPerson[] = [];
   private searchQuery = '';
   private riskFilter: string | null = null;
-  private regionFilter: string | null = null;
   private sortBy: 'activity' | 'mentions' | 'risk' | 'name' = 'activity';
   private selectedPerson: POIPerson | null = null;
   private drawerEl: HTMLElement | null = null;
   private overlayEl: HTMLElement | null = null;
-  private onLocateCallback: ((person: POIPerson) => void) | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
     injectStyles();
-  }
-
-  /**
-   * Register a callback fired when user clicks "Locate" on a POI card.
-   * Use this to fly the DeckGL/Globe map to the person's location.
-   */
-  onLocate(cb: (person: POIPerson) => void): void {
-    this.onLocateCallback = cb;
   }
 
   async init(): Promise<void> {
@@ -760,7 +418,6 @@ export class POIPanel {
   private applyFilters(): void {
     let list = [...this.data];
 
-    // Search
     if (this.searchQuery) {
       const q = this.searchQuery.toLowerCase();
       list = list.filter(
@@ -774,18 +431,11 @@ export class POIPanel {
       );
     }
 
-    // Risk filter
     if (this.riskFilter) {
       list = list.filter((p) => p.riskLevel === this.riskFilter);
     }
 
-    // Region filter
-    if (this.regionFilter) {
-      list = list.filter((p) => p.region === this.regionFilter);
-    }
-
-    // Sort
-    const riskOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+    const riskOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     switch (this.sortBy) {
       case 'activity':
         list.sort((a, b) => b.activityScore - a.activityScore);
@@ -794,7 +444,7 @@ export class POIPanel {
         list.sort((a, b) => b.mentionCount - a.mentionCount);
         break;
       case 'risk':
-        list.sort((a, b) => riskOrder[a.riskLevel] - riskOrder[b.riskLevel]);
+        list.sort((a, b) => (riskOrder[a.riskLevel] ?? 3) - (riskOrder[b.riskLevel] ?? 3));
         break;
       case 'name':
         list.sort((a, b) => a.name.localeCompare(b.name));
@@ -804,12 +454,7 @@ export class POIPanel {
     this.filtered = list;
   }
 
-  private getRegions(): string[] {
-    return [...new Set(this.data.map((p) => p.region))].sort();
-  }
-
   private render(): void {
-    const regions = this.getRegions();
     const panel = this.container.querySelector('.poi-panel') || this.container;
 
     panel.innerHTML = `
@@ -818,35 +463,23 @@ export class POIPanel {
           <input class="poi-search" type="text" placeholder="Search name, role, location, entity…"
             value="${escapeHtml(this.searchQuery)}" />
         </div>
-
         <button class="poi-filter-btn ${!this.riskFilter ? 'active' : ''}" data-risk="">ALL</button>
-        <button class="poi-filter-btn ${this.riskFilter === 'critical' ? 'active' : ''}" data-risk="critical"
-          style="--badge-color:${RISK_COLORS.critical}">CRIT</button>
-        <button class="poi-filter-btn ${this.riskFilter === 'high' ? 'active' : ''}" data-risk="high"
-          style="--badge-color:${RISK_COLORS.high}">HIGH</button>
-        <button class="poi-filter-btn ${this.riskFilter === 'medium' ? 'active' : ''}" data-risk="medium"
-          style="--badge-color:${RISK_COLORS.medium}">MED</button>
-        <button class="poi-filter-btn ${this.riskFilter === 'low' ? 'active' : ''}" data-risk="low"
-          style="--badge-color:${RISK_COLORS.low}">LOW</button>
-
+        <button class="poi-filter-btn ${this.riskFilter === 'critical' ? 'active' : ''}" data-risk="critical" style="--badge-color:${RISK_COLORS.critical}">CRIT</button>
+        <button class="poi-filter-btn ${this.riskFilter === 'high' ? 'active' : ''}" data-risk="high" style="--badge-color:${RISK_COLORS.high}">HIGH</button>
+        <button class="poi-filter-btn ${this.riskFilter === 'medium' ? 'active' : ''}" data-risk="medium" style="--badge-color:${RISK_COLORS.medium}">MED</button>
+        <button class="poi-filter-btn ${this.riskFilter === 'low' ? 'active' : ''}" data-risk="low" style="--badge-color:${RISK_COLORS.low}">LOW</button>
         <select class="poi-sort-select" title="Sort by">
           <option value="activity" ${this.sortBy === 'activity' ? 'selected' : ''}>⚡ Activity</option>
           <option value="mentions" ${this.sortBy === 'mentions' ? 'selected' : ''}>📊 Mentions</option>
           <option value="risk" ${this.sortBy === 'risk' ? 'selected' : ''}>⚠ Risk</option>
           <option value="name" ${this.sortBy === 'name' ? 'selected' : ''}>A→Z Name</option>
         </select>
-
         <span class="poi-count">${this.filtered.length} / ${this.data.length} tracked</span>
       </div>
-
-      <div class="poi-grid" id="poi-grid">
+      <div class="poi-grid">
         ${this.filtered.length === 0
-          ? `<div class="poi-empty" style="grid-column:1/-1">
-              <div class="poi-empty-icon">👤</div>
-              <div>No persons match your filters</div>
-            </div>`
-          : this.filtered.map((p, i) => this.renderCard(p, i)).join('')
-        }
+          ? `<div class="poi-empty" style="grid-column:1/-1"><div class="poi-empty-icon">👤</div><div>No persons match your filters</div></div>`
+          : this.filtered.map((p, i) => this.renderCard(p, i)).join('')}
       </div>
     `;
 
@@ -854,12 +487,7 @@ export class POIPanel {
   }
 
   private renderCard(p: POIPerson, index: number): string {
-    const initials = p.name
-      .split(' ')
-      .map((w) => w[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase();
+    const initials = p.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
     const riskColor = RISK_COLORS[p.riskLevel] || RISK_COLORS.medium;
     const sentColor = toneToColor(p.averageTone);
     const regionFlag = REGION_FLAGS[p.region] || '🌐';
@@ -874,49 +502,28 @@ export class POIPanel {
             <div class="poi-card-region">${regionFlag} ${escapeHtml(p.region)}</div>
           </div>
           <div class="poi-card-badges">
-            <span class="poi-risk-badge" style="--badge-color:${riskColor}">
-              ${RISK_ICONS[p.riskLevel]} ${p.riskLevel}
-            </span>
-            <span class="poi-sentiment-icon" style="color:${sentColor}" title="Sentiment: ${p.sentiment}">
-              ${SENTIMENT_ICONS[p.sentiment] || '●'}
-            </span>
+            <span class="poi-risk-badge" style="--badge-color:${riskColor}">${RISK_ICONS[p.riskLevel] || '●'} ${p.riskLevel}</span>
+            <span class="poi-sentiment-icon" style="color:${sentColor}" title="Sentiment: ${p.sentiment}">${SENTIMENT_ICONS[p.sentiment] || '●'}</span>
           </div>
         </div>
-
         <div class="poi-card-metrics">
-          <div class="poi-metric">
-            <div class="poi-metric-label">Mentions</div>
-            <div class="poi-metric-value">${p.mentionCount.toLocaleString()}</div>
-          </div>
-          <div class="poi-metric">
-            <div class="poi-metric-label">Activity</div>
-            ${activityGauge(p.activityScore)}
-          </div>
-          <div class="poi-metric">
-            <div class="poi-metric-label">Tone</div>
-            <div class="poi-metric-value" style="color:${sentColor}; font-size:13px">${toneToLabel(p.averageTone)}</div>
-          </div>
+          <div class="poi-metric"><div class="poi-metric-label">Mentions</div><div class="poi-metric-value">${p.mentionCount.toLocaleString()}</div></div>
+          <div class="poi-metric"><div class="poi-metric-label">Activity</div>${activityGauge(p.activityScore)}</div>
+          <div class="poi-metric"><div class="poi-metric-label">Tone</div><div class="poi-metric-value" style="color:${sentColor}; font-size:13px">${toneToLabel(p.averageTone)}</div></div>
         </div>
-
         <div class="poi-card-location">
           <span class="poi-card-location-icon">📍</span>
           <span class="poi-card-location-name">${escapeHtml(p.lastKnownLocation)}</span>
           ${confidenceBar(p.locationConfidence)}
         </div>
-
-        ${p.tags.length > 0
-          ? `<div class="poi-card-tags">${p.tags.slice(0, 5).map((t) => `<span class="poi-tag">${escapeHtml(t)}</span>`).join('')}</div>`
-          : ''
-        }
-
+        ${p.tags.length > 0 ? `<div class="poi-card-tags">${p.tags.slice(0, 5).map((t) => `<span class="poi-tag">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
         <div class="poi-card-summary">${escapeHtml(p.summary)}</div>
       </div>
     `;
   }
 
   private bindEvents(panel: Element): void {
-    // Search
-    const searchInput = panel.querySelector('.poi-search') as HTMLInputElement;
+    const searchInput = panel.querySelector('.poi-search') as HTMLInputElement | null;
     if (searchInput) {
       let debounce: ReturnType<typeof setTimeout>;
       searchInput.addEventListener('input', () => {
@@ -929,50 +536,49 @@ export class POIPanel {
       });
     }
 
-    // Risk filter buttons
     panel.querySelectorAll('.poi-filter-btn[data-risk]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const risk = (btn as HTMLElement).dataset.risk || null;
-        this.riskFilter = risk || null;
+        const el = btn as HTMLElement;
+        const risk = el.dataset.risk;
+        this.riskFilter = (risk !== undefined && risk.length > 0) ? risk : null;
         this.applyFilters();
         this.render();
       });
     });
 
-    // Sort
-    const sortSelect = panel.querySelector('.poi-sort-select') as HTMLSelectElement;
+    const sortSelect = panel.querySelector('.poi-sort-select') as HTMLSelectElement | null;
     if (sortSelect) {
       sortSelect.addEventListener('change', () => {
-        this.sortBy = sortSelect.value as typeof this.sortBy;
+        this.sortBy = sortSelect.value as 'activity' | 'mentions' | 'risk' | 'name';
         this.applyFilters();
         this.render();
       });
     }
 
-    // Card clicks → open drawer
     panel.querySelectorAll('.poi-card').forEach((card) => {
       card.addEventListener('click', () => {
-        const idx = parseInt((card as HTMLElement).dataset.index || '0');
-        this.openDrawer(this.filtered[idx]);
+        const idx = parseInt((card as HTMLElement).dataset.index || '0', 10);
+        const person = this.filtered[idx];
+        if (person) {
+          this.openDrawer(person);
+        }
       });
     });
   }
 
   private openDrawer(person: POIPerson): void {
     this.selectedPerson = person;
-    this.closeDrawer(); // clean up any existing
+    this.closeDrawer();
 
     const riskColor = RISK_COLORS[person.riskLevel] || RISK_COLORS.medium;
     const sentColor = toneToColor(person.averageTone);
     const initials = person.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 
-    // Overlay
     this.overlayEl = document.createElement('div');
     this.overlayEl.className = 'poi-drawer-overlay';
     this.overlayEl.addEventListener('click', () => this.closeDrawer());
     document.body.appendChild(this.overlayEl);
 
-    // Drawer
     this.drawerEl = document.createElement('div');
     this.drawerEl.className = 'poi-drawer';
     this.drawerEl.style.setProperty('--card-risk-color', riskColor);
@@ -985,95 +591,33 @@ export class POIPanel {
         </div>
         <button class="poi-drawer-close" title="Close">✕</button>
       </div>
-
       <div class="poi-drawer-body">
-        <!-- Metrics -->
         <div class="poi-drawer-section">
           <div class="poi-drawer-section-title">Key Metrics</div>
           <div class="poi-drawer-metrics-grid">
-            <div class="poi-drawer-metric">
-              <div class="poi-drawer-metric-label">Risk Level</div>
-              <div class="poi-drawer-metric-value" style="color:${riskColor}">${person.riskLevel.toUpperCase()}</div>
-            </div>
-            <div class="poi-drawer-metric">
-              <div class="poi-drawer-metric-label">Mentions</div>
-              <div class="poi-drawer-metric-value">${person.mentionCount.toLocaleString()}</div>
-            </div>
-            <div class="poi-drawer-metric">
-              <div class="poi-drawer-metric-label">Activity Score</div>
-              <div class="poi-drawer-metric-value">${person.activityScore}</div>
-            </div>
-            <div class="poi-drawer-metric">
-              <div class="poi-drawer-metric-label">Avg Tone</div>
-              <div class="poi-drawer-metric-value" style="color:${sentColor}">${person.averageTone.toFixed(2)}</div>
-            </div>
-            <div class="poi-drawer-metric">
-              <div class="poi-drawer-metric-label">Location</div>
-              <div class="poi-drawer-metric-value" style="font-size:12px">${escapeHtml(person.lastKnownLocation)}</div>
-            </div>
-            <div class="poi-drawer-metric">
-              <div class="poi-drawer-metric-label">Loc Confidence</div>
-              <div class="poi-drawer-metric-value">${Math.round(person.locationConfidence * 100)}%</div>
-            </div>
+            <div class="poi-drawer-metric"><div class="poi-drawer-metric-label">Risk Level</div><div class="poi-drawer-metric-value" style="color:${riskColor}">${person.riskLevel.toUpperCase()}</div></div>
+            <div class="poi-drawer-metric"><div class="poi-drawer-metric-label">Mentions</div><div class="poi-drawer-metric-value">${person.mentionCount.toLocaleString()}</div></div>
+            <div class="poi-drawer-metric"><div class="poi-drawer-metric-label">Activity Score</div><div class="poi-drawer-metric-value">${person.activityScore}</div></div>
+            <div class="poi-drawer-metric"><div class="poi-drawer-metric-label">Avg Tone</div><div class="poi-drawer-metric-value" style="color:${sentColor}">${person.averageTone.toFixed(2)}</div></div>
+            <div class="poi-drawer-metric"><div class="poi-drawer-metric-label">Location</div><div class="poi-drawer-metric-value" style="font-size:12px">${escapeHtml(person.lastKnownLocation)}</div></div>
+            <div class="poi-drawer-metric"><div class="poi-drawer-metric-label">Loc Confidence</div><div class="poi-drawer-metric-value">${Math.round(person.locationConfidence * 100)}%</div></div>
           </div>
         </div>
-
-        <!-- Summary -->
         <div class="poi-drawer-section">
           <div class="poi-drawer-section-title">AI Intelligence Summary</div>
           <div class="poi-drawer-summary">${escapeHtml(person.summary)}</div>
         </div>
-
-        <!-- Recent Activity -->
-        ${person.recentActivity.length > 0 ? `
-        <div class="poi-drawer-section">
-          <div class="poi-drawer-section-title">Recent Activity</div>
-          ${person.recentActivity.map((a) => `
-            <div class="poi-drawer-activity-item">
-              <div class="poi-drawer-activity-dot"></div>
-              <div>${escapeHtml(a)}</div>
-            </div>
-          `).join('')}
-        </div>` : ''}
-
-        <!-- Articles -->
-        ${person.recentArticles.length > 0 ? `
-        <div class="poi-drawer-section">
-          <div class="poi-drawer-section-title">Source Articles</div>
-          ${person.recentArticles.map((a) => `
-            <a class="poi-drawer-article" href="${escapeHtml(a.url)}" target="_blank" rel="noopener">
-              <div class="poi-drawer-article-title">${escapeHtml(a.title)}</div>
-              <div class="poi-drawer-article-date">${escapeHtml(a.date)}</div>
-            </a>
-          `).join('')}
-        </div>` : ''}
-
-        <!-- Associated Entities -->
-        ${person.associatedEntities.length > 0 ? `
-        <div class="poi-drawer-section">
-          <div class="poi-drawer-section-title">Associated Entities</div>
-          <div class="poi-drawer-entities">
-            ${person.associatedEntities.map((e) => `<span class="poi-entity-chip">${escapeHtml(e)}</span>`).join('')}
-          </div>
-        </div>` : ''}
-
-        <!-- Tags -->
-        ${person.tags.length > 0 ? `
-        <div class="poi-drawer-section">
-          <div class="poi-drawer-section-title">Tags</div>
-          <div class="poi-card-tags" style="margin-top:0">
-            ${person.tags.map((t) => `<span class="poi-tag">${escapeHtml(t)}</span>`).join('')}
-          </div>
-        </div>` : ''}
+        ${person.recentActivity.length > 0 ? `<div class="poi-drawer-section"><div class="poi-drawer-section-title">Recent Activity</div>${person.recentActivity.map((a) => `<div class="poi-drawer-activity-item"><div class="poi-drawer-activity-dot"></div><div>${escapeHtml(a)}</div></div>`).join('')}</div>` : ''}
+        ${person.recentArticles.length > 0 ? `<div class="poi-drawer-section"><div class="poi-drawer-section-title">Source Articles</div>${person.recentArticles.map((a) => `<a class="poi-drawer-article" href="${escapeHtml(a.url)}" target="_blank" rel="noopener"><div class="poi-drawer-article-title">${escapeHtml(a.title)}</div><div class="poi-drawer-article-date">${escapeHtml(a.date)}</div></a>`).join('')}</div>` : ''}
+        ${person.associatedEntities.length > 0 ? `<div class="poi-drawer-section"><div class="poi-drawer-section-title">Associated Entities</div><div class="poi-drawer-entities">${person.associatedEntities.map((e) => `<span class="poi-entity-chip">${escapeHtml(e)}</span>`).join('')}</div></div>` : ''}
+        ${person.tags.length > 0 ? `<div class="poi-drawer-section"><div class="poi-drawer-section-title">Tags</div><div class="poi-card-tags" style="margin-top:0">${person.tags.map((t) => `<span class="poi-tag">${escapeHtml(t)}</span>`).join('')}</div></div>` : ''}
       </div>
     `;
     document.body.appendChild(this.drawerEl);
 
-    // Close button
     this.drawerEl.querySelector('.poi-drawer-close')?.addEventListener('click', () => this.closeDrawer());
 
-    // Escape key
-    const escHandler = (e: KeyboardEvent) => {
+    const escHandler = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         this.closeDrawer();
         document.removeEventListener('keydown', escHandler);
@@ -1081,7 +625,6 @@ export class POIPanel {
     };
     document.addEventListener('keydown', escHandler);
 
-    // Animate open
     requestAnimationFrame(() => {
       this.overlayEl?.classList.add('open');
       this.drawerEl?.classList.add('open');
@@ -1102,19 +645,7 @@ export class POIPanel {
     this.selectedPerson = null;
   }
 
-  /**
-   * Returns POI data formatted for map pin rendering.
-   * Use this from DeckGLMap.ts or GlobeMap.ts to plot person locations.
-   */
-  getMapPins(): Array<{
-    name: string;
-    role: string;
-    location: string;
-    riskLevel: string;
-    riskColor: string;
-    confidence: number;
-    activityScore: number;
-  }> {
+  getMapPins(): Array<{ name: string; role: string; location: string; riskLevel: string; riskColor: string; confidence: number; activityScore: number }> {
     return this.data.map((p) => ({
       name: p.name,
       role: p.role,
@@ -1126,7 +657,6 @@ export class POIPanel {
     }));
   }
 
-  /** Expose current data for external use */
   getData(): POIPerson[] {
     return this.data;
   }

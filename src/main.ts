@@ -438,12 +438,3 @@ if (!('__TAURI_INTERNALS__' in window) && !('__TAURI__' in window) && 'serviceWo
 //     window.location.reload();
 //   });
 // }
-import { POIPanel } from './components/POIPanel';
-
-// When the POI panel becomes active:
-const poiContainer = document.getElementById('panel-poi');
-    },
-  });
-
-  mobileNav.mount();
-}

@@ -58,7 +58,7 @@ const KNOWN_LOCATIONS: Record<string, [number, number]> = {
   'tokyo': [35.6762, 139.6503],
   'new delhi': [28.6139, 77.2090],
   'delhi': [28.6139, 77.2090],
-  'brasília': [−15.7975, −47.8919],
+  'brasília': [-15.7975, -47.8919],
   'brasilia': [-15.7975, -47.8919],
   'ottawa': [45.4215, -75.6972],
   'canberra': [-35.2809, 149.1300],

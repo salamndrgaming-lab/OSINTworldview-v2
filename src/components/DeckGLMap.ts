@@ -5544,10 +5544,3 @@ export class DeckGLMap {
     this.container.removeEventListener('contextmenu', this.handleContextMenu);
     this.container.innerHTML = '';
   }
-}
-import ... from './POIPanel';
-
-// When the POI panel becomes active:
-const poiContainer = document.getElementById('panel-poi');
-const poiPanel = new POIPanel(poiContainer);
-await poiPanel.init();

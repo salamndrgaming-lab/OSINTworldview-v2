@@ -6,7 +6,7 @@ const SOCIAL_PREVIEW_UA =
 
 const SOCIAL_PREVIEW_PATHS = new Set(['/api/story', '/api/og-story']);
 
-const PUBLIC_API_PATHS = new Set(['/api/version', '/api/health']);
+const PUBLIC_API_PATHS = new Set(['/api/version', '/api/health', '/api/telegram-webhook']);
 
 const SOCIAL_IMAGE_UA =
   /Slack-ImgProxy|Slackbot|twitterbot|facebookexternalhit|linkedinbot|telegrambot|whatsapp|discordbot|redditbot/i;

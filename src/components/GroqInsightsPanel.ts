@@ -298,7 +298,7 @@ export class GroqInsightsPanel {
   }
 
   private renderInsightCard(insight: GroqInsight, index: number): string {
-    const sev = SEVERITY_CONFIG[insight.severity] ?? SEVERITY_CONFIG.info;
+    const sev = SEVERITY_CONFIG[insight.severity] || { color: '#3b82f6', icon: 'ℹ', label: 'INFO' };
     const icon = TYPE_ICONS[insight.type] || '●';
 
     return `

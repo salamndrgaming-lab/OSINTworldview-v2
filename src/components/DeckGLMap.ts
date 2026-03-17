@@ -5544,3 +5544,4 @@ export class DeckGLMap {
     this.container.removeEventListener('contextmenu', this.handleContextMenu);
     this.container.innerHTML = '';
   }
+}

@@ -312,7 +312,6 @@ export class POIPanel {
   }
 
   private openDrawer(person: POIPerson): void {
-    this._selectedPerson = person;
     this.closeDrawer();
     const riskColor = RISK_COLORS[person.riskLevel] || '#eab308';
     const sentColor = toneToColor(person.averageTone);
@@ -360,7 +359,6 @@ export class POIPanel {
       this.overlayEl?.classList.remove('open');
       setTimeout(() => { this.drawerEl?.remove(); this.overlayEl?.remove(); this.drawerEl = null; this.overlayEl = null; }, 300);
     }
-    this._selectedPerson = null;
   }
 
   getMapPins(): Array<{ name: string; role: string; location: string; riskLevel: string; riskColor: string; confidence: number; activityScore: number }> {

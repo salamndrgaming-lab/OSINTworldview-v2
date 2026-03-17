@@ -3287,27 +3287,4 @@ export class GlobeMap {
     this.container.classList.remove('globe-mode');
     this.container.style.cssText = '';
   }
-// In your render loop:
-function animate() {
-  if (perf.shouldSkipFrame()) {
-    requestAnimationFrame(animate);
-    return;
-  }
-
-  const frame = perf.beginFrame();
-
-  // Use frame.globeSegments for sphere detail
-  // Use frame.maxArcs to limit arc rendering
-  // Use frame.maxMarkers to limit marker count
-  // Use frame.budget.hasTimeLeft() to skip expensive work
-
-  // Frustum cull markers
-  const visible = FrustumCuller.isPointFacingCamera(
-    markerLat, markerLng, cameraLat, cameraLng
-  );
-
-  renderer.render(scene, camera);
-  perf.endFrame(renderer.info.render.calls, renderer.info.render.triangles);
-
-  requestAnimationFrame(animate);
 }

@@ -2,29 +2,18 @@
  * GroqInsightsPanel.ts — AI Insights Dashboard Panel
  * World Monitor OSINT Platform
  *
- * Fetches Groq-powered AI analysis from /api/insights and renders:
- * - Live intelligence brief (auto-refreshing)
- * - Threat assessment summary
- * - POI activity highlights
- * - Trend analysis with sentiment shifts
- * - Key entity network graph (text-based)
- *
- * Backend expected: /api/insights endpoint that calls Groq API
- * with aggregated Redis data and returns structured analysis.
- *
  * Drop into: src/components/GroqInsightsPanel.ts
- * Register in: src/config/panels.ts
  */
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export interface GroqInsight {
+interface GroqInsight {
   id: string;
   type: 'brief' | 'threat' | 'poi_highlight' | 'trend' | 'entity_link' | 'market' | 'geopolitical';
   title: string;
   content: string;
   severity: 'info' | 'watch' | 'warning' | 'critical';
-  confidence: number; // 0-1
+  confidence: number;
   timestamp: string;
   sources: string[];
   relatedPOIs: string[];
@@ -32,7 +21,7 @@ export interface GroqInsight {
   region?: string;
 }
 
-export interface InsightsResponse {
+interface InsightsResponse {
   brief: string;
   generatedAt: string;
   model: string;
@@ -56,6 +45,8 @@ const THREAT_LEVEL_CONFIG: Record<string, { color: string; bg: string; label: st
   high: { color: '#f97316', bg: 'rgba(249,115,22,0.08)', label: 'HIGH' },
   critical: { color: '#ef4444', bg: 'rgba(239,68,68,0.08)', label: 'CRITICAL' },
 };
+
+const DEFAULT_THREAT_LEVEL = { color: '#22c55e', bg: 'rgba(34,197,94,0.08)', label: 'STABLE' };
 
 const TYPE_ICONS: Record<string, string> = {
   brief: '📋',
@@ -116,317 +107,64 @@ function injectStyles(): void {
       --gi-transition: 200ms cubic-bezier(.4,0,.2,1);
     }
 
-    .gi-panel {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      overflow: hidden;
-      background: var(--gi-bg);
-      font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
-    }
+    .gi-panel { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--gi-bg); font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace; }
 
-    /* ── Header ── */
-    .gi-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 16px;
-      background: var(--gi-surface);
-      border-bottom: 1px solid var(--gi-border);
-      flex-shrink: 0;
-    }
-    .gi-header-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--gi-text);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .gi-header-model {
-      font-size: 10px;
-      color: var(--gi-text-muted);
-      padding: 2px 6px;
-      background: var(--gi-muted);
-      border-radius: 4px;
-    }
-    .gi-header-time {
-      font-size: 10px;
-      color: var(--gi-text-muted);
-      margin-left: auto;
-    }
-    .gi-refresh-btn {
-      padding: 4px 10px;
-      background: var(--gi-muted);
-      border: 1px solid var(--gi-border);
-      border-radius: var(--gi-radius);
-      color: var(--gi-text-dim);
-      font-size: 11px;
-      font-family: inherit;
-      cursor: pointer;
-      transition: all var(--gi-transition);
-    }
-    .gi-refresh-btn:hover {
-      background: var(--gi-surface-hover);
-      border-color: var(--gi-accent);
-      color: var(--gi-accent);
-    }
-    .gi-refresh-btn.spinning {
-      animation: gi-spin 1s linear infinite;
-      pointer-events: none;
-    }
-    @keyframes gi-spin {
-      to { transform: rotate(360deg); }
-    }
+    .gi-header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--gi-surface); border-bottom: 1px solid var(--gi-border); flex-shrink: 0; }
+    .gi-header-title { font-size: 13px; font-weight: 700; color: var(--gi-text); display: flex; align-items: center; gap: 8px; }
+    .gi-header-model { font-size: 10px; color: var(--gi-text-muted); padding: 2px 6px; background: var(--gi-muted); border-radius: 4px; }
+    .gi-header-time { font-size: 10px; color: var(--gi-text-muted); margin-left: auto; }
+    .gi-refresh-btn { padding: 4px 10px; background: var(--gi-muted); border: 1px solid var(--gi-border); border-radius: var(--gi-radius); color: var(--gi-text-dim); font-size: 11px; font-family: inherit; cursor: pointer; transition: all var(--gi-transition); }
+    .gi-refresh-btn:hover { background: var(--gi-surface-hover); border-color: var(--gi-accent); color: var(--gi-accent); }
+    .gi-refresh-btn.spinning { animation: gi-spin 1s linear infinite; pointer-events: none; }
+    @keyframes gi-spin { to { transform: rotate(360deg); } }
 
-    /* ── Threat Level Banner ── */
-    .gi-threat-banner {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--gi-border);
-      flex-shrink: 0;
-    }
-    .gi-threat-level {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      padding: 4px 12px;
-      border-radius: 4px;
-    }
-    .gi-threat-pulse {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      animation: gi-pulse 2s ease infinite;
-    }
-    @keyframes gi-pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(1.4); }
-    }
-    .gi-threat-trends {
-      flex: 1;
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-    .gi-trend-chip {
-      padding: 2px 8px;
-      background: var(--gi-muted);
-      border-radius: 10px;
-      font-size: 10px;
-      color: var(--gi-text-dim);
-    }
+    .gi-threat-banner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--gi-border); flex-shrink: 0; }
+    .gi-threat-level { font-size: 11px; font-weight: 700; letter-spacing: 1px; padding: 4px 12px; border-radius: 4px; }
+    .gi-threat-pulse { width: 8px; height: 8px; border-radius: 50%; animation: gi-pulse 2s ease infinite; }
+    @keyframes gi-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.4); } }
+    .gi-threat-trends { flex: 1; display: flex; gap: 6px; flex-wrap: wrap; }
+    .gi-trend-chip { padding: 2px 8px; background: var(--gi-muted); border-radius: 10px; font-size: 10px; color: var(--gi-text-dim); }
 
-    /* ── Brief Section ── */
-    .gi-brief {
-      padding: 16px;
-      border-bottom: 1px solid var(--gi-border);
-      flex-shrink: 0;
-    }
-    .gi-brief-label {
-      font-size: 9px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--gi-text-muted);
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .gi-brief-label::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--gi-border);
-    }
-    .gi-brief-text {
-      font-size: 12px;
-      color: var(--gi-text-dim);
-      line-height: 1.7;
-      max-height: 120px;
-      overflow-y: auto;
-      scrollbar-width: thin;
-      scrollbar-color: var(--gi-border) transparent;
-    }
+    .gi-brief { padding: 16px; border-bottom: 1px solid var(--gi-border); flex-shrink: 0; }
+    .gi-brief-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--gi-text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .gi-brief-label::after { content: ''; flex: 1; height: 1px; background: var(--gi-border); }
+    .gi-brief-text { font-size: 12px; color: var(--gi-text-dim); line-height: 1.7; max-height: 120px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--gi-border) transparent; }
 
-    /* ── Filter Tabs ── */
-    .gi-tabs {
-      display: flex;
-      gap: 4px;
-      padding: 8px 16px;
-      border-bottom: 1px solid var(--gi-border);
-      flex-shrink: 0;
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
+    .gi-tabs { display: flex; gap: 4px; padding: 8px 16px; border-bottom: 1px solid var(--gi-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: none; }
     .gi-tabs::-webkit-scrollbar { display: none; }
-    .gi-tab {
-      padding: 4px 10px;
-      background: none;
-      border: 1px solid transparent;
-      border-radius: var(--gi-radius);
-      color: var(--gi-text-muted);
-      font-size: 10px;
-      font-family: inherit;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all var(--gi-transition);
-    }
+    .gi-tab { padding: 4px 10px; background: none; border: 1px solid transparent; border-radius: var(--gi-radius); color: var(--gi-text-muted); font-size: 10px; font-family: inherit; cursor: pointer; white-space: nowrap; transition: all var(--gi-transition); }
     .gi-tab:hover { color: var(--gi-text-dim); }
-    .gi-tab.active {
-      background: color-mix(in srgb, var(--gi-accent) 12%, transparent);
-      border-color: color-mix(in srgb, var(--gi-accent) 30%, transparent);
-      color: var(--gi-accent);
-    }
+    .gi-tab.active { background: color-mix(in srgb, var(--gi-accent) 12%, transparent); border-color: color-mix(in srgb, var(--gi-accent) 30%, transparent); color: var(--gi-accent); }
 
-    /* ── Insights Feed ── */
-    .gi-feed {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px 16px;
-      scrollbar-width: thin;
-      scrollbar-color: var(--gi-border) transparent;
-    }
+    .gi-feed { flex: 1; overflow-y: auto; padding: 12px 16px; scrollbar-width: thin; scrollbar-color: var(--gi-border) transparent; }
 
-    .gi-insight-card {
-      background: var(--gi-surface);
-      border: 1px solid var(--gi-border);
-      border-radius: 10px;
-      padding: 14px;
-      margin-bottom: 10px;
-      position: relative;
-      overflow: hidden;
-      transition: all var(--gi-transition);
-      animation: gi-card-in 0.3s ease both;
-    }
-    .gi-insight-card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; bottom: 0;
-      width: 3px;
-      background: var(--insight-color, var(--gi-accent));
-    }
-    .gi-insight-card:hover {
-      border-color: var(--gi-border);
-      background: var(--gi-surface-hover);
-    }
-    @keyframes gi-card-in {
-      from { opacity: 0; transform: translateX(-8px); }
-      to { opacity: 1; transform: translateX(0); }
-    }
+    .gi-insight-card { background: var(--gi-surface); border: 1px solid var(--gi-border); border-radius: 10px; padding: 14px; margin-bottom: 10px; position: relative; overflow: hidden; transition: all var(--gi-transition); animation: gi-card-in 0.3s ease both; }
+    .gi-insight-card::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 3px; background: var(--insight-color, var(--gi-accent)); }
+    .gi-insight-card:hover { border-color: var(--gi-border); background: var(--gi-surface-hover); }
+    @keyframes gi-card-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
 
-    .gi-insight-header {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-    .gi-insight-icon {
-      font-size: 16px;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-    .gi-insight-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--gi-text);
-      flex: 1;
-      line-height: 1.3;
-    }
-    .gi-insight-severity {
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      padding: 2px 6px;
-      border-radius: 3px;
-      flex-shrink: 0;
-    }
+    .gi-insight-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+    .gi-insight-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .gi-insight-title { font-size: 13px; font-weight: 700; color: var(--gi-text); flex: 1; line-height: 1.3; }
+    .gi-insight-severity { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
 
-    .gi-insight-content {
-      font-size: 12px;
-      color: var(--gi-text-dim);
-      line-height: 1.6;
-      padding-left: 24px;
-    }
+    .gi-insight-content { font-size: 12px; color: var(--gi-text-dim); line-height: 1.6; padding-left: 24px; }
 
-    .gi-insight-meta {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding-left: 24px;
-      margin-top: 10px;
-      flex-wrap: wrap;
-    }
-    .gi-insight-time {
-      font-size: 10px;
-      color: var(--gi-text-muted);
-    }
-    .gi-insight-confidence {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 10px;
-      color: var(--gi-text-muted);
-    }
-    .gi-insight-tags {
-      display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
-    }
-    .gi-insight-tag {
-      padding: 1px 6px;
-      background: var(--gi-muted);
-      border-radius: 3px;
-      font-size: 9px;
-      color: var(--gi-text-muted);
-    }
-    .gi-insight-pois {
-      display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
-    }
-    .gi-insight-poi {
-      padding: 1px 6px;
-      background: color-mix(in srgb, var(--gi-accent) 12%, transparent);
-      border-radius: 3px;
-      font-size: 9px;
-      color: var(--gi-accent);
-      cursor: pointer;
-    }
-    .gi-insight-poi:hover {
-      background: color-mix(in srgb, var(--gi-accent) 25%, transparent);
-    }
+    .gi-insight-meta { display: flex; align-items: center; gap: 10px; padding-left: 24px; margin-top: 10px; flex-wrap: wrap; }
+    .gi-insight-time { font-size: 10px; color: var(--gi-text-muted); }
+    .gi-insight-confidence { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--gi-text-muted); }
+    .gi-insight-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+    .gi-insight-tag { padding: 1px 6px; background: var(--gi-muted); border-radius: 3px; font-size: 9px; color: var(--gi-text-muted); }
+    .gi-insight-pois { display: flex; gap: 4px; flex-wrap: wrap; }
+    .gi-insight-poi { padding: 1px 6px; background: color-mix(in srgb, var(--gi-accent) 12%, transparent); border-radius: 3px; font-size: 9px; color: var(--gi-accent); cursor: pointer; }
+    .gi-insight-poi:hover { background: color-mix(in srgb, var(--gi-accent) 25%, transparent); }
 
-    /* ── Loading ── */
-    .gi-loading {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      color: var(--gi-text-muted);
-      gap: 12px;
-    }
-    .gi-loading-brain {
-      font-size: 32px;
-      animation: gi-brain-pulse 1.5s ease infinite;
-    }
-    @keyframes gi-brain-pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.1); opacity: 0.7; }
-    }
+    .gi-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; color: var(--gi-text-muted); gap: 12px; }
+    .gi-loading-brain { font-size: 32px; animation: gi-brain-pulse 1.5s ease infinite; }
+    @keyframes gi-brain-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } }
 
-    .gi-empty {
-      padding: 40px 20px;
-      text-align: center;
-      color: var(--gi-text-muted);
-      font-size: 12px;
-    }
+    .gi-empty { padding: 40px 20px; text-align: center; color: var(--gi-text-muted); font-size: 12px; }
 
-    /* ── Responsive ── */
     @media (max-width: 768px) {
       .gi-insight-content { padding-left: 0; }
       .gi-insight-meta { padding-left: 0; }
@@ -442,7 +180,7 @@ export class GroqInsightsPanel {
   private container: HTMLElement;
   private data: InsightsResponse | null = null;
   private filteredInsights: GroqInsight[] = [];
-  private activeFilter: string = 'all';
+  private activeFilter = 'all';
   private refreshInterval: ReturnType<typeof setInterval> | null = null;
   private onPOIClick: ((poiName: string) => void) | null = null;
 
@@ -451,9 +189,6 @@ export class GroqInsightsPanel {
     injectStyles();
   }
 
-  /**
-   * Register callback for when user clicks a POI name in insights.
-   */
   onPOIClicked(cb: (poiName: string) => void): void {
     this.onPOIClick = cb;
   }
@@ -470,8 +205,7 @@ export class GroqInsightsPanel {
     await this.fetchInsights();
     this.render();
 
-    // Auto-refresh every 5 minutes
-    this.refreshInterval = setInterval(() => this.fetchInsights().then(() => this.render()), 300000);
+    this.refreshInterval = setInterval(() => { void this.fetchInsights().then(() => this.render()); }, 300000);
   }
 
   private async fetchInsights(): Promise<void> {
@@ -481,7 +215,6 @@ export class GroqInsightsPanel {
       this.data = await res.json();
     } catch (err) {
       console.error('[GroqInsights] Failed to fetch:', err);
-      // Generate fallback structure so panel still renders
       if (!this.data) {
         this.data = {
           brief: 'Unable to connect to Groq AI analysis endpoint. Waiting for data…',
@@ -508,10 +241,9 @@ export class GroqInsightsPanel {
       this.filteredInsights = this.data.insights.filter((i) => i.type === this.activeFilter);
     }
 
-    // Sort by severity then timestamp
-    const severityOrder = { critical: 0, warning: 1, watch: 2, info: 3 };
+    const severityOrder: Record<string, number> = { critical: 0, warning: 1, watch: 2, info: 3 };
     this.filteredInsights.sort((a, b) => {
-      const sd = severityOrder[a.severity] - severityOrder[b.severity];
+      const sd = (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3);
       if (sd !== 0) return sd;
       return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
     });
@@ -520,54 +252,45 @@ export class GroqInsightsPanel {
   private render(): void {
     if (!this.data) return;
 
-    const tl = THREAT_LEVEL_CONFIG[this.data.threatLevel] || THREAT_LEVEL_CONFIG.stable;
+    const tl = THREAT_LEVEL_CONFIG[this.data.threatLevel] ?? DEFAULT_THREAT_LEVEL;
     const types = ['all', ...new Set(this.data.insights.map((i) => i.type))];
+    const currentData = this.data;
 
     const panel = this.container.querySelector('.gi-panel') || this.container;
     panel.innerHTML = `
-      <!-- Header -->
       <div class="gi-header">
-        <div class="gi-header-title">
-          🧠 <span>AI Intelligence Feed</span>
-        </div>
-        <span class="gi-header-model">${escapeHtml(this.data.model)}</span>
-        <span class="gi-header-time">${relativeTime(this.data.generatedAt)}</span>
+        <div class="gi-header-title">🧠 <span>AI Intelligence Feed</span></div>
+        <span class="gi-header-model">${escapeHtml(currentData.model)}</span>
+        <span class="gi-header-time">${relativeTime(currentData.generatedAt)}</span>
         <button class="gi-refresh-btn" title="Refresh analysis">↻</button>
       </div>
 
-      <!-- Threat Level Banner -->
       <div class="gi-threat-banner" style="background:${tl.bg}">
         <div class="gi-threat-pulse" style="background:${tl.color}"></div>
-        <div class="gi-threat-level" style="color:${tl.color};background:${tl.bg};border:1px solid ${tl.color}30">
-          THREAT: ${tl.label}
-        </div>
+        <div class="gi-threat-level" style="color:${tl.color};background:${tl.bg};border:1px solid ${tl.color}30">THREAT: ${tl.label}</div>
         <div class="gi-threat-trends">
-          ${this.data.topTrends.map((t) => `<span class="gi-trend-chip">${escapeHtml(t)}</span>`).join('')}
+          ${currentData.topTrends.map((t) => `<span class="gi-trend-chip">${escapeHtml(t)}</span>`).join('')}
         </div>
       </div>
 
-      <!-- Brief -->
       <div class="gi-brief">
         <div class="gi-brief-label">📋 Executive Brief</div>
-        <div class="gi-brief-text">${escapeHtml(this.data.brief)}</div>
+        <div class="gi-brief-text">${escapeHtml(currentData.brief)}</div>
       </div>
 
-      <!-- Filter Tabs -->
       <div class="gi-tabs">
         ${types.map((t) => {
           const icon = t === 'all' ? '◉' : (TYPE_ICONS[t] || '●');
           const label = t === 'all' ? 'All' : t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-          const count = t === 'all' ? this.data!.insights.length : this.data!.insights.filter((i) => i.type === t).length;
+          const count = t === 'all' ? currentData.insights.length : currentData.insights.filter((i) => i.type === t).length;
           return `<button class="gi-tab ${this.activeFilter === t ? 'active' : ''}" data-filter="${t}">${icon} ${label} (${count})</button>`;
         }).join('')}
       </div>
 
-      <!-- Feed -->
-      <div class="gi-feed" id="gi-feed">
+      <div class="gi-feed">
         ${this.filteredInsights.length === 0
           ? '<div class="gi-empty">No insights match this filter</div>'
-          : this.filteredInsights.map((insight, i) => this.renderInsightCard(insight, i)).join('')
-        }
+          : this.filteredInsights.map((insight, i) => this.renderInsightCard(insight, i)).join('')}
       </div>
     `;
 
@@ -575,7 +298,7 @@ export class GroqInsightsPanel {
   }
 
   private renderInsightCard(insight: GroqInsight, index: number): string {
-    const sev = SEVERITY_CONFIG[insight.severity] || SEVERITY_CONFIG.info;
+    const sev = SEVERITY_CONFIG[insight.severity] ?? SEVERITY_CONFIG.info;
     const icon = TYPE_ICONS[insight.type] || '●';
 
     return `
@@ -583,53 +306,29 @@ export class GroqInsightsPanel {
         <div class="gi-insight-header">
           <span class="gi-insight-icon">${icon}</span>
           <div class="gi-insight-title">${escapeHtml(insight.title)}</div>
-          <span class="gi-insight-severity"
-            style="color:${sev.color}; background:${sev.color}15; border:1px solid ${sev.color}30">
-            ${sev.icon} ${sev.label}
-          </span>
+          <span class="gi-insight-severity" style="color:${sev.color}; background:${sev.color}15; border:1px solid ${sev.color}30">${sev.icon} ${sev.label}</span>
         </div>
-
         <div class="gi-insight-content">${escapeHtml(insight.content)}</div>
-
         <div class="gi-insight-meta">
           <span class="gi-insight-time">${relativeTime(insight.timestamp)}</span>
-          <span class="gi-insight-confidence">
-            Conf: ${confidencePips(insight.confidence)}
-          </span>
+          <span class="gi-insight-confidence">Conf: ${confidencePips(insight.confidence)}</span>
           ${insight.region ? `<span class="gi-insight-tag">${escapeHtml(insight.region)}</span>` : ''}
         </div>
-
-        ${insight.relatedPOIs.length > 0 ? `
-          <div class="gi-insight-meta">
-            <div class="gi-insight-pois">
-              ${insight.relatedPOIs.map((p) => `<span class="gi-insight-poi" data-poi="${escapeHtml(p)}">👤 ${escapeHtml(p)}</span>`).join('')}
-            </div>
-          </div>
-        ` : ''}
-
-        ${insight.tags.length > 0 ? `
-          <div class="gi-insight-meta">
-            <div class="gi-insight-tags">
-              ${insight.tags.slice(0, 6).map((t) => `<span class="gi-insight-tag">#${escapeHtml(t)}</span>`).join('')}
-            </div>
-          </div>
-        ` : ''}
+        ${insight.relatedPOIs.length > 0 ? `<div class="gi-insight-meta"><div class="gi-insight-pois">${insight.relatedPOIs.map((p) => `<span class="gi-insight-poi" data-poi="${escapeHtml(p)}">👤 ${escapeHtml(p)}</span>`).join('')}</div></div>` : ''}
+        ${insight.tags.length > 0 ? `<div class="gi-insight-meta"><div class="gi-insight-tags">${insight.tags.slice(0, 6).map((t) => `<span class="gi-insight-tag">#${escapeHtml(t)}</span>`).join('')}</div></div>` : ''}
       </div>
     `;
   }
 
   private bindEvents(panel: Element): void {
-    // Refresh button
     const refreshBtn = panel.querySelector('.gi-refresh-btn');
     if (refreshBtn) {
-      refreshBtn.addEventListener('click', async () => {
+      refreshBtn.addEventListener('click', () => {
         refreshBtn.classList.add('spinning');
-        await this.fetchInsights();
-        this.render();
+        void this.fetchInsights().then(() => this.render());
       });
     }
 
-    // Filter tabs
     panel.querySelectorAll('.gi-tab').forEach((tab) => {
       tab.addEventListener('click', () => {
         this.activeFilter = (tab as HTMLElement).dataset.filter || 'all';
@@ -638,7 +337,6 @@ export class GroqInsightsPanel {
       });
     });
 
-    // POI clicks
     panel.querySelectorAll('.gi-insight-poi').forEach((el) => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();

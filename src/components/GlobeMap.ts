@@ -3292,7 +3292,7 @@ import { POIMapLayer } from './POIMapLayer';
 
 const poiLayer = new POIMapLayer();
 await poiLayer.load();
-const globePoints = poiLayer.getGlobePoints();
+const _globePoints = poiLayer.getGlobePoints();
 // Add as Three.js markers on sphere surface
 import { GlobePerf, FrustumCuller } from './GlobePerf';
 

@@ -3287,26 +3287,6 @@ export class GlobeMap {
     this.container.classList.remove('globe-mode');
     this.container.style.cssText = '';
   }
-}
-import { POIMapLayer } from './POIMapLayer';
-
-const poiLayer = new POIMapLayer();
-await poiLayer.load();
-const _globePoints = poiLayer.getGlobePoints();
-// Add as Three.js markers on sphere surface
-import { GlobePerf, FrustumCuller } from './GlobePerf';
-
-const perf = new GlobePerf();
-
-// Optional: quality change listener to rebuild geometry
-perf.onQualityChanged((tier, pixelRatio) => {
-  renderer.setPixelRatio(pixelRatio);
-  rebuildGlobeGeometry(perf.beginFrame().globeSegments);
-});
-
-// Optional: debug overlay (toggle with ` key)
-document.body.appendChild(perf.createDebugOverlay());
-
 // In your render loop:
 function animate() {
   if (perf.shouldSkipFrame()) {

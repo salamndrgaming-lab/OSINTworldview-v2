@@ -2,40 +2,20 @@
  * GlobePerf.ts — Globe Performance Optimization Module
  * World Monitor OSINT Platform
  *
- * Drop-in performance layer for GlobeMap.ts (Three.js).
- * Provides:
- *   - Level-of-Detail (LOD) geometry for sphere
- *   - Frustum culling for markers/arcs
- *   - Adaptive quality based on frame rate
- *   - Texture compression & mipmap management
- *   - Frame budgeting with priority queue
- *   - Instanced rendering for markers
- *   - WebGL state optimization
- *
  * Drop into: src/components/GlobePerf.ts
- * Import and use in GlobeMap.ts
  */
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface PerfConfig {
-  /** Target FPS (default 30 on mobile, 60 on desktop) */
   targetFPS: number;
-  /** Maximum markers rendered per frame (default 200) */
   maxMarkersPerFrame: number;
-  /** Enable adaptive quality scaling (default true) */
   adaptiveQuality: boolean;
-  /** Minimum pixel ratio (default 0.5) */
   minPixelRatio: number;
-  /** Maximum pixel ratio (default devicePixelRatio) */
   maxPixelRatio: number;
-  /** Frame budget in ms (default 16.6 for 60fps) */
   frameBudgetMs: number;
-  /** Enable LOD (default true) */
   enableLOD: boolean;
-  /** Enable frustum culling (default true) */
   enableFrustumCulling: boolean;
-  /** Globe segment counts for LOD tiers [high, medium, low] */
   lodSegments: [number, number, number];
 }
 
@@ -53,12 +33,12 @@ interface FrameStats {
 
 // ── Default Config ───────────────────────────────────────────────────────────
 
-const isMobile = (): boolean =>
+const isMobileDevice = (): boolean =>
   /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
   window.matchMedia('(max-width: 768px)').matches;
 
 function defaultConfig(): PerfConfig {
-  const mobile = isMobile();
+  const mobile = isMobileDevice();
   return {
     targetFPS: mobile ? 30 : 60,
     maxMarkersPerFrame: mobile ? 80 : 200,
@@ -101,7 +81,7 @@ class FPSTracker {
     if (this.samples.length === 0) return 60;
     const sorted = [...this.samples].sort((a, b) => a - b);
     const idx = Math.floor((pct / 100) * sorted.length);
-    return sorted[Math.min(idx, sorted.length - 1)];
+    return sorted[Math.min(idx, sorted.length - 1)] ?? 60;
   }
 
   reset(): void {
@@ -117,7 +97,7 @@ class QualityController {
   private currentTier: QualityTier = 'high';
   private currentPixelRatio: number;
   private tierStabilityFrames = 0;
-  private readonly STABILITY_THRESHOLD = 90; // frames before tier change
+  private readonly STABILITY_THRESHOLD = 90;
   private fpsTracker: FPSTracker;
 
   constructor(config: PerfConfig, fpsTracker: FPSTracker) {
@@ -132,12 +112,11 @@ class QualityController {
     }
 
     const fps = this.fpsTracker.getFPS();
-    const p5 = this.fpsTracker.getPercentile(5); // worst 5% frames
+    const p5 = this.fpsTracker.getPercentile(5);
     const target = this.config.targetFPS;
 
-    let desiredTier = this.currentTier;
+    let desiredTier: QualityTier = this.currentTier;
 
-    // Downgrade conditions
     if (p5 < target * 0.5) {
       desiredTier = 'potato';
     } else if (fps < target * 0.6) {
@@ -146,7 +125,6 @@ class QualityController {
       desiredTier = 'medium';
     }
 
-    // Upgrade conditions (conservative)
     if (fps > target * 0.95 && p5 > target * 0.7) {
       if (this.currentTier === 'potato') desiredTier = 'low';
       else if (this.currentTier === 'low') desiredTier = 'medium';
@@ -163,12 +141,10 @@ class QualityController {
       return { tierChanged: false, tier: this.currentTier, pixelRatio: this.currentPixelRatio };
     }
 
-    // Apply tier change
     const prevTier = this.currentTier;
     this.currentTier = desiredTier;
     this.tierStabilityFrames = 0;
 
-    // Adjust pixel ratio
     const ratioMap: Record<QualityTier, number> = {
       high: this.config.maxPixelRatio,
       medium: Math.max(this.config.minPixelRatio, this.config.maxPixelRatio * 0.75),
@@ -195,11 +171,6 @@ class QualityController {
 
 // ── LOD Manager ──────────────────────────────────────────────────────────────
 
-export interface LODGeometry {
-  segments: number;
-  tier: QualityTier;
-}
-
 class LODManager {
   private config: PerfConfig;
 
@@ -207,13 +178,8 @@ class LODManager {
     this.config = config;
   }
 
-  /**
-   * Get sphere segments for current quality tier.
-   * Use with: new THREE.SphereGeometry(radius, segments, segments)
-   */
   getGlobeSegments(tier: QualityTier): number {
     if (!this.config.enableLOD) return this.config.lodSegments[0];
-
     switch (tier) {
       case 'high': return this.config.lodSegments[0];
       case 'medium': return this.config.lodSegments[1];
@@ -222,9 +188,6 @@ class LODManager {
     }
   }
 
-  /**
-   * Get atmosphere/glow detail level
-   */
   getAtmosphereDetail(tier: QualityTier): { enabled: boolean; segments: number; opacity: number } {
     switch (tier) {
       case 'high': return { enabled: true, segments: 48, opacity: 0.15 };
@@ -234,9 +197,6 @@ class LODManager {
     }
   }
 
-  /**
-   * Get max visible arcs for current tier
-   */
   getMaxArcs(tier: QualityTier): number {
     switch (tier) {
       case 'high': return 100;
@@ -246,9 +206,6 @@ class LODManager {
     }
   }
 
-  /**
-   * Get arc tube segments
-   */
   getArcDetail(tier: QualityTier): number {
     switch (tier) {
       case 'high': return 32;
@@ -261,17 +218,7 @@ class LODManager {
 
 // ── Frustum Culler ───────────────────────────────────────────────────────────
 
-/**
- * Simple frustum culling helper.
- * Pass camera and objects to determine visibility.
- */
 export class FrustumCuller {
-  /**
-   * Given an array of objects with 3D positions, return indices of visible ones.
-   * `cameraPos` is the camera's world position [x,y,z].
-   * `cameraDir` is the camera's forward direction [x,y,z].
-   * `fov` is the camera's field of view in radians.
-   */
   static cull(
     positions: Array<[number, number, number]>,
     cameraPos: [number, number, number],
@@ -280,10 +227,12 @@ export class FrustumCuller {
     maxDistance: number
   ): number[] {
     const visible: number[] = [];
-    const cosFov = Math.cos(fov * 0.6); // slightly wider than actual FOV
+    const cosFov = Math.cos(fov * 0.6);
 
     for (let i = 0; i < positions.length; i++) {
-      const [px, py, pz] = positions[i];
+      const pos = positions[i];
+      if (!pos) continue;
+      const [px, py, pz] = pos;
       const dx = px - cameraPos[0];
       const dy = py - cameraPos[1];
       const dz = pz - cameraPos[2];
@@ -291,7 +240,6 @@ export class FrustumCuller {
 
       if (dist > maxDistance) continue;
 
-      // Dot product for angle check
       const dot = (dx * cameraDir[0] + dy * cameraDir[1] + dz * cameraDir[2]) / dist;
       if (dot > cosFov) {
         visible.push(i);
@@ -301,10 +249,6 @@ export class FrustumCuller {
     return visible;
   }
 
-  /**
-   * Check if a lat/lng point on a sphere is facing the camera
-   * (simple back-face culling for globe markers).
-   */
   static isPointFacingCamera(
     lat: number,
     lng: number,
@@ -316,21 +260,16 @@ export class FrustumCuller {
     const cLatR = (cameraLat * Math.PI) / 180;
     const cLngR = (cameraLng * Math.PI) / 180;
 
-    // Dot product of two unit sphere normals
     const dot =
       Math.cos(latR) * Math.cos(cLatR) * Math.cos(lngR - cLngR) +
       Math.sin(latR) * Math.sin(cLatR);
 
-    return dot > -0.1; // slightly past horizon for smooth transition
+    return dot > -0.1;
   }
 }
 
 // ── Frame Budget Manager ─────────────────────────────────────────────────────
 
-/**
- * Prioritizes work within a frame time budget.
- * Use to throttle expensive per-frame operations.
- */
 export class FrameBudget {
   private budgetMs: number;
   private frameStart = 0;
@@ -343,29 +282,22 @@ export class FrameBudget {
     this.frameStart = performance.now();
   }
 
-  /**
-   * Returns true if there's still time left in the frame budget.
-   */
   hasTimeLeft(): boolean {
-    return (performance.now() - this.frameStart) < this.budgetMs * 0.8; // 80% budget
+    return (performance.now() - this.frameStart) < this.budgetMs * 0.8;
   }
 
-  /**
-   * Get remaining ms in budget
-   */
   remaining(): number {
     return Math.max(0, this.budgetMs * 0.8 - (performance.now() - this.frameStart));
   }
 
-  /**
-   * Run a batch of work items, stopping when budget exhausted.
-   * Returns the number of items processed.
-   */
   processBatch<T>(items: T[], fn: (item: T, index: number) => void): number {
     let processed = 0;
     for (let i = 0; i < items.length; i++) {
       if (!this.hasTimeLeft()) break;
-      fn(items[i], i);
+      const item = items[i];
+      if (item !== undefined) {
+        fn(item, i);
+      }
       processed++;
     }
     return processed;
@@ -375,9 +307,6 @@ export class FrameBudget {
 // ── Texture Optimization ─────────────────────────────────────────────────────
 
 export class TextureOptimizer {
-  /**
-   * Returns optimal texture dimensions for the current quality tier.
-   */
   static getTextureDimensions(
     tier: QualityTier,
     originalWidth: number,
@@ -404,10 +333,6 @@ export class TextureOptimizer {
     }
   }
 
-  /**
-   * Downscale a texture using an offscreen canvas.
-   * Returns a new canvas element sized for the quality tier.
-   */
   static downscaleTexture(
     source: HTMLImageElement | HTMLCanvasElement,
     targetWidth: number,
@@ -416,34 +341,24 @@ export class TextureOptimizer {
     const canvas = document.createElement('canvas');
     canvas.width = targetWidth;
     canvas.height = targetHeight;
-    const ctx = canvas.getContext('2d')!;
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(source, 0, 0, targetWidth, targetHeight);
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(source, 0, 0, targetWidth, targetHeight);
+    }
     return canvas;
   }
 }
 
 // ── Marker Instance Pool ─────────────────────────────────────────────────────
 
-/**
- * Pre-allocates marker geometry for instanced rendering.
- * Instead of creating individual meshes per marker, use
- * THREE.InstancedMesh with this pool.
- *
- * Usage in GlobeMap.ts:
- *   const pool = new MarkerPool(maxMarkers);
- *   // Create InstancedMesh with pool.maxCount
- *   // Use pool.setMarker(index, position, color, scale) to update instances
- */
 export class MarkerPool {
   readonly maxCount: number;
   private activeCount = 0;
-
-  // Flat arrays for instanced attributes
-  readonly positions: Float32Array;   // xyz per marker
-  readonly colors: Float32Array;      // rgba per marker
-  readonly scales: Float32Array;      // uniform scale per marker
+  readonly positions: Float32Array;
+  readonly colors: Float32Array;
+  readonly scales: Float32Array;
 
   constructor(maxCount: number) {
     this.maxCount = maxCount;
@@ -508,18 +423,10 @@ export class GlobePerf {
     };
   }
 
-  /**
-   * Register callback for quality tier changes.
-   * Use to rebuild globe geometry, resize renderer, etc.
-   */
   onQualityChanged(cb: (tier: QualityTier, pixelRatio: number) => void): void {
     this.onQualityChange = cb;
   }
 
-  /**
-   * Call at the start of every render frame.
-   * Returns the current quality tier and whether it changed.
-   */
   beginFrame(): {
     tier: QualityTier;
     pixelRatio: number;
@@ -543,7 +450,6 @@ export class GlobePerf {
 
     const tier = quality.tier;
 
-    // Adjust max markers per tier
     const markerScale: Record<QualityTier, number> = {
       high: 1,
       medium: 0.6,
@@ -568,9 +474,6 @@ export class GlobePerf {
     };
   }
 
-  /**
-   * Call at the end of render frame to track stats.
-   */
   endFrame(drawCalls?: number, triangles?: number): void {
     this.stats.drawCalls = drawCalls || 0;
     this.stats.triangles = triangles || 0;
@@ -588,29 +491,18 @@ export class GlobePerf {
     return this.qualityController.getPixelRatio();
   }
 
-  /**
-   * Get a pre-configured MarkerPool sized for current tier
-   */
   createMarkerPool(): MarkerPool {
     return new MarkerPool(this.config.maxMarkersPerFrame);
   }
 
-  /**
-   * Utility: should we skip rendering this frame?
-   * Returns true if we're running behind and should drop a frame.
-   */
   shouldSkipFrame(): boolean {
     const fps = this.fpsTracker.getFPS();
     if (fps < this.config.targetFPS * 0.3) {
-      // Severely behind, skip every other frame
       return Math.random() < 0.3;
     }
     return false;
   }
 
-  /**
-   * Create a stats overlay for debugging (toggle with ~ key)
-   */
   createDebugOverlay(): HTMLElement {
     const el = document.createElement('div');
     el.id = 'globe-perf-overlay';
@@ -631,15 +523,13 @@ export class GlobePerf {
       pointerEvents: 'none',
     });
 
-    // Toggle with ~ key
     document.addEventListener('keydown', (e) => {
       if (e.key === '`') {
         el.style.display = el.style.display === 'none' ? 'block' : 'none';
       }
     });
 
-    // Update loop
-    const update = () => {
+    const update = (): void => {
       if (el.style.display !== 'none') {
         const s = this.stats;
         const fpsColor = s.fps > 50 ? '#22c55e' : s.fps > 30 ? '#eab308' : '#ef4444';
@@ -659,7 +549,4 @@ export class GlobePerf {
   }
 }
 
-// ── Convenience export ───────────────────────────────────────────────────────
-
-export { FrustumCuller as Culler, FrameBudget as Budget, TextureOptimizer as TexOpt };
 export default GlobePerf;

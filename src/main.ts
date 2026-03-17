@@ -438,3 +438,34 @@ if (!('__TAURI_INTERNALS__' in window) && !('__TAURI__' in window) && 'serviceWo
 //     window.location.reload();
 //   });
 // }
+import { POIPanel } from './components/POIPanel';
+
+// When the POI panel becomes active:
+const poiContainer = document.getElementById('panel-poi');
+const poiPanel = new POIPanel(poiContainer);
+await poiPanel.init();
+import { MobileNav, initMobileViewport, isMobile } from './components/MobileNav';
+import { getMobileTabPanels } from './config/panels';
+
+// Initialize viewport fixes
+initMobileViewport();
+
+if (isMobile()) {
+  const tabs = getMobileTabPanels().map(p => ({
+    id: p.id,
+    label: p.label,
+    icon: p.icon,
+    panel: p.id,
+  }));
+
+  const mobileNav = new MobileNav({
+    tabs,
+    initialTab: 'dashboard',
+    onTabChange: (tabId) => {
+      // Your existing panel switching logic
+      switchToPanel(tabId);
+    },
+  });
+
+  mobileNav.mount();
+}

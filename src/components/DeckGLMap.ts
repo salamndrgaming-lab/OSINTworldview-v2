@@ -345,6 +345,7 @@ export class DeckGLMap {
   private speciesRecoveryZones: Array<SpeciesRecovery & { recoveryZone: { name: string; lat: number; lon: number } }> = [];
   private renewableInstallations: RenewableInstallation[] = [];
   private webcamData: Array<WebcamEntry | WebcamCluster> = [];
+  private poiPins: Array<{ name: string; role: string; location: string; riskLevel: string; lat: number; lng: number; riskColor: [number, number, number, number]; confidence: number; activityScore: number; summary: string; region: string }> = [];
   private countriesGeoJsonData: FeatureCollection<Geometry> | null = null;
   private conflictZoneGeoJson: GeoJSON.FeatureCollection | null = null;
 
@@ -1517,6 +1518,10 @@ export class DeckGLMap {
         radiusUnits: 'pixels',
         pickable: true,
       }));
+    }
+    // POI markers layer
+    if (mapLayers.poi && this.poiPins.length > 0) {
+      layers.push(this.createPOILayer());
     }
 
     // News geo-locations (always shown if data exists)
@@ -3201,6 +3206,21 @@ export class DeckGLMap {
       hydro: [0, 180, 180, 200],
       geothermal: [255, 150, 80, 200],
     };
+    private createPOILayer(): ScatterplotLayer {
+    return new ScatterplotLayer({
+      id: 'poi-layer',
+      data: this.poiPins,
+      getPosition: (d: (typeof this.poiPins)[0]) => [d.lng, d.lat],
+      getRadius: (d: (typeof this.poiPins)[0]) => d.riskLevel === 'critical' ? 22000 : d.riskLevel === 'high' ? 18000 : 14000,
+      getFillColor: (d: (typeof this.poiPins)[0]) => d.riskColor,
+      getLineColor: [255, 255, 255, 160] as [number, number, number, number],
+      stroked: true,
+      lineWidthMinPixels: 1.5,
+      radiusMinPixels: 6,
+      radiusMaxPixels: 18,
+      pickable: true,
+    });
+  }
     const typeLineColors: Record<string, [number, number, number, number]> = {
       solar: [255, 200, 50, 255],
       wind: [100, 200, 255, 255],
@@ -3474,6 +3494,11 @@ export class DeckGLMap {
         imgHtml += '</div>';
         return { html: imgHtml };
       }
+        case 'poi-layer': {
+        const riskColors: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e' };
+        const rc = riskColors[obj.riskLevel] || '#eab308';
+        return { html: `<div class="deckgl-tooltip"><strong>👤 ${text(obj.name)}</strong><br/>${text(obj.role)}<br/><span style="color:${rc};text-transform:uppercase;font-weight:700;font-size:10px">${text(obj.riskLevel)}</span> · 📍 ${text(obj.location)}<br/><span style="opacity:.7">${text((obj.summary || '').slice(0, 100))}</span></div>` };
+      }
       case 'webcam-layer': {
         const label = 'count' in obj
           ? `${obj.count} webcams`
@@ -3711,6 +3736,7 @@ export class DeckGLMap {
       'gps-jamming-layer': 'gpsJamming',
       'cable-advisories-layer': 'cable-advisory',
       'repair-ships-layer': 'repair-ship',
+      'poi-layer': 'poi' as PopupType,
     };
 
     const popupType = layerToPopupType[layerId];
@@ -4775,6 +4801,11 @@ export class DeckGLMap {
   public setWebcams(markers: Array<WebcamEntry | WebcamCluster>): void {
     this.webcamData = markers;
     this.render();
+    
+  public setPOIMarkers(markers: Array<{ name: string; role: string; location: string; riskLevel: string; lat: number; lng: number; riskColor: [number, number, number, number]; confidence: number; activityScore: number; summary: string; region: string }>): void {
+    this.poiPins = markers;
+    this.render();
+  }
   }
 
   public setGpsJamming(hexes: GpsJamHex[]): void {

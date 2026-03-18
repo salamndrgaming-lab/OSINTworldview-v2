@@ -115,6 +115,7 @@ export const DEFAULT_MAP_LAYERS: MapLayers = {
 
   ciiChoropleth: false,
   webcams: false,
+  poi: false,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

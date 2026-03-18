@@ -3206,6 +3206,7 @@ export class DeckGLMap {
       hydro: [0, 180, 180, 200],
       geothermal: [255, 150, 80, 200],
     };
+  }
     private createPOILayer(): ScatterplotLayer {
     return new ScatterplotLayer({
       id: 'poi-layer',
@@ -3220,7 +3221,7 @@ export class DeckGLMap {
       radiusMaxPixels: 18,
       pickable: true,
     });
-  }
+      
     const typeLineColors: Record<string, [number, number, number, number]> = {
       solar: [255, 200, 50, 255],
       wind: [100, 200, 255, 255],
@@ -4801,11 +4802,11 @@ export class DeckGLMap {
   public setWebcams(markers: Array<WebcamEntry | WebcamCluster>): void {
     this.webcamData = markers;
     this.render();
-    
+  }  
+  
   public setPOIMarkers(markers: Array<{ name: string; role: string; location: string; riskLevel: string; lat: number; lng: number; riskColor: [number, number, number, number]; confidence: number; activityScore: number; summary: string; region: string }>): void {
     this.poiPins = markers;
     this.render();
-  }
   }
 
   public setGpsJamming(hexes: GpsJamHex[]): void {

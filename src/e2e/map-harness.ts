@@ -188,6 +188,7 @@ const allLayersEnabled: MapLayers = {
   processingPlants: false,
   commodityPorts: false,
   webcams: false,
+  poi: false,
 };
 
 const allLayersDisabled: MapLayers = {
@@ -243,6 +244,7 @@ const allLayersDisabled: MapLayers = {
   processingPlants: false,
   commodityPorts: false,
   webcams: false,
+  poi: false,
 };
 
 const SEEDED_NEWS_LOCATIONS: Array<{

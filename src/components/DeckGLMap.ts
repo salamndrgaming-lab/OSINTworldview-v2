@@ -3199,15 +3199,35 @@ export class DeckGLMap {
     });
   }
 
-  private createRenewableInstallationsLayer(): ScatterplotLayer {
+ private createRenewableInstallationsLayer(): ScatterplotLayer {
     const typeColors: Record<string, [number, number, number, number]> = {
       solar: [255, 200, 50, 200],
       wind: [100, 200, 255, 200],
       hydro: [0, 180, 180, 200],
       geothermal: [255, 150, 80, 200],
     };
+    const typeLineColors: Record<string, [number, number, number, number]> = {
+      solar: [255, 200, 50, 255],
+      wind: [100, 200, 255, 255],
+      hydro: [0, 180, 180, 255],
+      geothermal: [255, 150, 80, 255],
+    };
+    return new ScatterplotLayer({
+      id: 'renewable-installations-layer',
+      data: this.renewableInstallations,
+      getPosition: (d: RenewableInstallation) => [d.lon, d.lat],
+      getRadius: 30000,
+      radiusMinPixels: 5,
+      radiusMaxPixels: 18,
+      getFillColor: (d: RenewableInstallation) => typeColors[d.type] ?? [200, 200, 200, 200] as [number, number, number, number],
+      stroked: true,
+      getLineColor: (d: RenewableInstallation) => typeLineColors[d.type] ?? [200, 200, 200, 255] as [number, number, number, number],
+      lineWidthMinPixels: 1,
+      pickable: true,
+    });
   }
-    private createPOILayer(): ScatterplotLayer {
+
+  private createPOILayer(): ScatterplotLayer {
     return new ScatterplotLayer({
       id: 'poi-layer',
       data: this.poiPins,
@@ -3221,6 +3241,7 @@ export class DeckGLMap {
       radiusMaxPixels: 18,
       pickable: true,
     });
+  }
       
     const typeLineColors: Record<string, [number, number, number, number]> = {
       solar: [255, 200, 50, 255],

@@ -229,6 +229,7 @@ export const DEFAULT_MAP_LAYERS: MapLayers = {
   processingPlants: false,
   commodityPorts: false,
   webcams: false,
+  poi: false,
 };
 
 // Mobile defaults for finance variant

@@ -5,7 +5,7 @@
  */
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Layer, LayersList, PickingInfo } from '@deck.gl/core';
-import { GeoJsonLayer, ScatterplotLayer, PathLayer, IconLayer, TextLayer, PolygonLayer } from '@deck.gl/layers';
+import { GeoJsonLayer, ScatterplotLayer, PathLayer, IconLayer, TextLayer, PolygonLayer, ArcLayer} from '@deck.gl/layers';
 import maplibregl from 'maplibre-gl';
 import { registerPMTilesProtocol, FALLBACK_DARK_STYLE, FALLBACK_LIGHT_STYLE, getMapProvider, getMapTheme, getStyleForProvider, isLightMapTheme } from '@/config/basemap';
 import Supercluster from 'supercluster';
@@ -46,7 +46,6 @@ import type { ImageryScene } from '@/generated/server/worldmonitor/imagery/v1/se
 import type { DisplacementFlow } from '@/services/displacement';
 import type { Earthquake } from '@/services/earthquakes';
 import type { ClimateAnomaly } from '@/services/climate';
-import { ArcLayer } from '@deck.gl/layers';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { PathStyleExtension } from '@deck.gl/extensions';
@@ -3242,13 +3241,14 @@ export class DeckGLMap {
       pickable: true,
     });
   }
-      
+     
     const typeLineColors: Record<string, [number, number, number, number]> = {
       solar: [255, 200, 50, 255],
       wind: [100, 200, 255, 255],
       hydro: [0, 180, 180, 255],
       geothermal: [255, 150, 80, 255],
     };
+}
     return new ScatterplotLayer({
       id: 'renewable-installations-layer',
       data: this.renewableInstallations,

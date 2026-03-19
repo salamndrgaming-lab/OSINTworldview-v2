@@ -3242,28 +3242,6 @@ export class DeckGLMap {
     });
   }
      
-    const typeLineColors: Record<string, [number, number, number, number]> = {
-      solar: [255, 200, 50, 255],
-      wind: [100, 200, 255, 255],
-      hydro: [0, 180, 180, 255],
-      geothermal: [255, 150, 80, 255],
-    };
-}
-    return new ScatterplotLayer({
-      id: 'renewable-installations-layer',
-      data: this.renewableInstallations,
-      getPosition: (d: RenewableInstallation) => [d.lon, d.lat],
-      getRadius: 30000,
-      radiusMinPixels: 5,
-      radiusMaxPixels: 18,
-      getFillColor: (d: RenewableInstallation) => typeColors[d.type] ?? [200, 200, 200, 200] as [number, number, number, number],
-      stroked: true,
-      getLineColor: (d: RenewableInstallation) => typeLineColors[d.type] ?? [200, 200, 200, 255] as [number, number, number, number],
-      lineWidthMinPixels: 1,
-      pickable: true,
-    });
-  }
-
   private createImageryFootprintLayer(): PolygonLayer {
     return new PolygonLayer({
       id: 'satellite-imagery-layer',

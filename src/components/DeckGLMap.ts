@@ -3376,6 +3376,8 @@ export class DeckGLMap {
         return { html: `<div class="deckgl-tooltip"><strong>M${(obj.magnitude || 0).toFixed(1)} ${t('components.deckgl.tooltip.earthquake')}</strong><br/>${text(obj.place)}</div>` };
       case 'military-vessels-layer':
         return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name)}</strong><br/>${text(obj.operatorCountry)}</div>` };
+            case 'global-flights':
+        return { html: `<div class="deckgl-tooltip"><strong>${obj.label}</strong><br/>${obj.desc}</div>` };
       case 'military-flights-layer':
         return { html: `<div class="deckgl-tooltip"><strong>${text(obj.callsign || obj.registration || t('components.deckgl.tooltip.militaryAircraft'))}</strong><br/>${text(obj.type)}</div>` };
       case 'military-vessel-clusters-layer':
@@ -5617,6 +5619,11 @@ export class DeckGLMap {
     this.debouncedRebuildLayers.cancel();
     this.debouncedFetchBases.cancel();
     this.debouncedFetchAircraft.cancel();
+    if (this.flightWorker) {
+      this.flightWorker.terminate();
+      this.flightWorker = null;
+    }
+    this.flightHistory.clear();
     this.rafUpdateLayers.cancel();
 
     if (this.renderRafId !== null) {

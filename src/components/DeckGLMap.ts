@@ -449,30 +449,26 @@ export class DeckGLMap {
     }, 150);
     this.debouncedFetchBases = debounce(() => this.fetchServerBases(), 300);
     this.debouncedFetchAircraft = debounce(() => this.fetchViewportAircraft(), 500);
-    // Setup Global Flight Worker
+
     try {
       this.flightWorker = new Worker(new URL('../workers/flight-worker.ts', import.meta.url));
-      this.flightWorker.onmessage = (e) => {
+      this.flightWorker.onmessage = (e: MessageEvent) => {
         const flights = e.data;
         const now = Date.now() / 1000;
-        
         flights.forEach((f: any) => {
           const existing = this.flightHistory.get(f.id) || { path: [], timestamps: [] };
           const lastCoord = existing.path[existing.path.length - 1];
-          
-          // Only update history if position actually changed
           if (!lastCoord || lastCoord[0] !== f.coords[0] || lastCoord[1] !== f.coords[1]) {
             const newPath = [...existing.path.slice(-14), f.coords];
             const newTimes = [...existing.timestamps.slice(-14), now];
             this.flightHistory.set(f.id, { path: newPath, timestamps: newTimes });
           }
         });
-
         this.aircraftPositions = flights;
         this.debouncedRebuildLayers();
       };
     } catch (err) {
-      console.error('Failed to initialize flight worker', err);
+      console.error('Flight worker failed to load', err);
     }
     this.rafUpdateLayers = rafSchedule(() => {
       if (this.renderPaused || this.webglLost || !this.maplibreMap) return;
@@ -1382,42 +1378,46 @@ export class DeckGLMap {
 
     // Aircraft positions layer (live tracking, under flights toggle)
     if (mapLayers.flights && this.aircraftPositions.length > 0) {
-            // 1. GLOBAL FAINT TRAILS
-      layers.push(new TripsLayer({
-        id: 'flight-trails',
-        data: Array.from(this.flightHistory.values()),
-        getPath: d => d.path,
-        getTimestamps: d => d.timestamps,
-        getColor: [255, 255, 255],
-        opacity: 0.12, 
-        widthMinPixels: 1,
-        trailLength: 600,
-        currentTime: Date.now() / 1000
-      }));
+      layers.push(
+        new TripsLayer({
+          id: 'flight-trails',
+          data: Array.from(this.flightHistory.values()),
+          getPath: (d: any) => d.path,
+          getTimestamps: (d: any) => d.timestamps,
+          getColor: [255, 255, 255],
+          opacity: 0.12,
+          widthMinPixels: 1,
+          trailLength: 600,
+          currentTime: Date.now() / 1000
+        })
+      );
 
-      // 2. GLOBAL 3D MODELS
-      layers.push(new ScenegraphLayer({
-        id: 'global-flights',
-        data: this.aircraftPositions,
-        scenegraph: 'https://raw.githubusercontent.com/visgl/deck.gl-data/master/luma.gl/examples/objects/airplane.glb',
-        getPosition: d => d.coords,
-        getOrientation: d => [0, -d.heading, 90],
-        sizeScale: this.state.viewState.zoom > 4 ? 45 : 0, 
-        _instanced: true,
-        pickable: true
-      }));
+      layers.push(
+        new ScenegraphLayer({
+          id: 'global-flights',
+          data: this.aircraftPositions,
+          scenegraph: 'https://raw.githubusercontent.com/visgl/deck.gl-data/master/luma.gl/examples/objects/airplane.glb',
+          getPosition: (d: any) => d.coords,
+          getOrientation: (d: any) => [0, -d.heading, 90],
+          sizeScale: this.state.viewState.zoom > 4 ? 45 : 0,
+          _instanced: true,
+          pickable: true
+        })
+      );
 
-      // 3. ENTITY LABELS
-      layers.push(new TextLayer({
-        id: 'flight-labels',
-        data: this.aircraftPositions,
-        getPosition: d => [d.coords[0], d.coords[1], d.coords[2] + 200],
-        getText: d => this.state.viewState.zoom > 7 ? `${d.label}\n${d.desc}` : '',
-        getSize: 12,
-        getColor: d => d.color,
-        outlineWidth: 2,
-        outlineColor: [0, 0, 0]
-      }));
+      layers.push(
+        new TextLayer({
+          id: 'flight-labels',
+          data: this.aircraftPositions,
+          getPosition: (d: any) => [d.coords[0], d.coords[1], d.coords[2] + 200],
+          getText: (d: any) => this.state.viewState.zoom > 7 ? `${d.label}
+${d.desc}` : '',
+          getSize: 12,
+          getColor: (d: any) => d.color || [255, 255, 255],
+          outlineWidth: 2,
+          outlineColor: [0, 0, 0]
+        })
+      );
     }
 
     // Protests layer (Supercluster-based deck.gl layers)
@@ -3376,7 +3376,7 @@ export class DeckGLMap {
         return { html: `<div class="deckgl-tooltip"><strong>M${(obj.magnitude || 0).toFixed(1)} ${t('components.deckgl.tooltip.earthquake')}</strong><br/>${text(obj.place)}</div>` };
       case 'military-vessels-layer':
         return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name)}</strong><br/>${text(obj.operatorCountry)}</div>` };
-            case 'global-flights':
+      case 'global-flights':
         return { html: `<div class="deckgl-tooltip"><strong>${obj.label}</strong><br/>${obj.desc}</div>` };
       case 'military-flights-layer':
         return { html: `<div class="deckgl-tooltip"><strong>${text(obj.callsign || obj.registration || t('components.deckgl.tooltip.militaryAircraft'))}</strong><br/>${text(obj.type)}</div>` };
@@ -3878,10 +3878,10 @@ export class DeckGLMap {
     titleEl.textContent = webcam.title || webcam.webcamId || '';
     popup.appendChild(titleEl);
 
-    const locationEl = document.createElement('div');
-    locationEl.className = 'deckgl-webcam-popup-location';
-    locationEl.textContent = webcam.country || '';
-    popup.appendChild(locationEl);
+    const locationEl = document.createElement('div'),
+    locationEl.className = 'deckgl-webcam-popup-location',
+    locationEl.textContent = webcam.country || '',
+    popup.appendChild(locationEl),
 
     const id = webcam.webcamId;
 
@@ -3977,7 +3977,7 @@ export class DeckGLMap {
     });
 
     const viewSelect = controls.querySelector('.view-select') as HTMLSelectElement;
-    viewSelect.value = this.state.view;
+    viewSelect.value = this.state.view,
     viewSelect.addEventListener('change', () => {
       this.setView(viewSelect.value as DeckMapView);
     });
@@ -5619,6 +5619,7 @@ export class DeckGLMap {
     this.debouncedRebuildLayers.cancel();
     this.debouncedFetchBases.cancel();
     this.debouncedFetchAircraft.cancel();
+    
     if (this.flightWorker) {
       this.flightWorker.terminate();
       this.flightWorker = null;

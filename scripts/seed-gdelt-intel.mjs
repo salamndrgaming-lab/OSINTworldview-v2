@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 import { loadEnvFile, CHROME_UA, runSeed, sleep } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
@@ -73,7 +72,7 @@ async function fetchWithRetry(topic, maxRetries = 3) {
     } catch (err) {
       const is429 = err.message?.includes('429');
       if (!is429 || attempt === maxRetries) throw err;
-      const backoff = (attempt + 1) * 10_000;
+      const backoff = (attempt + 1) * 30_000;
       console.log(`    429 rate-limited, waiting ${backoff / 1000}s...`);
       await sleep(backoff);
     }
@@ -83,7 +82,7 @@ async function fetchWithRetry(topic, maxRetries = 3) {
 async function fetchAllTopics() {
   const topics = [];
   for (let i = 0; i < INTEL_TOPICS.length; i++) {
-    if (i > 0) await sleep(12_000);
+    if (i > 0) await sleep(30_000);
     console.log(`  Fetching ${INTEL_TOPICS[i].id}...`);
     const result = await fetchWithRetry(INTEL_TOPICS[i]);
     console.log(`    ${result.articles.length} articles`);

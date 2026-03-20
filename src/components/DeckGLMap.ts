@@ -3,12 +3,11 @@
  * Uses deck.gl for high-performance rendering of large datasets
  * Mobile devices gracefully degrade to the D3/SVG-based Map component
  */
+import { MapboxOverlay } from '@deck.gl/mapbox';
 import { TripsLayer } from '@deck.gl/geo-layers';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers';
-import { TextLayer } from '@deck.gl/layers';
-import { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Layer, LayersList, PickingInfo } from '@deck.gl/core';
-import { GeoJsonLayer, ScatterplotLayer, PathLayer, IconLayer, TextLayer, PolygonLayer, ArcLayer} from '@deck.gl/layers';
+import { GeoJsonLayer, ScatterplotLayer, PathLayer, IconLayer, TextLayer, PolygonLayer } from '@deck.gl/layers';
 import maplibregl from 'maplibre-gl';
 import { registerPMTilesProtocol, FALLBACK_DARK_STYLE, FALLBACK_LIGHT_STYLE, getMapProvider, getMapTheme, getStyleForProvider, isLightMapTheme } from '@/config/basemap';
 import Supercluster from 'supercluster';
@@ -39,9 +38,6 @@ import type {
   CableHealthRecord,
   MilitaryBaseEnriched,
 } from '@/types';
-// Inside your class definition
-private flightHistory: Map<string, {path: number[][], timestamps: number[]}> = new Map();
-private MAX_HISTORY = 10; // Number of trail points
 import { fetchMilitaryBases, type MilitaryBaseCluster as ServerBaseCluster } from '@/services/military-bases';
 import type { AirportDelayAlert, PositionSample } from '@/services/aviation';
 import { fetchAircraftPositions } from '@/services/aviation';
@@ -52,6 +48,7 @@ import type { ImageryScene } from '@/generated/server/worldmonitor/imagery/v1/se
 import type { DisplacementFlow } from '@/services/displacement';
 import type { Earthquake } from '@/services/earthquakes';
 import type { ClimateAnomaly } from '@/services/climate';
+import { ArcLayer } from '@deck.gl/layers';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 import { H3HexagonLayer } from '@deck.gl/geo-layers';
 import { PathStyleExtension } from '@deck.gl/extensions';
@@ -156,41 +153,6 @@ interface TechEventMarker {
   daysUntil: number;
 }
 
-// 1. THE FAINT TRAILS (Lines)
-new TripsLayer({
-  id: 'flight-trails',
-  data: Array.from(this.flightHistory.values()),
-  getPath: d => d.path,
-  getColor: [255, 255, 255], // White trails
-  opacity: 0.15, // Very faint
-  widthMinPixels: 1,
-  trailLength: 600, 
-  currentTime: Date.now() / 1000
-}),
-
-// 2. THE 3D MODELS (Aircraft)
-new ScenegraphLayer({
-  id: 'global-flights',
-  data: this.state.flights,
-  scenegraph: 'https://raw.githubusercontent.com/visgl/deck.gl-data/master/luma.gl/examples/objects/airplane.glb',
-  getPosition: d => d.coords,
-  getOrientation: d => [0, -d.heading, 90],
-  sizeScale: this.state.viewState.zoom > 5 ? 40 : 0, // Zoom-dependent visibility
-  _instanced: true, 
-  pickable: true
-}),
-
-// 3. THE LABELS (Entity Info)
-new TextLayer({
-  id: 'flight-labels',
-  data: this.state.flights,
-  getPosition: d => [d.coords[0], d.coords[1], d.coords[2] + 150],
-  getText: d => this.state.viewState.zoom > 8 ? `${d.label}\n${d.desc}` : '',
-  getSize: 12,
-  getColor: d => d.color, // Color coded by entity type
-  outlineWidth: 2,
-  outlineColor: [0, 0, 0]
-})
 // View presets with longitude, latitude, zoom
 const VIEW_PRESETS: Record<DeckMapView, { longitude: number; latitude: number; zoom: number }> = {
   global: { longitude: 0, latitude: 20, zoom: 1.5 },
@@ -362,7 +324,9 @@ export class DeckGLMap {
   private firmsFireData: Array<{ lat: number; lon: number; brightness: number; frp: number; confidence: number; region: string; acq_date: string; daynight: string }> = [];
   private techEvents: TechEventMarker[] = [];
   private flightDelays: AirportDelayAlert[] = [];
-  private aircraftPositions: PositionSample[] = [];
+  private aircraftPositions: any[] = [];
+  private flightWorker: Worker | null = null;
+  private flightHistory: Map<string, {path: number[][], timestamps: number[]}> = new Map();
   private aircraftFetchTimer: ReturnType<typeof setInterval> | null = null;
   private news: NewsItem[] = [];
   private newsLocations: Array<{ lat: number; lon: number; title: string; threatLevel: string; timestamp?: Date }> = [];
@@ -485,6 +449,31 @@ export class DeckGLMap {
     }, 150);
     this.debouncedFetchBases = debounce(() => this.fetchServerBases(), 300);
     this.debouncedFetchAircraft = debounce(() => this.fetchViewportAircraft(), 500);
+    // Setup Global Flight Worker
+    try {
+      this.flightWorker = new Worker(new URL('../workers/flight-worker.ts', import.meta.url));
+      this.flightWorker.onmessage = (e) => {
+        const flights = e.data;
+        const now = Date.now() / 1000;
+        
+        flights.forEach((f: any) => {
+          const existing = this.flightHistory.get(f.id) || { path: [], timestamps: [] };
+          const lastCoord = existing.path[existing.path.length - 1];
+          
+          // Only update history if position actually changed
+          if (!lastCoord || lastCoord[0] !== f.coords[0] || lastCoord[1] !== f.coords[1]) {
+            const newPath = [...existing.path.slice(-14), f.coords];
+            const newTimes = [...existing.timestamps.slice(-14), now];
+            this.flightHistory.set(f.id, { path: newPath, timestamps: newTimes });
+          }
+        });
+
+        this.aircraftPositions = flights;
+        this.debouncedRebuildLayers();
+      };
+    } catch (err) {
+      console.error('Failed to initialize flight worker', err);
+    }
     this.rafUpdateLayers = rafSchedule(() => {
       if (this.renderPaused || this.webglLost || !this.maplibreMap) return;
       try { this.deckOverlay?.setProps({ layers: this.buildLayers() }); } catch { /* map mid-teardown */ }
@@ -1393,7 +1382,42 @@ export class DeckGLMap {
 
     // Aircraft positions layer (live tracking, under flights toggle)
     if (mapLayers.flights && this.aircraftPositions.length > 0) {
-      layers.push(this.createAircraftPositionsLayer());
+            // 1. GLOBAL FAINT TRAILS
+      layers.push(new TripsLayer({
+        id: 'flight-trails',
+        data: Array.from(this.flightHistory.values()),
+        getPath: d => d.path,
+        getTimestamps: d => d.timestamps,
+        getColor: [255, 255, 255],
+        opacity: 0.12, 
+        widthMinPixels: 1,
+        trailLength: 600,
+        currentTime: Date.now() / 1000
+      }));
+
+      // 2. GLOBAL 3D MODELS
+      layers.push(new ScenegraphLayer({
+        id: 'global-flights',
+        data: this.aircraftPositions,
+        scenegraph: 'https://raw.githubusercontent.com/visgl/deck.gl-data/master/luma.gl/examples/objects/airplane.glb',
+        getPosition: d => d.coords,
+        getOrientation: d => [0, -d.heading, 90],
+        sizeScale: this.state.viewState.zoom > 4 ? 45 : 0, 
+        _instanced: true,
+        pickable: true
+      }));
+
+      // 3. ENTITY LABELS
+      layers.push(new TextLayer({
+        id: 'flight-labels',
+        data: this.aircraftPositions,
+        getPosition: d => [d.coords[0], d.coords[1], d.coords[2] + 200],
+        getText: d => this.state.viewState.zoom > 7 ? `${d.label}\n${d.desc}` : '',
+        getSize: 12,
+        getColor: d => d.color,
+        outlineWidth: 2,
+        outlineColor: [0, 0, 0]
+      }));
     }
 
     // Protests layer (Supercluster-based deck.gl layers)
@@ -3282,7 +3306,28 @@ export class DeckGLMap {
       pickable: true,
     });
   }
-     
+      
+    const typeLineColors: Record<string, [number, number, number, number]> = {
+      solar: [255, 200, 50, 255],
+      wind: [100, 200, 255, 255],
+      hydro: [0, 180, 180, 255],
+      geothermal: [255, 150, 80, 255],
+    };
+    return new ScatterplotLayer({
+      id: 'renewable-installations-layer',
+      data: this.renewableInstallations,
+      getPosition: (d: RenewableInstallation) => [d.lon, d.lat],
+      getRadius: 30000,
+      radiusMinPixels: 5,
+      radiusMaxPixels: 18,
+      getFillColor: (d: RenewableInstallation) => typeColors[d.type] ?? [200, 200, 200, 200] as [number, number, number, number],
+      stroked: true,
+      getLineColor: (d: RenewableInstallation) => typeLineColors[d.type] ?? [200, 200, 200, 255] as [number, number, number, number],
+      lineWidthMinPixels: 1,
+      pickable: true,
+    });
+  }
+
   private createImageryFootprintLayer(): PolygonLayer {
     return new PolygonLayer({
       id: 'satellite-imagery-layer',
@@ -4774,15 +4819,10 @@ export class DeckGLMap {
     return Math.abs(center.lat - prevLat) > threshold || Math.abs(center.lng - prevLng) > threshold;
   }
 
-  private fetchViewportAircraft(): void {
-    if (!this.maplibreMap) return;
+    private fetchViewportAircraft(): void {
     if (!this.state.layers.flights) return;
-    const zoom = this.maplibreMap.getZoom();
-    if (zoom < 2) {
-      if (this.aircraftPositions.length > 0) {
-        this.aircraftPositions = [];
-        this.render();
-      }
+    this.flightWorker?.postMessage('fetch');
+  }
       return;
     }
     if (!this.hasAircraftViewportChanged()) return;

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 import { loadEnvFile, CHROME_UA, runSeed, sleep } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);

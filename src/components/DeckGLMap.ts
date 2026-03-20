@@ -3,6 +3,9 @@
  * Uses deck.gl for high-performance rendering of large datasets
  * Mobile devices gracefully degrade to the D3/SVG-based Map component
  */
+import { TripsLayer } from '@deck.gl/geo-layers';
+import { ScenegraphLayer } from '@deck.gl/mesh-layers';
+import { TextLayer } from '@deck.gl/layers';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Layer, LayersList, PickingInfo } from '@deck.gl/core';
 import { GeoJsonLayer, ScatterplotLayer, PathLayer, IconLayer, TextLayer, PolygonLayer, ArcLayer} from '@deck.gl/layers';
@@ -36,6 +39,9 @@ import type {
   CableHealthRecord,
   MilitaryBaseEnriched,
 } from '@/types';
+// Inside your class definition
+private flightHistory: Map<string, {path: number[][], timestamps: number[]}> = new Map();
+private MAX_HISTORY = 10; // Number of trail points
 import { fetchMilitaryBases, type MilitaryBaseCluster as ServerBaseCluster } from '@/services/military-bases';
 import type { AirportDelayAlert, PositionSample } from '@/services/aviation';
 import { fetchAircraftPositions } from '@/services/aviation';
@@ -150,6 +156,41 @@ interface TechEventMarker {
   daysUntil: number;
 }
 
+// 1. THE FAINT TRAILS (Lines)
+new TripsLayer({
+  id: 'flight-trails',
+  data: Array.from(this.flightHistory.values()),
+  getPath: d => d.path,
+  getColor: [255, 255, 255], // White trails
+  opacity: 0.15, // Very faint
+  widthMinPixels: 1,
+  trailLength: 600, 
+  currentTime: Date.now() / 1000
+}),
+
+// 2. THE 3D MODELS (Aircraft)
+new ScenegraphLayer({
+  id: 'global-flights',
+  data: this.state.flights,
+  scenegraph: 'https://raw.githubusercontent.com/visgl/deck.gl-data/master/luma.gl/examples/objects/airplane.glb',
+  getPosition: d => d.coords,
+  getOrientation: d => [0, -d.heading, 90],
+  sizeScale: this.state.viewState.zoom > 5 ? 40 : 0, // Zoom-dependent visibility
+  _instanced: true, 
+  pickable: true
+}),
+
+// 3. THE LABELS (Entity Info)
+new TextLayer({
+  id: 'flight-labels',
+  data: this.state.flights,
+  getPosition: d => [d.coords[0], d.coords[1], d.coords[2] + 150],
+  getText: d => this.state.viewState.zoom > 8 ? `${d.label}\n${d.desc}` : '',
+  getSize: 12,
+  getColor: d => d.color, // Color coded by entity type
+  outlineWidth: 2,
+  outlineColor: [0, 0, 0]
+})
 // View presets with longitude, latitude, zoom
 const VIEW_PRESETS: Record<DeckMapView, { longitude: number; latitude: number; zoom: number }> = {
   global: { longitude: 0, latitude: 20, zoom: 1.5 },

@@ -29,7 +29,6 @@ jobs:
       - run: node scripts/seed-unrest-events.mjs
       - run: node scripts/seed-prediction-markets.mjs
       - run: node scripts/seed-gdelt-intel.mjs
-33:        continue-on-error: true
       - run: node scripts/seed-service-statuses.mjs
       - run: node scripts/seed-climate-anomalies.mjs
       - run: node scripts/seed-gulf-quotes.mjs
@@ -48,6 +47,8 @@ jobs:
       - run: node scripts/seed-ucdp-events.mjs
         continue-on-error: true
       - run: node scripts/seed-internet-outages.mjs
+        continue-on-error: true
+      - run: node scripts/seed-gdelt-intel.mjs
         continue-on-error: true
 
       # AI-powered (runs last since it reads from cached data)

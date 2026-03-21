@@ -4,6 +4,8 @@
  * Mobile devices gracefully degrade to the D3/SVG-based Map component
  */
 import { MapboxOverlay } from '@deck.gl/mapbox';
+import { TripsLayer } from '@deck.gl/geo-layers';
+import { ScenegraphLayer } from '@deck.gl/mesh-layers';
 import type { Layer, LayersList, PickingInfo } from '@deck.gl/core';
 import { GeoJsonLayer, ScatterplotLayer, PathLayer, IconLayer, TextLayer, PolygonLayer } from '@deck.gl/layers';
 import maplibregl from 'maplibre-gl';
@@ -322,7 +324,9 @@ export class DeckGLMap {
   private firmsFireData: Array<{ lat: number; lon: number; brightness: number; frp: number; confidence: number; region: string; acq_date: string; daynight: string }> = [];
   private techEvents: TechEventMarker[] = [];
   private flightDelays: AirportDelayAlert[] = [];
-  private aircraftPositions: PositionSample[] = [];
+  private aircraftPositions: any[] = [];
+  private flightWorker: Worker | null = null;
+  private flightHistory: Map<string, {path: number[][], timestamps: number[]}> = new Map();
   private aircraftFetchTimer: ReturnType<typeof setInterval> | null = null;
   private news: NewsItem[] = [];
   private newsLocations: Array<{ lat: number; lon: number; title: string; threatLevel: string; timestamp?: Date }> = [];
@@ -345,6 +349,7 @@ export class DeckGLMap {
   private speciesRecoveryZones: Array<SpeciesRecovery & { recoveryZone: { name: string; lat: number; lon: number } }> = [];
   private renewableInstallations: RenewableInstallation[] = [];
   private webcamData: Array<WebcamEntry | WebcamCluster> = [];
+  private poiPins: Array<{ name: string; role: string; location: string; riskLevel: string; lat: number; lng: number; riskColor: [number, number, number, number]; confidence: number; activityScore: number; summary: string; region: string }> = [];
   private countriesGeoJsonData: FeatureCollection<Geometry> | null = null;
   private conflictZoneGeoJson: GeoJSON.FeatureCollection | null = null;
 
@@ -444,6 +449,27 @@ export class DeckGLMap {
     }, 150);
     this.debouncedFetchBases = debounce(() => this.fetchServerBases(), 300);
     this.debouncedFetchAircraft = debounce(() => this.fetchViewportAircraft(), 500);
+
+    try {
+      this.flightWorker = new Worker(new URL('../workers/flight-worker.ts', import.meta.url));
+      this.flightWorker.onmessage = (e: MessageEvent) => {
+        const flights = e.data;
+        const now = Date.now() / 1000;
+        flights.forEach((f: any) => {
+          const existing = this.flightHistory.get(f.id) || { path: [], timestamps: [] };
+          const lastCoord = existing.path[existing.path.length - 1];
+          if (!lastCoord || lastCoord[0] !== f.coords[0] || lastCoord[1] !== f.coords[1]) {
+            const newPath = [...existing.path.slice(-14), f.coords];
+            const newTimes = [...existing.timestamps.slice(-14), now];
+            this.flightHistory.set(f.id, { path: newPath, timestamps: newTimes });
+          }
+        });
+        this.aircraftPositions = flights;
+        this.debouncedRebuildLayers();
+      };
+    } catch (err) {
+      console.error('Flight worker failed to load', err);
+    }
     this.rafUpdateLayers = rafSchedule(() => {
       if (this.renderPaused || this.webglLost || !this.maplibreMap) return;
       try { this.deckOverlay?.setProps({ layers: this.buildLayers() }); } catch { /* map mid-teardown */ }
@@ -1352,7 +1378,46 @@ export class DeckGLMap {
 
     // Aircraft positions layer (live tracking, under flights toggle)
     if (mapLayers.flights && this.aircraftPositions.length > 0) {
-      layers.push(this.createAircraftPositionsLayer());
+      layers.push(
+        new TripsLayer({
+          id: 'flight-trails',
+          data: Array.from(this.flightHistory.values()),
+          getPath: (d: any) => d.path,
+          getTimestamps: (d: any) => d.timestamps,
+          getColor: [255, 255, 255],
+          opacity: 0.12,
+          widthMinPixels: 1,
+          trailLength: 600,
+          currentTime: Date.now() / 1000
+        })
+      );
+
+      layers.push(
+        new ScenegraphLayer({
+          id: 'global-flights',
+          data: this.aircraftPositions,
+          scenegraph: 'https://raw.githubusercontent.com/visgl/deck.gl-data/master/luma.gl/examples/objects/airplane.glb',
+          getPosition: (d: any) => d.coords,
+          getOrientation: (d: any) => [0, -d.heading, 90],
+          sizeScale: this.state.viewState.zoom > 4 ? 45 : 0,
+          _instanced: true,
+          pickable: true
+        })
+      );
+
+      layers.push(
+        new TextLayer({
+          id: 'flight-labels',
+          data: this.aircraftPositions,
+          getPosition: (d: any) => [d.coords[0], d.coords[1], d.coords[2] + 200],
+          getText: (d: any) => this.state.viewState.zoom > 7 ? `${d.label}
+${d.desc}` : '',
+          getSize: 12,
+          getColor: (d: any) => d.color || [255, 255, 255],
+          outlineWidth: 2,
+          outlineColor: [0, 0, 0]
+        })
+      );
     }
 
     // Protests layer (Supercluster-based deck.gl layers)
@@ -1517,6 +1582,10 @@ export class DeckGLMap {
         radiusUnits: 'pixels',
         pickable: true,
       }));
+    }
+    // POI markers layer
+    if (mapLayers.poi && this.poiPins.length > 0) {
+      layers.push(this.createPOILayer());
     }
 
     // News geo-locations (always shown if data exists)
@@ -3194,7 +3263,7 @@ export class DeckGLMap {
     });
   }
 
-  private createRenewableInstallationsLayer(): ScatterplotLayer {
+ private createRenewableInstallationsLayer(): ScatterplotLayer {
     const typeColors: Record<string, [number, number, number, number]> = {
       solar: [255, 200, 50, 200],
       wind: [100, 200, 255, 200],
@@ -3218,6 +3287,22 @@ export class DeckGLMap {
       stroked: true,
       getLineColor: (d: RenewableInstallation) => typeLineColors[d.type] ?? [200, 200, 200, 255] as [number, number, number, number],
       lineWidthMinPixels: 1,
+      pickable: true,
+    });
+  }
+
+  private createPOILayer(): ScatterplotLayer {
+    return new ScatterplotLayer({
+      id: 'poi-layer',
+      data: this.poiPins,
+      getPosition: (d: (typeof this.poiPins)[0]) => [d.lng, d.lat],
+      getRadius: (d: (typeof this.poiPins)[0]) => d.riskLevel === 'critical' ? 22000 : d.riskLevel === 'high' ? 18000 : 14000,
+      getFillColor: (d: (typeof this.poiPins)[0]) => d.riskColor,
+      getLineColor: [255, 255, 255, 160] as [number, number, number, number],
+      stroked: true,
+      lineWidthMinPixels: 1.5,
+      radiusMinPixels: 6,
+      radiusMaxPixels: 18,
       pickable: true,
     });
   }
@@ -3270,6 +3355,8 @@ export class DeckGLMap {
         return { html: `<div class="deckgl-tooltip"><strong>M${(obj.magnitude || 0).toFixed(1)} ${t('components.deckgl.tooltip.earthquake')}</strong><br/>${text(obj.place)}</div>` };
       case 'military-vessels-layer':
         return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name)}</strong><br/>${text(obj.operatorCountry)}</div>` };
+      case 'global-flights':
+        return { html: `<div class="deckgl-tooltip"><strong>${obj.label}</strong><br/>${obj.desc}</div>` };
       case 'military-flights-layer':
         return { html: `<div class="deckgl-tooltip"><strong>${text(obj.callsign || obj.registration || t('components.deckgl.tooltip.militaryAircraft'))}</strong><br/>${text(obj.type)}</div>` };
       case 'military-vessel-clusters-layer':
@@ -3473,6 +3560,11 @@ export class DeckGLMap {
         }
         imgHtml += '</div>';
         return { html: imgHtml };
+      }
+        case 'poi-layer': {
+        const riskColors: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e' };
+        const rc = riskColors[obj.riskLevel] || '#eab308';
+        return { html: `<div class="deckgl-tooltip"><strong>👤 ${text(obj.name)}</strong><br/>${text(obj.role)}<br/><span style="color:${rc};text-transform:uppercase;font-weight:700;font-size:10px">${text(obj.riskLevel)}</span> · 📍 ${text(obj.location)}<br/><span style="opacity:.7">${text((obj.summary || '').slice(0, 100))}</span></div>` };
       }
       case 'webcam-layer': {
         const label = 'count' in obj
@@ -3711,6 +3803,7 @@ export class DeckGLMap {
       'gps-jamming-layer': 'gpsJamming',
       'cable-advisories-layer': 'cable-advisory',
       'repair-ships-layer': 'repair-ship',
+      'poi-layer': 'poi' as PopupType,
     };
 
     const popupType = layerToPopupType[layerId];
@@ -3863,7 +3956,7 @@ export class DeckGLMap {
     });
 
     const viewSelect = controls.querySelector('.view-select') as HTMLSelectElement;
-    viewSelect.value = this.state.view;
+    viewSelect.value = this.state.view,
     viewSelect.addEventListener('change', () => {
       this.setView(viewSelect.value as DeckMapView);
     });
@@ -4707,15 +4800,10 @@ export class DeckGLMap {
     return Math.abs(center.lat - prevLat) > threshold || Math.abs(center.lng - prevLng) > threshold;
   }
 
-  private fetchViewportAircraft(): void {
-    if (!this.maplibreMap) return;
+    private fetchViewportAircraft(): void {
     if (!this.state.layers.flights) return;
-    const zoom = this.maplibreMap.getZoom();
-    if (zoom < 2) {
-      if (this.aircraftPositions.length > 0) {
-        this.aircraftPositions = [];
-        this.render();
-      }
+    this.flightWorker?.postMessage('fetch');
+  }
       return;
     }
     if (!this.hasAircraftViewportChanged()) return;
@@ -4774,6 +4862,11 @@ export class DeckGLMap {
 
   public setWebcams(markers: Array<WebcamEntry | WebcamCluster>): void {
     this.webcamData = markers;
+    this.render();
+  }  
+  
+  public setPOIMarkers(markers: Array<{ name: string; role: string; location: string; riskLevel: string; lat: number; lng: number; riskColor: [number, number, number, number]; confidence: number; activityScore: number; summary: string; region: string }>): void {
+    this.poiPins = markers;
     this.render();
   }
 
@@ -5505,6 +5598,12 @@ export class DeckGLMap {
     this.debouncedRebuildLayers.cancel();
     this.debouncedFetchBases.cancel();
     this.debouncedFetchAircraft.cancel();
+    
+    if (this.flightWorker) {
+      this.flightWorker.terminate();
+      this.flightWorker = null;
+    }
+    this.flightHistory.clear();
     this.rafUpdateLayers.cancel();
 
     if (this.renderRafId !== null) {
@@ -5545,9 +5644,3 @@ export class DeckGLMap {
     this.container.innerHTML = '';
   }
 }
-import { POIPanel } from './components/POIPanel';
-
-// When the POI panel becomes active:
-const poiContainer = document.getElementById('panel-poi');
-const poiPanel = new POIPanel(poiContainer);
-await poiPanel.init();

@@ -186,6 +186,51 @@ export interface DataLoaderCallbacks {
   refreshOpenCountryBrief: () => void;
 }
 
+// ---- POI Geocoding (module-level for use in DataLoaderManager.loadPOIMarkers) ----
+
+const POI_KNOWN_LOCATIONS: Record<string, [number, number]> = {
+  'washington': [38.8977, -77.0365], 'washington d.c.': [38.8977, -77.0365], 'washington, d.c.': [38.8977, -77.0365],
+  'white house': [38.8977, -77.0365], 'moscow': [55.7558, 37.6173], 'kremlin': [55.7520, 37.6175],
+  'beijing': [39.9042, 116.4074], 'zhongnanhai': [39.9130, 116.3862], 'london': [51.5074, -0.1278],
+  '10 downing street': [51.5034, -0.1276], 'paris': [48.8566, 2.3522], 'berlin': [52.5200, 13.4050],
+  'rome': [41.9028, 12.4964], 'tokyo': [35.6762, 139.6503], 'new delhi': [28.6139, 77.2090],
+  'delhi': [28.6139, 77.2090], 'brasilia': [-15.7975, -47.8919], 'ottawa': [45.4215, -75.6972],
+  'canberra': [-35.2809, 149.1300], 'seoul': [37.5665, 126.9780], 'riyadh': [24.7136, 46.6753],
+  'ankara': [39.9334, 32.8597], 'cairo': [30.0444, 31.2357], 'pretoria': [-25.7461, 28.1881],
+  'kyiv': [50.4501, 30.5234], 'tehran': [35.6892, 51.3890], 'islamabad': [33.6844, 73.0479],
+  'mexico city': [19.4326, -99.1332], 'buenos aires': [-34.6037, -58.3816], 'vatican city': [41.9029, 12.4534],
+  'jerusalem': [31.7683, 35.2137], 'taipei': [25.0330, 121.5654], 'pyongyang': [39.0392, 125.7625],
+  'jakarta': [-6.2088, 106.8456], 'manila': [14.5995, 120.9842], 'hanoi': [21.0278, 105.8342],
+  'bangkok': [13.7563, 100.5018], 'abu dhabi': [24.4539, 54.3773], 'doha': [25.2854, 51.5310],
+  'addis ababa': [9.0250, 38.7469], 'nairobi': [-1.2921, 36.8219], 'lagos': [6.5244, 3.3792],
+  'mar-a-lago': [26.6776, -80.0370], 'mar a lago': [26.6776, -80.0370],
+  'united nations': [40.7489, -73.9680], 'un headquarters': [40.7489, -73.9680],
+  'brussels': [50.8503, 4.3517], 'geneva': [46.2044, 6.1432], 'davos': [46.8003, 9.8361],
+  'the hague': [52.0705, 4.3007], 'damascus': [33.5138, 36.2765], 'beirut': [33.8938, 35.5018],
+  'gaza': [31.5017, 34.4668], 'gaza city': [31.5017, 34.4668], 'baghdad': [33.3152, 44.3661],
+  'kabul': [34.5553, 69.2075], 'minsk': [53.9006, 27.5590], 'havana': [23.1136, -82.3666],
+  'caracas': [10.4806, -66.9036], 'bogota': [4.7110, -74.0721], 'lima': [-12.0464, -77.0428],
+  'santiago': [-33.4489, -70.6693], 'algiers': [36.7538, 3.0588], 'tunis': [36.8065, 10.1815],
+  'tripoli': [32.8872, 13.1913], 'khartoum': [15.5007, 32.5599], 'mogadishu': [2.0469, 45.3182],
+};
+
+const POI_RISK_RGBA: Record<string, [number, number, number, number]> = {
+  low: [34, 197, 94, 200],
+  medium: [234, 179, 8, 200],
+  high: [249, 115, 22, 220],
+  critical: [239, 68, 68, 240],
+};
+
+function geocodePOILocation(location: string): [number, number] | null {
+  const norm = location.toLowerCase().trim();
+  const direct = POI_KNOWN_LOCATIONS[norm];
+  if (direct) return direct;
+  for (const [key, coords] of Object.entries(POI_KNOWN_LOCATIONS)) {
+    if (norm.includes(key) || key.includes(norm)) return coords;
+  }
+  return null;
+}
+
 export class DataLoaderManager implements AppModule {
   private ctx: AppContext;
   private callbacks: DataLoaderCallbacks;
@@ -467,6 +512,7 @@ export class DataLoaderManager implements AppModule {
     if (SITE_VARIANT !== 'happy' && (this.ctx.mapLayers.techEvents || SITE_VARIANT === 'tech')) tasks.push({ name: 'techEvents', task: runGuarded('techEvents', () => this.loadTechEvents()) });
     if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.satellites && this.ctx.map?.isGlobeMode?.()) tasks.push({ name: 'satellites', task: runGuarded('satellites', () => this.loadSatellites()) });
     if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.webcams) tasks.push({ name: 'webcams', task: runGuarded('webcams', () => this.loadWebcams()) });
+    if (this.ctx.mapLayers.poi) tasks.push({ name: 'poi', task: runGuarded('poi', () => this.loadPOIMarkers()) });
 
     if (SITE_VARIANT !== 'happy') {
       tasks.push({ name: 'techReadiness', task: runGuarded('techReadiness', () => (this.ctx.panels['tech-readiness'] as TechReadinessPanel)?.refresh()) });
@@ -2055,6 +2101,59 @@ export class DataLoaderManager implements AppModule {
     } catch (err) {
       console.warn('[data-loader] webcams failed:', err);
       this.ctx.map?.setLayerReady('webcams', false);
+    }
+  }
+
+  // ---- POI Map Markers ----
+
+  async loadPOIMarkers(): Promise<void> {
+    try {
+      const res = await fetch(toApiUrl('/api/poi'));
+      if (!res.ok) throw new Error(`POI API ${res.status}`);
+      const data = await res.json();
+      const persons: Array<any> = data?.persons || [];
+
+      const markers: Array<{ name: string; role: string; location: string; riskLevel: string; lat: number; lng: number; riskColor: [number, number, number, number]; confidence: number; activityScore: number; summary: string; region: string }> = [];
+
+      for (const p of persons) {
+        const loc = p.lastKnownLocation || '';
+        const coords = geocodePOILocation(loc);
+        if (!coords) continue;
+
+        // Normalize risk level to expected values
+        const risk = (p.riskLevel || 'medium').toLowerCase().replace('elevated', 'high').replace('moderate', 'medium');
+        const riskColor: [number, number, number, number] = POI_RISK_RGBA[risk] ?? [234, 179, 8, 200];
+
+        // Handle both string and numeric locationConfidence
+        let confidence = 0.5;
+        if (typeof p.locationConfidence === 'number') {
+          confidence = p.locationConfidence;
+        } else if (typeof p.locationConfidence === 'string') {
+          const confMap: Record<string, number> = { confirmed: 0.95, likely: 0.7, estimated: 0.4, unknown: 0.1 };
+          confidence = confMap[p.locationConfidence] || 0.5;
+        }
+
+        markers.push({
+          name: p.name || 'Unknown',
+          role: p.role || '',
+          location: loc,
+          riskLevel: risk,
+          lat: coords[0],
+          lng: coords[1],
+          riskColor,
+          confidence,
+          activityScore: typeof p.activityScore === 'number' ? p.activityScore : 0,
+          summary: p.summary || '',
+          region: p.region || '',
+        });
+      }
+
+      this.ctx.map?.setPOIMarkers(markers);
+      this.ctx.map?.setLayerReady('poi', markers.length > 0);
+      console.log(`[POI] Geocoded ${markers.length}/${persons.length} persons onto map`);
+    } catch (err) {
+      console.warn('[POI] Failed to load markers:', err);
+      this.ctx.map?.setLayerReady('poi', false);
     }
   }
 

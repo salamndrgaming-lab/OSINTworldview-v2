@@ -135,6 +135,7 @@ export class MapContainer {
   private cachedEscalationVessels: MilitaryVessel[] | null = null;
   private cachedImageryScenes: ImageryScene[] | null = null;
   private cachedWebcams: Array<WebcamEntry | WebcamCluster> | null = null;
+  private cachedPOIMarkers: Array<{ name: string; role: string; location: string; riskLevel: string; lat: number; lng: number; riskColor: [number, number, number, number]; confidence: number; activityScore: number; summary: string; region: string }> | null = null;
 
   constructor(container: HTMLElement, initialState: MapContainerState, preferGlobe = false) {
     this.container = container;
@@ -302,6 +303,9 @@ export class MapContainer {
       else if (this.useDeckGL) this.deckGLMap?.setWebcams(this.cachedWebcams);
       else this.svgMap?.setWebcams(this.cachedWebcams);
     }
+    if (this.cachedPOIMarkers && this.useDeckGL) {
+      this.deckGLMap?.setPOIMarkers(this.cachedPOIMarkers);
+    }
   }
 
   public isGlobeMode(): boolean {
@@ -412,6 +416,12 @@ export class MapContainer {
     if (this.useGlobe) { this.globeMap?.setWebcams(markers); return; }
     if (this.useDeckGL) { this.deckGLMap?.setWebcams(markers); }
     else { this.svgMap?.setWebcams(markers); }
+  }
+
+  public setPOIMarkers(markers: Array<{ name: string; role: string; location: string; riskLevel: string; lat: number; lng: number; riskColor: [number, number, number, number]; confidence: number; activityScore: number; summary: string; region: string }>): void {
+    this.cachedPOIMarkers = markers;
+    // POI markers only on DeckGL flat map for now (globe support is a future addition)
+    if (this.useDeckGL) { this.deckGLMap?.setPOIMarkers(markers); }
   }
 
   public setWeatherAlerts(alerts: WeatherAlert[]): void {

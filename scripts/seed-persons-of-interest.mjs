@@ -1,19 +1,26 @@
 #!/usr/bin/env node
 
 /**
- * seed-persons-of-interest.mjs
- * 
- * Searches GDELT for mentions of tracked persons, aggregates articles,
- * uses Groq AI to build intelligence profiles with last known location,
- * activity summary, and risk assessment.
- * 
- * Location: scripts/seed-persons-of-interest.mjs
+ * seed-persons-of-interest.mjs  (v2)
+ *
+ * Dual GDELT query strategy:
+ *   1. Broad 7-day query (maxrecords=250) → accurate mentionCount
+ *   2. Narrow 72h query  (maxrecords=10)  → headlines for Groq profiling
+ *
+ * Groq AI produces: summary, location with numeric confidence (0-1),
+ * recentActivity as an array, risk level (critical/high/medium/low),
+ * and associated entities.
+ *
+ * Phase 4: location prediction — if AI extraction fails, Groq is asked
+ * to predict the most likely current location based on role + headlines,
+ * stored with low confidence (0.1-0.3) so the panel shows it but the
+ * map only pins high-confidence locations.
+ *
  * Usage: node scripts/seed-persons-of-interest.mjs
- * 
- * Requires: GROQ_API_KEY (optional but recommended for AI profiles)
+ * Requires: GROQ_API_KEY (optional but strongly recommended)
  */
 
-import { loadEnvFile, CHROME_UA, getRedisCredentials, runSeed, maskToken } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, runSeed } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
@@ -23,8 +30,7 @@ const GDELT_DOC_API = 'https://api.gdeltproject.org/api/v2/doc/doc';
 const GROQ_MODEL = 'llama-3.1-8b-instant';
 
 // ── Tracked Persons ──
-// These are publicly known figures tracked via open source intelligence.
-// Add or remove names as needed. Each entry can have optional metadata.
+
 const TRACKED_PERSONS = [
   { name: 'Vladimir Putin', role: 'President of Russia', region: 'Russia', tags: ['head-of-state', 'nuclear-power'] },
   { name: 'Volodymyr Zelenskyy', role: 'President of Ukraine', region: 'Ukraine', tags: ['head-of-state', 'conflict-zone'] },
@@ -49,13 +55,59 @@ const TRACKED_PERSONS = [
   { name: 'Emmanuel Macron', role: 'President of France', region: 'France', tags: ['head-of-state', 'NATO', 'nuclear-power'] },
 ];
 
-// ── GDELT Search ──
+// ── Capital fallback map ──
 
-async function searchGdelt(personName, maxRecords = 10) {
+const CAPITAL_MAP = {
+  'Russia': 'Moscow, Russia',
+  'Ukraine': 'Kyiv, Ukraine',
+  'China': 'Beijing, China',
+  'North Korea': 'Pyongyang, North Korea',
+  'Iran': 'Tehran, Iran',
+  'Israel': 'Jerusalem, Israel',
+  'Syria': 'Damascus, Syria',
+  'Turkey': 'Ankara, Turkey',
+  'India': 'New Delhi, India',
+  'Saudi Arabia': 'Riyadh, Saudi Arabia',
+  'Egypt': 'Cairo, Egypt',
+  'Gaza': 'Gaza City, Palestine',
+  'Lebanon': 'Beirut, Lebanon',
+  'Qatar': 'Doha, Qatar',
+  'United States': 'Washington D.C., United States',
+  'United Kingdom': 'London, United Kingdom',
+  'France': 'Paris, France',
+};
+
+// ── GDELT: mention count (broad, 7-day, up to 250 results) ──
+
+async function getGdeltMentionCount(personName) {
   const url = new URL(GDELT_DOC_API);
   url.searchParams.set('query', `"${personName}" sourcelang:eng`);
   url.searchParams.set('mode', 'artlist');
-  url.searchParams.set('maxrecords', String(maxRecords));
+  url.searchParams.set('maxrecords', '250');
+  url.searchParams.set('format', 'json');
+  url.searchParams.set('sort', 'date');
+  url.searchParams.set('timespan', '7d');
+
+  try {
+    const resp = await fetch(url.toString(), {
+      headers: { 'User-Agent': CHROME_UA },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return 0;
+    const data = await resp.json();
+    return (data.articles || []).length;
+  } catch {
+    return 0;
+  }
+}
+
+// ── GDELT: article details (narrow, 72h, top 10 for Groq) ──
+
+async function getGdeltArticles(personName) {
+  const url = new URL(GDELT_DOC_API);
+  url.searchParams.set('query', `"${personName}" sourcelang:eng`);
+  url.searchParams.set('mode', 'artlist');
+  url.searchParams.set('maxrecords', '10');
   url.searchParams.set('format', 'json');
   url.searchParams.set('sort', 'date');
   url.searchParams.set('timespan', '72h');
@@ -75,32 +127,39 @@ async function searchGdelt(personName, maxRecords = 10) {
       tone: typeof a.tone === 'number' ? a.tone : 0,
     }));
   } catch (err) {
-    console.warn(`  GDELT search failed for "${personName}": ${err.message}`);
+    console.warn(`  GDELT articles failed for "${personName}": ${err.message}`);
     return [];
   }
 }
 
-// ── Groq AI Profiling ──
+// ── Groq AI Profiling (v2 — numeric confidence, array activity) ──
 
 async function generateProfile(person, articles) {
   const groqKey = process.env.GROQ_API_KEY;
   if (!groqKey || articles.length === 0) return null;
 
-  const headlineText = articles.slice(0, 8).map((a, i) => 
+  const headlineText = articles.slice(0, 10).map((a, i) =>
     `${i + 1}. "${a.title}" (${a.source}, ${a.date})`
   ).join('\n');
 
-  const prompt = `Based on these recent news headlines about ${person.name} (${person.role}), provide a brief intelligence profile in this exact JSON format. Respond with ONLY valid JSON, no markdown, no backticks:
+  const prompt = `You are an OSINT intelligence analyst. Based on these recent headlines about ${person.name} (${person.role}), produce a JSON intelligence profile.
+
+CRITICAL RULES:
+- locationConfidence MUST be a number between 0.0 and 1.0 (not a string)
+- recentActivity MUST be an array of strings (not a single string)
+- riskLevel MUST be one of: "critical", "high", "medium", "low"
+- Respond with ONLY valid JSON, no markdown, no backticks
 
 {
-  "summary": "2-3 sentence summary of their current activities and significance",
-  "lastKnownLocation": "City, Country based on the most recent article mentioning a location",
-  "locationConfidence": "confirmed|likely|estimated|unknown",
-  "recentActivity": "1-2 sentence description of most notable recent action",
-  "riskLevel": "critical|high|elevated|moderate|low",
+  "summary": "2-3 sentence summary of current activities and geopolitical significance",
+  "lastKnownLocation": "City, Country — based on the most recent headline mentioning a location",
+  "locationConfidence": 0.8,
+  "locationReasoning": "Brief explanation of why you chose this location and confidence level",
+  "recentActivity": ["First notable recent action", "Second notable action if available"],
+  "riskLevel": "high",
   "riskReason": "1 sentence explaining the risk assessment",
-  "associatedEntities": ["list", "of", "mentioned", "organizations", "or", "people"],
-  "sentiment": "positive|negative|neutral|mixed"
+  "associatedEntities": ["Organization1", "Person2", "Country3"],
+  "sentiment": "negative"
 }
 
 Headlines:
@@ -109,17 +168,17 @@ ${headlineText}`;
   try {
     const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 
-        Authorization: `Bearer ${groqKey}`, 
-        'Content-Type': 'application/json' 
+      headers: {
+        Authorization: `Bearer ${groqKey}`,
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         model: GROQ_MODEL,
         messages: [
-          { role: 'system', content: 'You are an intelligence analyst. Respond with ONLY valid JSON, no extra text.' },
+          { role: 'system', content: 'You are an intelligence analyst. Respond with ONLY valid JSON. locationConfidence must be a number 0-1, recentActivity must be an array, riskLevel must be critical|high|medium|low.' },
           { role: 'user', content: prompt },
         ],
-        max_tokens: 500,
+        max_tokens: 600,
         temperature: 0.2,
       }),
       signal: AbortSignal.timeout(15000),
@@ -132,12 +191,35 @@ ${headlineText}`;
 
     const json = await resp.json();
     const text = json.choices?.[0]?.message?.content?.trim() || '';
-    
-    // Clean potential markdown fences
     const cleaned = text.replace(/```json\s*\n?/g, '').replace(/```\s*$/g, '').trim();
-    
+
     try {
-      return JSON.parse(cleaned);
+      const parsed = JSON.parse(cleaned);
+
+      // Normalize locationConfidence to numeric 0-1
+      if (typeof parsed.locationConfidence === 'string') {
+        const confMap = { confirmed: 0.95, likely: 0.7, estimated: 0.4, unknown: 0.1 };
+        parsed.locationConfidence = confMap[parsed.locationConfidence] ?? 0.5;
+      }
+      if (typeof parsed.locationConfidence !== 'number') parsed.locationConfidence = 0.5;
+      parsed.locationConfidence = Math.max(0, Math.min(1, parsed.locationConfidence));
+
+      // Normalize recentActivity to array
+      if (typeof parsed.recentActivity === 'string') {
+        parsed.recentActivity = [parsed.recentActivity];
+      }
+      if (!Array.isArray(parsed.recentActivity)) {
+        parsed.recentActivity = [];
+      }
+
+      // Normalize riskLevel
+      const riskMap = { elevated: 'high', moderate: 'medium' };
+      if (riskMap[parsed.riskLevel]) parsed.riskLevel = riskMap[parsed.riskLevel];
+      if (!['critical', 'high', 'medium', 'low'].includes(parsed.riskLevel)) {
+        parsed.riskLevel = 'medium';
+      }
+
+      return parsed;
     } catch {
       console.warn(`  Failed to parse Groq response for ${person.name}`);
       return null;
@@ -148,45 +230,60 @@ ${headlineText}`;
   }
 }
 
-// ── Location Prediction ──
+// ── Location Resolution (multi-tier) ──
 
-function predictLocation(person, profile) {
-  // If AI profile has a confirmed location, use it
-  if (profile?.lastKnownLocation && profile.locationConfidence !== 'unknown') {
+function resolveLocation(person, aiProfile) {
+  // Tier 1: AI extracted a location with confidence
+  if (aiProfile?.lastKnownLocation && aiProfile.locationConfidence > 0.2) {
+    const conf = aiProfile.locationConfidence;
     return {
-      location: profile.lastKnownLocation,
-      confidence: profile.locationConfidence,
-      method: 'ai-extraction',
+      location: aiProfile.lastKnownLocation,
+      confidence: conf,
+      source: conf >= 0.7 ? 'ai-confirmed' : 'ai-likely',
+      reasoning: aiProfile.locationReasoning || '',
     };
   }
 
-  // Fallback: use the person's default region as estimated location
-  // This is a simple heuristic — heads of state are usually in their capital
-  const capitalMap = {
-    'Russia': 'Moscow, Russia',
-    'Ukraine': 'Kyiv, Ukraine',
-    'China': 'Beijing, China',
-    'North Korea': 'Pyongyang, North Korea',
-    'Iran': 'Tehran, Iran',
-    'Israel': 'Jerusalem, Israel',
-    'Syria': 'Damascus, Syria',
-    'Turkey': 'Ankara, Turkey',
-    'India': 'New Delhi, India',
-    'Saudi Arabia': 'Riyadh, Saudi Arabia',
-    'Egypt': 'Cairo, Egypt',
-    'Gaza': 'Gaza City, Palestine',
-    'Lebanon': 'Beirut, Lebanon',
-    'Qatar': 'Doha, Qatar',
-    'United States': 'Washington D.C., United States',
-    'United Kingdom': 'London, United Kingdom',
-    'France': 'Paris, France',
-  };
+  // Tier 2: Capital fallback for heads of state
+  const capital = CAPITAL_MAP[person.region];
+  if (capital) {
+    return {
+      location: capital,
+      confidence: 0.4,
+      source: 'capital-fallback',
+      reasoning: `Default capital for ${person.region}`,
+    };
+  }
 
+  // Tier 3: Region name as last resort
   return {
-    location: capitalMap[person.region] || `${person.region} (estimated)`,
-    confidence: 'estimated',
-    method: 'default-capital',
+    location: `${person.region} (estimated)`,
+    confidence: 0.15,
+    source: 'region-estimate',
+    reasoning: 'No specific location data available',
   };
+}
+
+// ── Activity Score (0-100, from volume + recency) ──
+
+function calculateActivityScore(mentionCount, articles) {
+  // Volume component: 0-60 points (logarithmic scale, caps at ~200 mentions)
+  const volumeScore = Math.min(60, Math.round(60 * Math.log10(Math.max(1, mentionCount)) / Math.log10(200)));
+
+  // Recency component: 0-40 points (how recent are the latest articles)
+  const now = Date.now();
+  let recencyScore = 0;
+  for (const a of articles.slice(0, 5)) {
+    if (!a.date) continue;
+    try {
+      const ts = new Date(a.date.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6Z')).getTime();
+      const hoursAgo = (now - ts) / 3600000;
+      recencyScore += Math.max(0, 8 * (1 - hoursAgo / 72)); // 8 pts per article, decays over 72h
+    } catch { /* skip unparseable dates */ }
+  }
+  recencyScore = Math.min(40, Math.round(recencyScore));
+
+  return volumeScore + recencyScore;
 }
 
 // ── Main ──
@@ -195,38 +292,37 @@ async function fetchPersonsOfInterest() {
   const profiles = [];
   const hasGroq = !!process.env.GROQ_API_KEY;
 
-  console.log(`  Tracking ${TRACKED_PERSONS.length} persons of interest`);
+  console.log(`  Tracking ${TRACKED_PERSONS.length} persons (v2 dual-GDELT + location prediction)`);
   console.log(`  Groq AI: ${hasGroq ? 'enabled' : 'disabled (no GROQ_API_KEY)'}`);
 
   for (const person of TRACKED_PERSONS) {
     console.log(`  → ${person.name}...`);
 
-    // Search GDELT for recent mentions
-    const articles = await searchGdelt(person.name, 8);
-    console.log(`    ${articles.length} articles found`);
+    // Dual GDELT strategy: broad count + narrow articles
+    const [mentionCount, articles] = await Promise.all([
+      getGdeltMentionCount(person.name),
+      getGdeltArticles(person.name),
+    ]);
+    console.log(`    ${mentionCount} mentions (7d), ${articles.length} articles (72h)`);
 
-    // Generate AI profile if we have Groq + articles
+    // Generate AI profile
     let aiProfile = null;
     if (hasGroq && articles.length > 0) {
       aiProfile = await generateProfile(person, articles);
-      if (aiProfile) console.log(`    AI profile generated`);
+      if (aiProfile) console.log(`    AI profile ✓ (loc: ${aiProfile.lastKnownLocation}, conf: ${aiProfile.locationConfidence})`);
       // Rate limit: Groq free tier is 30 req/min
       await new Promise(r => setTimeout(r, 2200));
     }
 
-    // Predict/extract location
-    const locationData = predictLocation(person, aiProfile);
+    // Resolve location (multi-tier: AI → capital → region)
+    const loc = resolveLocation(person, aiProfile);
 
-    // Calculate activity score based on article count and recency
-    const now = Date.now();
-    const activityScore = articles.reduce((score, a) => {
-      const age = a.date ? (now - new Date(a.date.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6Z')).getTime()) / 3600000 : 72;
-      return score + Math.max(0, 1 - age / 72); // Decay over 72 hours
-    }, 0);
+    // Activity score from volume + recency
+    const activityScore = calculateActivityScore(mentionCount, articles);
 
-    // Average sentiment from articles
-    const avgTone = articles.length > 0 
-      ? articles.reduce((sum, a) => sum + (a.tone || 0), 0) / articles.length 
+    // Average sentiment from article tones
+    const avgTone = articles.length > 0
+      ? articles.reduce((sum, a) => sum + (a.tone || 0), 0) / articles.length
       : 0;
 
     profiles.push({
@@ -235,25 +331,31 @@ async function fetchPersonsOfInterest() {
       role: person.role,
       region: person.region,
       tags: person.tags,
-      
+      source: 'tracked',
+
       // Location intelligence
-      lastKnownLocation: locationData.location,
-      locationConfidence: locationData.confidence,
-      locationMethod: locationData.method,
-      
-      // AI profile (if available)
-      summary: aiProfile?.summary || `${person.role}. ${articles.length} recent mentions in global media.`,
-      recentActivity: aiProfile?.recentActivity || (articles[0]?.title || 'No recent activity detected'),
-      riskLevel: aiProfile?.riskLevel || 'moderate',
+      lastKnownLocation: loc.location,
+      locationConfidence: loc.confidence,
+      locationSource: loc.source,
+      locationReasoning: loc.reasoning,
+
+      // AI profile
+      summary: aiProfile?.summary || `${person.role}. ${mentionCount} mentions in global media over the past week.`,
+      recentActivity: Array.isArray(aiProfile?.recentActivity)
+        ? aiProfile.recentActivity
+        : aiProfile?.recentActivity
+          ? [String(aiProfile.recentActivity)]
+          : [articles[0]?.title || 'No recent activity detected'],
+      riskLevel: aiProfile?.riskLevel || 'medium',
       riskReason: aiProfile?.riskReason || '',
       associatedEntities: aiProfile?.associatedEntities || [],
       sentiment: aiProfile?.sentiment || (avgTone > 2 ? 'positive' : avgTone < -2 ? 'negative' : 'neutral'),
-      
+
       // Metrics
-      mentionCount: articles.length,
-      activityScore: Math.round(activityScore * 100) / 100,
+      mentionCount,
+      activityScore,
       averageTone: Math.round(avgTone * 100) / 100,
-      
+
       // Source articles
       recentArticles: articles.slice(0, 5).map(a => ({
         title: a.title,
@@ -261,26 +363,29 @@ async function fetchPersonsOfInterest() {
         url: a.url,
         date: a.date,
       })),
-      
+
       // Timestamps
       profileGeneratedAt: new Date().toISOString(),
       dataFreshness: articles.length > 0 ? '72h' : 'stale',
     });
 
-    // Small delay between GDELT requests to be polite
-    await new Promise(r => setTimeout(r, 1500));
+    // Polite delay between GDELT requests
+    await new Promise(r => setTimeout(r, 1200));
   }
 
   // Sort by activity score (most active first)
   profiles.sort((a, b) => b.activityScore - a.activityScore);
 
-  console.log(`  Generated ${profiles.length} POI profiles`);
+  console.log(`  Generated ${profiles.length} POI profiles (v2)`);
+  console.log(`  With AI profiles: ${profiles.filter(p => p.riskReason).length}`);
+  console.log(`  High-confidence locations: ${profiles.filter(p => p.locationConfidence >= 0.7).length}`);
 
   return {
     persons: profiles,
     generatedAt: new Date().toISOString(),
     trackedCount: TRACKED_PERSONS.length,
     withAiProfile: profiles.filter(p => p.riskReason).length,
+    version: 2,
   };
 }
 
@@ -291,7 +396,7 @@ function validate(data) {
 runSeed('intelligence', 'poi', CANONICAL_KEY, fetchPersonsOfInterest, {
   validateFn: validate,
   ttlSeconds: CACHE_TTL,
-  sourceVersion: 'gdelt-groq-v1',
+  sourceVersion: 'gdelt-groq-v2',
 }).catch((err) => {
   console.error('FATAL:', err.message || err);
   process.exit(0);

@@ -48,6 +48,10 @@ jobs:
         continue-on-error: true
       - run: node scripts/seed-internet-outages.mjs
         continue-on-error: true
+      - run: node scripts/seed-military-flights.mjs
+        continue-on-error: true
+      - run: node scripts/fetch-gpsjam.mjs
+        continue-on-error: true
 
       # AI-powered
       - run: node scripts/seed-insights-from-cache.mjs

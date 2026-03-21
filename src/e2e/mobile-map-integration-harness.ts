@@ -137,6 +137,7 @@ const layers = {
   processingPlants: false,
   commodityPorts: false,
   webcams: false,
+  poi: false,
 };
 
 await initI18n();

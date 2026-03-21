@@ -435,7 +435,37 @@ export default async function handler(req) {
         report = generatePoiReport(pdata);
         break;
       }
-      case '/seed':
+      case '/seed': {
+        try {
+          // Verify GITHUB_PAT is in Vercel Env Variables
+          const ghToken = process.env.GITHUB_PAT;
+          if (!ghToken) {
+            report = '❌ Error: GITHUB_PAT is not configured in Vercel.';
+            break;
+          }
+
+          const triggerResp = await fetch('https://api.github.com/repos/salamndrgaming-lab/OSINTworldview-v2/actions/workflows/seed.yml/dispatches', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${ghToken}`,
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json',
+              'X-GitHub-Api-Version': '2022-11-28'
+            },
+            body: JSON.stringify({ ref: 'main' }),
+          });
+
+          if (triggerResp.status === 204 || triggerResp.ok) {
+            report = '✅ <b>Seed Triggered</b>\nData is being refreshed. Check /status in ~5 mins.';
+          } else {
+            const err = await triggerResp.text();
+            report = `⚠️ <b>Trigger Failed</b>\nHTTP ${triggerResp.status}: ${err}`;
+          }
+        } catch (e) {
+          report = `❌ <b>System Error</b>\n${e.message}`;
+        }
+        break;
+      }
       case '/refresh': {
         var ghToken = process.env.GITHUB_TOKEN;
         var ghRepo = process.env.GITHUB_REPO;

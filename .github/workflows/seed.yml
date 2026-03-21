@@ -1,11 +1,12 @@
 name: Seed Data
 on:
   schedule:
-    - cron: '0 */4 * * *'
+    - cron: '0 */3 * * *'
   workflow_dispatch:
 
 jobs:
-  seed:
+  # JOB 1: The Fast Lane (Completes quickly)
+  seed-fast:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -21,14 +22,13 @@ jobs:
           node-version: 22
       - run: npm install --ignore-scripts
 
-      # Free data sources (no API keys needed)
+      # Free data sources
       - run: node scripts/seed-earthquakes.mjs
       - run: node scripts/seed-natural-events.mjs
       - run: node scripts/seed-weather-alerts.mjs
       - run: node scripts/seed-commodity-quotes.mjs
       - run: node scripts/seed-unrest-events.mjs
       - run: node scripts/seed-prediction-markets.mjs
-      - run: node scripts/seed-gdelt-intel.mjs
       - run: node scripts/seed-service-statuses.mjs
       - run: node scripts/seed-climate-anomalies.mjs
       - run: node scripts/seed-gulf-quotes.mjs
@@ -49,26 +49,11 @@ jobs:
       - run: node scripts/seed-internet-outages.mjs
         continue-on-error: true
 
-      # AI-powered (runs last since it reads from cached data)
+      # AI-powered
       - run: node scripts/seed-insights-from-cache.mjs
         continue-on-error: true
       - run: node scripts/seed-persons-of-interest.mjs
         continue-on-error: true
-
-      # Notify via Telegram when done
-      - name: Notify Telegram
-        if: always()
-        run: |
-          STATUS="${{ job.status }}"
-          if [ "$STATUS" = "success" ]; then
-            MSG="✅ <b>Seed Complete</b>%0A%0AAll data sources refreshed successfully.%0ATime: $(date -u '+%Y-%m-%d %H:%M UTC')%0A%0AUse /report for the latest intelligence brief."
-          else
-            MSG="⚠️ <b>Seed Finished (with warnings)</b>%0A%0ASome data sources may have failed.%0ATime: $(date -u '+%Y-%m-%d %H:%M UTC')%0A%0AUse /status to check data availability."
-          fi
-          curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${MSG}&parse_mode=HTML" > /dev/null
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     env:
       UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
@@ -84,3 +69,45 @@ jobs:
       OTX_API_KEY: ${{ secrets.OTX_API_KEY }}
       ABUSEIPDB_API_KEY: ${{ secrets.ABUSEIPDB_API_KEY }}
       UCDP_ACCESS_TOKEN: ${{ secrets.UCDP_ACCESS_TOKEN }}
+
+  # JOB 2: The GDELT Lane (Isolated & Patient)
+  seed-gdelt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts
+            shared
+            package.json
+            package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --ignore-scripts
+
+      - run: node scripts/seed-gdelt-intel.mjs
+        continue-on-error: true
+
+    env:
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+  # JOB 3: Telegram Notification (Waits for both lanes)
+  notify:
+    needs: [seed-fast, seed-gdelt]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Telegram
+        run: |
+          if [ "${{ needs.seed-fast.result }}" = "success" ]; then
+            MSG="✅ <b>Seed Complete</b>%0A%0AAll fast data sources refreshed successfully.%0ATime: $(date -u '+%Y-%m-%d %H:%M UTC')%0A%0AUse /report for the latest intelligence brief."
+          else
+            MSG="⚠️ <b>Seed Finished (with warnings)</b>%0A%0ASome data sources may have failed.%0ATime: $(date -u '+%Y-%m-%d %H:%M UTC')%0A%0AUse /status to check data availability."
+          fi
+          curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${MSG}&parse_mode=HTML" > /dev/null
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

@@ -631,6 +631,8 @@ export interface MapLayers {
   processingPlants: boolean;
   commodityPorts: boolean;
   webcams: boolean;
+  // Persons of Interest layer
+  poi: boolean;
 }
 
 export interface AIDataCenter {

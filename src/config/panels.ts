@@ -21,6 +21,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'strategic-risk': { name: 'Strategic Risk Overview', enabled: true, priority: 1, ...(_desktop && { premium: 'enhanced' as const }) },
   intel: { name: 'Intel Feed', enabled: true, priority: 1 },
   'gdelt-intel': { name: 'Live Intelligence', enabled: true, priority: 1, ...(_desktop && { premium: 'enhanced' as const }) },
+  poi: { name: 'Persons of Interest', enabled: true, priority: 1 },
   cascade: { name: 'Infrastructure Cascade', enabled: true, priority: 1 },
   'military-correlation': { name: 'Force Posture', enabled: true, priority: 2 },
   'escalation-correlation': { name: 'Escalation Monitor', enabled: true, priority: 2 },
@@ -125,6 +126,7 @@ const FULL_MAP_LAYERS: MapLayers = {
   processingPlants: false,
   commodityPorts: false,
   webcams: false,
+  poi: false,
 };
 
 const FULL_MOBILE_MAP_LAYERS: MapLayers = {
@@ -185,6 +187,7 @@ const FULL_MOBILE_MAP_LAYERS: MapLayers = {
   processingPlants: false,
   commodityPorts: false,
   webcams: false,
+  poi: false,
 };
 
 // ============================================
@@ -288,6 +291,7 @@ const TECH_MAP_LAYERS: MapLayers = {
   processingPlants: false,
   commodityPorts: false,
   webcams: false,
+  poi: false,
 };
 
 const TECH_MOBILE_MAP_LAYERS: MapLayers = {
@@ -348,6 +352,7 @@ const TECH_MOBILE_MAP_LAYERS: MapLayers = {
   processingPlants: false,
   commodityPorts: false,
   webcams: false,
+  poi: false,
 };
 
 // ============================================
@@ -452,6 +457,7 @@ const FINANCE_MAP_LAYERS: MapLayers = {
   processingPlants: false,
   commodityPorts: false,
   webcams: false,
+  poi: false,
 };
 
 const FINANCE_MOBILE_MAP_LAYERS: MapLayers = {
@@ -512,6 +518,7 @@ const FINANCE_MOBILE_MAP_LAYERS: MapLayers = {
   processingPlants: false,
   commodityPorts: false,
   webcams: false,
+  poi: false,
 };
 
 // ============================================
@@ -588,6 +595,7 @@ const HAPPY_MAP_LAYERS: MapLayers = {
   processingPlants: false,
   commodityPorts: false,
   webcams: false,
+  poi: false,
 };
 
 const HAPPY_MOBILE_MAP_LAYERS: MapLayers = {
@@ -648,6 +656,7 @@ const HAPPY_MOBILE_MAP_LAYERS: MapLayers = {
   processingPlants: false,
   commodityPorts: false,
   webcams: false,
+  poi: false,
 };
 
 // ============================================
@@ -738,6 +747,7 @@ const COMMODITY_MAP_LAYERS: MapLayers = {
   processingPlants: true,
   commodityPorts: true,
   webcams: false,
+  poi: false,
 };
 
 const COMMODITY_MOBILE_MAP_LAYERS: MapLayers = {
@@ -798,6 +808,7 @@ const COMMODITY_MOBILE_MAP_LAYERS: MapLayers = {
   processingPlants: false,
   commodityPorts: true,
   webcams: false,
+  poi: false,
 };
 
 // ============================================
@@ -1002,109 +1013,3 @@ export const STORAGE_KEYS = {
   mapLayers: 'worldmonitor-layers',
   disabledFeeds: 'worldmonitor-disabled-feeds',
 } as const;
-/**
- * panels.ts — Panel Registry (updated with POI + Groq Insights)
- * World Monitor OSINT Platform
- *
- * Drop into: src/config/panels.ts
- *
- * This shows the panel registration pattern. Merge with your
- * existing panels.ts — add the POI and Insights entries.
- */
-
-export interface PanelConfig {
-  id: string;
-  label: string;
-  icon: string;
-  component: string;        // path to component file (for dynamic import)
-  position?: 'main' | 'sidebar' | 'modal';
-  defaultVisible?: boolean;
-  order?: number;
-  mobileTab?: boolean;       // show in mobile bottom nav
-}
-
-export const PANELS: PanelConfig[] = [
-  // ── Existing panels (keep yours, these are examples) ───────────────────
-  {
-    id: 'dashboard',
-    label: 'Dashboard',
-    icon: '📊',
-    component: './components/Dashboard',
-    position: 'main',
-    defaultVisible: true,
-    order: 0,
-    mobileTab: true,
-  },
-  {
-    id: 'map',
-    label: 'Map',
-    icon: '🗺️',
-    component: './components/DeckGLMap',
-    position: 'main',
-    defaultVisible: true,
-    order: 1,
-    mobileTab: true,
-  },
-  {
-    id: 'globe',
-    label: 'Globe',
-    icon: '🌐',
-    component: './components/GlobeMap',
-    position: 'main',
-    defaultVisible: false,
-    order: 2,
-    mobileTab: false,
-  },
-  {
-    id: 'threats',
-    label: 'Threats',
-    icon: '⚠️',
-    component: './components/ThreatsPanel',
-    position: 'main',
-    order: 3,
-    mobileTab: true,
-  },
-
-  // ── NEW: Persons of Interest Panel ─────────────────────────────────────
-  {
-    id: 'poi',
-    label: 'Persons',
-    icon: '👤',
-    component: './components/POIPanel',
-    position: 'main',
-    defaultVisible: false,
-    order: 4,
-    mobileTab: true,
-  },
-
-  // ── NEW: AI Insights Panel (Groq) ─────────────────────────────────────
-  {
-    id: 'insights',
-    label: 'AI Intel',
-    icon: '🧠',
-    component: './components/GroqInsightsPanel',
-    position: 'main',
-    defaultVisible: false,
-    order: 5,
-    mobileTab: true,
-  },
-];
-
-/**
- * Get panels configured for mobile bottom tab navigation.
- * Use with MobileNav component.
- */
-export function getMobileTabPanels(): PanelConfig[] {
-  return PANELS
-    .filter((p) => p.mobileTab)
-    .sort((a, b) => (a.order || 0) - (b.order || 0));
-}
-
-/**
- * Get panel config by ID
- */
-export function getPanelById(id: string): PanelConfig | undefined {
-  return PANELS.find((p) => p.id === id);
-}
-
-export default PANELS;

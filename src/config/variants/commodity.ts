@@ -115,6 +115,7 @@ export const DEFAULT_MAP_LAYERS: MapLayers = {
 
   ciiChoropleth: false,
   webcams: false,
+  poi: false,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -177,6 +178,7 @@ export const MOBILE_DEFAULT_MAP_LAYERS: MapLayers = {
 
   ciiChoropleth: false,
   webcams: false,
+  poi: false,
 };
 
 export const VARIANT_CONFIG: VariantConfig = {

@@ -271,7 +271,6 @@ const MARKER_ICONS = {
 const BASES_ICON_MAPPING = { triangleUp: { x: 0, y: 0, width: 32, height: 32, mask: true } };
 const NUCLEAR_ICON_MAPPING = { hexagon: { x: 0, y: 0, width: 32, height: 32, mask: true } };
 const DATACENTER_ICON_MAPPING = { square: { x: 0, y: 0, width: 32, height: 32, mask: true } };
-const AIRCRAFT_ICON_MAPPING = { plane: { x: 0, y: 0, width: 32, height: 32, mask: true } };
 
 const CONFLICT_COUNTRY_ISO: Record<string, string[]> = {
   iran: ['IR'],
@@ -1399,7 +1398,7 @@ export class DeckGLMap {
           scenegraph: 'https://raw.githubusercontent.com/visgl/deck.gl-data/master/luma.gl/examples/objects/airplane.glb',
           getPosition: (d: any) => d.coords,
           getOrientation: (d: any) => [0, -d.heading, 90],
-          sizeScale: this.state.viewState.zoom > 4 ? 45 : 0,
+          sizeScale: this.state.zoom > 4 ? 45 : 0,
           _instanced: true,
           pickable: true
         })
@@ -1410,7 +1409,7 @@ export class DeckGLMap {
           id: 'flight-labels',
           data: this.aircraftPositions,
           getPosition: (d: any) => [d.coords[0], d.coords[1], d.coords[2] + 200],
-          getText: (d: any) => this.state.viewState.zoom > 7 ? `${d.label}
+          getText: (d: any) => this.state.zoom > 7 ? `${d.label}
 ${d.desc}` : '',
           getSize: 12,
           getColor: (d: any) => d.color || [255, 255, 255],
@@ -1922,28 +1921,6 @@ ${d.desc}` : '',
       radiusMinPixels: 8,
       radiusMaxPixels: 40,
       pickable: true,
-    });
-  }
-
-  private createAircraftPositionsLayer(): IconLayer<PositionSample> {
-    return new IconLayer<PositionSample>({
-      id: 'aircraft-positions-layer',
-      data: this.aircraftPositions,
-      getPosition: (d) => [d.lon, d.lat],
-      getIcon: () => 'plane',
-      iconAtlas: MARKER_ICONS.plane,
-      iconMapping: AIRCRAFT_ICON_MAPPING,
-      getSize: (d) => d.onGround ? 14 : 18,
-      getColor: (d) => {
-        if (d.onGround) return [120, 120, 120, 160] as [number, number, number, number];
-        return [160, 100, 255, 220] as [number, number, number, number]; // Purple for all airborne
-      },
-      getAngle: (d) => -d.trackDeg,
-      sizeMinPixels: 8,
-      sizeMaxPixels: 28,
-      sizeScale: 1,
-      pickable: true,
-      billboard: false,
     });
   }
 
@@ -4800,14 +4777,14 @@ ${d.desc}` : '',
     return Math.abs(center.lat - prevLat) > threshold || Math.abs(center.lng - prevLng) > threshold;
   }
 
-    private fetchViewportAircraft(): void {
+  private fetchViewportAircraft(): void {
     if (!this.state.layers.flights) return;
-    this.flightWorker?.postMessage('fetch');
-  }
+    if (this.flightWorker) {
+      this.flightWorker.postMessage('fetch');
       return;
     }
     if (!this.hasAircraftViewportChanged()) return;
-    const bounds = this.maplibreMap.getBounds();
+    const bounds = this.maplibreMap!.getBounds();
     const sw = bounds.getSouthWest();
     const ne = bounds.getNorthEast();
     const seq = ++this.aircraftFetchSeq;
@@ -4815,7 +4792,7 @@ ${d.desc}` : '',
       swLat: sw.lat, swLon: sw.lng,
       neLat: ne.lat, neLon: ne.lng,
     }).then((positions) => {
-      if (seq !== this.aircraftFetchSeq) return; // discard stale response
+      if (seq !== this.aircraftFetchSeq) return;
       this.aircraftPositions = positions;
       this.onAircraftPositionsUpdate?.(positions);
       const center = this.maplibreMap?.getCenter();

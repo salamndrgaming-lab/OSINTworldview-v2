@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-
 import { loadEnvFile, CHROME_UA, runSeed, sleep } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
@@ -73,7 +72,9 @@ async function fetchWithRetry(topic, maxRetries = 3) {
     } catch (err) {
       const is429 = err.message?.includes('429');
       if (!is429 || attempt === maxRetries) throw err;
-      const backoff = (attempt + 1) * 10_000;
+      
+      // More aggressive backoff if we DO get hit with a 429
+      const backoff = (attempt + 1) * 30_000;
       console.log(`    429 rate-limited, waiting ${backoff / 1000}s...`);
       await sleep(backoff);
     }
@@ -83,11 +84,24 @@ async function fetchWithRetry(topic, maxRetries = 3) {
 async function fetchAllTopics() {
   const topics = [];
   for (let i = 0; i < INTEL_TOPICS.length; i++) {
-    if (i > 0) await sleep(12_000);
-    console.log(`  Fetching ${INTEL_TOPICS[i].id}...`);
-    const result = await fetchWithRetry(INTEL_TOPICS[i]);
-    console.log(`    ${result.articles.length} articles`);
-    topics.push(result);
+    const topic = INTEL_TOPICS[i];
+
+    // The Golden Rule: Minimum 60s wait between topics to keep GDELT happy
+    if (i > 0) {
+      console.log(`   Cooling down for 60s to avoid the penalty box...`);
+      await sleep(60000); 
+    }
+
+    console.log(`   Fetching ${topic.id}...`);
+    try {
+      const result = await fetchWithRetry(topic);
+      console.log(`    ✅ ${result.articles.length} articles found`);
+      topics.push(result);
+    } catch (err) {
+      // SOFT FAIL: Log the error, save empty articles, and keep the script alive
+      console.error(`    ⚠️ GDELT skip [${topic.id}]: ${err.message}`);
+      topics.push({ id: topic.id, articles: [], fetchedAt: new Date().toISOString() });
+    }
   }
   return { topics, fetchedAt: new Date().toISOString() };
 }
@@ -95,7 +109,8 @@ async function fetchAllTopics() {
 function validate(data) {
   if (!Array.isArray(data?.topics) || data.topics.length !== INTEL_TOPICS.length) return false;
   const populated = data.topics.filter((t) => Array.isArray(t.articles) && t.articles.length > 0);
-  return populated.length >= 3;
+  // Lowered to 2 so the cache still successfully saves even if a couple topics get rate-limited
+  return populated.length >= 2; 
 }
 
 runSeed('intelligence', 'gdelt-intel', CANONICAL_KEY, fetchAllTopics, {

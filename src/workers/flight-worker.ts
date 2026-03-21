@@ -1,12 +1,12 @@
 // src/workers/flight-worker.ts
-// Web Worker — fetches global ADS-B data from adsb.one, classifies aircraft,
-// filters junk (simulated transponders, ground vehicles, invalid positions),
-// and posts processed results back to the main thread.
+// Web Worker — fetches global ADS-B data via /api/adsb proxy (avoids CORS),
+// classifies aircraft, filters junk, and posts results to the main thread.
 
 async function fetchAndProcess(): Promise<void> {
   try {
-    const res = await fetch('https://api.adsb.one/v2/all');
-    if (!res.ok) throw new Error(`ADSB fetch failed: HTTP ${res.status}`);
+    // Use our own Vercel edge proxy to avoid CORS blocks from adsb.one
+    const res = await fetch('/api/adsb');
+    if (!res.ok) throw new Error(`ADSB proxy HTTP ${res.status}`);
     const data = await res.json();
 
     // Guard against malformed API response
@@ -77,6 +77,5 @@ self.onmessage = () => {
   fetchAndProcess();
 };
 
-// Immediate first fetch after a short delay to ensure main thread
-// has finished setting up the onmessage handler before we post back
+// Immediate first fetch after short delay to ensure main thread handler is ready
 setTimeout(() => fetchAndProcess(), 2000);

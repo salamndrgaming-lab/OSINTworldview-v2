@@ -271,6 +271,8 @@ const BASES_ICON_MAPPING = { triangleUp: { x: 0, y: 0, width: 32, height: 32, ma
 const NUCLEAR_ICON_MAPPING = { hexagon: { x: 0, y: 0, width: 32, height: 32, mask: true } };
 const DATACENTER_ICON_MAPPING = { square: { x: 0, y: 0, width: 32, height: 32, mask: true } };
 
+const AIRCRAFT_ICON_MAPPING = { plane: { x: 0, y: 0, width: 32, height: 32, mask: true, anchorY: 16 } };
+
 const CONFLICT_COUNTRY_ISO: Record<string, string[]> = {
   iran: ['IR'],
   ukraine: ['UA'],
@@ -1376,7 +1378,7 @@ export class DeckGLMap {
 
     // Aircraft positions layer (live tracking, under flights toggle)
     if (mapLayers.flights && this.aircraftPositions.length > 0) {
-      // Faint trails behind each aircraft (white, subtle)
+      // Faint trails behind each aircraft
       layers.push(
         new TripsLayer({
           id: 'flight-trails',
@@ -1391,29 +1393,29 @@ export class DeckGLMap {
         })
       );
 
-      // Aircraft dots — colored by category (Military=red, Cargo=purple, GA=grey, Commercial=blue)
+      // Airplane icons — shaped like planes, colored by category, rotated by heading
       layers.push(
-        new ScatterplotLayer({
+        new IconLayer({
           id: 'global-flights',
           data: this.aircraftPositions,
-          scenegraph: 'https://raw.githubusercontent.com/visgl/deck.gl-data/master/examples/scenegraph-layer/airplane.glb',
           getPosition: (d: any) => d.coords,
-          getFillColor: (d: any) => d.color || [0, 150, 255],
-          getLineColor: [255, 255, 255, 120],
-          getRadius: (d: any) => {
-            // Military/Gov gets larger dots for visibility
-            if (d.category === 'Military/Gov') return 28000;
-            if (d.category === 'Cargo') return 22000;
-            return 16000;
+          iconAtlas: MARKER_ICONS.plane,
+          iconMapping: AIRCRAFT_ICON_MAPPING,
+          getIcon: () => 'plane',
+          getSize: (d: any) => {
+            if (d.category === 'Military/Gov') return 26;
+            if (d.category === 'Cargo') return 22;
+            return 18;
           },
-          radiusMinPixels: 3,
-          radiusMaxPixels: 12,
-          stroked: true,
-          lineWidthMinPixels: 1,
-          filled: true,
+          getColor: (d: any) => d.color || [0, 150, 255],
+          getAngle: (d: any) => -d.heading,
+          sizeMinPixels: 6,
+          sizeMaxPixels: 32,
+          sizeScale: 1,
+          billboard: false,
           pickable: true,
           autoHighlight: true,
-          highlightColor: [255, 255, 255, 80],
+          highlightColor: [255, 255, 255, 100],
         })
       );
 
@@ -1423,15 +1425,14 @@ export class DeckGLMap {
           id: 'flight-labels',
           data: this.aircraftPositions,
           getPosition: (d: any) => [d.coords[0], d.coords[1], (d.coords[2] || 0) + 200],
-          getText: (d: any) => this.state.zoom > 6 ? `${d.label}\n${d.desc}` : '',
+          getText: (d: any) => this.state.zoom > 6 ? d.label : '',
           getSize: 11,
           getColor: (d: any) => d.color || [255, 255, 255],
           outlineWidth: 2,
           outlineColor: [0, 0, 0, 200],
-          fontWeight: 'bold',
           getTextAnchor: 'start',
           getAlignmentBaseline: 'center',
-          getPixelOffset: [10, 0],
+          getPixelOffset: [12, 0],
           billboard: true,
         })
       );
@@ -3350,8 +3351,13 @@ export class DeckGLMap {
         return { html: `<div class="deckgl-tooltip"><strong>M${(obj.magnitude || 0).toFixed(1)} ${t('components.deckgl.tooltip.earthquake')}</strong><br/>${text(obj.place)}</div>` };
       case 'military-vessels-layer':
         return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name)}</strong><br/>${text(obj.operatorCountry)}</div>` };
-      case 'global-flights':
-        return { html: `<div class="deckgl-tooltip"><strong>${obj.label}</strong><br/>${obj.desc}</div>` };
+      case 'global-flights': {
+        const catColors: Record<string, string> = { 'Military/Gov': '#ff3232', 'Cargo': '#a064ff', 'General Aviation': '#b4b4b4', 'Commercial': '#0096ff' };
+        const catColor = catColors[obj.category] || '#0096ff';
+        const altFt = obj.coords?.[2] ? Math.round(obj.coords[2] / 0.3048) : 0;
+        const altStr = altFt > 0 ? `${altFt.toLocaleString()} ft` : 'Ground';
+        return { html: `<div class="deckgl-tooltip" style="min-width:180px"><strong style="font-size:13px">✈ ${text(obj.label)}</strong><br/><span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;background:${catColor}22;color:${catColor};border:1px solid ${catColor}44;margin:4px 0;text-transform:uppercase">${text(obj.category)}</span><br/><span style="opacity:.85">${text(obj.desc)}</span><br/><span style="opacity:.6;font-size:10px">Alt: ${altStr} · Hdg: ${Math.round(obj.heading || 0)}° · ICAO: ${text(obj.id)}</span></div>` };
+      }
       case 'military-flights-layer':
         return { html: `<div class="deckgl-tooltip"><strong>${text(obj.callsign || obj.registration || t('components.deckgl.tooltip.militaryAircraft'))}</strong><br/>${text(obj.type)}</div>` };
       case 'military-vessel-clusters-layer':

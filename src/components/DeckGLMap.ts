@@ -1395,7 +1395,7 @@ export class DeckGLMap {
         new ScenegraphLayer({
           id: 'global-flights',
           data: this.aircraftPositions,
-          scenegraph: 'https://raw.githubusercontent.com/visgl/deck.gl-data/master/luma.gl/examples/objects/airplane.glb',
+          scenegraph: 'https://raw.githubusercontent.com/visgl/deck.gl-data/master/examples/scenegraph-layer/airplane.glb',
           getPosition: (d: any) => d.coords,
           getOrientation: (d: any) => [0, -d.heading, 90],
           sizeScale: this.state.zoom > 4 ? 45 : 0,

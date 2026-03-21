@@ -4807,7 +4807,7 @@ export class DeckGLMap {
     if (existing) return; // already visible
 
     const flightsToggle = this.container.querySelector('.layer-toggle[data-layer="flights"]');
-    if (!flightsToggle) return;
+    if (!flightsToggle) { console.warn('[DeckGLMap] flights toggle not found for subpanel'); return; }
 
     const cats: Array<{ key: string; label: string; color: string }> = [
       { key: 'Military/Gov', label: 'Military / Gov', color: '#ff3232' },
@@ -4818,15 +4818,24 @@ export class DeckGLMap {
 
     const panel = document.createElement('div');
     panel.className = 'flight-category-subpanel';
-    panel.style.cssText = 'padding:4px 0 4px 24px;display:flex;flex-direction:column;gap:3px;';
+    panel.style.cssText = 'padding:2px 0 6px 28px;display:flex;flex-direction:column;gap:2px;border-left:2px solid var(--border-color,#1e293b);margin-left:14px;margin-bottom:4px;';
     panel.innerHTML = cats.map(c => `
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:10px;color:var(--text-secondary,#94a3b8);user-select:none" data-cat="${c.key}">
-        <input type="checkbox" ${this.flightCategoryFilters[c.key] !== false ? 'checked' : ''} style="accent-color:${c.color};width:12px;height:12px">
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:10px;color:var(--text-secondary,#94a3b8);user-select:none;padding:1px 0" data-cat="${c.key}">
+        <input type="checkbox" ${this.flightCategoryFilters[c.key] !== false ? 'checked' : ''} style="accent-color:${c.color};width:12px;height:12px;margin:0">
         <span style="width:8px;height:8px;border-radius:50%;background:${c.color};flex-shrink:0"></span>
         <span>${c.label}</span>
       </label>`).join('');
 
-    flightsToggle.insertAdjacentElement('afterend', panel);
+    // Insert after the flights toggle label, inside the same parent (toggle-list)
+    const parent = flightsToggle.parentElement;
+    const nextSibling = flightsToggle.nextElementSibling;
+    if (parent) {
+      if (nextSibling) {
+        parent.insertBefore(panel, nextSibling);
+      } else {
+        parent.appendChild(panel);
+      }
+    }
 
     // Bind category toggle events
     panel.querySelectorAll('label[data-cat]').forEach(label => {

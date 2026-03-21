@@ -5,7 +5,6 @@
  */
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { TripsLayer } from '@deck.gl/geo-layers';
-import { ScenegraphLayer } from '@deck.gl/mesh-layers';
 import type { Layer, LayersList, PickingInfo } from '@deck.gl/core';
 import { GeoJsonLayer, ScatterplotLayer, PathLayer, IconLayer, TextLayer, PolygonLayer } from '@deck.gl/layers';
 import maplibregl from 'maplibre-gl';
@@ -1377,6 +1376,7 @@ export class DeckGLMap {
 
     // Aircraft positions layer (live tracking, under flights toggle)
     if (mapLayers.flights && this.aircraftPositions.length > 0) {
+      // Faint trails behind each aircraft (white, subtle)
       layers.push(
         new TripsLayer({
           id: 'flight-trails',
@@ -1384,37 +1384,54 @@ export class DeckGLMap {
           getPath: (d: any) => d.path,
           getTimestamps: (d: any) => d.timestamps,
           getColor: [255, 255, 255],
-          opacity: 0.12,
+          opacity: 0.25,
           widthMinPixels: 1,
           trailLength: 600,
           currentTime: Date.now() / 1000
         })
       );
 
+      // Aircraft dots — colored by category (Military=red, Cargo=purple, GA=grey, Commercial=blue)
       layers.push(
-        new ScenegraphLayer({
+        new ScatterplotLayer({
           id: 'global-flights',
           data: this.aircraftPositions,
-          scenegraph: 'https://raw.githubusercontent.com/visgl/deck.gl-data/master/luma.gl/examples/objects/airplane.glb',
           getPosition: (d: any) => d.coords,
-          getOrientation: (d: any) => [0, -d.heading, 90],
-          sizeScale: this.state.zoom > 4 ? 45 : 0,
-          _instanced: true,
-          pickable: true
+          getFillColor: (d: any) => d.color || [0, 150, 255],
+          getLineColor: [255, 255, 255, 120],
+          getRadius: (d: any) => {
+            // Military/Gov gets larger dots for visibility
+            if (d.category === 'Military/Gov') return 28000;
+            if (d.category === 'Cargo') return 22000;
+            return 16000;
+          },
+          radiusMinPixels: 3,
+          radiusMaxPixels: 12,
+          stroked: true,
+          lineWidthMinPixels: 1,
+          filled: true,
+          pickable: true,
+          autoHighlight: true,
+          highlightColor: [255, 255, 255, 80],
         })
       );
 
+      // Labels — callsign + operator, visible at zoom 6+
       layers.push(
         new TextLayer({
           id: 'flight-labels',
           data: this.aircraftPositions,
-          getPosition: (d: any) => [d.coords[0], d.coords[1], d.coords[2] + 200],
-          getText: (d: any) => this.state.zoom > 7 ? `${d.label}
-${d.desc}` : '',
-          getSize: 12,
+          getPosition: (d: any) => [d.coords[0], d.coords[1], (d.coords[2] || 0) + 200],
+          getText: (d: any) => this.state.zoom > 6 ? `${d.label}\n${d.desc}` : '',
+          getSize: 11,
           getColor: (d: any) => d.color || [255, 255, 255],
           outlineWidth: 2,
-          outlineColor: [0, 0, 0]
+          outlineColor: [0, 0, 0, 200],
+          fontWeight: 'bold',
+          getTextAnchor: 'start',
+          getAlignmentBaseline: 'center',
+          getPixelOffset: [10, 0],
+          billboard: true,
         })
       );
     }

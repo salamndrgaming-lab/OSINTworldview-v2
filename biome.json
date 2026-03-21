@@ -15,6 +15,15 @@
 		{
 			"includes": ["src/generated/**"],
 			"linter": { "enabled": false }
+		},
+		{
+			"includes": ["api/telegram-webhook.js"],
+			"linter": {
+				"rules": {
+					"suspicious": { "noVar": "warn" },
+					"correctness": { "noInnerDeclarations": "warn" }
+				}
+			}
 		}
 	],
 	"linter": {

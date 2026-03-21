@@ -23,13 +23,26 @@ export default async function handler(req) {
   }
 
   const relayBaseUrl = getRelayBaseUrl();
+
+  // If relay is not configured, return empty feed (200, not 503)
+  // so the frontend doesn't throw and spam console errors
   if (!relayBaseUrl) {
-    return new Response(JSON.stringify({ error: 'WS_RELAY_URL is not configured' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    return new Response(JSON.stringify({
+      items: [],
+      count: 0,
+      configured: false,
+      note: 'Telegram feed requires WS_RELAY_URL. Set it in Vercel environment variables.',
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60',
+        ...corsHeaders,
+      },
     });
   }
 
+  // Relay is configured — proxy through to it
   try {
     const url = new URL(req.url);
     const limit = Math.max(1, Math.min(200, parseInt(url.searchParams.get('limit') || '50', 10) || 50));
@@ -65,12 +78,19 @@ export default async function handler(req) {
     });
   } catch (error) {
     const isTimeout = error?.name === 'AbortError';
+    // On relay failure, return empty feed (200) not 502/504
     return new Response(JSON.stringify({
+      items: [],
+      count: 0,
+      configured: true,
       error: isTimeout ? 'Relay timeout' : 'Relay request failed',
-      details: error?.message || String(error),
     }), {
-      status: isTimeout ? 504 : 502,
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...corsHeaders },
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+        ...corsHeaders,
+      },
     });
   }
 }

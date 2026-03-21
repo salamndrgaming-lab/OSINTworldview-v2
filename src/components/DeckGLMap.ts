@@ -1396,6 +1396,7 @@ export class DeckGLMap {
         new ScatterplotLayer({
           id: 'global-flights',
           data: this.aircraftPositions,
+          scenegraph: 'https://raw.githubusercontent.com/visgl/deck.gl-data/master/examples/scenegraph-layer/airplane.glb',
           getPosition: (d: any) => d.coords,
           getFillColor: (d: any) => d.color || [0, 150, 255],
           getLineColor: [255, 255, 255, 120],

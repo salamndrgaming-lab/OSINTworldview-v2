@@ -11,12 +11,17 @@ async function fetchAndProcess(): Promise<void> {
 
     // Guard against malformed API response
     const raw = Array.isArray(data?.ac) ? data.ac : [];
+    if (raw.length === 0) {
+      console.warn('[flight-worker] API returned 0 aircraft');
+      self.postMessage([]);
+      return;
+    }
 
-    // Filter out junk before processing:
+    // Filter out junk:
     //  - hex starting with '~' = non-ICAO / MLAT artifact / simulated target
-    //  - missing or invalid lat/lon = no position data
+    //  - hex matching SIM prefix = simulator feeds
+    //  - missing or invalid lat/lon = no usable position
     //  - category 'C3' = ground vehicle (airport service trucks etc.)
-    //  - hex matching SIM pattern = simulator feeds that leak into the network
     const valid = raw.filter((ac: any) =>
       ac.hex &&
       !ac.hex.startsWith('~') &&
@@ -26,13 +31,15 @@ async function fetchAndProcess(): Promise<void> {
       ac.category !== 'C3'
     );
 
+    console.log(`[flight-worker] ${raw.length} raw → ${valid.length} after filter (dropped ${raw.length - valid.length})`);
+
     const now = Date.now() / 1000;
 
     const processed = valid.map((ac: any) => {
       const operator = ac.ownOp || ac.r || 'Private/Unknown';
       const callsign = (ac.flight || '').trim();
 
-      // Entity classification — Military/Gov, Cargo, General Aviation, or Commercial
+      // Entity classification
       let category = 'Commercial';
       let color = [0, 150, 255]; // Blue
 
@@ -49,7 +56,7 @@ async function fetchAndProcess(): Promise<void> {
 
       return {
         id: ac.hex,
-        coords: [ac.lon, ac.lat, (ac.alt_baro || 0) * 0.3048], // ft → meters
+        coords: [ac.lon, ac.lat, (ac.alt_baro || 0) * 0.3048],
         heading: ac.track || 0,
         label: callsign || ac.r || ac.hex.toUpperCase(),
         desc: `${operator} (${ac.t || 'UNK'})`,
@@ -70,6 +77,6 @@ self.onmessage = () => {
   fetchAndProcess();
 };
 
-// Immediate first fetch on worker load so trails start building
-// right away instead of waiting for the first 120s timer tick
-fetchAndProcess();
+// Immediate first fetch after a short delay to ensure main thread
+// has finished setting up the onmessage handler before we post back
+setTimeout(() => fetchAndProcess(), 2000);

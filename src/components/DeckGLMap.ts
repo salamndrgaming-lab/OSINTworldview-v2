@@ -327,6 +327,13 @@ export class DeckGLMap {
   private aircraftPositions: any[] = [];
   private flightWorker: Worker | null = null;
   private flightHistory: Map<string, {path: number[][], timestamps: number[]}> = new Map();
+  /** Active flight category filters — all enabled by default */
+  private flightCategoryFilters: Record<string, boolean> = {
+    'Military/Gov': true,
+    'Cargo': true,
+    'General Aviation': true,
+    'Commercial': true,
+  };
   private aircraftFetchTimer: ReturnType<typeof setInterval> | null = null;
   private news: NewsItem[] = [];
   private newsLocations: Array<{ lat: number; lon: number; title: string; threatLevel: string; timestamp?: Date }> = [];
@@ -1378,64 +1385,76 @@ export class DeckGLMap {
 
     // Aircraft positions layer (live tracking, under flights toggle)
     if (mapLayers.flights && this.aircraftPositions.length > 0) {
-      // Faint trails behind each aircraft
-      layers.push(
-        new TripsLayer({
-          id: 'flight-trails',
-          data: Array.from(this.flightHistory.values()),
-          getPath: (d: any) => d.path,
-          getTimestamps: (d: any) => d.timestamps,
-          getColor: [255, 255, 255],
-          opacity: 0.25,
-          widthMinPixels: 1,
-          trailLength: 600,
-          currentTime: Date.now() / 1000
-        })
+      // Filter by user-selected categories
+      const visibleAircraft = this.aircraftPositions.filter(
+        (d: any) => this.flightCategoryFilters[d.category] !== false
       );
 
-      // Airplane icons — shaped like planes, colored by category, rotated by heading
-      layers.push(
-        new IconLayer({
-          id: 'global-flights',
-          data: this.aircraftPositions,
-          getPosition: (d: any) => d.coords,
-          iconAtlas: MARKER_ICONS.plane,
-          iconMapping: AIRCRAFT_ICON_MAPPING,
-          getIcon: () => 'plane',
-          getSize: (d: any) => {
-            if (d.category === 'Military/Gov') return 26;
-            if (d.category === 'Cargo') return 22;
-            return 18;
-          },
-          getColor: (d: any) => d.color || [0, 150, 255],
-          getAngle: (d: any) => -d.heading,
-          sizeMinPixels: 6,
-          sizeMaxPixels: 32,
-          sizeScale: 1,
-          billboard: false,
-          pickable: true,
-          autoHighlight: true,
-          highlightColor: [255, 255, 255, 100],
-        })
-      );
+      if (visibleAircraft.length > 0) {
+        // Faint trails behind each aircraft
+        const visibleIds = new Set(visibleAircraft.map((d: any) => d.id));
+        const visibleHistory = Array.from(this.flightHistory.entries())
+          .filter(([key]) => visibleIds.has(key))
+          .map(([, val]) => val);
 
-      // Labels — callsign + operator, visible at zoom 6+
-      layers.push(
-        new TextLayer({
-          id: 'flight-labels',
-          data: this.aircraftPositions,
-          getPosition: (d: any) => [d.coords[0], d.coords[1], (d.coords[2] || 0) + 200],
-          getText: (d: any) => this.state.zoom > 6 ? d.label : '',
-          getSize: 11,
-          getColor: (d: any) => d.color || [255, 255, 255],
-          outlineWidth: 2,
-          outlineColor: [0, 0, 0, 200],
-          getTextAnchor: 'start',
-          getAlignmentBaseline: 'center',
-          getPixelOffset: [12, 0],
-          billboard: true,
-        })
-      );
+        layers.push(
+          new TripsLayer({
+            id: 'flight-trails',
+            data: visibleHistory,
+            getPath: (d: any) => d.path,
+            getTimestamps: (d: any) => d.timestamps,
+            getColor: [255, 255, 255],
+            opacity: 0.25,
+            widthMinPixels: 1,
+            trailLength: 600,
+            currentTime: Date.now() / 1000
+          })
+        );
+
+        // Airplane icons — shaped like planes, colored by category, rotated by heading
+        layers.push(
+          new IconLayer({
+            id: 'global-flights',
+            data: visibleAircraft,
+            getPosition: (d: any) => d.coords,
+            iconAtlas: MARKER_ICONS.plane,
+            iconMapping: AIRCRAFT_ICON_MAPPING,
+            getIcon: () => 'plane',
+            getSize: (d: any) => {
+              if (d.category === 'Military/Gov') return 26;
+              if (d.category === 'Cargo') return 22;
+              return 18;
+            },
+            getColor: (d: any) => d.color || [0, 150, 255],
+            getAngle: (d: any) => -d.heading,
+            sizeMinPixels: 6,
+            sizeMaxPixels: 32,
+            sizeScale: 1,
+            billboard: false,
+            pickable: true,
+            autoHighlight: true,
+            highlightColor: [255, 255, 255, 100],
+          })
+        );
+
+        // Labels — callsign, visible at zoom 6+
+        layers.push(
+          new TextLayer({
+            id: 'flight-labels',
+            data: visibleAircraft,
+            getPosition: (d: any) => [d.coords[0], d.coords[1], (d.coords[2] || 0) + 200],
+            getText: (d: any) => this.state.zoom > 6 ? d.label : '',
+            getSize: 11,
+            getColor: (d: any) => d.color || [255, 255, 255],
+            outlineWidth: 2,
+            outlineColor: [0, 0, 0, 200],
+            getTextAnchor: 'start',
+            getAlignmentBaseline: 'center',
+            getPixelOffset: [12, 0],
+            billboard: true,
+          })
+        );
+      }
     }
 
     // Protests layer (Supercluster-based deck.gl layers)
@@ -3355,8 +3374,15 @@ export class DeckGLMap {
         const catColors: Record<string, string> = { 'Military/Gov': '#ff3232', 'Cargo': '#a064ff', 'General Aviation': '#b4b4b4', 'Commercial': '#0096ff' };
         const catColor = catColors[obj.category] || '#0096ff';
         const altFt = obj.coords?.[2] ? Math.round(obj.coords[2] / 0.3048) : 0;
-        const altStr = altFt > 0 ? `${altFt.toLocaleString()} ft` : 'Ground';
-        return { html: `<div class="deckgl-tooltip" style="min-width:180px"><strong style="font-size:13px">✈ ${text(obj.label)}</strong><br/><span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;background:${catColor}22;color:${catColor};border:1px solid ${catColor}44;margin:4px 0;text-transform:uppercase">${text(obj.category)}</span><br/><span style="opacity:.85">${text(obj.desc)}</span><br/><span style="opacity:.6;font-size:10px">Alt: ${altStr} · Hdg: ${Math.round(obj.heading || 0)}° · ICAO: ${text(obj.id)}</span></div>` };
+        const altStr = obj.onGround ? 'On Ground' : altFt > 0 ? `${altFt.toLocaleString()} ft` : '—';
+        const spdStr = obj.groundSpeed != null ? `${obj.groundSpeed} kts` : '—';
+        const vrStr = obj.verticalRate != null ? `${obj.verticalRate > 0 ? '+' : ''}${obj.verticalRate} ft/m` : '';
+        const sqkStr = obj.squawk ? `Squawk: ${text(obj.squawk)}` : '';
+        const regStr = obj.registration ? `Reg: ${text(obj.registration)}` : '';
+        const typeStr = obj.acType ? text(obj.acType) : 'UNK';
+        const emergStr = obj.emergency ? `<br/><span style="color:#ff4444;font-weight:700">⚠ EMERGENCY: ${text(obj.emergency).toUpperCase()}</span>` : '';
+        const details = [regStr, sqkStr].filter(Boolean).join(' · ');
+        return { html: `<div class="deckgl-tooltip" style="min-width:220px;max-width:300px"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><strong style="font-size:13px;flex:1">✈ ${text(obj.label)}</strong><span style="padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;background:${catColor}22;color:${catColor};border:1px solid ${catColor}44;text-transform:uppercase;white-space:nowrap">${text(obj.category)}</span></div>${emergStr}<div style="opacity:.9;margin-bottom:3px">${text(obj.operator)} · <span style="opacity:.7">${typeStr}</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;font-size:10px;opacity:.75"><span>Alt: ${altStr}</span><span>Spd: ${spdStr}</span><span>Hdg: ${Math.round(obj.heading || 0)}°</span><span>${vrStr}</span></div>${details ? `<div style="font-size:10px;opacity:.6;margin-top:3px">${details}</div>` : ''}<div style="font-size:9px;opacity:.45;margin-top:3px">ICAO: ${text(obj.id)}</div></div>` };
       }
       case 'military-flights-layer':
         return { html: `<div class="deckgl-tooltip"><strong>${text(obj.callsign || obj.registration || t('components.deckgl.tooltip.militaryAircraft'))}</strong><br/>${text(obj.type)}</div>` };
@@ -4039,7 +4065,10 @@ export class DeckGLMap {
         const layer = (input as HTMLInputElement).closest('.layer-toggle')?.getAttribute('data-layer') as keyof MapLayers;
         if (layer) {
           this.state.layers[layer] = (input as HTMLInputElement).checked;
-          if (layer === 'flights') this.manageAircraftTimer((input as HTMLInputElement).checked);
+          if (layer === 'flights') {
+            this.manageAircraftTimer((input as HTMLInputElement).checked);
+            this.updateFlightCategorySubpanel((input as HTMLInputElement).checked);
+          }
           this.render();
           this.onLayerChange?.(layer, (input as HTMLInputElement).checked, 'user');
           if (layer === 'ciiChoropleth') {
@@ -4768,6 +4797,45 @@ export class DeckGLMap {
       this.render();
     }).catch((err) => {
       console.error('[bases] fetch error', err);
+    });
+  }
+
+  /** Show/hide the flight category filter sub-panel under the flights toggle */
+  private updateFlightCategorySubpanel(show: boolean): void {
+    const existing = this.container.querySelector('.flight-category-subpanel');
+    if (!show) { existing?.remove(); return; }
+    if (existing) return; // already visible
+
+    const flightsToggle = this.container.querySelector('.layer-toggle[data-layer="flights"]');
+    if (!flightsToggle) return;
+
+    const cats: Array<{ key: string; label: string; color: string }> = [
+      { key: 'Military/Gov', label: 'Military / Gov', color: '#ff3232' },
+      { key: 'Cargo', label: 'Cargo', color: '#a064ff' },
+      { key: 'General Aviation', label: 'Gen. Aviation', color: '#b4b4b4' },
+      { key: 'Commercial', label: 'Commercial', color: '#0096ff' },
+    ];
+
+    const panel = document.createElement('div');
+    panel.className = 'flight-category-subpanel';
+    panel.style.cssText = 'padding:4px 0 4px 24px;display:flex;flex-direction:column;gap:3px;';
+    panel.innerHTML = cats.map(c => `
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:10px;color:var(--text-secondary,#94a3b8);user-select:none" data-cat="${c.key}">
+        <input type="checkbox" ${this.flightCategoryFilters[c.key] !== false ? 'checked' : ''} style="accent-color:${c.color};width:12px;height:12px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${c.color};flex-shrink:0"></span>
+        <span>${c.label}</span>
+      </label>`).join('');
+
+    flightsToggle.insertAdjacentElement('afterend', panel);
+
+    // Bind category toggle events
+    panel.querySelectorAll('label[data-cat]').forEach(label => {
+      const checkbox = label.querySelector('input') as HTMLInputElement;
+      checkbox?.addEventListener('change', () => {
+        const cat = (label as HTMLElement).dataset.cat || '';
+        this.flightCategoryFilters[cat] = checkbox.checked;
+        this.render();
+      });
     });
   }
 

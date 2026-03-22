@@ -109,10 +109,33 @@ export class GdeltIntelPanel extends Panel {
       return;
     }
 
+    // Build freshness indicator from the cached topic data
+    const cached = this.topicData.get(this.activeTopic.id);
+    const fetchedAt = cached?.fetchedAt;
+    const freshnessEl = this.buildFreshnessIndicator(fetchedAt);
+
     replaceChildren(this.content,
+      freshnessEl,
       h('div', { className: 'gdelt-intel-articles' },
         ...articles.map(article => this.buildArticle(article)),
       ),
+    );
+  }
+
+  private buildFreshnessIndicator(fetchedAt?: Date): HTMLElement {
+    if (!fetchedAt) {
+      return h('div', { className: 'gdelt-intel-freshness', style: 'display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:11px;opacity:.6' },
+        h('span', {}, '⏳ Loading...'),
+      );
+    }
+    const ageMs = Date.now() - fetchedAt.getTime();
+    const ageMins = Math.floor(ageMs / 60_000);
+    const ageStr = ageMins < 1 ? 'just now' : ageMins < 60 ? `${ageMins}m ago` : `${Math.floor(ageMins / 60)}h ${ageMins % 60}m ago`;
+    const isStale = ageMins > 60;
+    const dotColor = isStale ? '#f59e0b' : '#22c55e';
+    return h('div', { className: 'gdelt-intel-freshness', style: 'display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:11px;opacity:.6' },
+      h('span', { style: `display:inline-block;width:6px;height:6px;border-radius:50%;background:${dotColor}` }),
+      h('span', {}, `Updated ${ageStr}`),
     );
   }
 

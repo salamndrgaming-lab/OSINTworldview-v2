@@ -32,6 +32,8 @@ interface POIPerson {
   averageTone: number;
   associatedEntities: string[];
   sentiment: 'positive' | 'neutral' | 'negative';
+  source?: 'tracked' | 'auto-discovered';
+  discoveredAt?: string;
 }
 
 interface POIData {
@@ -138,6 +140,7 @@ function injectPOIStyles(): void {
 .poi-tg{padding:1px 5px;background:var(--bg-tertiary,#1e293b);border-radius:3px;font-size:8px;color:var(--text-muted,#64748b);text-transform:uppercase}
 .poi-sum{font-size:10px;color:var(--text-secondary,#94a3b8);line-height:1.4;margin-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .poi-empty{text-align:center;padding:30px 10px;color:var(--text-muted,#64748b);font-size:12px}
+@keyframes poi-pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .poi-drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:9998;opacity:0;transition:opacity .3s;pointer-events:none}
 .poi-drawer-overlay.open{opacity:1;pointer-events:auto}
 .poi-drawer{position:fixed;top:0;right:0;bottom:0;width:min(480px,90vw);background:var(--bg-primary,#0a0e17);border-left:1px solid var(--border-color,#1e293b);z-index:9999;transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow:hidden}
@@ -268,10 +271,13 @@ export class POIPanel extends Panel {
     const rc = RISK_COLORS[p.riskLevel] || '#eab308';
     const sc = toneToColor(p.averageTone);
     const rf = REGION_FLAGS[p.region] || '🌐';
-    return `<div class="poi-card" data-idx="${idx}" style="--card-risk:${rc}">
+    const isAuto = p.source === 'auto-discovered';
+    const cardBorder = isAuto ? 'border-style:dashed;border-color:var(--accent-color,#3b82f6)' : '';
+    const autoBadge = isAuto ? '<span style="padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;background:#3b82f620;color:#3b82f6;border:1px solid #3b82f640;text-transform:uppercase;letter-spacing:.5px;margin-left:4px;animation:poi-pulse 2s ease-in-out infinite">NEW</span>' : '';
+    return `<div class="poi-card" data-idx="${idx}" style="--card-risk:${rc};${cardBorder}">
       <div class="poi-card-hdr">
-        <div class="poi-av" style="border-color:${rc}">${ini}</div>
-        <div class="poi-info"><div class="poi-nm">${esc(p.name)}</div><div class="poi-rl">${esc(p.role)}</div><div class="poi-rg">${rf} ${esc(p.region)}</div></div>
+        <div class="poi-av" style="border-color:${isAuto ? 'var(--accent-color,#3b82f6)' : rc}">${ini}</div>
+        <div class="poi-info"><div class="poi-nm">${esc(p.name)}${autoBadge}</div><div class="poi-rl">${esc(p.role)}</div><div class="poi-rg">${rf} ${esc(p.region)}</div></div>
         <div class="poi-badges"><span class="poi-risk" style="color:${rc};background:${rc}18;border:1px solid ${rc}40">${RISK_ICONS[p.riskLevel] || '●'} ${p.riskLevel}</span><span class="poi-sent" style="color:${sc}">${SENTIMENT_ICONS[p.sentiment] || '●'}</span></div>
       </div>
       <div class="poi-metrics">

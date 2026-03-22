@@ -513,6 +513,7 @@ export class DataLoaderManager implements AppModule {
     if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.satellites && this.ctx.map?.isGlobeMode?.()) tasks.push({ name: 'satellites', task: runGuarded('satellites', () => this.loadSatellites()) });
     if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.webcams) tasks.push({ name: 'webcams', task: runGuarded('webcams', () => this.loadWebcams()) });
     if (this.ctx.mapLayers.poi) tasks.push({ name: 'poi', task: runGuarded('poi', () => this.loadPOIMarkers()) });
+    if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.missileStrikes) tasks.push({ name: 'missileStrikes', task: runGuarded('missileStrikes', () => this.loadMissileEvents()) });
 
     if (SITE_VARIANT !== 'happy') {
       tasks.push({ name: 'techReadiness', task: runGuarded('techReadiness', () => (this.ctx.panels['tech-readiness'] as TechReadinessPanel)?.refresh()) });
@@ -617,6 +618,9 @@ export class DataLoaderManager implements AppModule {
           break;
         case 'poi':
           await this.loadPOIMarkers();
+          break;
+        case 'missileStrikes':
+          await this.loadMissileEvents();
           break;
         case 'ucdpEvents':
         case 'displacement':
@@ -2157,6 +2161,22 @@ export class DataLoaderManager implements AppModule {
     } catch (err) {
       console.warn('[POI] Failed to load markers:', err);
       this.ctx.map?.setLayerReady('poi', false);
+    }
+  }
+
+  async loadMissileEvents(): Promise<void> {
+    try {
+      const res = await fetch(toApiUrl('/api/missile-events'));
+      if (!res.ok) throw new Error(`Missile events API ${res.status}`);
+      const data = await res.json();
+      const events: Array<{ id: string; title: string; eventType: string; severity: string; latitude: number; longitude: number; locationName: string; timestamp: number; sources: string[]; dataSource: string }> = data?.events || [];
+
+      this.ctx.map?.setMissileEvents(events);
+      this.ctx.map?.setLayerReady('missileStrikes', events.length > 0);
+      console.log(`[MissileStrikes] Loaded ${events.length} events`);
+    } catch (err) {
+      console.warn('[MissileStrikes] Failed to load:', err);
+      this.ctx.map?.setLayerReady('missileStrikes', false);
     }
   }
 

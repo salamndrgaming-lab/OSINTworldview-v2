@@ -357,6 +357,7 @@ export class DeckGLMap {
   private renewableInstallations: RenewableInstallation[] = [];
   private webcamData: Array<WebcamEntry | WebcamCluster> = [];
   private poiPins: Array<{ name: string; role: string; location: string; riskLevel: string; lat: number; lng: number; riskColor: [number, number, number, number]; confidence: number; activityScore: number; summary: string; region: string }> = [];
+  private missileEvents: Array<{ id: string; title: string; eventType: string; severity: string; latitude: number; longitude: number; locationName: string; timestamp: number; sources: string[]; dataSource: string }> = [];
   private countriesGeoJsonData: FeatureCollection<Geometry> | null = null;
   private conflictZoneGeoJson: GeoJSON.FeatureCollection | null = null;
 
@@ -1623,6 +1624,12 @@ export class DeckGLMap {
     // POI markers layer
     if (mapLayers.poi && this.poiPins.length > 0) {
       layers.push(this.createPOILayer());
+    }
+
+    // Missile / drone strike events layer
+    if (mapLayers.missileStrikes && this.missileEvents.length > 0) {
+      layers.push(this.createMissileStrikesLayer());
+      layers.push(this.createGhostLayer('missile-strikes-layer', this.missileEvents, d => [d.longitude, d.latitude], { radiusMinPixels: 10 }));
     }
 
     // News geo-locations (always shown if data exists)
@@ -3322,6 +3329,36 @@ export class DeckGLMap {
     });
   }
 
+  private createMissileStrikesLayer(): ScatterplotLayer {
+    // 6-hour time filter: seed stores 12h, render only recent 6h
+    const sixHoursAgo = Date.now() - 6 * 3600_000;
+    const recentEvents = this.missileEvents.filter(e => e.timestamp >= sixHoursAgo);
+
+    return new ScatterplotLayer({
+      id: 'missile-strikes-layer',
+      data: recentEvents,
+      getPosition: (d: (typeof this.missileEvents)[0]) => [d.longitude, d.latitude],
+      getRadius: (d: (typeof this.missileEvents)[0]) => {
+        if (d.severity === 'critical') return 30000;
+        if (d.severity === 'high') return 24000;
+        if (d.severity === 'medium') return 18000;
+        return 14000;
+      },
+      getFillColor: (d: (typeof this.missileEvents)[0]) => {
+        if (d.severity === 'critical') return [255, 0, 0, 220] as [number, number, number, number];
+        if (d.severity === 'high') return [255, 60, 0, 200] as [number, number, number, number];
+        if (d.severity === 'medium') return [255, 140, 0, 180] as [number, number, number, number];
+        return [255, 200, 0, 160] as [number, number, number, number];
+      },
+      getLineColor: [255, 255, 255, 120] as [number, number, number, number],
+      stroked: true,
+      lineWidthMinPixels: 1,
+      radiusMinPixels: 6,
+      radiusMaxPixels: 22,
+      pickable: true,
+    });
+  }
+
   private createImageryFootprintLayer(): PolygonLayer {
     return new PolygonLayer({
       id: 'satellite-imagery-layer',
@@ -3592,6 +3629,16 @@ export class DeckGLMap {
         const riskColors: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e' };
         const rc = riskColors[obj.riskLevel] || '#eab308';
         return { html: `<div class="deckgl-tooltip"><strong>👤 ${text(obj.name)}</strong><br/>${text(obj.role)}<br/><span style="color:${rc};text-transform:uppercase;font-weight:700;font-size:10px">${text(obj.riskLevel)}</span> · 📍 ${text(obj.location)}<br/><span style="opacity:.7">${text((obj.summary || '').slice(0, 100))}</span></div>` };
+      }
+      case 'missile-strikes-layer': {
+        const sevColors: Record<string, string> = { critical: '#ff0000', high: '#ff3c00', medium: '#ff8c00', low: '#ffc800' };
+        const sc = sevColors[obj.severity] || '#ff8c00';
+        const typeIcons: Record<string, string> = { missile: '🚀', drone: '🛩️', airstrike: '💣' };
+        const icon = typeIcons[obj.eventType] || '💥';
+        const age = obj.timestamp ? Math.round((Date.now() - obj.timestamp) / 3600_000) : 0;
+        const ageStr = age < 1 ? '<1h ago' : `${age}h ago`;
+        const srcStr = Array.isArray(obj.sources) && obj.sources.length > 0 ? obj.sources[0] : (obj.dataSource || 'GDELT');
+        return { html: `<div class="deckgl-tooltip"><strong>${icon} ${text(obj.eventType?.toUpperCase() || 'STRIKE')}</strong><br/>${text((obj.title || '').slice(0, 100))}<br/><span style="color:${sc};text-transform:uppercase;font-weight:700;font-size:10px">${text(obj.severity)}</span> · 📍 ${text(obj.locationName)} · ${ageStr}<br/><span style="opacity:.7">Source: ${text(srcStr)}</span></div>` };
       }
       case 'webcam-layer': {
         const label = 'count' in obj
@@ -4945,6 +4992,11 @@ export class DeckGLMap {
   
   public setPOIMarkers(markers: Array<{ name: string; role: string; location: string; riskLevel: string; lat: number; lng: number; riskColor: [number, number, number, number]; confidence: number; activityScore: number; summary: string; region: string }>): void {
     this.poiPins = markers;
+    this.render();
+  }
+
+  public setMissileEvents(events: Array<{ id: string; title: string; eventType: string; severity: string; latitude: number; longitude: number; locationName: string; timestamp: number; sources: string[]; dataSource: string }>): void {
+    this.missileEvents = events;
     this.render();
   }
 

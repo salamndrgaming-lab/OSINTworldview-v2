@@ -60,6 +60,8 @@ jobs:
         continue-on-error: true
       - run: node scripts/seed-poi-discovery.mjs
         continue-on-error: true
+      - run: node scripts/seed-missile-events.mjs
+        continue-on-error: true
 
     env:
       UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}

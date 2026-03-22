@@ -79,6 +79,7 @@ export const LAYER_REGISTRY: Record<keyof MapLayers, LayerDefinition> = {
   commodityPorts:           def('commodityPorts',           '&#9973;',   'commodityPorts',           'Commodity Ports'),
   webcams:                  def('webcams',                  '&#128247;', 'webcams',                  'Live Webcams'),
   poi:                        def('poi',                        '&#128100;', 'poi',                        'Persons of Interest'),
+  missileStrikes:             def('missileStrikes',             '&#128165;', 'missileStrikes',             'Missile/Drone Strikes'),
 };
 
 const VARIANT_LAYER_ORDER: Record<MapVariant, Array<keyof MapLayers>> = {
@@ -90,7 +91,7 @@ const VARIANT_LAYER_ORDER: Record<MapVariant, Array<keyof MapLayers>> = {
     'ucdpEvents', 'displacement', 'climate', 'weather',
     'outages', 'cyberThreats', 'natural', 'fires',
     'waterways', 'economic', 'minerals', 'gpsJamming',
-    'satellites', 'ciiChoropleth', 'dayNight', 'webcams', 'poi',
+    'satellites', 'ciiChoropleth', 'dayNight', 'webcams', 'poi', 'missileStrikes',
   ],
   tech: [
     'startupHubs', 'techHQs', 'accelerators', 'cloudRegions',

@@ -633,6 +633,8 @@ export interface MapLayers {
   webcams: boolean;
   // Persons of Interest layer
   poi: boolean;
+  // Missile / drone strike events layer
+  missileStrikes: boolean;
 }
 
 export interface AIDataCenter {

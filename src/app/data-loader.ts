@@ -615,6 +615,9 @@ export class DataLoaderManager implements AppModule {
         case 'webcams':
           await this.loadWebcams();
           break;
+        case 'poi':
+          await this.loadPOIMarkers();
+          break;
         case 'ucdpEvents':
         case 'displacement':
         case 'climate':

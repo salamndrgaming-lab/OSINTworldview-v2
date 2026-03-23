@@ -13,7 +13,7 @@
 // Output: Writes the final SITREP to Redis at 'intelligence:agent-sitrep:v1'
 // and optionally sends a Telegram summary.
 
-import { loadEnvFile, CHROME_UA, getRedisCredentials } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, getRedisCredentials, sleep } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
@@ -221,7 +221,7 @@ async function executeTool(name, args, context) {
         watch_list: args.watch_list || [],
         generated_at: Date.now(),
         generated_by: 'agent-sitrep-v1',
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
       };
 
       // Save to Redis
@@ -376,8 +376,9 @@ function countBy(arr, field) {
 // ---------- Groq API ----------
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
-const MAX_AGENT_STEPS = 8; // Maximum tool-calling loops before forcing completion
+const GROQ_MODEL = 'llama-3.1-8b-instant';  // 8B has 131K TPM vs 12K on the 70B — essential for multi-step agent loops
+const MAX_AGENT_STEPS = 6; // Reduced from 8 — 8B model needs fewer steps with targeted prompting
+const STEP_DELAY_MS = 3_000; // 3s delay between steps to avoid rate limits
 
 const SYSTEM_PROMPT = `You are an expert intelligence analyst working for World Monitor, an open-source OSINT platform. Your task is to generate a comprehensive Situation Report (SITREP) by querying available intelligence data sources and synthesizing findings.
 
@@ -412,22 +413,34 @@ async function callGroq(messages, tools) {
   // Only include tools if we want the model to call them
   if (tools) body.tools = tools;
 
-  const resp = await fetch(GROQ_API_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
-  });
+  // Retry up to 3 times on 429 rate limit errors
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const resp = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    });
 
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => '');
-    throw new Error(`Groq API ${resp.status}: ${errText.slice(0, 200)}`);
+    if (resp.status === 429) {
+      const waitSec = (attempt + 1) * 15;
+      console.warn(`    Rate limited (429) — waiting ${waitSec}s before retry ${attempt + 1}/3...`);
+      await sleep(waitSec * 1000);
+      continue;
+    }
+
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      throw new Error(`Groq API ${resp.status}: ${errText.slice(0, 200)}`);
+    }
+
+    return resp.json();
   }
 
-  return resp.json();
+  throw new Error('Groq API rate limited after 3 retries');
 }
 
 // ---------- Agent Loop ----------
@@ -439,6 +452,12 @@ async function runAgent(context) {
   ];
 
   for (let step = 0; step < MAX_AGENT_STEPS; step++) {
+    // Delay between steps to stay within rate limits
+    if (step > 0) {
+      console.log(`    (waiting ${STEP_DELAY_MS / 1000}s between steps...)`);
+      await sleep(STEP_DELAY_MS);
+    }
+
     console.log(`  Step ${step + 1}/${MAX_AGENT_STEPS}...`);
 
     // On the last step, don't pass tools to force the model to finish

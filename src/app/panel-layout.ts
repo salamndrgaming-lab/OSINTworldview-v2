@@ -212,6 +212,8 @@ export class PanelLayoutManager implements AppModule {
           <button class="search-btn" id="searchBtn"><kbd>⌘K</kbd> ${t('header.search')}</button>
           <a href="/api/search" target="_blank" rel="noopener" class="search-btn" id="intelSearchBtn" style="text-decoration:none;font-size:12px" title="Semantic Intelligence Search">🔍 Intel Search</a>
           <a href="/api/sitrep" target="_blank" rel="noopener" class="search-btn" id="sitrepBtn" style="text-decoration:none;font-size:12px" title="Intelligence SITREP">📋 SITREP</a>
+          <button class="search-btn" id="godmodeToggle" style="font-size:12px;cursor:pointer;${SITE_VARIANT === 'godmode' ? 'background:#dc2626;color:#fff;border-color:#dc2626;' : ''}" title="Toggle God Mode — maximum intelligence coverage">⚡ ${SITE_VARIANT === 'godmode' ? 'GOD MODE ON' : 'God Mode'}</button>
+          <span id="threatBadge" style="display:${SITE_VARIANT === 'godmode' ? 'inline-flex' : 'none'};align-items:center;gap:4px;font-size:11px;font-weight:700;letter-spacing:.5px;padding:3px 8px;border-radius:4px;text-transform:uppercase;background:#333;color:#888;margin-left:4px"></span>
           ${this.ctx.isDesktopApp ? '' : `<button class="copy-link-btn" id="copyLinkBtn">${t('header.copyLink')}</button>`}
           ${this.ctx.isDesktopApp ? '' : `<button class="fullscreen-btn" id="fullscreenBtn" title="${t('header.fullscreen')}">⛶</button>`}
           ${SITE_VARIANT === 'happy' ? `<button class="tv-mode-btn" id="tvModeBtn" title="TV Mode (Shift+T)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></button>` : ''}
@@ -281,6 +283,10 @@ export class PanelLayoutManager implements AppModule {
         </button>`
       ).join('')}
       </div>
+      <div id="alertTicker" style="display:${SITE_VARIANT === 'godmode' ? 'block' : 'none'};background:#1a0000;border-bottom:1px solid #3a1010;overflow:hidden;white-space:nowrap;font-size:12px;height:28px;line-height:28px;color:#ff6b6b;font-family:monospace">
+        <div id="alertTickerContent" style="display:inline-block;padding-left:100%;animation:ticker-scroll 60s linear infinite">Loading alerts...</div>
+      </div>
+      <style>@keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }</style>
       <div class="main-content">
         <div class="map-section" id="mapSection">
           <div class="panel-header">
@@ -325,6 +331,9 @@ export class PanelLayoutManager implements AppModule {
     `;
 
     this.createPanels();
+
+    // Godmode features: toggle button, alert ticker, threat badge
+    this.initGodmodeFeatures();
 
     if (this.ctx.isMobile) {
       this.setupMobileMapToggle();
@@ -456,6 +465,92 @@ export class PanelLayoutManager implements AppModule {
     this.ctx.newsPanels[key] = panel;
     this.ctx.panels[key] = panel;
     return panel;
+  }
+
+  // ---------- Godmode Features ----------
+  // These three features are exclusive to godmode and cannot be replicated
+  // by simply toggling map layers:
+  //   1. Alert ticker — real-time scrolling chyron of anomaly alerts
+  //   2. Threat badge — persistent global threat level in the header
+  //   3. Toggle button — one-click switch in/out of godmode from any variant
+
+  private initGodmodeFeatures(): void {
+    // Wire up the godmode toggle button (available in all variants)
+    const toggle = document.getElementById('godmodeToggle');
+    if (toggle) {
+      toggle.addEventListener('click', () => {
+        const isGodmode = SITE_VARIANT === 'godmode';
+        if (isGodmode) {
+          // Switching OUT of godmode — go back to full
+          const url = new URL(window.location.href);
+          url.searchParams.delete('variant');
+          window.location.href = url.toString();
+        } else {
+          // Switching INTO godmode
+          const url = new URL(window.location.href);
+          url.searchParams.set('variant', 'godmode');
+          window.location.href = url.toString();
+        }
+      });
+    }
+
+    // Only run ticker + badge in godmode
+    if (SITE_VARIANT !== 'godmode') return;
+
+    // Start the alert ticker and threat badge polling
+    this.pollGodmodeData();
+    // Re-poll every 30 seconds for near-real-time feel
+    setInterval(() => this.pollGodmodeData(), 30_000);
+  }
+
+  private async pollGodmodeData(): Promise<void> {
+    // Fetch alerts for the ticker
+    try {
+      const alertResp = await fetch('/api/alerts');
+      if (alertResp.ok) {
+        const alertData = await alertResp.json();
+        const alerts = alertData?.alerts || [];
+        const tickerContent = document.getElementById('alertTickerContent');
+        if (tickerContent) {
+          if (alerts.length === 0) {
+            tickerContent.textContent = '  ✅ No active alerts — all systems nominal  ';
+            tickerContent.style.color = '#22c55e';
+          } else {
+            // Build ticker text from alerts with severity icons
+            const sevIcons: Record<string, string> = { critical: '🔴', high: '🟠', medium: '🟡' };
+            const tickerText = alerts.slice(0, 15).map((a: { severity?: string; title?: string; source?: string }) => {
+              const icon = sevIcons[a.severity || ''] || '⚪';
+              return `${icon} ${a.title || 'Alert'} [${a.source || '?'}]`;
+            }).join('     ·     ');
+            tickerContent.textContent = tickerText + '     ·     ' + tickerText; // Duplicate for seamless scroll
+            tickerContent.style.color = alerts.some((a: { severity?: string }) => a.severity === 'critical') ? '#ff4444' : '#ff6b6b';
+            // Adjust animation speed based on content length
+            const duration = Math.max(30, tickerText.length / 5);
+            tickerContent.style.animationDuration = `${duration}s`;
+          }
+        }
+      }
+    } catch { /* silent fail — ticker will show stale data */ }
+
+    // Fetch agent sitrep for the threat badge
+    try {
+      const sitrepResp = await fetch('/api/agent-sitrep?format=json');
+      if (sitrepResp.ok) {
+        const sitrep = await sitrepResp.json();
+        const badge = document.getElementById('threatBadge');
+        if (badge && sitrep.overall_threat_level) {
+          const level = sitrep.overall_threat_level.toUpperCase();
+          const colors: Record<string, string> = {
+            CRITICAL: '#dc2626', HIGH: '#f97316', ELEVATED: '#eab308', MODERATE: '#22c55e', LOW: '#6b7280',
+          };
+          const bgColor = colors[level] || '#333';
+          badge.style.background = bgColor;
+          badge.style.color = '#fff';
+          badge.textContent = `🛡️ ${level}`;
+          badge.title = `Global threat level: ${level} (from agent SITREP)`;
+        }
+      }
+    } catch { /* silent fail */ }
   }
 
   private createPanel<T extends import('@/components/Panel').Panel>(key: string, factory: () => T): T | null {

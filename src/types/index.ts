@@ -635,6 +635,12 @@ export interface MapLayers {
   poi: boolean;
   // Missile / drone strike events layer
   missileStrikes: boolean;
+  // VIEWS conflict forecast choropleth
+  conflictForecast: boolean;
+  // WHO disease outbreak events
+  diseaseOutbreaks: boolean;
+  // Safecast radiation monitoring
+  radiation: boolean;
 }
 
 export interface AIDataCenter {

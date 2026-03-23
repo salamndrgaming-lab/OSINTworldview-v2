@@ -190,6 +190,9 @@ const allLayersEnabled: MapLayers = {
   webcams: false,
   poi: false,
   missileStrikes: false,
+  conflictForecast: false,
+  diseaseOutbreaks: false,
+  radiation: false,
 };
 
 const allLayersDisabled: MapLayers = {
@@ -247,6 +250,9 @@ const allLayersDisabled: MapLayers = {
   webcams: false,
   poi: false,
   missileStrikes: false,
+  conflictForecast: false,
+  diseaseOutbreaks: false,
+  radiation: false,
 };
 
 const SEEDED_NEWS_LOCATIONS: Array<{

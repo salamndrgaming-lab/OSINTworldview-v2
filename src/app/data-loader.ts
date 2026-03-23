@@ -514,6 +514,9 @@ export class DataLoaderManager implements AppModule {
     if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.webcams) tasks.push({ name: 'webcams', task: runGuarded('webcams', () => this.loadWebcams()) });
     if (this.ctx.mapLayers.poi) tasks.push({ name: 'poi', task: runGuarded('poi', () => this.loadPOIMarkers()) });
     if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.missileStrikes) tasks.push({ name: 'missileStrikes', task: runGuarded('missileStrikes', () => this.loadMissileEvents()) });
+    if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.conflictForecast) tasks.push({ name: 'conflictForecast', task: runGuarded('conflictForecast', () => this.loadConflictForecasts()) });
+    if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.diseaseOutbreaks) tasks.push({ name: 'diseaseOutbreaks', task: runGuarded('diseaseOutbreaks', () => this.loadDiseaseOutbreaks()) });
+    if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.radiation) tasks.push({ name: 'radiation', task: runGuarded('radiation', () => this.loadRadiationReadings()) });
 
     if (SITE_VARIANT !== 'happy') {
       tasks.push({ name: 'techReadiness', task: runGuarded('techReadiness', () => (this.ctx.panels['tech-readiness'] as TechReadinessPanel)?.refresh()) });
@@ -621,6 +624,15 @@ export class DataLoaderManager implements AppModule {
           break;
         case 'missileStrikes':
           await this.loadMissileEvents();
+          break;
+        case 'conflictForecast':
+          await this.loadConflictForecasts();
+          break;
+        case 'diseaseOutbreaks':
+          await this.loadDiseaseOutbreaks();
+          break;
+        case 'radiation':
+          await this.loadRadiationReadings();
           break;
         case 'ucdpEvents':
         case 'displacement':
@@ -2177,6 +2189,54 @@ export class DataLoaderManager implements AppModule {
     } catch (err) {
       console.warn('[MissileStrikes] Failed to load:', err);
       this.ctx.map?.setLayerReady('missileStrikes', false);
+    }
+  }
+
+  async loadConflictForecasts(): Promise<void> {
+    try {
+      const res = await fetch(toApiUrl('/api/conflict-forecast'));
+      if (!res.ok) throw new Error(`Conflict forecast API ${res.status}`);
+      const data = await res.json();
+      const forecasts = data?.forecasts || [];
+
+      this.ctx.map?.setConflictForecasts(forecasts);
+      this.ctx.map?.setLayerReady('conflictForecast', forecasts.length > 0);
+      console.log(`[ConflictForecast] Loaded ${forecasts.length} country forecasts`);
+    } catch (err) {
+      console.warn('[ConflictForecast] Failed to load:', err);
+      this.ctx.map?.setLayerReady('conflictForecast', false);
+    }
+  }
+
+  async loadDiseaseOutbreaks(): Promise<void> {
+    try {
+      const res = await fetch(toApiUrl('/api/disease-outbreaks'));
+      if (!res.ok) throw new Error(`Disease outbreaks API ${res.status}`);
+      const data = await res.json();
+      const events = data?.events || [];
+
+      this.ctx.map?.setDiseaseOutbreaks(events);
+      this.ctx.map?.setLayerReady('diseaseOutbreaks', events.length > 0);
+      console.log(`[DiseaseOutbreaks] Loaded ${events.length} outbreak events`);
+    } catch (err) {
+      console.warn('[DiseaseOutbreaks] Failed to load:', err);
+      this.ctx.map?.setLayerReady('diseaseOutbreaks', false);
+    }
+  }
+
+  async loadRadiationReadings(): Promise<void> {
+    try {
+      const res = await fetch(toApiUrl('/api/radiation'));
+      if (!res.ok) throw new Error(`Radiation API ${res.status}`);
+      const data = await res.json();
+      const readings = data?.readings || [];
+
+      this.ctx.map?.setRadiationReadings(readings);
+      this.ctx.map?.setLayerReady('radiation', readings.length > 0);
+      console.log(`[Radiation] Loaded ${readings.length} readings (${data?.anomalyCount ?? 0} anomalies)`);
+    } catch (err) {
+      console.warn('[Radiation] Failed to load:', err);
+      this.ctx.map?.setLayerReady('radiation', false);
     }
   }
 

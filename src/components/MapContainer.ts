@@ -137,6 +137,9 @@ export class MapContainer {
   private cachedWebcams: Array<WebcamEntry | WebcamCluster> | null = null;
   private cachedPOIMarkers: Array<{ name: string; role: string; location: string; riskLevel: string; lat: number; lng: number; riskColor: [number, number, number, number]; confidence: number; activityScore: number; summary: string; region: string }> | null = null;
   private cachedMissileEvents: Array<{ id: string; title: string; eventType: string; severity: string; latitude: number; longitude: number; locationName: string; timestamp: number; sources: string[]; dataSource: string }> | null = null;
+  private cachedConflictForecasts: Array<{ countryCode: string; countryName: string; predictedLogFatalities: number; estimatedFatalities: number; probability: number | null; lat: number; lon: number }> | null = null;
+  private cachedDiseaseOutbreaks: Array<{ id: string; title: string; diseaseType: string; severity: string; country: string; latitude: number; longitude: number; timestamp: number; sourceUrl: string; dataSource: string }> | null = null;
+  private cachedRadiationReadings: Array<{ id: string | number; latitude: number; longitude: number; cpm: number; usvh: number; isAnomaly: boolean; capturedAt: string | null }> | null = null;
 
   constructor(container: HTMLElement, initialState: MapContainerState, preferGlobe = false) {
     this.container = container;
@@ -310,6 +313,15 @@ export class MapContainer {
     if (this.cachedMissileEvents && this.useDeckGL) {
       this.deckGLMap?.setMissileEvents(this.cachedMissileEvents);
     }
+    if (this.cachedConflictForecasts && this.useDeckGL) {
+      this.deckGLMap?.setConflictForecasts(this.cachedConflictForecasts);
+    }
+    if (this.cachedDiseaseOutbreaks && this.useDeckGL) {
+      this.deckGLMap?.setDiseaseOutbreaks(this.cachedDiseaseOutbreaks);
+    }
+    if (this.cachedRadiationReadings && this.useDeckGL) {
+      this.deckGLMap?.setRadiationReadings(this.cachedRadiationReadings);
+    }
   }
 
   public isGlobeMode(): boolean {
@@ -431,6 +443,21 @@ export class MapContainer {
   public setMissileEvents(events: Array<{ id: string; title: string; eventType: string; severity: string; latitude: number; longitude: number; locationName: string; timestamp: number; sources: string[]; dataSource: string }>): void {
     this.cachedMissileEvents = events;
     if (this.useDeckGL) { this.deckGLMap?.setMissileEvents(events); }
+  }
+
+  public setConflictForecasts(forecasts: Array<{ countryCode: string; countryName: string; predictedLogFatalities: number; estimatedFatalities: number; probability: number | null; lat: number; lon: number }>): void {
+    this.cachedConflictForecasts = forecasts;
+    if (this.useDeckGL) { this.deckGLMap?.setConflictForecasts(forecasts); }
+  }
+
+  public setDiseaseOutbreaks(events: Array<{ id: string; title: string; diseaseType: string; severity: string; country: string; latitude: number; longitude: number; timestamp: number; sourceUrl: string; dataSource: string }>): void {
+    this.cachedDiseaseOutbreaks = events;
+    if (this.useDeckGL) { this.deckGLMap?.setDiseaseOutbreaks(events); }
+  }
+
+  public setRadiationReadings(readings: Array<{ id: string | number; latitude: number; longitude: number; cpm: number; usvh: number; isAnomaly: boolean; capturedAt: string | null }>): void {
+    this.cachedRadiationReadings = readings;
+    if (this.useDeckGL) { this.deckGLMap?.setRadiationReadings(readings); }
   }
 
   public setWeatherAlerts(alerts: WeatherAlert[]): void {

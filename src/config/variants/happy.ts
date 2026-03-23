@@ -79,6 +79,9 @@ export const DEFAULT_MAP_LAYERS: MapLayers = {
   webcams: false,
   poi: false,
   missileStrikes: false,
+  conflictForecast: false,
+  diseaseOutbreaks: false,
+  radiation: false,
 };
 
 // Mobile defaults — same as desktop for happy variant
@@ -142,6 +145,9 @@ export const MOBILE_DEFAULT_MAP_LAYERS: MapLayers = {
   webcams: false,
   poi: false,
   missileStrikes: false,
+  conflictForecast: false,
+  diseaseOutbreaks: false,
+  radiation: false,
 };
 
 export const VARIANT_CONFIG: VariantConfig = {

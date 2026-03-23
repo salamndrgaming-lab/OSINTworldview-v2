@@ -139,6 +139,9 @@ const layers = {
   webcams: false,
   poi: false,
   missileStrikes: false,
+  conflictForecast: false,
+  diseaseOutbreaks: false,
+  radiation: false,
 };
 
 await initI18n();

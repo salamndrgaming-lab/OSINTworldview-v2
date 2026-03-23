@@ -80,6 +80,9 @@ export const LAYER_REGISTRY: Record<keyof MapLayers, LayerDefinition> = {
   webcams:                  def('webcams',                  '&#128247;', 'webcams',                  'Live Webcams'),
   poi:                        def('poi',                        '&#128100;', 'poi',                        'Persons of Interest'),
   missileStrikes:             def('missileStrikes',             '&#128165;', 'missileStrikes',             'Missile/Drone Strikes'),
+  conflictForecast:           def('conflictForecast',           '&#128200;', 'conflictForecast',           'Conflict Forecast', ['flat']),
+  diseaseOutbreaks:           def('diseaseOutbreaks',           '&#129440;', 'diseaseOutbreaks',           'Disease Outbreaks'),
+  radiation:                  def('radiation',                  '&#9762;',   'radiation',                  'Radiation Monitoring'),
 };
 
 const VARIANT_LAYER_ORDER: Record<MapVariant, Array<keyof MapLayers>> = {
@@ -92,6 +95,7 @@ const VARIANT_LAYER_ORDER: Record<MapVariant, Array<keyof MapLayers>> = {
     'outages', 'cyberThreats', 'natural', 'fires',
     'waterways', 'economic', 'minerals', 'gpsJamming',
     'satellites', 'ciiChoropleth', 'dayNight', 'webcams', 'poi', 'missileStrikes',
+    'conflictForecast', 'diseaseOutbreaks', 'radiation',
   ],
   tech: [
     'startupHubs', 'techHQs', 'accelerators', 'cloudRegions',

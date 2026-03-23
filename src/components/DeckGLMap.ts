@@ -358,6 +358,9 @@ export class DeckGLMap {
   private webcamData: Array<WebcamEntry | WebcamCluster> = [];
   private poiPins: Array<{ name: string; role: string; location: string; riskLevel: string; lat: number; lng: number; riskColor: [number, number, number, number]; confidence: number; activityScore: number; summary: string; region: string }> = [];
   private missileEvents: Array<{ id: string; title: string; eventType: string; severity: string; latitude: number; longitude: number; locationName: string; timestamp: number; sources: string[]; dataSource: string }> = [];
+  private conflictForecasts: Array<{ countryCode: string; countryName: string; predictedLogFatalities: number; estimatedFatalities: number; probability: number | null; lat: number; lon: number }> = [];
+  private diseaseOutbreaks: Array<{ id: string; title: string; diseaseType: string; severity: string; country: string; latitude: number; longitude: number; timestamp: number; sourceUrl: string; dataSource: string }> = [];
+  private radiationReadings: Array<{ id: string | number; latitude: number; longitude: number; cpm: number; usvh: number; isAnomaly: boolean; capturedAt: string | null }> = [];
   private countriesGeoJsonData: FeatureCollection<Geometry> | null = null;
   private conflictZoneGeoJson: GeoJSON.FeatureCollection | null = null;
 
@@ -1630,6 +1633,22 @@ export class DeckGLMap {
     if (mapLayers.missileStrikes && this.missileEvents.length > 0) {
       layers.push(this.createMissileStrikesLayer());
       layers.push(this.createGhostLayer('missile-strikes-layer', this.missileEvents, d => [d.longitude, d.latitude], { radiusMinPixels: 10 }));
+    }
+
+    // Conflict forecast layer (choropleth-like scatter of country centroids)
+    if (mapLayers.conflictForecast && this.conflictForecasts.length > 0) {
+      layers.push(this.createConflictForecastLayer());
+    }
+
+    // Disease outbreak events layer
+    if (mapLayers.diseaseOutbreaks && this.diseaseOutbreaks.length > 0) {
+      layers.push(this.createDiseaseOutbreaksLayer());
+      layers.push(this.createGhostLayer('disease-outbreaks-layer', this.diseaseOutbreaks, d => [d.longitude, d.latitude], { radiusMinPixels: 10 }));
+    }
+
+    // Radiation monitoring layer
+    if (mapLayers.radiation && this.radiationReadings.length > 0) {
+      layers.push(this.createRadiationLayer());
     }
 
     // News geo-locations (always shown if data exists)
@@ -3359,6 +3378,85 @@ export class DeckGLMap {
     });
   }
 
+  // --- Conflict Forecast (country centroid scatter, sized+colored by predicted risk) ---
+  private createConflictForecastLayer(): ScatterplotLayer {
+    return new ScatterplotLayer({
+      id: 'conflict-forecast-layer',
+      data: this.conflictForecasts.filter(d => d.predictedLogFatalities > 0),
+      getPosition: (d: (typeof this.conflictForecasts)[0]) => [d.lon, d.lat],
+      getRadius: (d: (typeof this.conflictForecasts)[0]) => {
+        // Scale radius by log fatalities prediction
+        const lf = d.predictedLogFatalities;
+        if (lf > 5) return 50000;
+        if (lf > 3) return 35000;
+        if (lf > 1) return 25000;
+        return 16000;
+      },
+      getFillColor: (d: (typeof this.conflictForecasts)[0]) => {
+        // Red gradient by predicted fatalities
+        const lf = d.predictedLogFatalities;
+        if (lf > 5) return [220, 20, 20, 200] as [number, number, number, number];
+        if (lf > 3) return [240, 80, 20, 180] as [number, number, number, number];
+        if (lf > 1) return [255, 150, 30, 160] as [number, number, number, number];
+        return [255, 200, 60, 120] as [number, number, number, number];
+      },
+      getLineColor: [255, 255, 255, 100] as [number, number, number, number],
+      stroked: true,
+      lineWidthMinPixels: 1,
+      radiusMinPixels: 5,
+      radiusMaxPixels: 28,
+      pickable: true,
+    });
+  }
+
+  // --- Disease Outbreaks (colored by disease type) ---
+  private createDiseaseOutbreaksLayer(): ScatterplotLayer {
+    return new ScatterplotLayer({
+      id: 'disease-outbreaks-layer',
+      data: this.diseaseOutbreaks,
+      getPosition: (d: (typeof this.diseaseOutbreaks)[0]) => [d.longitude, d.latitude],
+      getRadius: (d: (typeof this.diseaseOutbreaks)[0]) => d.severity === 'critical' ? 28000 : d.severity === 'high' ? 22000 : 16000,
+      getFillColor: (d: (typeof this.diseaseOutbreaks)[0]) => {
+        // Color by disease type: red=hemorrhagic, orange=respiratory, yellow=waterborne, green=vector, blue=bacterial
+        if (d.diseaseType === 'hemorrhagic') return [220, 30, 30, 200] as [number, number, number, number];
+        if (d.diseaseType === 'respiratory') return [240, 120, 20, 180] as [number, number, number, number];
+        if (d.diseaseType === 'waterborne') return [230, 200, 30, 170] as [number, number, number, number];
+        if (d.diseaseType === 'vector') return [60, 180, 60, 170] as [number, number, number, number];
+        if (d.diseaseType === 'bacterial') return [60, 120, 220, 170] as [number, number, number, number];
+        return [180, 180, 180, 150] as [number, number, number, number];
+      },
+      getLineColor: [255, 255, 255, 140] as [number, number, number, number],
+      stroked: true,
+      lineWidthMinPixels: 1,
+      radiusMinPixels: 6,
+      radiusMaxPixels: 20,
+      pickable: true,
+    });
+  }
+
+  // --- Radiation Monitoring (HeatmapLayer with anomaly highlighting) ---
+  private createRadiationLayer(): ScatterplotLayer {
+    return new ScatterplotLayer({
+      id: 'radiation-layer',
+      data: this.radiationReadings,
+      getPosition: (d: (typeof this.radiationReadings)[0]) => [d.longitude, d.latitude],
+      getRadius: (d: (typeof this.radiationReadings)[0]) => d.isAnomaly ? 25000 : 12000,
+      getFillColor: (d: (typeof this.radiationReadings)[0]) => {
+        if (d.isAnomaly) return [255, 0, 255, 220] as [number, number, number, number]; // Magenta for anomalies
+        if (d.cpm > 60) return [255, 100, 0, 180] as [number, number, number, number]; // Orange for elevated
+        if (d.cpm > 30) return [255, 220, 0, 140] as [number, number, number, number]; // Yellow for normal-high
+        return [0, 200, 100, 100] as [number, number, number, number]; // Green for normal
+      },
+      getLineColor: (d: (typeof this.radiationReadings)[0]) =>
+        d.isAnomaly ? [255, 0, 0, 255] as [number, number, number, number] : [255, 255, 255, 60] as [number, number, number, number],
+      stroked: true,
+      lineWidthMinPixels: 1,
+      radiusMinPixels: 3,
+      radiusMaxPixels: 16,
+      pickable: true,
+    });
+  }
+
   private createImageryFootprintLayer(): PolygonLayer {
     return new PolygonLayer({
       id: 'satellite-imagery-layer',
@@ -3639,6 +3737,30 @@ export class DeckGLMap {
         const ageStr = age < 1 ? '<1h ago' : `${age}h ago`;
         const srcStr = Array.isArray(obj.sources) && obj.sources.length > 0 ? obj.sources[0] : (obj.dataSource || 'GDELT');
         return { html: `<div class="deckgl-tooltip"><strong>${icon} ${text(obj.eventType?.toUpperCase() || 'STRIKE')}</strong><br/>${text((obj.title || '').slice(0, 100))}<br/><span style="color:${sc};text-transform:uppercase;font-weight:700;font-size:10px">${text(obj.severity)}</span> · 📍 ${text(obj.locationName)} · ${ageStr}<br/><span style="opacity:.7">Source: ${text(srcStr)}</span></div>` };
+      }
+      case 'conflict-forecast-layer': {
+        const lf = obj.predictedLogFatalities ?? 0;
+        const riskLabel = lf > 5 ? 'EXTREME' : lf > 3 ? 'HIGH' : lf > 1 ? 'ELEVATED' : 'LOW';
+        const riskColor = lf > 5 ? '#dc1414' : lf > 3 ? '#f05014' : lf > 1 ? '#ff961e' : '#ffc83c';
+        const estF = obj.estimatedFatalities ?? 0;
+        const probStr = obj.probability != null ? ` · ${Math.round(obj.probability * 100)}% prob ≥25 BRD` : '';
+        return { html: `<div class="deckgl-tooltip"><strong>📊 ${text(obj.countryName || obj.countryCode)}</strong><br/><span style="color:${riskColor};font-weight:700;font-size:10px">${riskLabel} RISK</span>${probStr}<br/><span style="opacity:.7">Est. fatalities: ~${estF.toLocaleString()}/mo</span><br/><span style="opacity:.5">VIEWS fatalities003 model</span></div>` };
+      }
+      case 'disease-outbreaks-layer': {
+        const dtColors: Record<string, string> = { hemorrhagic: '#dc1e1e', respiratory: '#f07814', waterborne: '#e6c81e', vector: '#3cb43c', bacterial: '#3c78dc', other: '#b4b4b4' };
+        const dc = dtColors[obj.diseaseType] || '#b4b4b4';
+        const dtIcons: Record<string, string> = { hemorrhagic: '🩸', respiratory: '🫁', waterborne: '💧', vector: '🦟', bacterial: '🦠', other: '⚕️' };
+        const di = dtIcons[obj.diseaseType] || '⚕️';
+        const oAge = obj.timestamp ? Math.round((Date.now() - obj.timestamp) / 86400_000) : 0;
+        const oAgeStr = oAge < 1 ? 'today' : `${oAge}d ago`;
+        return { html: `<div class="deckgl-tooltip"><strong>${di} ${text(obj.diseaseType?.toUpperCase() || 'OUTBREAK')}</strong><br/>${text((obj.title || '').slice(0, 120))}<br/><span style="color:${dc};text-transform:uppercase;font-weight:700;font-size:10px">${text(obj.severity)}</span> · 📍 ${text(obj.country)} · ${oAgeStr}<br/><span style="opacity:.5">WHO Disease Outbreak News</span></div>` };
+      }
+      case 'radiation-layer': {
+        const cpm = obj.cpm ?? 0;
+        const usvh = obj.usvh ?? 0;
+        const anomalyBadge = obj.isAnomaly ? '<br/><span style="color:#ff00ff;font-weight:700;font-size:10px">⚠️ ANOMALOUS READING</span>' : '';
+        const levelColor = obj.isAnomaly ? '#ff00ff' : cpm > 60 ? '#ff6400' : cpm > 30 ? '#ffdc00' : '#00c864';
+        return { html: `<div class="deckgl-tooltip"><strong>☢️ Radiation</strong><br/><span style="color:${levelColor};font-weight:700">${cpm} CPM</span> (${usvh} µSv/h)${anomalyBadge}<br/><span style="opacity:.5">Safecast citizen sensor</span></div>` };
       }
       case 'webcam-layer': {
         const label = 'count' in obj
@@ -4997,6 +5119,21 @@ export class DeckGLMap {
 
   public setMissileEvents(events: Array<{ id: string; title: string; eventType: string; severity: string; latitude: number; longitude: number; locationName: string; timestamp: number; sources: string[]; dataSource: string }>): void {
     this.missileEvents = events;
+    this.render();
+  }
+
+  public setConflictForecasts(forecasts: Array<{ countryCode: string; countryName: string; predictedLogFatalities: number; estimatedFatalities: number; probability: number | null; lat: number; lon: number }>): void {
+    this.conflictForecasts = forecasts;
+    this.render();
+  }
+
+  public setDiseaseOutbreaks(events: Array<{ id: string; title: string; diseaseType: string; severity: string; country: string; latitude: number; longitude: number; timestamp: number; sourceUrl: string; dataSource: string }>): void {
+    this.diseaseOutbreaks = events;
+    this.render();
+  }
+
+  public setRadiationReadings(readings: Array<{ id: string | number; latitude: number; longitude: number; cpm: number; usvh: number; isAnomaly: boolean; capturedAt: string | null }>): void {
+    this.radiationReadings = readings;
     this.render();
   }
 

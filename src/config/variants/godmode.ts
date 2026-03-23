@@ -54,14 +54,12 @@ export const DEFAULT_PANELS: Record<string, PanelConfig> = {
   'trade-policy': { name: 'Trade Policy', enabled: true, priority: 1 },
   'supply-chain': { name: 'Supply Chain', enabled: true, priority: 1 },
   'tech-readiness': { name: 'Tech Readiness', enabled: true, priority: 1 },
-  'stock-analysis': { name: 'Stock Analysis', enabled: true, priority: 1 },
-  'stock-backtest': { name: 'Stock Backtest', enabled: true, priority: 1 },
-  poi: { name: 'Persons of Interest', enabled: true, priority: 1 },
-  // Godmode-exclusive panels — these don't exist in any other variant
+  // Godmode-exclusive panels — these replace the locked pro panels
   'ai-stock-analyst': { name: 'AI Stock Analyst', enabled: true, priority: 1 },
   'geo-risk-radar': { name: 'Geopolitical Risk Radar', enabled: true, priority: 1 },
   'intel-timeline': { name: 'Intelligence Timeline', enabled: true, priority: 1 },
-  'stock-backtest-gm': { name: 'Stock Backtest (GM)', enabled: true, priority: 1 },
+  'stock-backtest-gm': { name: 'Stock Backtest', enabled: true, priority: 1 },
+  poi: { name: 'Persons of Interest', enabled: true, priority: 1 },
 };
 
 // ALL map layers ON — the full intelligence picture
@@ -193,15 +191,19 @@ export const MOBILE_DEFAULT_MAP_LAYERS: MapLayers = {
 // Layout config for godmode
 export const PANEL_LAYOUT_CONFIG = {
   panelKeys: [
+    // Godmode-exclusive panels first — the reason you toggle godmode
+    'geo-risk-radar', 'ai-stock-analyst', 'intel-timeline', 'stock-backtest-gm',
+    // Core intelligence
     'cii', 'strategic-risk', 'intel', 'gdelt-intel', 'cascade',
     'telegram-intel', 'satellite-fires', 'poi',
+    // News feeds
     'live-news', 'politics', 'us', 'europe', 'middleeast', 'africa', 'latam', 'asia',
     'energy', 'gov', 'thinktanks', 'tech', 'ai',
+    // Markets & finance
     'markets', 'commodities', 'polymarket', 'economic', 'finance',
     'crypto', 'heatmap', 'macro-signals', 'etf-flows', 'stablecoins',
+    // Analysis
     'trade-policy', 'supply-chain', 'tech-readiness',
-    'stock-analysis', 'stock-backtest', 'layoffs', 'monitors',
-    // Godmode-exclusive panels
-    'ai-stock-analyst', 'geo-risk-radar', 'intel-timeline', 'stock-backtest-gm',
+    'layoffs', 'monitors',
   ],
 };

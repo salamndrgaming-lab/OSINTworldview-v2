@@ -92,21 +92,44 @@ const COUNTRY_CENTROIDS = {
 };
 
 async function fetchConflictForecasts() {
-  // Fetch the probability forecasts (dichotomous: prob of ≥25 BRDs) at country-month level
-  // The fatalities003 model is the current production model as of Dec 2025
-  const probUrl = `${VIEWS_API}/fatalities003/cm/sb/main_mean/latest?limit=500`;
-  console.log(`  Fetching from: ${probUrl}`);
+  // The VIEWS API uses the format: /{run}/{loa}/{type_of_violence}
+  // "current" aliases the latest production run. We fetch country-month state-based predictions.
+  // The response includes paginated data with country_id, month_id, and prediction values.
+  // Try multiple endpoint formats since the API structure may vary between versions.
+  const endpoints = [
+    `${VIEWS_API}/current/cm/sb?pagesize=500`,
+    `${VIEWS_API}/fatalities003/cm/sb?pagesize=500`,
+    `${VIEWS_API}/fatalities002/cm/sb?pagesize=500`,
+  ];
 
-  const resp = await fetch(probUrl, {
-    headers: { 'User-Agent': CHROME_UA, 'Accept': 'application/json' },
-    signal: AbortSignal.timeout(30_000),
-  });
+  let records = [];
 
-  if (!resp.ok) throw new Error(`VIEWS API ${resp.status}`);
-  const data = await resp.json();
+  for (const probUrl of endpoints) {
+    console.log(`  Trying: ${probUrl}`);
+    try {
+      const resp = await fetch(probUrl, {
+        headers: { 'User-Agent': CHROME_UA, 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(30_000),
+      });
 
-  // VIEWS API returns paginated results with a "data" array
-  const records = Array.isArray(data) ? data : (data.data || data.results || []);
+      if (!resp.ok) {
+        console.warn(`    HTTP ${resp.status} — skipping`);
+        continue;
+      }
+
+      const data = await resp.json();
+      // VIEWS API wraps data in a "data" array with metadata
+      records = Array.isArray(data) ? data : (data.data || data.results || []);
+      if (records.length > 0) {
+        console.log(`  Success: ${records.length} records from ${probUrl}`);
+        break;
+      }
+    } catch (err) {
+      console.warn(`    Failed: ${err.message}`);
+    }
+  }
+
+  if (records.length === 0) throw new Error('All VIEWS API endpoints returned empty or failed');
   console.log(`  Raw records: ${records.length}`);
 
   // Transform into our format. Each record has country_id (Gleditsch-Ward), month_id, and prediction values.

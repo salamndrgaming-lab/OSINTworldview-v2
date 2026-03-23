@@ -8,7 +8,14 @@ import { loadEnvFile, CHROME_UA, runSeed } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
-const WHO_DON_URL = 'https://www.who.int/feeds/entity/don/en/rss.xml';
+const WHO_DON_URLS = [
+  // Current WHO DON API endpoint (OData-style)
+  'https://www.who.int/api/hubs/diseaseoutbreaknews?$orderby=PublicationDate%20desc&$top=50',
+  // Legacy RSS feed (may still work in some regions)
+  'https://www.who.int/feeds/entity/don/en/rss.xml',
+  // Alternative WHO news feed endpoint
+  'https://www.who.int/api/news/diseaseoutbreaknews?sf_culture=en&$orderby=PublicationDateAndTime%20desc&$top=50',
+];
 const CANONICAL_KEY = 'health:outbreaks:v1';
 const CACHE_TTL = 14400; // 4h
 
@@ -139,16 +146,56 @@ function extractItems(xml) {
 // ---------- Main Fetch ----------
 
 async function fetchDiseaseOutbreaks() {
-  console.log('  Fetching WHO DON RSS feed...');
-  const resp = await fetch(WHO_DON_URL, {
-    headers: { 'User-Agent': CHROME_UA },
-    signal: AbortSignal.timeout(20_000),
-  });
+  let items = [];
 
-  if (!resp.ok) throw new Error(`WHO DON ${resp.status}`);
-  const xml = await resp.text();
-  const items = extractItems(xml);
-  console.log(`  RSS items: ${items.length}`);
+  // Try each URL until one works
+  for (const url of WHO_DON_URLS) {
+    console.log(`  Trying: ${url}`);
+    try {
+      const resp = await fetch(url, {
+        headers: { 'User-Agent': CHROME_UA, 'Accept': 'application/json, application/xml, text/xml, */*' },
+        signal: AbortSignal.timeout(20_000),
+      });
+
+      if (!resp.ok) {
+        console.warn(`    HTTP ${resp.status} — skipping`);
+        continue;
+      }
+
+      const contentType = resp.headers.get('content-type') || '';
+      const body = await resp.text();
+
+      if (contentType.includes('json') || body.trim().startsWith('{') || body.trim().startsWith('[')) {
+        // JSON API response — WHO OData format: { value: [...] } or direct array
+        try {
+          const json = JSON.parse(body);
+          const entries = json.value || json.Value || (Array.isArray(json) ? json : []);
+          for (const entry of entries) {
+            const title = entry.Title || entry.title || entry.Name || '';
+            const link = entry.UrlName
+              ? `https://www.who.int/emergencies/disease-outbreak-news/item/${entry.UrlName}`
+              : (entry.ItemDefaultUrl || entry.url || '');
+            const pubDate = entry.PublicationDate || entry.PublicationDateAndTime || entry.pubDate || '';
+            const description = entry.Summary || entry.Description || entry.description || '';
+            if (title) items.push({ title: title.trim(), link, pubDate, description: description.replace(/<[^>]+>/g, '').trim() });
+          }
+        } catch { /* not valid JSON, try next */ }
+      } else if (body.includes('<rss') || body.includes('<item>')) {
+        // RSS XML response
+        items = extractItems(body);
+      }
+
+      if (items.length > 0) {
+        console.log(`  Success: ${items.length} items from ${url}`);
+        break;
+      }
+    } catch (err) {
+      console.warn(`    Failed: ${err.message}`);
+    }
+  }
+
+  if (items.length === 0) throw new Error('All WHO DON endpoints returned empty or failed');
+  console.log(`  Total DON items: ${items.length}`);
 
   const events = [];
   for (const item of items) {

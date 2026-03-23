@@ -31,7 +31,7 @@ async function callGroq(messages: GroqMessage[], apiKey: string): Promise<{ cont
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: 'llama-3.1-70b-versatile',
+      model: 'llama-3.3-70b-versatile',
       messages,
       temperature: 0.3,
       max_tokens: 3000,
@@ -45,7 +45,7 @@ async function callGroq(messages: GroqMessage[], apiKey: string): Promise<{ cont
   const data: GroqResponse = await res.json();
   return {
     content: data.choices[0]?.message?.content || '{}',
-    model: data.model || 'llama-3.1-70b-versatile',
+    model: data.model || 'llama-3.3-70b-versatile',
   };
 }
 

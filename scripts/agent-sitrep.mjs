@@ -221,7 +221,7 @@ async function executeTool(name, args, context) {
         watch_list: args.watch_list || [],
         generated_at: Date.now(),
         generated_by: 'agent-sitrep-v1',
-        model: 'llama-3.1-70b-versatile',
+        model: 'llama-3.3-70b-versatile',
       };
 
       // Save to Redis
@@ -376,7 +376,7 @@ function countBy(arr, field) {
 // ---------- Groq API ----------
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.1-70b-versatile';
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
 const MAX_AGENT_STEPS = 8; // Maximum tool-calling loops before forcing completion
 
 const SYSTEM_PROMPT = `You are an expert intelligence analyst working for World Monitor, an open-source OSINT platform. Your task is to generate a comprehensive Situation Report (SITREP) by querying available intelligence data sources and synthesizing findings.

@@ -1,0 +1,200 @@
+// Godmode variant — maximum intelligence coverage
+// Every panel enabled, every map layer active, all data sources visible.
+// Access via godmode. subdomain or localStorage override.
+import type { PanelConfig, MapLayers } from '@/types';
+
+// Re-export base config
+export * from './base';
+
+// Re-export all data configs (superset of all variants)
+export * from '../feeds';
+export * from '../geo';
+export * from '../irradiators';
+export * from '../pipelines';
+export * from '../ports';
+export * from '../military';
+export * from '../airports';
+export * from '../entities';
+
+// Every panel enabled at priority 1 — nothing hidden
+export const DEFAULT_PANELS: Record<string, PanelConfig> = {
+  map: { name: 'Global Map', enabled: true, priority: 1 },
+  'live-news': { name: 'Live News', enabled: true, priority: 1 },
+  intel: { name: 'Intel Feed', enabled: true, priority: 1 },
+  'gdelt-intel': { name: 'Live Intelligence', enabled: true, priority: 1 },
+  cii: { name: 'Country Instability', enabled: true, priority: 1 },
+  cascade: { name: 'Infrastructure Cascade', enabled: true, priority: 1 },
+  'strategic-risk': { name: 'Strategic Risk Overview', enabled: true, priority: 1 },
+  politics: { name: 'World News', enabled: true, priority: 1 },
+  us: { name: 'United States', enabled: true, priority: 1 },
+  europe: { name: 'Europe', enabled: true, priority: 1 },
+  middleeast: { name: 'Middle East', enabled: true, priority: 1 },
+  africa: { name: 'Africa', enabled: true, priority: 1 },
+  latam: { name: 'Latin America', enabled: true, priority: 1 },
+  asia: { name: 'Asia-Pacific', enabled: true, priority: 1 },
+  energy: { name: 'Energy & Resources', enabled: true, priority: 1 },
+  gov: { name: 'Government', enabled: true, priority: 1 },
+  thinktanks: { name: 'Think Tanks', enabled: true, priority: 1 },
+  polymarket: { name: 'Predictions', enabled: true, priority: 1 },
+  commodities: { name: 'Commodities', enabled: true, priority: 1 },
+  markets: { name: 'Markets', enabled: true, priority: 1 },
+  economic: { name: 'Economic Indicators', enabled: true, priority: 1 },
+  finance: { name: 'Financial', enabled: true, priority: 1 },
+  tech: { name: 'Technology', enabled: true, priority: 1 },
+  crypto: { name: 'Crypto', enabled: true, priority: 1 },
+  heatmap: { name: 'Sector Heatmap', enabled: true, priority: 1 },
+  ai: { name: 'AI/ML', enabled: true, priority: 1 },
+  layoffs: { name: 'Layoffs Tracker', enabled: true, priority: 1 },
+  'macro-signals': { name: 'Market Radar', enabled: true, priority: 1 },
+  'etf-flows': { name: 'BTC ETF Tracker', enabled: true, priority: 1 },
+  stablecoins: { name: 'Stablecoins', enabled: true, priority: 1 },
+  monitors: { name: 'My Monitors', enabled: true, priority: 1 },
+  'telegram-intel': { name: 'Telegram Intel', enabled: true, priority: 1 },
+  'satellite-fires': { name: 'Satellite Fires', enabled: true, priority: 1 },
+  'trade-policy': { name: 'Trade Policy', enabled: true, priority: 1 },
+  'supply-chain': { name: 'Supply Chain', enabled: true, priority: 1 },
+  'tech-readiness': { name: 'Tech Readiness', enabled: true, priority: 1 },
+  'stock-analysis': { name: 'Stock Analysis', enabled: true, priority: 1 },
+  'stock-backtest': { name: 'Stock Backtest', enabled: true, priority: 1 },
+  poi: { name: 'Persons of Interest', enabled: true, priority: 1 },
+};
+
+// ALL map layers ON — the full intelligence picture
+export const DEFAULT_MAP_LAYERS: MapLayers = {
+  // Core intelligence layers — all active
+  conflicts: true,
+  bases: true,
+  cables: true,
+  pipelines: true,
+  hotspots: true,
+  ais: true,
+  nuclear: true,
+  irradiators: true,
+  sanctions: true,
+  weather: true,
+  economic: true,
+  waterways: true,
+  outages: true,
+  cyberThreats: true,
+  datacenters: true,
+  protests: true,
+  flights: true,
+  military: true,
+  natural: true,
+  spaceports: true,
+  minerals: true,
+  fires: true,
+  ucdpEvents: true,
+  displacement: true,
+  climate: true,
+  // Surveillance & tracking
+  gpsJamming: true,
+  satellites: true,
+  iranAttacks: true,
+  // Overlays
+  ciiChoropleth: true,
+  dayNight: true,
+  tradeRoutes: true,
+  webcams: true,
+  // God-mode additions
+  poi: true,
+  missileStrikes: true,
+  conflictForecast: true,
+  diseaseOutbreaks: true,
+  radiation: true,
+  // Tech layers
+  startupHubs: false,
+  cloudRegions: false,
+  accelerators: false,
+  techHQs: false,
+  techEvents: false,
+  // Finance layers
+  stockExchanges: false,
+  financialCenters: false,
+  centralBanks: false,
+  commodityHubs: false,
+  gulfInvestments: false,
+  // Happy layers (off — not relevant for godmode)
+  positiveEvents: false,
+  kindness: false,
+  happiness: false,
+  speciesRecovery: false,
+  renewableInstallations: false,
+  // Commodity layers
+  miningSites: false,
+  processingPlants: false,
+  commodityPorts: false,
+};
+
+// Mobile godmode — slightly reduced for performance but still maximal
+export const MOBILE_DEFAULT_MAP_LAYERS: MapLayers = {
+  conflicts: true,
+  bases: true,
+  cables: false,
+  pipelines: false,
+  hotspots: true,
+  ais: false,
+  nuclear: true,
+  irradiators: false,
+  sanctions: true,
+  weather: true,
+  economic: false,
+  waterways: true,
+  outages: true,
+  cyberThreats: true,
+  datacenters: false,
+  protests: true,
+  flights: true,
+  military: true,
+  natural: true,
+  spaceports: false,
+  minerals: false,
+  fires: true,
+  ucdpEvents: true,
+  displacement: false,
+  climate: false,
+  gpsJamming: true,
+  satellites: false,
+  iranAttacks: true,
+  ciiChoropleth: false,
+  dayNight: false,
+  tradeRoutes: false,
+  webcams: false,
+  poi: true,
+  missileStrikes: true,
+  conflictForecast: true,
+  diseaseOutbreaks: true,
+  radiation: true,
+  startupHubs: false,
+  cloudRegions: false,
+  accelerators: false,
+  techHQs: false,
+  techEvents: false,
+  stockExchanges: false,
+  financialCenters: false,
+  centralBanks: false,
+  commodityHubs: false,
+  gulfInvestments: false,
+  positiveEvents: false,
+  kindness: false,
+  happiness: false,
+  speciesRecovery: false,
+  renewableInstallations: false,
+  miningSites: false,
+  processingPlants: false,
+  commodityPorts: false,
+};
+
+// Layout config for godmode
+export const PANEL_LAYOUT_CONFIG = {
+  panelKeys: [
+    'cii', 'strategic-risk', 'intel', 'gdelt-intel', 'cascade',
+    'telegram-intel', 'satellite-fires', 'poi',
+    'live-news', 'politics', 'us', 'europe', 'middleeast', 'africa', 'latam', 'asia',
+    'energy', 'gov', 'thinktanks', 'tech', 'ai',
+    'markets', 'commodities', 'polymarket', 'economic', 'finance',
+    'crypto', 'heatmap', 'macro-signals', 'etf-flows', 'stablecoins',
+    'trade-policy', 'supply-chain', 'tech-readiness',
+    'stock-analysis', 'stock-backtest', 'layoffs', 'monitors',
+  ],
+};

@@ -77,6 +77,10 @@ jobs:
       - run: node scripts/agent-sitrep.mjs
         continue-on-error: true
 
+      # Vector index — indexes all intel data for semantic search (runs last)
+      - run: node scripts/seed-vector-index.mjs
+        continue-on-error: true
+
     env:
       UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
@@ -91,6 +95,8 @@ jobs:
       OTX_API_KEY: ${{ secrets.OTX_API_KEY }}
       ABUSEIPDB_API_KEY: ${{ secrets.ABUSEIPDB_API_KEY }}
       UCDP_ACCESS_TOKEN: ${{ secrets.UCDP_ACCESS_TOKEN }}
+      UPSTASH_VECTOR_REST_URL: ${{ secrets.UPSTASH_VECTOR_REST_URL }}
+      UPSTASH_VECTOR_REST_TOKEN: ${{ secrets.UPSTASH_VECTOR_REST_TOKEN }}
 
   # JOB 2: The GDELT Lane (Isolated & Patient)
   seed-gdelt:

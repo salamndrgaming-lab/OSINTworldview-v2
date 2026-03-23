@@ -840,6 +840,22 @@ export class PanelLayoutManager implements AppModule {
     this.createPanel('insights', () => new InsightsPanel());
     this.createPanel('poi', () => new POIPanel());
 
+    // Godmode-exclusive panels — these only load when godmode variant is active
+    if (SITE_VARIANT === 'godmode') {
+      this.lazyPanel('ai-stock-analyst', () =>
+        import('@/components/AIStockAnalystPanel').then(m => new m.AIStockAnalystPanel()),
+      );
+      this.lazyPanel('geo-risk-radar', () =>
+        import('@/components/GeoRiskRadarPanel').then(m => new m.GeoRiskRadarPanel()),
+      );
+      this.lazyPanel('intel-timeline', () =>
+        import('@/components/IntelTimelinePanel').then(m => new m.IntelTimelinePanel()),
+      );
+      this.lazyPanel('stock-backtest-gm', () =>
+        import('@/components/StockBacktestGMPanel').then(m => new m.StockBacktestPanel()),
+      );
+    }
+
     // Global Giving panel (all variants)
     this.lazyPanel('giving', () =>
       import('@/components/GivingPanel').then(m => new m.GivingPanel()),

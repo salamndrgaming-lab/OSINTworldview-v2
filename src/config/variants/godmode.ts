@@ -57,6 +57,11 @@ export const DEFAULT_PANELS: Record<string, PanelConfig> = {
   'stock-analysis': { name: 'Stock Analysis', enabled: true, priority: 1 },
   'stock-backtest': { name: 'Stock Backtest', enabled: true, priority: 1 },
   poi: { name: 'Persons of Interest', enabled: true, priority: 1 },
+  // Godmode-exclusive panels — these don't exist in any other variant
+  'ai-stock-analyst': { name: 'AI Stock Analyst', enabled: true, priority: 1 },
+  'geo-risk-radar': { name: 'Geopolitical Risk Radar', enabled: true, priority: 1 },
+  'intel-timeline': { name: 'Intelligence Timeline', enabled: true, priority: 1 },
+  'stock-backtest-gm': { name: 'Stock Backtest (GM)', enabled: true, priority: 1 },
 };
 
 // ALL map layers ON — the full intelligence picture
@@ -196,5 +201,7 @@ export const PANEL_LAYOUT_CONFIG = {
     'crypto', 'heatmap', 'macro-signals', 'etf-flows', 'stablecoins',
     'trade-policy', 'supply-chain', 'tech-readiness',
     'stock-analysis', 'stock-backtest', 'layoffs', 'monitors',
+    // Godmode-exclusive panels
+    'ai-stock-analyst', 'geo-risk-radar', 'intel-timeline', 'stock-backtest-gm',
   ],
 };

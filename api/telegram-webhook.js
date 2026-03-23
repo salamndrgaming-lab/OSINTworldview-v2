@@ -66,6 +66,12 @@ async function getBootstrapData() {
     cryptoQuotes:    'market:crypto:v1',
     gdeltIntel:      'intelligence:gdelt-intel:v1',
     poi:             'intelligence:poi:v1',
+    // God-mode additions
+    agentSitrep:     'intelligence:agent-sitrep:v1',
+    missileEvents:   'intelligence:missile-events:v1',
+    diseaseOutbreaks:'health:outbreaks:v1',
+    conflictForecast:'forecast:conflict:v1',
+    radiationData:   'environment:radiation:v1',
   };
 
   var names = Object.keys(keyMap);
@@ -111,15 +117,96 @@ function generateFullReport(data) {
   });
 
   var s = [];
-  s.push('<b>INTELLIGENCE BRIEF</b>');
+  s.push('<b>🌐 INTELLIGENCE BRIEF</b>');
   s.push('<i>' + ts + ' UTC</i>');
   s.push('<i>Redis: ' + (data._keysFound || 0) + '/' + (data._keysTotal || 0) + ' sources</i>');
   s.push('');
 
   var hasData = false;
 
+  // If we have an agent-generated SITREP, use its executive summary as the lead section
+  var sitrep = data.agentSitrep;
+  if (sitrep && sitrep.executive_summary) {
+    hasData = true;
+    var threatBadge = (sitrep.overall_threat_level || 'unknown').toUpperCase();
+    s.push('<b>AI EXECUTIVE SUMMARY</b> [' + threatBadge + ']');
+    // Trim to ~400 chars for Telegram readability
+    var summary = String(sitrep.executive_summary).slice(0, 400);
+    s.push(esc(summary));
+    s.push('');
+
+    // Include watch list if present
+    if (sitrep.watch_list && sitrep.watch_list.length > 0) {
+      s.push('<b>⚠️ WATCH LIST</b>');
+      for (var wi = 0; wi < Math.min(sitrep.watch_list.length, 5); wi++) {
+        s.push('• ' + esc(String(sitrep.watch_list[wi]).slice(0, 120)));
+      }
+      s.push('');
+    }
+  }
+
+  // Missile/drone strikes section (new)
+  var missiles = data.missileEvents;
+  if (missiles && missiles.events && missiles.events.length > 0) {
+    hasData = true;
+    var sixH = Date.now() - 6 * 3600000;
+    var recentStrikes = missiles.events.filter(function(e) { return e.timestamp >= sixH; });
+    var critStrikes = recentStrikes.filter(function(e) { return e.severity === 'critical' || e.severity === 'high'; });
+    s.push('<b>🚀 MISSILE/DRONE STRIKES</b>');
+    s.push(recentStrikes.length + ' events in 6h (' + critStrikes.length + ' critical/high)');
+    for (var si2 = 0; si2 < Math.min(recentStrikes.length, 4); si2++) {
+      var se = recentStrikes[si2];
+      s.push('> ' + esc(se.locationName || '?') + ': ' + esc((se.title || '').slice(0, 80)));
+    }
+    s.push('');
+  }
+
+  // Conflict forecast section (new)
+  var forecasts = data.conflictForecast;
+  if (forecasts && forecasts.forecasts && forecasts.forecasts.length > 0) {
+    var highRisk = forecasts.forecasts.filter(function(f) { return f.predictedLogFatalities > 3; }).slice(0, 5);
+    if (highRisk.length > 0) {
+      hasData = true;
+      s.push('<b>📊 CONFLICT FORECAST</b>');
+      for (var fi = 0; fi < highRisk.length; fi++) {
+        var fr = highRisk[fi];
+        var riskLbl = fr.predictedLogFatalities > 5 ? '🔴 EXTREME' : '🟠 HIGH';
+        s.push(riskLbl + ' ' + esc(fr.countryName || fr.countryCode) + ' (~' + (fr.estimatedFatalities || 0) + ' fatalities/mo)');
+      }
+      s.push('');
+    }
+  }
+
+  // Disease outbreaks section (new)
+  var diseases = data.diseaseOutbreaks;
+  if (diseases && diseases.events && diseases.events.length > 0) {
+    var critDiseases = diseases.events.filter(function(e) {
+      return e.severity === 'critical' || e.diseaseType === 'hemorrhagic';
+    });
+    if (critDiseases.length > 0) {
+      hasData = true;
+      s.push('<b>🦠 DISEASE OUTBREAKS</b>');
+      for (var di = 0; di < Math.min(critDiseases.length, 4); di++) {
+        var de = critDiseases[di];
+        s.push('> ' + esc(de.country || '?') + ': ' + esc((de.title || de.diseaseType || '').slice(0, 80)));
+      }
+      s.push('');
+    }
+  }
+
+  // Radiation anomalies section (new)
+  var radiation = data.radiationData;
+  if (radiation && radiation.anomalyCount > 0) {
+    hasData = true;
+    s.push('<b>☢️ RADIATION</b>');
+    s.push(radiation.anomalyCount + ' anomalous readings (threshold: ' + (radiation.anomalyThreshold || '?') + ' CPM)');
+    s.push('');
+  }
+
+  // Original sections follow — executive summary from insights
   var insights = unwrap(data.insights);
-  if (insights.length > 0) {
+  if (insights.length > 0 && !sitrep) {
+    // Only show if agent sitrep wasn't available (to avoid duplication)
     hasData = true;
     s.push('<b>EXECUTIVE SUMMARY</b>');
     for (var ii = 0; ii < Math.min(insights.length, 5); ii++) {

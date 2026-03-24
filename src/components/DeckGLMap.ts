@@ -1622,7 +1622,6 @@ export class DeckGLMap {
       layers.push(this.createImageryFootprintLayer());
     }
 
-    // Webcam layer (server-side clustered markers)
     new IconLayer<WindyWebcam>({
   id: 'windy-webcams-layer',
   data: webcamData, // Ensure this array is passed from your state/props

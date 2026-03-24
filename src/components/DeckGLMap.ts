@@ -3,6 +3,16 @@
  * Uses deck.gl for high-performance rendering of large datasets
  * Mobile devices gracefully degrade to the D3/SVG-based Map component
  */
+interface WindyWebcam {
+  id: string;
+  status: string;
+  title?: string;
+  location?: { longitude?: string | number; latitude?: string | number };
+  longitude?: string | number;
+  latitude?: string | number;
+  images?: { current?: { thumbnail?: string } };
+  url?: { current?: { desktop?: string } };
+}
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { TripsLayer } from '@deck.gl/geo-layers';
 import type { Layer, LayersList, PickingInfo } from '@deck.gl/core';

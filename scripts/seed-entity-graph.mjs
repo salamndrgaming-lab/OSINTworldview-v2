@@ -499,7 +499,8 @@ async function main() {
       console.log(`    ${row[0]}: ${row[1]}`);
     }
   } catch { /* silent */ }
-
+  
+  await driver.close();
   console.log('=== Done ===');
   process.exit(0);
 }

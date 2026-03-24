@@ -500,12 +500,17 @@ async function main() {
     }
   } catch { /* silent */ }
   
-await driver.close();
-  console.log('=== Done ===');
-  process.exit(0);
+await session.close();
+    await driver.close();
+    console.log('=== Graph Seeding Complete ===');
+    process.exit(0);
+  } catch (err) {
+    console.error('FATAL ERROR:', err);
+    process.exit(1);
+  }
 }
 
 main().catch(err => {
-  console.error('FATAL:', err);
-  process.exit(0);
+  console.error('Unhandled Rejection:', err);
+  process.exit(1);
 });

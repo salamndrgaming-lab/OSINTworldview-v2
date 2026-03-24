@@ -38,12 +38,20 @@ function getNeo4jCredentials() {
   // neo4j+s://xxxxx.databases.neo4j.io -> https://xxxxx.databases.neo4j.io/db/neo4j/query/v2
   // The HTTP API (port 7473) is NOT available on AuraDB — must use Query API on port 443
   // Extract host and point to the default database endpoint
-  const host = uri.replace(/^neo4j\+s?:\/\//, '').replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+  // Convert bolt/neo4j URI to AuraDB Default Query API v2 endpoint
+  // Bypasses the strict 'neo4j' database requirement for Aura cloud routing
+  let host = uri;
+  if (uri.startsWith('neo4j+s://') || uri.startsWith('neo4j://')) {
+    host = uri.replace(/^neo4j\+s?:\/\//, '');
+  } else if (uri.startsWith('https://')) {
+    host = uri.replace(/^https:\/\//, '');
+  }
+  
+  // Strip trailing paths and ports to get the clean host
+  host = host.split('/')[0].split(':')[0];
+  
+  // CRITICAL FIX: Route to default /db/query/v2 instead of /db/neo4j/query/v2
   const queryUrl = `https://${host}/db/query/v2`;
-
-  const authToken = Buffer.from(`${username}:${password}`).toString('base64');
-  return { queryUrl, authToken };
-}
 
 // Execute a single Cypher statement via the AuraDB Query API v2
 // Docs: https://neo4j.com/docs/query-api/current/

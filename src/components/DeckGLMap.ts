@@ -1617,7 +1617,6 @@ export class DeckGLMap {
     if (mapLayers.renewableInstallations && this.renewableInstallations.length > 0) {
       layers.push(this.createRenewableInstallationsLayer());
     }
-
     if (mapLayers.satellites && this.imageryScenes.length > 0) {
       layers.push(this.createImageryFootprintLayer());
     },

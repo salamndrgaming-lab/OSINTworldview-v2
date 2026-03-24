@@ -105,7 +105,7 @@ function isHighValuePOI(entity) {
 
 // === IMPLEMENTATION EXAMPLE (How to use it in your data pipeline) ===
 // Replace your old `.filter(e => e.articleCount >= 15)` with this:
-const finalPOIList = extractedEntities.filter(entity => isHighValuePOI(entity));
+const finalPOIList = findNewPersons(extractedNames);
 // ── Groq NER: extract person names from headlines ──
 
 async function extractPersonNames(headlines) {

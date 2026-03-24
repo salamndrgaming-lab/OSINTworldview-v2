@@ -500,12 +500,12 @@ async function main() {
     }
   } catch { /* silent */ }
   
-  await driver.close();
+await driver.close();
   console.log('=== Done ===');
   process.exit(0);
 }
 
 main().catch(err => {
-  console.error('FATAL:', err.message || err);
+  console.error('FATAL:', err);
   process.exit(0);
 });

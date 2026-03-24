@@ -321,17 +321,14 @@ async function main() {
     process.exit(0);
   }
 
-  // Step 2: Extract person names via Groq NER
+  // STEP 2: Extract names (This creates the variable)
   console.log('  Step 2: Extracting person names via Groq NER...');
-  // This line CREATES the variable
   const extractedNames = await extractPersonNames(allHeadlines); 
-  console.log(`  Extracted ${extractedNames.length} name mentions`);
 
-  // Step 3: Find new high-volume persons
+  // STEP 3: Find new persons (This uses the variable)
   console.log('  Step 3: Finding new high-volume persons...');
-  // This line USES the variable
-  const newPersons = findNewPersons(extractedNames); 
-  console.log(`  Found ${newPersons.length} new persons above threshold`);
+  // Ensure this line is BELOW the one above and INSIDE main()
+  const newPersons = findNewPersons(extractedNames);
 
   if (newPersons.length === 0) {
     console.log('  No new persons discovered this run');

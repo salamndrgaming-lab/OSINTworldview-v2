@@ -66,7 +66,46 @@ async function fetchGdeltHeadlines(query, maxRecords = 100) {
     return [];
   }
 }
+/**
+ * Determines if a person should be tracked as a POI.
+ * @param {Object} entity - The extracted person entity
+ * @param {number} entity.articleCount - How many times they were mentioned
+ * @param {string[]} entity.relatedHeadlines - Array of article titles they appear in
+ * @returns {boolean} True if they meet threshold OR organic criteria
+ */
+function isHighValuePOI(entity) {
+  // 1. The Volume Threshold (Your original logic, lowered slightly for safety)
+  if (entity.articleCount >= 10) return true;
 
+  // 2. The Organic "Trigger" Discovery (The new intelligence layer)
+  const highValueRoles = ['commander', 'minister', 'general', 'ceo', 'envoy', 'leader'];
+  const triggerEvents = [
+    'sanctioned', 'detained', 'arrested', 'disappeared', 
+    'assassinated', 'threatened', 'resigned', 'fled'
+  ];
+
+  // Flatten all related headlines into a single lowercase text block for analysis
+  const contextBlock = (entity.relatedHeadlines || []).join(" ").toLowerCase();
+
+  // Check if context contains a high-value role
+  const hasRole = highValueRoles.some(role => contextBlock.includes(role));
+  
+  // Check if context contains a critical geopolitical trigger
+  const isCritical = triggerEvents.some(event => contextBlock.includes(event));
+
+  // If they are a high-value target involved in a critical event, 
+  // bypass the article count requirement.
+  if (hasRole && isCritical) {
+    console.log(`[ORGANIC INTEL] Fast-tracking POI: ${entity.name} (Role/Event matched)`);
+    return true;
+  }
+
+  return false;
+}
+
+// === IMPLEMENTATION EXAMPLE (How to use it in your data pipeline) ===
+// Replace your old `.filter(e => e.articleCount >= 15)` with this:
+const finalPOIList = extractedEntities.filter(entity => isHighValuePOI(entity));
 // ── Groq NER: extract person names from headlines ──
 
 async function extractPersonNames(headlines) {

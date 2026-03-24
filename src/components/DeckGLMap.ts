@@ -1620,7 +1620,7 @@ export class DeckGLMap {
 
     if (mapLayers.satellites && this.imageryScenes.length > 0) {
       layers.push(this.createImageryFootprintLayer());
-    }
+    },
 
     new IconLayer<WindyWebcam>({
   id: 'windy-webcams-layer',

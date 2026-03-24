@@ -840,7 +840,7 @@ export class PanelLayoutManager implements AppModule {
     this.createPanel('insights', () => new InsightsPanel());
     this.createPanel('poi', () => new POIPanel());
 
-    // Godmode-exclusive panels — these only load when godmode variant is active
+        // Godmode-exclusive panels — these only load when godmode variant is active
     if (SITE_VARIANT === 'godmode') {
       this.lazyPanel('ai-stock-analyst', () =>
         import('@/components/AIStockAnalystPanel').then(m => new m.AIStockAnalystPanel()),
@@ -853,6 +853,15 @@ export class PanelLayoutManager implements AppModule {
       );
       this.lazyPanel('stock-backtest-gm', () =>
         import('@/components/StockBacktestGMPanel').then(m => new m.StockBacktestPanel()),
+      );
+      this.lazyPanel('correlation-engine', () =>
+        import('@/components/CorrelationEnginePanel').then(m => new m.CorrelationEnginePanel()),
+      );
+      this.lazyPanel('nl-query', () =>
+        import('@/components/NLQueryPanel').then(m => new m.NLQueryPanel()),
+      );
+      this.lazyPanel('data-health', () =>
+        import('@/components/DataHealthPanel').then(m => new m.DataHealthPanel()),
       );
     }
 

@@ -1622,11 +1622,11 @@ export class DeckGLMap {
     }
 
     // --- FIXED BLOCK START ---
-    if (mapLayers.webcams && webcamData.length > 0) {
+    if (mapLayers.webcams && this.webcamData.length > 0) { // Added this.
       layers.push(
         new IconLayer<WindyWebcam>({
           id: 'windy-webcams-layer',
-          data: webcamData,
+          data: this.webcamData, // Added this.
           pickable: true,
           getPosition: (d: WindyWebcam): [number, number] => {
             const lng = d.location?.longitude ?? d.longitude ?? 0;

@@ -22,22 +22,24 @@ function getNeo4jCredentials() {
   const password = process.env.NEO4J_PASSWORD;
   if (!uri || !password) return null;
 
-  let httpUrl;
+  // AuraDB Query API v2 — port 443, not 7473
+  let queryUrl;
   if (uri.startsWith('neo4j+s://') || uri.startsWith('neo4j://')) {
     const host = uri.replace(/^neo4j\+s?:\/\//, '').replace(/:\d+$/, '');
-    httpUrl = `https://${host}:7473/db/neo4j/tx/commit`;
+    queryUrl = `https://${host}/db/neo4j/query/v2`;
   } else if (uri.startsWith('https://')) {
-    httpUrl = uri.endsWith('/tx/commit') ? uri : `${uri}/db/neo4j/tx/commit`;
+    const host = uri.replace(/^https:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '');
+    queryUrl = `https://${host}/db/neo4j/query/v2`;
   } else {
-    httpUrl = `https://${uri}:7473/db/neo4j/tx/commit`;
+    queryUrl = `https://${uri}/db/neo4j/query/v2`;
   }
 
   const authToken = btoa(`${username}:${password}`);
-  return { httpUrl, authToken };
+  return { queryUrl, authToken };
 }
 
-async function runCypher(httpUrl, authToken, query, params = {}) {
-  const resp = await fetch(httpUrl, {
+async function runCypher(queryUrl, authToken, query, params = {}) {
+  const resp = await fetch(queryUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${authToken}`,
@@ -45,7 +47,8 @@ async function runCypher(httpUrl, authToken, query, params = {}) {
       'Accept': 'application/json',
     },
     body: JSON.stringify({
-      statements: [{ statement: query, parameters: params }],
+      statement: query,
+      parameters: params,
     }),
     signal: AbortSignal.timeout(10_000),
   });
@@ -63,13 +66,14 @@ async function runCypher(httpUrl, authToken, query, params = {}) {
   return result;
 }
 
-function extractRows(result, resultIndex = 0) {
-  const data = result.results?.[resultIndex]?.data || [];
-  const columns = result.results?.[resultIndex]?.columns || [];
-  return data.map(d => {
-    const row = {};
-    columns.forEach((col, i) => { row[col] = d.row[i]; });
-    return row;
+function extractRows(result) {
+  // Query API v2 returns: { data: { fields: ["col1", "col2"], values: [["val1", "val2"], ...] } }
+  const fields = result.data?.fields || [];
+  const values = result.data?.values || [];
+  return values.map(row => {
+    const obj = {};
+    fields.forEach((col, i) => { obj[col] = row[i]; });
+    return obj;
   });
 }
 
@@ -278,7 +282,7 @@ export default async function handler(req) {
 
   try {
     const { query, params, description } = buildQuery(url.searchParams);
-    const result = await runCypher(neo4j.httpUrl, neo4j.authToken, query, params);
+    const result = await runCypher(neo4j.queryUrl, neo4j.authToken, query, params);
     const rows = extractRows(result);
 
     if (format === 'json') {

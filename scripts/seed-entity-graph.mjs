@@ -34,31 +34,34 @@ function getNeo4jCredentials() {
     process.exit(0);
   }
 
-  // Convert bolt/neo4j URI to HTTP endpoint
-  // neo4j+s://xxxxx.databases.neo4j.io -> https://xxxxx.databases.neo4j.io:7473/db/neo4j/tx/commit
-  let httpUrl;
+  // Convert bolt/neo4j URI to AuraDB Query API v2 endpoint
+  // neo4j+s://xxxxx.databases.neo4j.io -> https://xxxxx.databases.neo4j.io/db/neo4j/query/v2
+  // The HTTP API (port 7473) is NOT available on AuraDB — must use Query API on port 443
+  let queryUrl;
   if (uri.startsWith('neo4j+s://') || uri.startsWith('neo4j://')) {
     const host = uri.replace(/^neo4j\+s?:\/\//, '').replace(/:\d+$/, '');
-    httpUrl = `https://${host}:7473/db/neo4j/tx/commit`;
+    queryUrl = `https://${host}/db/neo4j/query/v2`;
   } else if (uri.startsWith('https://')) {
-    httpUrl = uri.endsWith('/tx/commit') ? uri : `${uri}/db/neo4j/tx/commit`;
+    const host = uri.replace(/^https:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '');
+    queryUrl = `https://${host}/db/neo4j/query/v2`;
   } else {
-    httpUrl = `https://${uri}:7473/db/neo4j/tx/commit`;
+    queryUrl = `https://${uri}/db/neo4j/query/v2`;
   }
 
   const authToken = Buffer.from(`${username}:${password}`).toString('base64');
-  return { httpUrl, authToken };
+  return { queryUrl, authToken };
 }
 
-async function runCypher(httpUrl, authToken, statements) {
+// Execute a single Cypher statement via the AuraDB Query API v2
+// Docs: https://neo4j.com/docs/query-api/current/
+// Body format: { "statement": "CYPHER", "parameters": {} }
+async function runCypherSingle(queryUrl, authToken, query, params = {}) {
   const body = {
-    statements: statements.map(s => ({
-      statement: s.query,
-      parameters: s.params || {},
-    })),
+    statement: query,
+    parameters: params,
   };
 
-  const resp = await fetch(httpUrl, {
+  const resp = await fetch(queryUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${authToken}`,
@@ -71,18 +74,28 @@ async function runCypher(httpUrl, authToken, statements) {
 
   if (!resp.ok) {
     const errText = await resp.text().catch(() => '');
-    throw new Error(`Neo4j HTTP ${resp.status}: ${errText.slice(0, 200)}`);
+    throw new Error(`Neo4j Query API ${resp.status}: ${errText.slice(0, 200)}`);
   }
 
   const result = await resp.json();
 
-  // Check for Cypher errors
+  // Check for errors in the Query API response
   if (result.errors && result.errors.length > 0) {
     const firstErr = result.errors[0];
-    throw new Error(`Cypher error: ${firstErr.code} — ${firstErr.message?.slice(0, 200)}`);
+    throw new Error(`Cypher error: ${firstErr.code || ''} — ${(firstErr.message || '').slice(0, 200)}`);
   }
 
   return result;
+}
+
+// Execute multiple Cypher statements sequentially (Query API v2 = one per request)
+async function runCypher(queryUrl, authToken, statements) {
+  const results = [];
+  for (const s of statements) {
+    const result = await runCypherSingle(queryUrl, authToken, s.query, s.params || {});
+    results.push(result);
+  }
+  return results;
 }
 
 // ---------- Redis Helpers ----------
@@ -380,11 +393,11 @@ async function main() {
   const redis = getRedisCredentials();
 
   console.log('=== Entity Graph Seed ===');
-  console.log(`  Neo4j: ${neo4j.httpUrl}`);
+  console.log(`  Neo4j: ${neo4j.queryUrl}`);
 
   // Test Neo4j connectivity
   try {
-    await runCypher(neo4j.httpUrl, neo4j.authToken, [{ query: 'RETURN 1 AS ok' }]);
+    await runCypher(neo4j.queryUrl, neo4j.authToken, [{ query: 'RETURN 1 AS ok' }]);
     console.log('  Neo4j: Connected ✅');
   } catch (err) {
     console.error(`  Neo4j connection failed: ${err.message}`);
@@ -394,7 +407,7 @@ async function main() {
   // Create indexes for performance (idempotent)
   console.log('  Creating indexes...');
   try {
-    await runCypher(neo4j.httpUrl, neo4j.authToken, [
+    await runCypher(neo4j.queryUrl, neo4j.authToken, [
       { query: 'CREATE INDEX person_name IF NOT EXISTS FOR (p:Person) ON (p.name)' },
       { query: 'CREATE INDEX country_code IF NOT EXISTS FOR (c:Country) ON (c.code)' },
       { query: 'CREATE INDEX event_id IF NOT EXISTS FOR (e:Event) ON (e.eventId)' },
@@ -437,42 +450,50 @@ async function main() {
     process.exit(0);
   }
 
-  // Execute in batches (Neo4j HTTP API handles multiple statements per request)
+  // Execute statements sequentially via Query API v2 (one statement per request)
+  // Process in logical batches for logging, but each statement runs individually
   const BATCH_SIZE = 20;
   let executed = 0;
   let errors = 0;
 
   for (let i = 0; i < allStatements.length; i += BATCH_SIZE) {
     const batch = allStatements.slice(i, i + BATCH_SIZE);
-    try {
-      await runCypher(neo4j.httpUrl, neo4j.authToken, batch);
-      executed += batch.length;
-      console.log(`  Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} statements OK (${executed}/${allStatements.length})`);
-    } catch (err) {
-      errors++;
-      console.warn(`  Batch ${Math.floor(i / BATCH_SIZE) + 1} failed: ${err.message}`);
+    let batchOk = 0;
+    for (const stmt of batch) {
+      try {
+        await runCypherSingle(neo4j.queryUrl, neo4j.authToken, stmt.query, stmt.params || {});
+        batchOk++;
+      } catch (err) {
+        errors++;
+        // Log first error per batch, skip rest silently
+        if (batchOk === 0) console.warn(`  Statement error: ${err.message.slice(0, 120)}`);
+      }
     }
+    executed += batchOk;
+    console.log(`  Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchOk}/${batch.length} OK (${executed}/${allStatements.length})`);
 
-    if (i + BATCH_SIZE < allStatements.length) await sleep(500);
+    if (i + BATCH_SIZE < allStatements.length) await sleep(300);
   }
 
-  console.log(`  Executed: ${executed}/${allStatements.length} (${errors} batch errors)`);
+  console.log(`  Executed: ${executed}/${allStatements.length} (${errors} errors)`);
 
   // Get node/relationship counts
   try {
-    const counts = await runCypher(neo4j.httpUrl, neo4j.authToken, [
-      { query: 'MATCH (n) RETURN labels(n)[0] AS label, count(n) AS count' },
-      { query: 'MATCH ()-[r]->() RETURN type(r) AS type, count(r) AS count' },
-    ]);
-    const nodeRows = counts.results?.[0]?.data || [];
-    const relRows = counts.results?.[1]?.data || [];
+    const nodeResult = await runCypherSingle(neo4j.queryUrl, neo4j.authToken,
+      'MATCH (n) RETURN labels(n)[0] AS label, count(n) AS count');
+    const relResult = await runCypherSingle(neo4j.queryUrl, neo4j.authToken,
+      'MATCH ()-[r]->() RETURN type(r) AS type, count(r) AS count');
+
+    // Query API v2 returns { data: { fields: [...], values: [[...], ...] } }
+    const nodeValues = nodeResult.data?.values || [];
+    const relValues = relResult.data?.values || [];
     console.log('  Node counts:');
-    for (const row of nodeRows) {
-      console.log(`    ${row.row[0]}: ${row.row[1]}`);
+    for (const row of nodeValues) {
+      console.log(`    ${row[0]}: ${row[1]}`);
     }
     console.log('  Relationship counts:');
-    for (const row of relRows) {
-      console.log(`    ${row.row[0]}: ${row.row[1]}`);
+    for (const row of relValues) {
+      console.log(`    ${row[0]}: ${row[1]}`);
     }
   } catch { /* silent */ }
 

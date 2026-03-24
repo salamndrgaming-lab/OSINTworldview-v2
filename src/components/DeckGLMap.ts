@@ -1623,17 +1623,36 @@ export class DeckGLMap {
     }
 
     // Webcam layer (server-side clustered markers)
-    if (mapLayers.webcams && this.webcamData.length > 0) {
-      layers.push(new ScatterplotLayer<WebcamEntry | WebcamCluster>({
-        id: 'webcam-layer',
-        data: this.webcamData,
-        getPosition: (d) => [d.lng, d.lat],
-        getRadius: (d) => ('count' in d ? Math.min(8 + d.count * 0.5, 24) : 6),
-        getFillColor: (d) => ('count' in d ? [0, 212, 255, 180] : [255, 215, 0, 200]) as [number, number, number, number],
-        radiusUnits: 'pixels',
-        pickable: true,
-      }));
+    new IconLayer<WindyWebcam>({
+  id: 'windy-webcams-layer',
+  data: webcamData, // Ensure this array is passed from your state/props
+  pickable: true,
+  // Defensive parsing: Checks nested location first, then root, forces float
+  getPosition: (d: WindyWebcam): [number, number] => {
+    const lng = d.location?.longitude ?? d.longitude ?? 0;
+    const lat = d.location?.latitude ?? d.latitude ?? 0;
+    return [
+      typeof lng === 'string' ? parseFloat(lng) : lng,
+      typeof lat === 'string' ? parseFloat(lat) : lat
+    ];
+  },
+  getIcon: (d: WindyWebcam) => ({
+    url: d.images?.current?.thumbnail || 'https://img.icons8.com/color/48/camera.png',
+    width: 128,
+    height: 128,
+    anchorY: 128, // Anchors the bottom of the image to the coordinate
+    mask: false   // Set to false because these are full-color thumbnails, not SVGs
+  }),
+  getSize: 40,
+  sizeScale: 1,
+  sizeUnits: 'pixels',
+  // Opens the actual webcam stream in a new tab when clicked
+  onClick: (info) => {
+    if (info.object?.url?.current?.desktop) {
+      window.open(info.object.url.current.desktop, '_blank');
     }
+  }
+}),
     // POI markers layer
     if (mapLayers.poi && this.poiPins.length > 0) {
       layers.push(this.createPOILayer());

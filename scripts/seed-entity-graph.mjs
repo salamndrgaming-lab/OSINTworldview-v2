@@ -52,6 +52,10 @@ function getNeo4jCredentials() {
   
   // CRITICAL FIX: Route to default /db/query/v2 instead of /db/neo4j/query/v2
   const queryUrl = `https://${host}/db/query/v2`;
+  const authToken = Buffer.from(`${username}:${password}`).toString('base64');
+  
+  return { queryUrl, authToken };
+}
 
 // Execute a single Cypher statement via the AuraDB Query API v2
 // Docs: https://neo4j.com/docs/query-api/current/
@@ -392,8 +396,9 @@ function buildUnrestStatements(unrestData) {
 // ---------- Main ----------
 
 async function main() {
-  const neo4j = getNeo4jCredentials();
-  const redis = getRedisCredentials();
+  try { 
+    const neo4j = getNeo4jCredentials();
+    const redis = getRedisCredentials();
 
   console.log('=== Entity Graph Seed ===');
   console.log(`  Neo4j: ${neo4j.queryUrl}`);
@@ -500,8 +505,7 @@ async function main() {
     }
   } catch { /* silent */ }
   
-await session.close();
-    await driver.close();
+console.log(`  Executed: ${executed}/${allStatements.length} (${errors} errors)`);
     console.log('=== Graph Seeding Complete ===');
     process.exit(0);
   } catch (err) {

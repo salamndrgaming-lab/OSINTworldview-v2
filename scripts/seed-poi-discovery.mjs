@@ -103,9 +103,6 @@ function isHighValuePOI(entity) {
   return false;
 }
 
-// === IMPLEMENTATION EXAMPLE (How to use it in your data pipeline) ===
-// Replace your old `.filter(e => e.articleCount >= 15)` with this:
-const finalPOIList = findNewPersons(extractedNames);
 // ── Groq NER: extract person names from headlines ──
 
 async function extractPersonNames(headlines) {
@@ -168,15 +165,17 @@ ${headlineBlock}`;
 
 // ── Count name frequency and find new high-volume persons ──
 
-function findNewPersons(extractedNames) {
-  // Count frequency, normalizing names
+function findNewPersons(extractedNames, allHeadlines) {
   const counts = new Map();
+  
+  // Combine all headlines into one block for the "Intel" logic to search
+  const contextBlock = allHeadlines.join(" ").toLowerCase();
+
   for (const name of extractedNames) {
     const normalized = name.trim();
     const key = normalized.toLowerCase();
-    // Skip if already tracked
+    
     if (TRACKED_NAMES.has(key)) continue;
-    // Skip obviously bad extractions (single words, very short, numbers)
     if (!normalized.includes(' ') || normalized.length < 5) continue;
     if (/^\d/.test(normalized)) continue;
 
@@ -184,13 +183,26 @@ function findNewPersons(extractedNames) {
     if (existing) {
       existing.count++;
     } else {
-      counts.set(key, { name: normalized, count: 1 });
+      counts.set(key, { 
+        name: normalized, 
+        count: 1,
+        // We pass the headlines here so isHighValuePOI can read them
+        relatedHeadlines: allHeadlines 
+      });
     }
   }
 
-  // Filter by threshold and sort by frequency
   return Array.from(counts.values())
-    .filter(p => p.count >= MIN_MENTIONS_THRESHOLD)
+    .filter(p => {
+      // THE NEW LOGIC:
+      // Keep them if they hit the 15-mention limit...
+      const hitThreshold = p.count >= MIN_MENTIONS_THRESHOLD;
+      
+      // ...OR if your 'isHighValuePOI' function says they are important
+      const isOrganicIntel = isHighValuePOI(p);
+
+      return hitThreshold || isOrganicIntel;
+    })
     .sort((a, b) => b.count - a.count)
     .slice(0, MAX_DISCOVERED);
 }

@@ -110,7 +110,7 @@ function buildQuery(params) {
                  m.name AS target, labels(m)[0] AS targetType,
                  m.riskLevel AS targetRisk, m.severity AS targetSeverity
           LIMIT $limit`,
-        params: { pattern: `(?i).*${entity}.*`, limit: parseInt(String(limit)) },
+        params: { pattern: `(?i).*${entity}.*`, limit },
         description: `Entities connected to "${entity}"`,
       };
     } else {
@@ -125,7 +125,7 @@ function buildQuery(params) {
             type(r) AS relationship,
             endNode(r).name AS target, labels(endNode(r))[0] AS targetType
           LIMIT $limit`,
-        params: { pattern: `(?i).*${entity}.*`, limit: parseInt(String(limit)) },
+        params: { pattern: `(?i).*${entity}.*`, limit },
         description: `${depth}-hop traversal from "${entity}"`,
       };
     }
@@ -142,7 +142,7 @@ function buildQuery(params) {
         RETURN n.name AS name, n.riskLevel AS riskLevel, n.role AS role,
                type(r) AS relationship, m.name AS connected, labels(m)[0] AS connectedType
         LIMIT $limit`,
-      params: { risk: risk || '', limit: parseInt(String(limit)) },
+      params: { risk: risk || '', limit },
       description: `${type} entities${risk ? ` (risk: ${risk})` : ''}`,
     };
   }
@@ -157,7 +157,7 @@ function buildQuery(params) {
                type(rel) AS relationship, e.title AS event, labels(e)[0] AS eventType,
                e.severity AS severity
         LIMIT $limit`,
-      params: { region, limit: parseInt(String(limit)) },
+      params: { region, limit },
       description: `Entities in ${region}`,
     };
   }
@@ -170,7 +170,7 @@ function buildQuery(params) {
       RETURN n.name AS name, type, connections, n.riskLevel AS riskLevel
       ORDER BY connections DESC
       LIMIT $limit`,
-    params: { limit: parseInt(String(limit)) },
+    params: { limit },
     description: 'Most connected entities',
   };
 }

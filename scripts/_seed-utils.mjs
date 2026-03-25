@@ -3,6 +3,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import neo4j from 'neo4j-driver';
 
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024; // 5MB per key
@@ -10,6 +11,35 @@ const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024; // 5MB per key
 const __seed_dirname = dirname(fileURLToPath(import.meta.url));
 
 export { CHROME_UA };
+
+/**
+ * NEW: Professional Neo4j Query Runner
+ * Uses the Bolt protocol to bypass HTTP 403 Forbidden errors.
+ */
+export async function runQuery(cypher, params = {}) {
+  const uri = process.env.NEO4J_URI;
+  const user = process.env.NEO4J_USERNAME || 'neo4j';
+  const password = process.env.NEO4J_PASSWORD;
+
+  if (!uri || !password) {
+    throw new Error('Missing NEO4J credentials in environment. Check your .env.local file.');
+  }
+
+  // Use neo4j+s:// for AuraDB (encrypted)
+  const driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
+  const session = driver.session();
+
+  try {
+    const result = await session.run(cypher, params);
+    return result.records;
+  } catch (err) {
+    console.error(`Cypher Error: ${err.message}`);
+    throw err;
+  } finally {
+    await session.close();
+    await driver.close();
+  }
+}
 
 export function loadSharedConfig(filename) {
   for (const base of [join(__seed_dirname, '..', 'shared'), join(__seed_dirname, 'shared')]) {
@@ -24,6 +54,7 @@ export function loadEnvFile(metaUrl) {
   const candidates = [
     join(__dirname, '..', '.env.local'),
     join(__dirname, '..', '..', '.env.local'),
+    join(__dirname, '.env.local'),
   ];
   if (process.env.HOME) {
     candidates.push(join(process.env.HOME, 'Documents/GitHub/worldmonitor', '.env.local'));

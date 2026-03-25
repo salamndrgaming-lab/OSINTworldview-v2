@@ -22,17 +22,15 @@ function getNeo4jCredentials() {
   const password = process.env.NEO4J_PASSWORD;
   if (!uri || !password) return null;
 
-  // AuraDB Query API v2 — port 443, not 7473
-  let queryUrl;
-  if (uri.startsWith('neo4j+s://') || uri.startsWith('neo4j://')) {
-    const host = uri.replace(/^neo4j\+s?:\/\//, '').replace(/:\d+$/, '');
-    queryUrl = `https://${host}/db/neo4j/query/v2`;
-  } else if (uri.startsWith('https://')) {
-    const host = uri.replace(/^https:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '');
-    queryUrl = `https://${host}/db/neo4j/query/v2`;
-  } else {
-    queryUrl = `https://${uri}/db/neo4j/query/v2`;
-  }
+  // AuraDB Query API v2 — port 443
+  const host = uri
+    .replace(/^neo4j\+s?:\/\//, '')
+    .replace(/^bolt\+s?:\/\//, '')
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '')
+    .replace(/:\d+$/, '');
+
+  const queryUrl = `https://${host}/db/neo4j/query/v2`;
 
   const authToken = btoa(`${username}:${password}`);
   return { queryUrl, authToken };

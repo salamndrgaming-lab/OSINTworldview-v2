@@ -3,7 +3,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import neo4j from 'neo4j-driver';
+// neo4j-driver is loaded lazily inside runQuery() — not required for most seed scripts
 
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024; // 5MB per key
@@ -26,6 +26,7 @@ export async function runQuery(cypher, params = {}) {
   }
 
   // Use neo4j+s:// for AuraDB (encrypted)
+  const { default: neo4j } = await import('neo4j-driver');
   const driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
   const session = driver.session();
 

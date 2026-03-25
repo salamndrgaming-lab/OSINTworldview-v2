@@ -3,6 +3,16 @@
  * Uses deck.gl for high-performance rendering of large datasets
  * Mobile devices gracefully degrade to the D3/SVG-based Map component
  */
+interface WindyWebcam {
+  id: string;
+  status: string;
+  title?: string;
+  location?: { longitude?: string | number; latitude?: string | number };
+  longitude?: string | number;
+  latitude?: string | number;
+  images?: { current?: { thumbnail?: string } };
+  url?: { current?: { desktop?: string } };
+}
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { TripsLayer } from '@deck.gl/geo-layers';
 import type { Layer, LayersList, PickingInfo } from '@deck.gl/core';
@@ -1607,22 +1617,42 @@ export class DeckGLMap {
     if (mapLayers.renewableInstallations && this.renewableInstallations.length > 0) {
       layers.push(this.createRenewableInstallationsLayer());
     }
-
     if (mapLayers.satellites && this.imageryScenes.length > 0) {
       layers.push(this.createImageryFootprintLayer());
     }
 
-    // Webcam layer (server-side clustered markers)
-    if (mapLayers.webcams && this.webcamData.length > 0) {
-      layers.push(new ScatterplotLayer<WebcamEntry | WebcamCluster>({
-        id: 'webcam-layer',
-        data: this.webcamData,
-        getPosition: (d) => [d.lng, d.lat],
-        getRadius: (d) => ('count' in d ? Math.min(8 + d.count * 0.5, 24) : 6),
-        getFillColor: (d) => ('count' in d ? [0, 212, 255, 180] : [255, 215, 0, 200]) as [number, number, number, number],
-        radiusUnits: 'pixels',
-        pickable: true,
-      }));
+    // --- FIXED BLOCK START ---
+    if (mapLayers.webcams && this.webcamData.length > 0) { // Added this.
+      layers.push(
+        new IconLayer<WindyWebcam>({
+          id: 'windy-webcams-layer',
+          data: this.webcamData, // Added this.
+          pickable: true,
+          getPosition: (d: WindyWebcam): [number, number] => {
+            const lng = d.location?.longitude ?? d.longitude ?? 0;
+            const lat = d.location?.latitude ?? d.latitude ?? 0;
+            return [
+              typeof lng === 'string' ? parseFloat(lng) : lng,
+              typeof lat === 'string' ? parseFloat(lat) : lat
+            ];
+          },
+          getIcon: (d: WindyWebcam) => ({
+            url: d.images?.current?.thumbnail || 'https://img.icons8.com/color/48/camera.png',
+            width: 128,
+            height: 128,
+            anchorY: 128,
+            mask: false
+          }),
+          getSize: 40,
+          sizeScale: 1,
+          sizeUnits: 'pixels',
+          onClick: (info) => {
+            if (info.object?.url?.current?.desktop) {
+              window.open(info.object.url.current.desktop, '_blank');
+            }
+          }
+        })
+      );
     }
     // POI markers layer
     if (mapLayers.poi && this.poiPins.length > 0) {

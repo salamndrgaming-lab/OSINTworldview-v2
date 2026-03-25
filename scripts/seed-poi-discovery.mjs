@@ -66,6 +66,42 @@ async function fetchGdeltHeadlines(query, maxRecords = 100) {
     return [];
   }
 }
+/**
+ * Determines if a person should be tracked as a POI.
+ * @param {Object} entity - The extracted person entity
+ * @param {number} entity.articleCount - How many times they were mentioned
+ * @param {string[]} entity.relatedHeadlines - Array of article titles they appear in
+ * @returns {boolean} True if they meet threshold OR organic criteria
+ */
+function isHighValuePOI(entity) {
+  // 1. The Volume Threshold (Your original logic, lowered slightly for safety)
+  if (entity.articleCount >= 10) return true;
+
+  // 2. The Organic "Trigger" Discovery (The new intelligence layer)
+  const highValueRoles = ['commander', 'minister', 'general', 'ceo', 'envoy', 'leader'];
+  const triggerEvents = [
+    'sanctioned', 'detained', 'arrested', 'disappeared', 
+    'assassinated', 'threatened', 'resigned', 'fled'
+  ];
+
+  // Flatten all related headlines into a single lowercase text block for analysis
+  const contextBlock = (entity.relatedHeadlines || []).join(" ").toLowerCase();
+
+  // Check if context contains a high-value role
+  const hasRole = highValueRoles.some(role => contextBlock.includes(role));
+  
+  // Check if context contains a critical geopolitical trigger
+  const isCritical = triggerEvents.some(event => contextBlock.includes(event));
+
+  // If they are a high-value target involved in a critical event, 
+  // bypass the article count requirement.
+  if (hasRole && isCritical) {
+    console.log(`[ORGANIC INTEL] Fast-tracking POI: ${entity.name} (Role/Event matched)`);
+    return true;
+  }
+
+  return false;
+}
 
 // ── Groq NER: extract person names from headlines ──
 
@@ -129,15 +165,17 @@ ${headlineBlock}`;
 
 // ── Count name frequency and find new high-volume persons ──
 
-function findNewPersons(extractedNames) {
-  // Count frequency, normalizing names
+function findNewPersons(extractedNames, allHeadlines) {
   const counts = new Map();
+  
+  // Combine all headlines into one block for the "Intel" logic to search
+  const contextBlock = allHeadlines.join(" ").toLowerCase();
+
   for (const name of extractedNames) {
     const normalized = name.trim();
     const key = normalized.toLowerCase();
-    // Skip if already tracked
+    
     if (TRACKED_NAMES.has(key)) continue;
-    // Skip obviously bad extractions (single words, very short, numbers)
     if (!normalized.includes(' ') || normalized.length < 5) continue;
     if (/^\d/.test(normalized)) continue;
 
@@ -145,13 +183,26 @@ function findNewPersons(extractedNames) {
     if (existing) {
       existing.count++;
     } else {
-      counts.set(key, { name: normalized, count: 1 });
+      counts.set(key, { 
+        name: normalized, 
+        count: 1,
+        // We pass the headlines here so isHighValuePOI can read them
+        relatedHeadlines: allHeadlines 
+      });
     }
   }
 
-  // Filter by threshold and sort by frequency
   return Array.from(counts.values())
-    .filter(p => p.count >= MIN_MENTIONS_THRESHOLD)
+    .filter(p => {
+      // THE NEW LOGIC:
+      // Keep them if they hit the 15-mention limit...
+      const hitThreshold = p.count >= MIN_MENTIONS_THRESHOLD;
+      
+      // ...OR if your 'isHighValuePOI' function says they are important
+      const isOrganicIntel = isHighValuePOI(p);
+
+      return hitThreshold || isOrganicIntel;
+    })
     .sort((a, b) => b.count - a.count)
     .slice(0, MAX_DISCOVERED);
 }
@@ -282,15 +333,14 @@ async function main() {
     process.exit(0);
   }
 
-  // Step 2: Extract person names via Groq NER
+  // STEP 2: Extract names (This creates the variable)
   console.log('  Step 2: Extracting person names via Groq NER...');
-  const extractedNames = await extractPersonNames(allHeadlines);
-  console.log(`  Extracted ${extractedNames.length} name mentions`);
+  const extractedNames = await extractPersonNames(allHeadlines); 
 
-  // Step 3: Find new high-volume persons
+  // STEP 3: Find new persons (This uses the variable)
   console.log('  Step 3: Finding new high-volume persons...');
+  // Ensure this line is BELOW the one above and INSIDE main()
   const newPersons = findNewPersons(extractedNames);
-  console.log(`  Found ${newPersons.length} new persons above threshold`);
 
   if (newPersons.length === 0) {
     console.log('  No new persons discovered this run');

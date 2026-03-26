@@ -28,6 +28,7 @@ function getNeo4jCredentials() {
   const uri = process.env.NEO4J_URI;
   const username = process.env.NEO4J_USERNAME || 'neo4j';
   const password = process.env.NEO4J_PASSWORD;
+  const database = process.env.NEO4J_DATABASE || 'neo4j';
 
   if (!uri || !password) {
     console.error('Missing NEO4J_URI or NEO4J_PASSWORD');
@@ -35,8 +36,7 @@ function getNeo4jCredentials() {
   }
 
   // Convert bolt/neo4j URI to AuraDB Query API v2 endpoint
-  // neo4j+s://xxxxx.databases.neo4j.io -> https://xxxxx.databases.neo4j.io/db/neo4j/query/v2
-  // The HTTP API (port 7473) is NOT available on AuraDB — must use Query API on port 443
+  // neo4j+s://xxxxx.databases.neo4j.io -> https://xxxxx.databases.neo4j.io/db/<database>/query/v2
   const host = uri
     .replace(/^neo4j\+s?:\/\//, '')
     .replace(/^bolt\+s?:\/\//, '')
@@ -44,15 +44,13 @@ function getNeo4jCredentials() {
     .replace(/\/.*$/, '')       // strip any path
     .replace(/:\d+$/, '');      // strip any port
 
-  const queryUrl = `https://${host}/db/neo4j/query/v2`;
+  const queryUrl = `https://${host}/db/${database}/query/v2`;
 
   const authToken = Buffer.from(`${username}:${password}`).toString('base64');
   return { queryUrl, authToken };
 }
 
 // Execute a single Cypher statement via the AuraDB Query API v2
-// Docs: https://neo4j.com/docs/query-api/current/
-// Body format: { "statement": "CYPHER", "parameters": {} }
 async function runCypherSingle(queryUrl, authToken, query, params = {}) {
   const body = {
     statement: query,
@@ -77,7 +75,6 @@ async function runCypherSingle(queryUrl, authToken, query, params = {}) {
 
   const result = await resp.json();
 
-  // Check for errors in the Query API response
   if (result.errors && result.errors.length > 0) {
     const firstErr = result.errors[0];
     throw new Error(`Cypher error: ${firstErr.code || ''} — ${(firstErr.message || '').slice(0, 200)}`);
@@ -86,7 +83,7 @@ async function runCypherSingle(queryUrl, authToken, query, params = {}) {
   return result;
 }
 
-// Execute multiple Cypher statements sequentially (Query API v2 = one per request)
+// Execute multiple Cypher statements sequentially
 async function runCypher(queryUrl, authToken, statements) {
   const results = [];
   for (const s of statements) {
@@ -136,7 +133,6 @@ function getRegion(countryCode) {
   return COUNTRY_TO_REGION[countryCode] || 'Other';
 }
 
-// Rough mapping from location names to country codes
 function locationToCountry(locationName) {
   const lower = (locationName || '').toLowerCase();
   const mapping = {
@@ -181,7 +177,6 @@ function buildPOIStatements(poiData) {
     const name = (p.name || '').trim();
     if (!name) continue;
 
-    // Create/merge Person node
     stmts.push({
       query: `MERGE (p:Person {name: $name})
               SET p.role = $role, p.riskLevel = $riskLevel, p.region = $region,
@@ -197,7 +192,6 @@ function buildPOIStatements(poiData) {
       },
     });
 
-    // Link to country if location is known
     const loc = p.lastKnownLocation || p.region || '';
     const countryCode = locationToCountry(loc);
     if (countryCode) {
@@ -208,7 +202,6 @@ function buildPOIStatements(poiData) {
         params: { name, code: countryCode },
       });
 
-      // Heads of state get a LEADS relationship
       const role = (p.role || '').toLowerCase();
       if (role.includes('president') || role.includes('prime minister') || role.includes('leader') || role.includes('supreme')) {
         stmts.push({
@@ -234,7 +227,6 @@ function buildConflictForecastStatements(forecastData) {
     const region = getRegion(code);
     const riskLevel = f.predictedLogFatalities > 5 ? 'extreme' : f.predictedLogFatalities > 3 ? 'high' : f.predictedLogFatalities > 1 ? 'elevated' : 'moderate';
 
-    // Create/merge Country node with forecast data
     stmts.push({
       query: `MERGE (c:Country {code: $code})
               SET c.name = $name, c.riskLevel = $riskLevel,
@@ -248,7 +240,6 @@ function buildConflictForecastStatements(forecastData) {
       },
     });
 
-    // Link country to region
     stmts.push({
       query: `MERGE (c:Country {code: $code})
               MERGE (r:Region {name: $region})
@@ -268,7 +259,6 @@ function buildMissileEventStatements(missileData) {
     const eventId = `missile:${e.id || (e.title || '').slice(0, 30)}`;
     const countryCode = locationToCountry(e.locationName);
 
-    // Create Event node
     stmts.push({
       query: `MERGE (e:Event {eventId: $eventId})
               SET e.type = 'missile_strike', e.subtype = $subtype,
@@ -285,7 +275,6 @@ function buildMissileEventStatements(missileData) {
       },
     });
 
-    // Link event to country
     if (countryCode) {
       stmts.push({
         query: `MERGE (e:Event {eventId: $eventId})
@@ -294,7 +283,6 @@ function buildMissileEventStatements(missileData) {
         params: { eventId, code: countryCode },
       });
 
-      // Link event to region
       const region = getRegion(countryCode);
       stmts.push({
         query: `MERGE (e:Event {eventId: $eventId})
@@ -331,7 +319,6 @@ function buildDiseaseStatements(diseaseData) {
       },
     });
 
-    // Try to link to country
     const countryCode = locationToCountry(e.country);
     if (countryCode) {
       stmts.push({
@@ -448,8 +435,7 @@ async function main() {
     process.exit(0);
   }
 
-  // Execute statements sequentially via Query API v2 (one statement per request)
-  // Process in logical batches for logging, but each statement runs individually
+  // Execute statements in batches
   const BATCH_SIZE = 20;
   let executed = 0;
   let errors = 0;
@@ -463,7 +449,6 @@ async function main() {
         batchOk++;
       } catch (err) {
         errors++;
-        // Log first error per batch, skip rest silently
         if (batchOk === 0) console.warn(`  Statement error: ${err.message.slice(0, 120)}`);
       }
     }
@@ -482,17 +467,12 @@ async function main() {
     const relResult = await runCypherSingle(neo4j.queryUrl, neo4j.authToken,
       'MATCH ()-[r]->() RETURN type(r) AS type, count(r) AS count');
 
-    // Query API v2 returns { data: { fields: [...], values: [[...], ...] } }
     const nodeValues = nodeResult.data?.values || [];
     const relValues = relResult.data?.values || [];
     console.log('  Node counts:');
-    for (const row of nodeValues) {
-      console.log(`    ${row[0]}: ${row[1]}`);
-    }
+    for (const row of nodeValues) console.log(`    ${row[0]}: ${row[1]}`);
     console.log('  Relationship counts:');
-    for (const row of relValues) {
-      console.log(`    ${row[0]}: ${row[1]}`);
-    }
+    for (const row of relValues) console.log(`    ${row[0]}: ${row[1]}`);
   } catch { /* silent */ }
 
   console.log('=== Done ===');

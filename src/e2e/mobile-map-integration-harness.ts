@@ -142,6 +142,7 @@ const layers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 await initI18n();

@@ -83,6 +83,7 @@ export const LAYER_REGISTRY: Record<keyof MapLayers, LayerDefinition> = {
   conflictForecast:           def('conflictForecast',           '&#128200;', 'conflictForecast',           'Conflict Forecast', ['flat']),
   diseaseOutbreaks:           def('diseaseOutbreaks',           '&#129440;', 'diseaseOutbreaks',           'Disease Outbreaks'),
   radiation:                  def('radiation',                  '&#9762;',   'radiation',                  'Radiation Monitoring'),
+  warcam:                     def('warcam',                     '&#127909;', 'warcam',                     'Conflict Zone Media'),
 };
 
 const VARIANT_LAYER_ORDER: Record<MapVariant, Array<keyof MapLayers>> = {
@@ -95,7 +96,7 @@ const VARIANT_LAYER_ORDER: Record<MapVariant, Array<keyof MapLayers>> = {
     'outages', 'cyberThreats', 'natural', 'fires',
     'waterways', 'economic', 'minerals', 'gpsJamming',
     'satellites', 'ciiChoropleth', 'dayNight', 'webcams', 'poi', 'missileStrikes',
-    'conflictForecast', 'diseaseOutbreaks', 'radiation',
+    'conflictForecast', 'diseaseOutbreaks', 'radiation', 'warcam',
   ],
   tech: [
     'startupHubs', 'techHQs', 'accelerators', 'cloudRegions',
@@ -127,7 +128,7 @@ const VARIANT_LAYER_ORDER: Record<MapVariant, Array<keyof MapLayers>> = {
     'outages', 'cyberThreats', 'natural', 'fires',
     'waterways', 'economic', 'minerals', 'gpsJamming',
     'satellites', 'ciiChoropleth', 'dayNight', 'webcams',
-    'poi', 'conflictForecast', 'diseaseOutbreaks', 'radiation',
+    'poi', 'conflictForecast', 'diseaseOutbreaks', 'radiation', 'warcam',
   ],
 };
 

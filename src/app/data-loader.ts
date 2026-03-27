@@ -517,6 +517,7 @@ export class DataLoaderManager implements AppModule {
     if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.conflictForecast) tasks.push({ name: 'conflictForecast', task: runGuarded('conflictForecast', () => this.loadConflictForecasts()) });
     if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.diseaseOutbreaks) tasks.push({ name: 'diseaseOutbreaks', task: runGuarded('diseaseOutbreaks', () => this.loadDiseaseOutbreaks()) });
     if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.radiation) tasks.push({ name: 'radiation', task: runGuarded('radiation', () => this.loadRadiationReadings()) });
+    if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.warcam) tasks.push({ name: 'warcam', task: runGuarded('warcam', () => this.loadWarcamData()) });
 
     if (SITE_VARIANT !== 'happy') {
       tasks.push({ name: 'techReadiness', task: runGuarded('techReadiness', () => (this.ctx.panels['tech-readiness'] as TechReadinessPanel)?.refresh()) });
@@ -633,6 +634,9 @@ export class DataLoaderManager implements AppModule {
           break;
         case 'radiation':
           await this.loadRadiationReadings();
+          break;
+        case 'warcam':
+          await this.loadWarcamData();
           break;
         case 'ucdpEvents':
         case 'displacement':
@@ -2237,6 +2241,22 @@ export class DataLoaderManager implements AppModule {
     } catch (err) {
       console.warn('[Radiation] Failed to load:', err);
       this.ctx.map?.setLayerReady('radiation', false);
+    }
+  }
+
+  async loadWarcamData(): Promise<void> {
+    try {
+      const res = await fetch(toApiUrl('/api/warcam'));
+      if (!res.ok) throw new Error(`Warcam API ${res.status}`);
+      const data = await res.json();
+      const entries = data?.entries || [];
+
+      this.ctx.map?.setWarcamEntries(entries);
+      this.ctx.map?.setLayerReady('warcam', entries.length > 0);
+      console.log(`[Warcam] Loaded ${entries.length} conflict media entries`);
+    } catch (err) {
+      console.warn('[Warcam] Failed to load:', err);
+      this.ctx.map?.setLayerReady('warcam', false);
     }
   }
 

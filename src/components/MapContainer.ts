@@ -140,6 +140,7 @@ export class MapContainer {
   private cachedConflictForecasts: Array<{ countryCode: string; countryName: string; predictedLogFatalities: number; estimatedFatalities: number; probability: number | null; lat: number; lon: number }> | null = null;
   private cachedDiseaseOutbreaks: Array<{ id: string; title: string; diseaseType: string; severity: string; country: string; latitude: number; longitude: number; timestamp: number; sourceUrl: string; dataSource: string }> | null = null;
   private cachedRadiationReadings: Array<{ id: string | number; latitude: number; longitude: number; cpm: number; usvh: number; isAnomaly: boolean; capturedAt: string | null }> | null = null;
+  private cachedWarcamEntries: Array<{ id: string; title: string; url: string; image: string; source: string; lat: number; lng: number; timestamp: number; category: string; severity: string }> | null = null;
 
   constructor(container: HTMLElement, initialState: MapContainerState, preferGlobe = false) {
     this.container = container;
@@ -322,6 +323,9 @@ export class MapContainer {
     if (this.cachedRadiationReadings && this.useDeckGL) {
       this.deckGLMap?.setRadiationReadings(this.cachedRadiationReadings);
     }
+    if (this.cachedWarcamEntries && this.useDeckGL) {
+      this.deckGLMap?.setWarcamEntries(this.cachedWarcamEntries);
+    }
   }
 
   public isGlobeMode(): boolean {
@@ -458,6 +462,11 @@ export class MapContainer {
   public setRadiationReadings(readings: Array<{ id: string | number; latitude: number; longitude: number; cpm: number; usvh: number; isAnomaly: boolean; capturedAt: string | null }>): void {
     this.cachedRadiationReadings = readings;
     if (this.useDeckGL) { this.deckGLMap?.setRadiationReadings(readings); }
+  }
+
+  public setWarcamEntries(entries: Array<{ id: string; title: string; url: string; image: string; source: string; lat: number; lng: number; timestamp: number; category: string; severity: string }>): void {
+    this.cachedWarcamEntries = entries;
+    if (this.useDeckGL) { this.deckGLMap?.setWarcamEntries(entries); }
   }
 
   public setWeatherAlerts(alerts: WeatherAlert[]): void {

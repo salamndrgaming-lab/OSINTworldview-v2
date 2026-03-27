@@ -131,6 +131,7 @@ const FULL_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 const FULL_MOBILE_MAP_LAYERS: MapLayers = {
@@ -196,6 +197,7 @@ const FULL_MOBILE_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 // ============================================
@@ -304,6 +306,7 @@ const TECH_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 const TECH_MOBILE_MAP_LAYERS: MapLayers = {
@@ -369,6 +372,7 @@ const TECH_MOBILE_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 // ============================================
@@ -478,6 +482,7 @@ const FINANCE_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 const FINANCE_MOBILE_MAP_LAYERS: MapLayers = {
@@ -543,6 +548,7 @@ const FINANCE_MOBILE_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 // ============================================
@@ -624,6 +630,7 @@ const HAPPY_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 const HAPPY_MOBILE_MAP_LAYERS: MapLayers = {
@@ -689,6 +696,7 @@ const HAPPY_MOBILE_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 // ============================================
@@ -784,6 +792,7 @@ const COMMODITY_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 const COMMODITY_MOBILE_MAP_LAYERS: MapLayers = {
@@ -849,6 +858,7 @@ const COMMODITY_MOBILE_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 // ============================================

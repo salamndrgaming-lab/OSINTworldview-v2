@@ -193,6 +193,7 @@ const allLayersEnabled: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 const allLayersDisabled: MapLayers = {
@@ -253,6 +254,7 @@ const allLayersDisabled: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 const SEEDED_NEWS_LOCATIONS: Array<{

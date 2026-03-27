@@ -82,6 +82,7 @@ export const DEFAULT_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 // Mobile defaults — same as desktop for happy variant
@@ -148,6 +149,7 @@ export const MOBILE_DEFAULT_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 export const VARIANT_CONFIG: VariantConfig = {

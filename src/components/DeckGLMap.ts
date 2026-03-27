@@ -371,6 +371,7 @@ export class DeckGLMap {
   private conflictForecasts: Array<{ countryCode: string; countryName: string; predictedLogFatalities: number; estimatedFatalities: number; probability: number | null; lat: number; lon: number }> = [];
   private diseaseOutbreaks: Array<{ id: string; title: string; diseaseType: string; severity: string; country: string; latitude: number; longitude: number; timestamp: number; sourceUrl: string; dataSource: string }> = [];
   private radiationReadings: Array<{ id: string | number; latitude: number; longitude: number; cpm: number; usvh: number; isAnomaly: boolean; capturedAt: string | null }> = [];
+  private warcamEntries: Array<{ id: string; title: string; url: string; image: string; source: string; lat: number; lng: number; timestamp: number; category: string; severity: string }> = [];
   private countriesGeoJsonData: FeatureCollection<Geometry> | null = null;
   private conflictZoneGeoJson: GeoJSON.FeatureCollection | null = null;
 
@@ -1622,11 +1623,11 @@ export class DeckGLMap {
     }
 
     // --- FIXED BLOCK START ---
-    if (mapLayers.webcams && this.webcamData.length > 0) { // Added this.
+    if (mapLayers.webcams && this.webcamData.length > 0) {
       layers.push(
-        new IconLayer<WindyWebcam>({
+        new ScatterplotLayer<WindyWebcam>({
           id: 'windy-webcams-layer',
-          data: this.webcamData, // Added this.
+          data: this.webcamData as unknown as WindyWebcam[],
           pickable: true,
           getPosition: (d: WindyWebcam): [number, number] => {
             const lng = d.location?.longitude ?? d.longitude ?? 0;
@@ -1636,16 +1637,13 @@ export class DeckGLMap {
               typeof lat === 'string' ? parseFloat(lat) : lat
             ];
           },
-          getIcon: (d: WindyWebcam) => ({
-            url: d.images?.current?.thumbnail || 'https://img.icons8.com/color/48/camera.png',
-            width: 128,
-            height: 128,
-            anchorY: 128,
-            mask: false
-          }),
-          getSize: 40,
-          sizeScale: 1,
-          sizeUnits: 'pixels',
+          getFillColor: [0, 180, 255, 200],
+          getLineColor: [255, 255, 255, 220],
+          getRadius: 4,
+          radiusMinPixels: 4,
+          radiusMaxPixels: 10,
+          lineWidthMinPixels: 1.5,
+          stroked: true,
           onClick: (info) => {
             if (info.object?.url?.current?.desktop) {
               window.open(info.object.url.current.desktop, '_blank');
@@ -1679,6 +1677,11 @@ export class DeckGLMap {
     // Radiation monitoring layer
     if (mapLayers.radiation && this.radiationReadings.length > 0) {
       layers.push(this.createRadiationLayer());
+    }
+
+    // Warcam — conflict zone media markers
+    if (mapLayers.warcam && this.warcamEntries.length > 0) {
+      layers.push(this.createWarcamLayer());
     }
 
     // News geo-locations (always shown if data exists)
@@ -3487,6 +3490,30 @@ export class DeckGLMap {
     });
   }
 
+  private createWarcamLayer(): ScatterplotLayer {
+    return new ScatterplotLayer({
+      id: 'warcam-layer',
+      data: this.warcamEntries,
+      getPosition: (d: (typeof this.warcamEntries)[0]) => [d.lng, d.lat],
+      getRadius: (d: (typeof this.warcamEntries)[0]) => {
+        if (d.severity === 'critical') return 30000;
+        if (d.severity === 'high') return 22000;
+        return 14000;
+      },
+      getFillColor: (d: (typeof this.warcamEntries)[0]) => {
+        if (d.severity === 'critical') return [220, 38, 38, 220] as [number, number, number, number];
+        if (d.severity === 'high') return [249, 115, 22, 200] as [number, number, number, number];
+        return [234, 179, 8, 160] as [number, number, number, number];
+      },
+      getLineColor: [255, 50, 50, 255] as [number, number, number, number],
+      stroked: true,
+      lineWidthMinPixels: 2,
+      radiusMinPixels: 5,
+      radiusMaxPixels: 18,
+      pickable: true,
+    });
+  }
+
   private createImageryFootprintLayer(): PolygonLayer {
     return new PolygonLayer({
       id: 'satellite-imagery-layer',
@@ -3791,6 +3818,13 @@ export class DeckGLMap {
         const anomalyBadge = obj.isAnomaly ? '<br/><span style="color:#ff00ff;font-weight:700;font-size:10px">⚠️ ANOMALOUS READING</span>' : '';
         const levelColor = obj.isAnomaly ? '#ff00ff' : cpm > 60 ? '#ff6400' : cpm > 30 ? '#ffdc00' : '#00c864';
         return { html: `<div class="deckgl-tooltip"><strong>☢️ Radiation</strong><br/><span style="color:${levelColor};font-weight:700">${cpm} CPM</span> (${usvh} µSv/h)${anomalyBadge}<br/><span style="opacity:.5">Safecast citizen sensor</span></div>` };
+      }
+      case 'warcam-layer': {
+        const sevColors: Record<string, string> = { critical: '#dc2626', high: '#f97316', medium: '#eab308', low: '#6b7280' };
+        const sevColor = sevColors[obj.severity] || '#888';
+        const timeStr = obj.timestamp ? new Date(obj.timestamp).toLocaleString() : '';
+        const srcStr = obj.source ? `<br/><span style="opacity:.5">${text(obj.source)}</span>` : '';
+        return { html: `<div class="deckgl-tooltip"><strong>🎥 ${text(obj.title || 'Conflict Media')}</strong><br/><span style="color:${sevColor};font-weight:700;font-size:10px;text-transform:uppercase">${text(obj.severity || '?')} — ${text(obj.category || '')}</span><br/><span style="opacity:.6">${timeStr}</span>${srcStr}</div>` };
       }
       case 'webcam-layer': {
         const label = 'count' in obj
@@ -5164,6 +5198,11 @@ export class DeckGLMap {
 
   public setRadiationReadings(readings: Array<{ id: string | number; latitude: number; longitude: number; cpm: number; usvh: number; isAnomaly: boolean; capturedAt: string | null }>): void {
     this.radiationReadings = readings;
+    this.render();
+  }
+
+  public setWarcamEntries(entries: Array<{ id: string; title: string; url: string; image: string; source: string; lat: number; lng: number; timestamp: number; category: string; severity: string }>): void {
+    this.warcamEntries = entries;
     this.render();
   }
 

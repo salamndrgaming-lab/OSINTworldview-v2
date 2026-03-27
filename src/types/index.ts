@@ -641,6 +641,8 @@ export interface MapLayers {
   diseaseOutbreaks: boolean;
   // Safecast radiation monitoring
   radiation: boolean;
+  // Conflict zone media with geolocation
+  warcam: boolean;
 }
 
 export interface AIDataCenter {

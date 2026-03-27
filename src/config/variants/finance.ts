@@ -234,6 +234,7 @@ export const DEFAULT_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 // Mobile defaults for finance variant
@@ -299,6 +300,7 @@ export const MOBILE_DEFAULT_MAP_LAYERS: MapLayers = {
   conflictForecast: false,
   diseaseOutbreaks: false,
   radiation: false,
+  warcam: false,
 };
 
 export const VARIANT_CONFIG: VariantConfig = {

@@ -22,7 +22,7 @@ loadEnvFile(import.meta.url);
 const CANONICAL_KEY = 'intelligence:poi:v1';
 const GDELT_DOC_API = 'https://api.gdeltproject.org/api/v2/doc/doc';
 const GROQ_MODEL = 'llama-3.1-8b-instant';
-const MIN_MENTIONS_THRESHOLD = 5;   // Lowered from 15 — sentiment weighting compensates
+const MIN_MENTIONS_THRESHOLD = 15;
 const MAX_DISCOVERED = 10; // Cap auto-discovered persons per run
 
 // These names are already tracked by seed-persons-of-interest.mjs — skip them
@@ -52,7 +52,7 @@ async function fetchGdeltHeadlines(query, maxRecords = 100) {
   url.searchParams.set('maxrecords', String(maxRecords));
   url.searchParams.set('format', 'json');
   url.searchParams.set('sort', 'hybridrel');
-  url.searchParams.set('timespan', '72h');  // Wider window for more data
+  url.searchParams.set('timespan', '24h');
 
   try {
     const resp = await fetch(url.toString(), {
@@ -65,50 +65,6 @@ async function fetchGdeltHeadlines(query, maxRecords = 100) {
   } catch {
     return [];
   }
-}
-
-// Fallback: pull headlines from already-seeded Redis data (GDELT intel, missiles, unrest)
-// This ensures POI discovery works even when GDELT API is rate-limited
-async function fetchRedisHeadlines() {
-  const { url, token } = getRedisCredentials();
-  const headlines = [];
-
-  const keysToRead = [
-    'intelligence:gdelt-intel:v1',
-    'intelligence:missile-events:v1',
-    'unrest:events:v1',
-    'health:outbreaks:v1',
-  ];
-
-  for (const key of keysToRead) {
-    try {
-      const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      if (!data.result) continue;
-      const parsed = JSON.parse(data.result);
-
-      // Extract titles from various data structures
-      if (parsed.topics) {
-        for (const topic of parsed.topics) {
-          for (const article of (topic.articles || [])) {
-            if (article.title) headlines.push(article.title);
-          }
-        }
-      }
-      if (parsed.events) {
-        for (const event of parsed.events) {
-          if (event.title) headlines.push(event.title);
-          if (event.description) headlines.push(event.description);
-        }
-      }
-    } catch { /* skip */ }
-  }
-
-  return headlines;
 }
 
 // ── Groq NER: extract person names from headlines ──
@@ -181,32 +137,14 @@ ${headlineBlock}`;
  * @returns {boolean} True if they meet threshold OR organic criteria
  */
 function isHighValuePOI(entity, allHeadlines = []) {
-  // 1. The Volume Threshold (lowered to 5 base, sentiment can boost)
-  let effectiveCount = entity.count;
-
-  // Sentiment weighting: negative/crisis headlines count double
-  const nameLower = entity.name.toLowerCase();
-  const relatedHeadlines = allHeadlines.filter(h => h.toLowerCase().includes(nameLower));
-  const crisisTerms = ['kill', 'dead', 'attack', 'bomb', 'crisis', 'war', 'strike', 'threat',
-    'sanction', 'nuclear', 'missile', 'arrest', 'coup', 'resign', 'flee', 'invasion',
-    'collapse', 'emergency', 'urgent', 'breaking'];
-  const crisisCount = relatedHeadlines.filter(h => {
-    const lower = h.toLowerCase();
-    return crisisTerms.some(t => lower.includes(t));
-  }).length;
-
-  // Each crisis headline adds 1.5x weight (so 3 crisis headlines = +4.5 effective mentions)
-  effectiveCount += Math.round(crisisCount * 1.5);
-
-  if (effectiveCount >= MIN_MENTIONS_THRESHOLD) return true;
+  // 1. The Volume Threshold
+  if (entity.count >= MIN_MENTIONS_THRESHOLD) return true;
 
   // 2. Organic "Trigger" Discovery
-  const highValueRoles = ['commander', 'minister', 'general', 'ceo', 'envoy', 'leader',
-    'president', 'prime minister', 'chief', 'director', 'secretary'];
+  const highValueRoles = ['commander', 'minister', 'general', 'ceo', 'envoy', 'leader'];
   const triggerEvents = [
     'sanctioned', 'detained', 'arrested', 'disappeared',
     'assassinated', 'threatened', 'resigned', 'fled',
-    'indicted', 'charged', 'expelled', 'deported',
   ];
 
   // Search headlines that contain this person's name
@@ -373,19 +311,9 @@ async function main() {
     console.log(`    "${query.slice(0, 40)}..." → ${headlines.length} headlines`);
     await sleep(1500); // GDELT rate limit
   }
-  console.log(`  GDELT headlines: ${allHeadlines.length}`);
-
-  // Step 1b: Fallback — if GDELT is rate-limited, pull from already-seeded Redis data
-  if (allHeadlines.length < 20) {
-    console.log('  Step 1b: GDELT returned too few results — pulling from Redis fallback...');
-    const redisHeadlines = await fetchRedisHeadlines();
-    allHeadlines.push(...redisHeadlines);
-    console.log(`  Redis fallback headlines: ${redisHeadlines.length}`);
-  }
-
   console.log(`  Total headlines: ${allHeadlines.length}`);
 
-  if (allHeadlines.length < 10) {
+  if (allHeadlines.length < 20) {
     console.log('  SKIP: Too few headlines for meaningful discovery');
     process.exit(0);
   }

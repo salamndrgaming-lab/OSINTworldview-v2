@@ -1622,13 +1622,11 @@ export class DeckGLMap {
     }
 
     // --- FIXED BLOCK START ---
-    if (mapLayers.webcams && this.webcamData.length > 0) {
-      // Use ScatterplotLayer for reliable webcam markers — IconLayer with dynamic URLs
-      // fails due to CORS issues and thumbnail loading failures on Windy CDN
+    if (mapLayers.webcams && this.webcamData.length > 0) { // Added this.
       layers.push(
-        new ScatterplotLayer<WindyWebcam>({
+        new IconLayer<WindyWebcam>({
           id: 'windy-webcams-layer',
-          data: this.webcamData as unknown as WindyWebcam[],
+          data: this.webcamData, // Added this.
           pickable: true,
           getPosition: (d: WindyWebcam): [number, number] => {
             const lng = d.location?.longitude ?? d.longitude ?? 0;
@@ -1638,13 +1636,16 @@ export class DeckGLMap {
               typeof lat === 'string' ? parseFloat(lat) : lat
             ];
           },
-          getFillColor: [0, 180, 255, 200],    // Bright cyan for webcams
-          getLineColor: [255, 255, 255, 220],
-          getRadius: 4,
-          radiusMinPixels: 4,
-          radiusMaxPixels: 10,
-          lineWidthMinPixels: 1.5,
-          stroked: true,
+          getIcon: (d: WindyWebcam) => ({
+            url: d.images?.current?.thumbnail || 'https://img.icons8.com/color/48/camera.png',
+            width: 128,
+            height: 128,
+            anchorY: 128,
+            mask: false
+          }),
+          getSize: 40,
+          sizeScale: 1,
+          sizeUnits: 'pixels',
           onClick: (info) => {
             if (info.object?.url?.current?.desktop) {
               window.open(info.object.url.current.desktop, '_blank');

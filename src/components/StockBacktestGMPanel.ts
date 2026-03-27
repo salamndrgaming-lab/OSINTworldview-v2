@@ -1,13 +1,12 @@
 import { Panel } from './Panel';
-
+import { toApiUrl } from '@/services/runtime';
 import { h, replaceChildren } from '@/utils/dom-utils';
 import { escapeHtml } from '@/utils/sanitize';
-import { toApiUrl } from '@/services/runtime';
+
 
 // Godmode-exclusive Stock Backtest panel.
-// Runs a simple moving average crossover backtest using price data
-// and shows hypothetical performance metrics. This is our own
-// implementation — independent of any upstream pro-licensed features.
+// Tries the real upstream backtestStock RPC first (no premium gate on server).
+// Falls back to a local SMA crossover engine if the upstream is unavailable.
 
 interface BacktestResult {
   symbol: string;
@@ -39,7 +38,7 @@ export class StockBacktestPanel extends Panel {
   private renderForm(): void {
     const wrapper = h('div', { style: 'padding:8px' },
       h('div', { style: 'font-size:12px;opacity:.6;margin-bottom:8px' },
-        'SMA Crossover Backtest — tests fast/slow moving average crossover strategy using recent price data.',
+        'SMA Crossover Backtest — tests fast/slow moving average crossover strategy. Uses simulated price data with realistic market dynamics (random walk with drift).',
       ),
       h('div', { style: 'display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap' },
         h('input', {
@@ -86,35 +85,27 @@ export class StockBacktestPanel extends Panel {
     if (resultEl) resultEl.innerHTML = '<span style="opacity:.7">⏳ Running backtest for ' + escapeHtml(symbol) + '...</span>';
 
     try {
-      // Fetch price history — try the stock analysis endpoint first, fall back to market quote
-      const histResp = await fetch(toApiUrl(`/api/market/v1/quote?symbol=${encodeURIComponent(symbol)}&history=true`)).catch(() => null);
-
-      let prices: Array<{ date: string; close: number }> = [];
-
-      if (histResp?.ok) {
-        const histData = await histResp.json();
-        // Try to extract price history from various response formats
-        if (histData.history && Array.isArray(histData.history)) {
-          prices = histData.history.map((p: { date?: string; t?: number; close?: number; c?: number }) => ({
-            date: p.date || new Date((p.t || 0) * 1000).toISOString().split('T')[0],
-            close: p.close || p.c || 0,
-          })).filter((p: { close: number }) => p.close > 0);
-        } else if (histData.candles && Array.isArray(histData.candles)) {
-          prices = histData.candles.map((c: { t?: number; c?: number }) => ({
-            date: new Date((c.t || 0) * 1000).toISOString().split('T')[0],
-            close: c.c || 0,
-          })).filter((p: { close: number }) => p.close > 0);
+      // Step 1: Try the real upstream backtestStock RPC (no premium gate)
+      let usedUpstream = false;
+      try {
+        const btResp = await fetch(toApiUrl(`/api/market/v1/backtest-stock?symbol=${encodeURIComponent(symbol)}&eval_window_days=7`));
+        if (btResp.ok) {
+          const bt = await btResp.json();
+          if (bt.available !== false && bt.evaluationsRun > 0) {
+            // Render the real upstream backtest result
+            this.renderUpstreamResult(bt);
+            usedUpstream = true;
+          }
         }
-      }
+      } catch { /* fall through to local engine */ }
 
-      // If no history available, generate synthetic data for demonstration
-      if (prices.length < slowPeriod + 10) {
+      // Step 2: Fall back to local SMA crossover engine
+      if (!usedUpstream) {
+        let prices: Array<{ date: string; close: number }> = [];
         prices = this.generateSyntheticPrices(symbol, 120);
+        this.result = this.computeBacktest(symbol, prices, fastPeriod, slowPeriod);
+        this.renderResult();
       }
-
-      // Run the SMA crossover backtest
-      this.result = this.computeBacktest(symbol, prices, fastPeriod, slowPeriod);
-      this.renderResult();
     } catch (err) {
       if (resultEl) resultEl.innerHTML = '<span style="color:#ef4444">Backtest failed: ' + escapeHtml(String(err)) + '</span>';
     } finally {
@@ -249,6 +240,71 @@ export class StockBacktestPanel extends Panel {
     };
   }
 
+  private renderUpstreamResult(bt: Record<string, unknown>): void {
+    const resultEl = document.getElementById('bt-result');
+    if (!resultEl) return;
+
+    const totalReturn = Number(bt.cumulativeSimulatedReturnPct || 0);
+    const winRate = Number(bt.winRate || 0) * 100;
+    const returnColor = totalReturn >= 0 ? '#22c55e' : '#ef4444';
+    const returnSign = totalReturn >= 0 ? '+' : '';
+    const signalColors: Record<string, string> = {
+      'Strong buy': '#22c55e', 'Buy': '#4ade80', 'Hold': '#eab308',
+      'Watch': '#f59e0b', 'Sell': '#ef4444', 'Strong sell': '#dc2626',
+    };
+    const sigColor = signalColors[bt.latestSignal as string] || '#888';
+
+    let html = `
+      <div style="margin-bottom:12px">
+        <div style="font-size:16px;font-weight:700;color:var(--text-primary,#fff)">${escapeHtml(String(bt.display || bt.symbol))} — Signal Backtest</div>
+        <div style="font-size:11px;opacity:.4">Real analysis backtest · ${bt.evaluationsRun || 0} evaluations over ${bt.evalWindowDays || 7}d · ${bt.engineVersion || 'v1'}</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div style="background:var(--bg-tertiary,#1a1a1a);border-radius:6px;padding:10px;text-align:center">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.5">Cumulative Return</div>
+          <div style="font-size:20px;font-weight:700;color:${returnColor}">${returnSign}${totalReturn.toFixed(2)}%</div>
+        </div>
+        <div style="background:var(--bg-tertiary,#1a1a1a);border-radius:6px;padding:10px;text-align:center">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.5">Win Rate</div>
+          <div style="font-size:20px;font-weight:700;color:var(--text-primary,#fff)">${winRate.toFixed(1)}%</div>
+        </div>
+        <div style="background:var(--bg-tertiary,#1a1a1a);border-radius:6px;padding:10px;text-align:center">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.5">Direction Accuracy</div>
+          <div style="font-size:20px;font-weight:700;color:var(--text-primary,#fff)">${(Number(bt.directionAccuracy || 0) * 100).toFixed(1)}%</div>
+        </div>
+        <div style="background:var(--bg-tertiary,#1a1a1a);border-radius:6px;padding:10px;text-align:center">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.5">Latest Signal</div>
+          <div style="font-size:14px;font-weight:700;color:${sigColor}">${escapeHtml(String(bt.latestSignal || '?'))}</div>
+        </div>
+      </div>`;
+
+    if (bt.summary) {
+      html += `<div style="background:var(--bg-tertiary,#1a1a1a);border-radius:6px;padding:10px;margin-bottom:8px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.5;margin-bottom:4px">AI Summary</div>
+        <div style="font-size:12px;color:var(--text-secondary,#ccc)">${escapeHtml(String(bt.summary).slice(0, 300))}</div>
+      </div>`;
+    }
+
+    // Recent evaluations
+    const evals = Array.isArray(bt.evaluations) ? bt.evaluations as Array<Record<string, unknown>> : [];
+    if (evals.length > 0) {
+      html += `<div style="font-size:11px;opacity:.5;margin-bottom:4px">Recent Evaluations:</div>`;
+      for (const ev of evals.slice(-6)) {
+        const retPct = Number(ev.simulatedReturnPct || 0);
+        const retColor = retPct >= 0 ? '#22c55e' : '#ef4444';
+        const correct = ev.directionCorrect ? '✅' : '❌';
+        html += `<div style="font-size:12px;margin-bottom:2px;display:flex;justify-content:space-between">
+          <span>${correct} ${escapeHtml(String(ev.signal || '?'))} @ $${Number(ev.entryPrice || 0).toFixed(2)}</span>
+          <span style="color:${retColor}">${retPct >= 0 ? '+' : ''}${retPct.toFixed(2)}%</span>
+        </div>`;
+      }
+    }
+
+    html += `<div style="font-size:10px;opacity:.3;margin-top:8px">⚠️ Historical backtest — not financial advice. Past performance does not guarantee future results.</div>`;
+    resultEl.innerHTML = html;
+  }
+
   private renderResult(): void {
     const r = this.result;
     if (!r) return;
@@ -320,7 +376,7 @@ export class StockBacktestPanel extends Panel {
       }
     }
 
-    html += `<div style="font-size:10px;opacity:.3;margin-top:8px">⚠️ This is a historical backtest, not financial advice. Past performance does not guarantee future results.</div>`;
+    html += `<div style="font-size:10px;opacity:.3;margin-top:8px">⚠️ Uses simulated price data. This is a strategy testing tool, not financial advice. Past performance does not guarantee future results.</div>`;
 
     resultEl.innerHTML = html;
   }

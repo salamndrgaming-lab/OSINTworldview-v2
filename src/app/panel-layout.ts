@@ -212,6 +212,7 @@ export class PanelLayoutManager implements AppModule {
           <button class="search-btn" id="searchBtn"><kbd>⌘K</kbd> ${t('header.search')}</button>
           <a href="/api/search" target="_blank" rel="noopener" class="search-btn" id="intelSearchBtn" style="text-decoration:none;font-size:12px" title="Semantic Intelligence Search">🔍 Intel Search</a>
           <a href="/api/sitrep" target="_blank" rel="noopener" class="search-btn" id="sitrepBtn" style="text-decoration:none;font-size:12px" title="Intelligence SITREP">📋 SITREP</a>
+          <a href="/api/graph-query" target="_blank" rel="noopener" class="search-btn" id="graphBtn" style="text-decoration:none;font-size:12px" title="Entity Knowledge Graph">🕸️ Graph</a>
           <button class="search-btn" id="godmodeToggle" style="font-size:12px;cursor:pointer;${SITE_VARIANT === 'godmode' ? 'background:#dc2626;color:#fff;border-color:#dc2626;' : ''}" title="Toggle God Mode — maximum intelligence coverage">⚡ ${SITE_VARIANT === 'godmode' ? 'GOD MODE ON' : 'God Mode'}</button>
           <span id="threatBadge" style="display:${SITE_VARIANT === 'godmode' ? 'inline-flex' : 'none'};align-items:center;gap:4px;font-size:11px;font-weight:700;letter-spacing:.5px;padding:3px 8px;border-radius:4px;text-transform:uppercase;background:#333;color:#888;margin-left:4px"></span>
           ${this.ctx.isDesktopApp ? '' : `<button class="copy-link-btn" id="copyLinkBtn">${t('header.copyLink')}</button>`}

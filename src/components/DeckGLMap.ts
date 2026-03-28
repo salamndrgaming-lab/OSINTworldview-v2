@@ -1630,11 +1630,11 @@ export class DeckGLMap {
           data: this.webcamData as unknown as WindyWebcam[],
           pickable: true,
           getPosition: (d: WindyWebcam): [number, number] => {
-            const lng = d.location?.longitude ?? d.longitude ?? 0;
-            const lat = d.location?.latitude ?? d.latitude ?? 0;
+            const lng = d.location?.longitude ?? d.longitude ?? (d as unknown as Record<string, unknown>).lng ?? 0;
+            const lat = d.location?.latitude ?? d.latitude ?? (d as unknown as Record<string, unknown>).lat ?? 0;
             return [
-              typeof lng === 'string' ? parseFloat(lng) : lng,
-              typeof lat === 'string' ? parseFloat(lat) : lat
+              typeof lng === 'string' ? parseFloat(lng) : Number(lng),
+              typeof lat === 'string' ? parseFloat(lat) : Number(lat)
             ];
           },
           getFillColor: [0, 220, 255, 240],
@@ -1645,9 +1645,24 @@ export class DeckGLMap {
           lineWidthMinPixels: 3,
           stroked: true,
           onClick: (info) => {
-            if (info.object?.url?.current?.desktop) {
-              window.open(info.object.url.current.desktop, '_blank');
+            const obj = info.object as Record<string, unknown> | undefined;
+            if (!obj) return;
+            // Try Windy desktop URL first
+            const windyUrl = (obj.url as Record<string, Record<string, string>>)?.current?.desktop;
+            if (windyUrl) {
+              window.open(windyUrl, '_blank');
+              return;
             }
+            // Try webcamId for Windy lookup
+            const wcId = obj.webcamId as string;
+            if (wcId) {
+              window.open(`https://www.windy.com/webcams/${wcId}`, '_blank');
+              return;
+            }
+            // Fallback: open Windy webcam map at this location
+            const lat = obj.lat ?? (obj.location as Record<string, number>)?.latitude ?? 0;
+            const lng = obj.lng ?? (obj.location as Record<string, number>)?.longitude ?? 0;
+            window.open(`https://www.windy.com/webcams/map?lat=${lat}&lng=${lng}&zoom=12`, '_blank');
           }
         })
       );
@@ -3826,11 +3841,15 @@ export class DeckGLMap {
         const srcStr = obj.source ? `<br/><span style="opacity:.5">${text(obj.source)}</span>` : '';
         return { html: `<div class="deckgl-tooltip"><strong>🎥 ${text(obj.title || 'Conflict Media')}</strong><br/><span style="color:${sevColor};font-weight:700;font-size:10px;text-transform:uppercase">${text(obj.severity || '?')} — ${text(obj.category || '')}</span><br/><span style="opacity:.6">${timeStr}</span>${srcStr}</div>` };
       }
-      case 'webcam-layer': {
+      case 'webcam-layer':
+      case 'windy-webcams-layer': {
+        const wcTitle = obj.title || obj.name || 'Webcam';
+        const wcCountry = obj.country || '';
+        const wcCategory = obj.category || '';
         const label = 'count' in obj
-          ? `${obj.count} webcams`
-          : (obj.title || obj.name || 'Webcam');
-        return { html: `<div class="deckgl-tooltip"><strong>${text(label)}</strong></div>` };
+          ? `${obj.count} webcams in area`
+          : wcTitle;
+        return { html: `<div class="deckgl-tooltip"><strong>📹 ${text(label)}</strong>${wcCountry ? `<br/><span style="opacity:.6">${text(wcCountry)}${wcCategory ? ' · ' + text(wcCategory) : ''}</span>` : ''}<br/><span style="opacity:.4;font-size:10px">Click to view webcam</span></div>` };
       }
       default:
         return null;

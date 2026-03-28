@@ -54,6 +54,10 @@ jobs:
       # Webcams — Windy API camera metadata for map layer
       - run: node scripts/seed-webcams.mjs
         continue-on-error: true
+
+      # Webcam fallback — ensures webcam layer always has data
+      - run: node scripts/seed-webcams-fallback.mjs
+        continue-on-error: true
       - run: node scripts/fetch-gpsjam.mjs
         continue-on-error: true
 

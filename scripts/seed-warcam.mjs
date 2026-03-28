@@ -66,7 +66,7 @@ const CONFLICT_ZONE_COORDS = {
   kremlin: [55.75, 37.62], putin: [55.75, 37.62],
   // Middle East
   gaza: [31.35, 34.31], israel: [31.77, 35.22], rafah: [31.28, 34.24],
-  jerusalem: [31.77, 35.23], tel aviv: [32.09, 34.78], west bank: [31.95, 35.25],
+  jerusalem: [31.77, 35.23], 'tel aviv': [32.09, 34.78], 'west bank': [31.95, 35.25],
   hamas: [31.35, 34.31], hezbollah: [33.89, 35.50], idf: [31.77, 35.22],
   syria: [34.80, 38.99], aleppo: [36.2, 37.17], damascus: [33.51, 36.29],
   iran: [35.69, 51.39], tehran: [35.69, 51.39], iranian: [35.69, 51.39],
@@ -77,8 +77,8 @@ const CONFLICT_ZONE_COORDS = {
   jordan: [31.95, 35.93], amman: [31.95, 35.93],
   // Africa
   sudan: [15.5, 32.56], khartoum: [15.59, 32.53], darfur: [13.5, 25.0],
-  south sudan: [4.85, 31.58], juba: [4.85, 31.58],
-  ethiopia: [9.02, 38.75], addis ababa: [9.02, 38.75], tigray: [13.5, 39.5],
+  'south sudan': [4.85, 31.58], juba: [4.85, 31.58],
+  ethiopia: [9.02, 38.75], 'addis ababa': [9.02, 38.75], tigray: [13.5, 39.5],
   somalia: [2.05, 45.32], mogadishu: [2.05, 45.32],
   libya: [32.90, 13.18], tripoli: [32.90, 13.18], benghazi: [32.12, 20.09],
   nigeria: [9.06, 7.49], lagos: [6.52, 3.38], abuja: [9.06, 7.49],
@@ -95,8 +95,8 @@ const CONFLICT_ZONE_COORDS = {
   // East/Southeast Asia
   myanmar: [19.76, 96.07], china: [39.9, 116.4], beijing: [39.9, 116.4],
   taiwan: [25.03, 121.57], taipei: [25.03, 121.57],
-  north korea: [39.02, 125.75], pyongyang: [39.02, 125.75],
-  south korea: [37.57, 126.98], seoul: [37.57, 126.98],
+  'north korea': [39.02, 125.75], pyongyang: [39.02, 125.75],
+  'south korea': [37.57, 126.98], seoul: [37.57, 126.98],
   philippines: [14.6, 120.98], manila: [14.6, 120.98],
   // Americas
   mexico: [19.43, -99.13], colombia: [4.71, -74.07], bogota: [4.71, -74.07],
@@ -106,7 +106,7 @@ const CONFLICT_ZONE_COORDS = {
   poland: [52.23, 21.01], romania: [44.43, 26.1],
   // Generic military terms — map to most active conflict zones
   pentagon: [38.87, -77.06], washington: [38.91, -77.04],
-  united states: [38.91, -77.04], u.s.: [38.91, -77.04],
+  'united states': [38.91, -77.04], 'u.s.': [38.91, -77.04],
   uk: [51.51, -0.13], london: [51.51, -0.13], britain: [51.51, -0.13],
   france: [48.86, 2.35], paris: [48.86, 2.35],
   germany: [52.52, 13.41], berlin: [52.52, 13.41],

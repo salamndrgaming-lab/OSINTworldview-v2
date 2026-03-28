@@ -16,7 +16,6 @@ import { loadEnvFile, CHROME_UA, getRedisCredentials, sleep } from './_seed-util
 loadEnvFile(import.meta.url);
 
 const REDIS_KEY = 'intelligence:warcam:v1';
-const GDELT_GEO_API = 'https://api.gdeltproject.org/api/v2/geo/geo';
 
 // Conflict-focused queries for the GEO API
 const WARCAM_QUERIES = [
@@ -27,39 +26,8 @@ const WARCAM_QUERIES = [
   { query: '(invasion OR offensive OR advance OR retreat)', label: 'military-ops' },
 ];
 
-// Parse GDELT GEO API JSON response
-// The GEO API returns { type: "FeatureCollection", features: [...] }
-async function fetchGeoArticles(query, timespan = '24h', maxRecords = 75) {
-  const url = new URL(GDELT_GEO_API);
-  url.searchParams.set('query', `${query} sourcelang:eng`);
-  url.searchParams.set('mode', 'pointdata');
-  url.searchParams.set('format', 'geojson');
-  url.searchParams.set('timespan', timespan);
-  url.searchParams.set('maxpoints', String(maxRecords));
-
-  try {
-    const resp = await fetch(url.toString(), {
-      headers: { 'User-Agent': CHROME_UA },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!resp.ok) {
-      console.warn(`    GEO API ${resp.status} for "${query.slice(0, 30)}..."`);
-      return [];
-    }
-    const data = await resp.json();
-    if (data.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
-      // Might be CSV or HTML format — try parsing differently
-      return [];
-    }
-    return data.features;
-  } catch (err) {
-    console.warn(`    GEO fetch error: ${err.message?.slice(0, 80)}`);
-    return [];
-  }
-}
-
-// Fallback: use DOC API for articles with social images
-async function fetchDocArticlesWithImages(query, timespan = '24h', maxRecords = 50) {
+// Fetch conflict articles from GDELT DOC API with social images
+async function fetchConflictArticles(query, timespan = '48h', maxRecords = 75) {
   const url = new URL('https://api.gdeltproject.org/api/v2/doc/doc');
   url.searchParams.set('query', `${query} sourcelang:eng`);
   url.searchParams.set('mode', 'artlist');
@@ -73,10 +41,14 @@ async function fetchDocArticlesWithImages(query, timespan = '24h', maxRecords = 
       headers: { 'User-Agent': CHROME_UA },
       signal: AbortSignal.timeout(15_000),
     });
-    if (!resp.ok) return [];
+    if (!resp.ok) {
+      console.warn(`    DOC API ${resp.status} for "${query.slice(0, 30)}..."`);
+      return [];
+    }
     const data = await resp.json();
-    return (data.articles || []).filter(a => a.socialimage && a.title);
-  } catch {
+    return (data.articles || []).filter(a => a.title);
+  } catch (err) {
+    console.warn(`    DOC fetch error: ${err.message?.slice(0, 80)}`);
     return [];
   }
 }
@@ -126,64 +98,35 @@ async function main() {
   const allEntries = [];
   const seenUrls = new Set();
 
-  // Step 1: Try GEO API for geolocated articles
-  console.log('  Step 1: Fetching geolocated conflict media...');
+  // Fetch conflict articles from GDELT DOC API and geocode from titles
+  console.log('  Fetching conflict media from GDELT DOC API...');
   for (const { query, label } of WARCAM_QUERIES) {
-    const features = await fetchGeoArticles(query, '24h', 50);
-    for (const f of features) {
-      const coords = f.geometry?.coordinates; // [lng, lat]
-      const props = f.properties || {};
-      const articleUrl = props.url || props.urlmobile || '';
-      if (seenUrls.has(articleUrl)) continue;
-      seenUrls.add(articleUrl);
+    const articles = await fetchConflictArticles(query, '48h', 50);
+    let geocoded = 0;
+    for (const a of articles) {
+      if (seenUrls.has(a.url)) continue;
+      seenUrls.add(a.url);
 
+      const coords = geocodeFromTitle(a.title || '');
+      if (!coords) continue;
+
+      geocoded++;
       allEntries.push({
-        id: articleUrl || `geo:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-        title: props.name || props.title || '',
-        url: articleUrl,
-        image: props.socialimage || props.shareimage || '',
-        source: props.domain || props.source || '',
-        lat: coords ? coords[1] : 0,
-        lng: coords ? coords[0] : 0,
-        timestamp: props.seendate ? new Date(props.seendate).getTime() : Date.now(),
+        id: a.url || `wc:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+        title: a.title || '',
+        url: a.url || '',
+        image: a.socialimage || '',
+        source: a.domain || '',
+        lat: coords[0],
+        lng: coords[1],
+        timestamp: a.seendate ? new Date(a.seendate).getTime() : Date.now(),
         category: label,
-        severity: classifySeverity(props.name || props.title || ''),
-        hasGeo: true,
+        severity: classifySeverity(a.title || ''),
+        hasGeo: false,
       });
     }
-    console.log(`    ${label}: ${features.length} geolocated articles`);
+    console.log(`    ${label}: ${articles.length} articles → ${geocoded} geocoded`);
     await sleep(1500);
-  }
-
-  // Step 2: Fallback — DOC API for articles with images (geocode from title)
-  if (allEntries.length < 20) {
-    console.log('  Step 2: Supplementing with DOC API articles...');
-    for (const { query, label } of WARCAM_QUERIES.slice(0, 3)) {
-      const articles = await fetchDocArticlesWithImages(query, '48h', 30);
-      for (const a of articles) {
-        if (seenUrls.has(a.url)) continue;
-        seenUrls.add(a.url);
-
-        const coords = geocodeFromTitle(a.title || '');
-        if (!coords) continue; // Skip articles we can't geolocate
-
-        allEntries.push({
-          id: a.url || `doc:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-          title: a.title || '',
-          url: a.url || '',
-          image: a.socialimage || '',
-          source: a.domain || '',
-          lat: coords[0],
-          lng: coords[1],
-          timestamp: a.seendate ? new Date(a.seendate).getTime() : Date.now(),
-          category: label,
-          severity: classifySeverity(a.title || ''),
-          hasGeo: false, // Geocoded from title, not from GDELT
-        });
-      }
-      console.log(`    ${label} (DOC fallback): ${articles.length} articles`);
-      await sleep(1500);
-    }
   }
 
   console.log(`  Total warcam entries: ${allEntries.length}`);

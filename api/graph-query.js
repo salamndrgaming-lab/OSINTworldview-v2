@@ -20,6 +20,7 @@ function getNeo4jCredentials() {
   const uri = process.env.NEO4J_URI;
   const username = process.env.NEO4J_USERNAME || 'neo4j';
   const password = process.env.NEO4J_PASSWORD;
+  const database = process.env.NEO4J_DATABASE || 'neo4j';
   if (!uri || !password) return null;
 
   // AuraDB Query API v2 — port 443
@@ -30,7 +31,7 @@ function getNeo4jCredentials() {
     .replace(/\/.*$/, '')
     .replace(/:\d+$/, '');
 
-  const queryUrl = `https://${host}/db/neo4j/query/v2`;
+  const queryUrl = `https://${host}/db/${database}/query/v2`;
 
   const authToken = btoa(`${username}:${password}`);
   return { queryUrl, authToken };

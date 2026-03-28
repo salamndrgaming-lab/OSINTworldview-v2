@@ -77,7 +77,8 @@ async function main() {
   const { url: redisUrl, token: redisToken } = getRedisCredentials();
   console.log('=== Webcam Fallback Seed ===');
 
-  // Check if primary Windy seed already populated
+  // Check if primary Windy seed already populated — still run to add Shodan cams
+  let primaryRan = false;
   try {
     const resp = await fetch(`${redisUrl}/get/${encodeURIComponent(VERSION_KEY)}`, {
       headers: { Authorization: `Bearer ${redisToken}` },
@@ -86,8 +87,8 @@ async function main() {
     if (resp.ok) {
       const data = await resp.json();
       if (data.result && !data.result.includes('fallback')) {
-        console.log(`  Primary seed already ran (${data.result}) — skipping`);
-        process.exit(0);
+        primaryRan = true;
+        console.log(`  Primary Windy seed ran (${data.result}) — adding Shodan + static cams on top`);
       }
     }
   } catch { /* continue */ }

@@ -92,14 +92,58 @@ async function main() {
     }
   } catch { /* continue */ }
 
-  console.log(`  Seeding ${WEBCAMS.length} webcam locations...`);
+  // Try Shodan for additional webcams
+  const shodanKey = process.env.SHODAN_API_KEY;
+  const allWebcams = [...WEBCAMS];
+
+  if (shodanKey) {
+    console.log('  Fetching webcams from Shodan...');
+    const shodanQueries = [
+      'webcam has_screenshot:true country:UA',
+      'webcam has_screenshot:true country:IL',
+      'webcam has_screenshot:true country:TR',
+      'webcam has_screenshot:true country:DE',
+      'webcam has_screenshot:true country:GB',
+      'webcam has_screenshot:true country:US',
+      'webcam has_screenshot:true country:JP',
+    ];
+    for (const query of shodanQueries) {
+      try {
+        const resp = await fetch(`https://api.shodan.io/shodan/host/search?key=${shodanKey}&query=${encodeURIComponent(query)}&page=1`, {
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!resp.ok) {
+          console.log(`    Shodan ${resp.status} for "${query.slice(0, 30)}..."`);
+          continue;
+        }
+        const data = await resp.json();
+        let added = 0;
+        for (const match of (data.matches || []).slice(0, 10)) {
+          if (!match.location?.latitude || !match.location?.longitude) continue;
+          allWebcams.push({
+            id: `shodan-${match.ip_str}`,
+            title: `Webcam — ${match.location.city || match.location.country_name || match.ip_str}`,
+            lat: match.location.latitude,
+            lng: match.location.longitude,
+            category: 'webcam',
+            country: match.location.country_code || '',
+          });
+          added++;
+        }
+        console.log(`    ${query.slice(0, 25)}... → ${added} webcams`);
+      } catch { /* skip */ }
+    }
+    console.log(`  Shodan total: ${allWebcams.length - WEBCAMS.length} additional webcams`);
+  }
+
+  console.log(`  Seeding ${allWebcams.length} webcam locations...`);
 
   const geoKey = `webcam:cameras:geo:${VERSION}`;
   const metaKey = `webcam:cameras:meta:${VERSION}`;
 
   // Write each webcam individually to avoid pipeline issues
   let written = 0;
-  for (const wc of WEBCAMS) {
+  for (const wc of allWebcams) {
     try {
       // GEOADD for spatial queries
       const geoResp = await fetch(redisUrl, {
@@ -147,7 +191,7 @@ async function main() {
     body: JSON.stringify(['SET', VERSION_KEY, VERSION, 'EX', '86400']),
   });
 
-  console.log(`  Written ${written}/${WEBCAMS.length} webcams`);
+  console.log(`  Written ${written}/${allWebcams.length} webcams`);
   console.log('=== Done ===');
   process.exit(0);
 }

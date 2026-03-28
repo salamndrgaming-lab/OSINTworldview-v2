@@ -121,6 +121,7 @@ jobs:
       NEO4J_USERNAME: ${{ secrets.NEO4J_USERNAME }}
       NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
       WINDY_API_KEY: ${{ secrets.WINDY_API_KEY }}
+      SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
       NEO4J_DATABASE: ${{ secrets.NEO4J_DATABASE }}
 
   # JOB 2: The GDELT Lane (Isolated & Patient)

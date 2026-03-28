@@ -1644,26 +1644,6 @@ export class DeckGLMap {
           radiusMaxPixels: 20,
           lineWidthMinPixels: 3,
           stroked: true,
-          onClick: (info) => {
-            const obj = info.object as Record<string, unknown> | undefined;
-            if (!obj) return;
-            // Try Windy desktop URL first
-            const windyUrl = (obj.url as Record<string, Record<string, string>>)?.current?.desktop;
-            if (windyUrl) {
-              window.open(windyUrl, '_blank');
-              return;
-            }
-            // Try webcamId for Windy lookup
-            const wcId = obj.webcamId as string;
-            if (wcId) {
-              window.open(`https://www.windy.com/webcams/${wcId}`, '_blank');
-              return;
-            }
-            // Fallback: open Windy webcam map at this location
-            const lat = obj.lat ?? (obj.location as Record<string, number>)?.latitude ?? 0;
-            const lng = obj.lng ?? (obj.location as Record<string, number>)?.longitude ?? 0;
-            window.open(`https://www.windy.com/webcams/map?lat=${lat}&lng=${lng}&zoom=12`, '_blank');
-          }
         })
       );
     }
@@ -4030,8 +4010,18 @@ export class DeckGLMap {
       return;
     }
 
-    if (layerId === 'webcam-layer' && !('count' in info.object)) {
-      this.showWebcamClickPopup(info.object as WebcamEntry, info.x, info.y);
+    if ((layerId === 'webcam-layer' || layerId === 'windy-webcams-layer') && !('count' in info.object)) {
+      // Handle both Windy format (WebcamEntry) and fallback format
+      const obj = info.object as Record<string, unknown>;
+      const entry: WebcamEntry = {
+        webcamId: (obj.webcamId || obj.id || '') as string,
+        title: (obj.title || obj.name || 'Webcam') as string,
+        lat: Number(obj.lat ?? (obj.location as Record<string, number>)?.latitude ?? 0),
+        lng: Number(obj.lng ?? (obj.location as Record<string, number>)?.longitude ?? 0),
+        category: (obj.category || 'other') as string,
+        country: (obj.country || '') as string,
+      };
+      this.showWebcamClickPopup(entry, info.x, info.y);
       return;
     }
 

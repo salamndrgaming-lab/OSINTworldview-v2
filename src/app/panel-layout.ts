@@ -864,6 +864,9 @@ export class PanelLayoutManager implements AppModule {
       this.lazyPanel('data-health', () =>
         import('@/components/DataHealthPanel').then(m => new m.DataHealthPanel()),
       );
+      this.lazyPanel('warcam', () =>
+        import('@/components/WarcamPanel').then(m => new m.WarcamPanel()),
+      );
     }
 
     // Global Giving panel (all variants)

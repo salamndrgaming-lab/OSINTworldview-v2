@@ -62,6 +62,7 @@ export const DEFAULT_PANELS: Record<string, PanelConfig> = {
   'correlation-engine': { name: 'Correlation Engine', enabled: true, priority: 1 },
   'nl-query': { name: 'Intel Query', enabled: true, priority: 1 },
   'data-health': { name: 'Data Source Health', enabled: true, priority: 1 },
+  warcam: { name: 'Conflict Zone Media', enabled: true, priority: 1 },
   poi: { name: 'Persons of Interest', enabled: true, priority: 1 },
 };
 
@@ -190,7 +191,7 @@ export const PANEL_LAYOUT_CONFIG = {
   panelKeys: [
     // Godmode-exclusive panels first — the reason you toggle godmode
     'geo-risk-radar', 'correlation-engine', 'nl-query',
-    'ai-stock-analyst', 'intel-timeline', 'stock-backtest-gm', 'data-health',
+    'ai-stock-analyst', 'intel-timeline', 'stock-backtest-gm', 'data-health', 'warcam',
     // Core intelligence
     'cii', 'strategic-risk', 'intel', 'gdelt-intel', 'cascade',
     'telegram-intel', 'satellite-fires', 'poi',

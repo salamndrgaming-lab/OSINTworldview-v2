@@ -1637,12 +1637,12 @@ export class DeckGLMap {
               typeof lat === 'string' ? parseFloat(lat) : lat
             ];
           },
-          getFillColor: [0, 180, 255, 200],
-          getLineColor: [255, 255, 255, 220],
-          getRadius: 4,
-          radiusMinPixels: 4,
-          radiusMaxPixels: 10,
-          lineWidthMinPixels: 1.5,
+          getFillColor: [0, 220, 255, 240],
+          getLineColor: [255, 255, 255, 255],
+          getRadius: 15000,
+          radiusMinPixels: 8,
+          radiusMaxPixels: 20,
+          lineWidthMinPixels: 3,
           stroked: true,
           onClick: (info) => {
             if (info.object?.url?.current?.desktop) {

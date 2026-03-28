@@ -195,11 +195,7 @@ function isHighValuePOI(entity, allHeadlines = []) {
     'indicted', 'charged', 'expelled', 'deported',
   ];
 
-  // Search headlines that contain this person's name
-  const nameLower = entity.name.toLowerCase();
-  const relatedHeadlines = (entity.relatedHeadlines || allHeadlines).filter(h =>
-    h.toLowerCase().includes(nameLower)
-  );
+  // Search headlines that contain this person's name (reuse from above)
   const contextBlock = relatedHeadlines.join(' ').toLowerCase();
 
   const hasRole = highValueRoles.some(role => contextBlock.includes(role));

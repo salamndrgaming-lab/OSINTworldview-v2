@@ -50,6 +50,10 @@ jobs:
         continue-on-error: true
       - run: node scripts/seed-military-flights.mjs
         continue-on-error: true
+
+      # Webcams — Windy API camera metadata for map layer
+      - run: node scripts/seed-webcams.mjs
+        continue-on-error: true
       - run: node scripts/fetch-gpsjam.mjs
         continue-on-error: true
 
@@ -112,6 +116,7 @@ jobs:
       NEO4J_URI: ${{ secrets.NEO4J_URI }}
       NEO4J_USERNAME: ${{ secrets.NEO4J_USERNAME }}
       NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+      WINDY_API_KEY: ${{ secrets.WINDY_API_KEY }}
       NEO4J_DATABASE: ${{ secrets.NEO4J_DATABASE }}
 
   # JOB 2: The GDELT Lane (Isolated & Patient)

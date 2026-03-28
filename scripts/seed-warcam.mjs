@@ -173,6 +173,48 @@ async function main() {
 
   console.log(`  Total warcam entries: ${allEntries.length}`);
 
+  // Fallback: if GDELT is rate-limited, build warcam from already-seeded Redis data
+  if (allEntries.length < 5) {
+    console.log('  GDELT rate-limited — pulling from Redis fallback...');
+    const { url: rUrl, token: rToken } = getRedisCredentials();
+    const fallbackKeys = ['intelligence:missile-events:v1', 'unrest:events:v1'];
+    for (const key of fallbackKeys) {
+      try {
+        const resp = await fetch(`${rUrl}/get/${encodeURIComponent(key)}`, {
+          headers: { Authorization: `Bearer ${rToken}` },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!resp.ok) continue;
+        const raw = await resp.json();
+        if (!raw.result) continue;
+        const parsed = JSON.parse(raw.result);
+        const events = parsed.events || [];
+        for (const e of events.slice(0, 30)) {
+          const title = e.title || e.description || '';
+          const coords = geocodeFromTitle(title);
+          if (!coords) continue;
+          const eUrl = e.url || e.sourceUrl || '';
+          if (seenUrls.has(eUrl) && eUrl) continue;
+          if (eUrl) seenUrls.add(eUrl);
+          allEntries.push({
+            id: eUrl || `redis:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+            title: title.slice(0, 200),
+            url: eUrl,
+            image: e.socialimage || '',
+            source: e.dataSource || e.source || 'Redis',
+            lat: coords[0],
+            lng: coords[1],
+            timestamp: e.timestamp || Date.now(),
+            category: key.includes('missile') ? 'airstrikes' : 'ground-combat',
+            severity: classifySeverity(title),
+            hasGeo: false,
+          });
+        }
+      } catch { /* skip */ }
+    }
+    console.log(`  Redis fallback total: ${allEntries.length}`);
+  }
+
   if (allEntries.length === 0) {
     console.log('  No conflict media found — skipping');
     process.exit(0);

@@ -224,7 +224,7 @@ async function main() {
   allEntries.sort((a, b) => b.timestamp - a.timestamp);
   const entries = allEntries.slice(0, 100);
 
-  // Store in Redis
+  // Store in Redis using the correct Upstash pipeline format
   const payload = {
     entries,
     entryCount: entries.length,
@@ -232,10 +232,10 @@ async function main() {
     sources: [...new Set(entries.map(e => e.source))].slice(0, 20),
   };
 
-  const resp = await fetch(`${redisUrl}/set/${encodeURIComponent(REDIS_KEY)}`, {
+  const resp = await fetch(redisUrl, {
     method: 'POST',
     headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ EX: 7200, value: JSON.stringify(payload) }),
+    body: JSON.stringify(['SET', REDIS_KEY, JSON.stringify(payload), 'EX', '7200']),
     signal: AbortSignal.timeout(5_000),
   });
 

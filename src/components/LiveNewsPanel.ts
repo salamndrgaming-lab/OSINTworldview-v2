@@ -1785,54 +1785,109 @@ export class LiveNewsPanel extends Panel {
   }
 
   private openAddStreamDialog(): void {
-    const existing = document.querySelector('.live-add-stream-dialog');
+    // If dialog already open, close it
+    const existing = document.querySelector('.live-add-stream-overlay');
     if (existing) { existing.remove(); return; }
+
+    // Full-screen transparent backdrop to catch outside clicks — sits under the dialog
+    const overlay = document.createElement('div');
+    overlay.className = 'live-add-stream-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9998;background:transparent;';
 
     const dialog = document.createElement('div');
     dialog.className = 'live-add-stream-dialog';
     dialog.style.cssText = [
-      'position:absolute',
-      'z-index:1000',
-      'bottom:44px',
-      'right:8px',
+      'position:fixed',
+      'z-index:9999',
+      'bottom:80px',
+      'right:24px',
       'background:var(--bg-panel,#1a1a2e)',
-      'border:1px solid var(--border,#333)',
-      'border-radius:8px',
-      'padding:12px',
-      'width:300px',
-      'box-shadow:0 4px 20px rgba(0,0,0,0.5)',
+      'border:1px solid var(--border,#444)',
+      'border-radius:10px',
+      'padding:16px',
+      'width:320px',
+      'box-shadow:0 8px 32px rgba(0,0,0,0.6)',
       'display:flex',
       'flex-direction:column',
-      'gap:8px',
+      'gap:10px',
     ].join(';');
 
+    // Stop clicks inside dialog from hitting the overlay
+    dialog.addEventListener('click', (e) => e.stopPropagation());
+    dialog.addEventListener('mousedown', (e) => e.stopPropagation());
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+
     const label = document.createElement('div');
-    label.style.cssText = 'font-size:12px;color:var(--text-primary,#fff);font-weight:600;';
+    label.style.cssText = 'font-size:13px;color:var(--text-primary,#fff);font-weight:600;';
     label.textContent = 'Add Custom Stream';
 
-    const hint = document.createElement('div');
-    hint.style.cssText = 'font-size:11px;color:var(--text-secondary,#999);line-height:1.5;';
-    hint.textContent = 'Paste a .m3u8 URL, YouTube link, Twitch URL, or any site URL. Other sites will be attempted as embeds.';
+    const closeX = document.createElement('button');
+    closeX.type = 'button';
+    closeX.textContent = '×';
+    closeX.style.cssText = 'background:none;border:none;color:var(--text-secondary,#999);font-size:18px;cursor:pointer;padding:0;line-height:1;';
+    closeX.addEventListener('click', () => overlay.remove());
 
-    const inputStyle = 'width:100%;padding:6px 8px;background:var(--bg-input,#111);border:1px solid var(--border,#444);border-radius:4px;color:var(--text-primary,#fff);font-size:12px;box-sizing:border-box;outline:none;';
+    header.append(label, closeX);
+
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:11px;color:var(--text-secondary,#888);line-height:1.5;';
+    hint.textContent = 'Paste a .m3u8 URL, YouTube link, Twitch URL, or any site. Other sites will be tried as embeds.';
+
+    const inputStyle = [
+      'width:100%',
+      'padding:8px 10px',
+      'background:var(--bg-input,#0d0d1a)',
+      'border:1px solid var(--border,#555)',
+      'border-radius:6px',
+      'color:var(--text-primary,#fff)',
+      'font-size:12px',
+      'box-sizing:border-box',
+      'outline:none',
+      'pointer-events:auto',
+    ].join(';');
+
+    const nameLabel = document.createElement('label');
+    nameLabel.style.cssText = 'font-size:11px;color:var(--text-secondary,#999);';
+    nameLabel.textContent = 'Name';
 
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
-    nameInput.placeholder = 'Stream name (e.g. "My Sports Feed")';
+    nameInput.placeholder = 'e.g. "My Sports Feed"';
     nameInput.style.cssText = inputStyle;
+    nameInput.autocomplete = 'off';
+
+    const urlLabel = document.createElement('label');
+    urlLabel.style.cssText = 'font-size:11px;color:var(--text-secondary,#999);margin-top:2px;';
+    urlLabel.textContent = 'Stream URL';
 
     const urlInput = document.createElement('input');
-    urlInput.type = 'url';
+    urlInput.type = 'text'; // use text not url — avoids browser validation blocking paste
     urlInput.placeholder = 'https://example.com/stream.m3u8';
     urlInput.style.cssText = inputStyle;
+    urlInput.autocomplete = 'off';
+    urlInput.spellcheck = false;
 
     const status = document.createElement('div');
-    status.style.cssText = 'font-size:11px;min-height:16px;';
+    status.style.cssText = 'font-size:11px;min-height:16px;padding:0 2px;';
 
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
-    addBtn.textContent = 'Add Stream';
-    addBtn.style.cssText = 'padding:7px 12px;background:var(--accent,#3498db);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:500;';
+    addBtn.textContent = '+ Add Stream';
+    addBtn.style.cssText = [
+      'padding:9px 14px',
+      'background:var(--accent,#3498db)',
+      'color:#fff',
+      'border:none',
+      'border-radius:6px',
+      'cursor:pointer',
+      'font-size:13px',
+      'font-weight:600',
+      'width:100%',
+      'margin-top:4px',
+      'pointer-events:auto',
+    ].join(';');
 
     urlInput.addEventListener('input', () => {
       const val = urlInput.value.trim();
@@ -1844,10 +1899,10 @@ export class LiveNewsPanel extends Panel {
         return;
       }
       const labels: Record<string, string> = {
-        hls: '✓ HLS stream (.m3u8) — native player',
+        hls: '✓ HLS stream — native player',
         youtube: '✓ YouTube — embedded player',
         twitch: '✓ Twitch — embedded player',
-        iframe: '⚠ Will try as embed (may be blocked by site)',
+        iframe: '⚠ Will try as embed (may be blocked)',
       };
       status.style.color = parsed.type === 'iframe' ? 'var(--warn,#f39c12)' : 'var(--success,#2ecc71)';
       status.textContent = labels[parsed.type] ?? '✓ URL detected';
@@ -1856,46 +1911,42 @@ export class LiveNewsPanel extends Panel {
       }
     });
 
-    addBtn.addEventListener('click', () => {
+    const submit = () => {
       const rawUrl = urlInput.value.trim();
       const name = nameInput.value.trim() || rawUrl;
+      if (!rawUrl) {
+        status.style.color = 'var(--danger,#e74c3c)';
+        status.textContent = '✗ Please enter a URL';
+        urlInput.focus();
+        return;
+      }
       const parsed = this.parseCustomStreamUrl(rawUrl);
       if (!parsed) {
         status.style.color = 'var(--danger,#e74c3c)';
         status.textContent = '✗ Please enter a valid URL';
+        urlInput.focus();
         return;
       }
       this.addCustomChannel(name, rawUrl, parsed);
-      dialog.remove();
-    });
+      overlay.remove();
+    };
 
-    urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addBtn.click(); });
+    addBtn.addEventListener('click', submit);
+    urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') urlInput.focus(); });
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { dialog.remove(); document.removeEventListener('keydown', onKey); }
+      if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKey); }
     };
     document.addEventListener('keydown', onKey);
-    setTimeout(() => {
-      document.addEventListener('click', function outsideClick(e) {
-        if (!dialog.contains(e.target as Node)) {
-          dialog.remove();
-          document.removeEventListener('click', outsideClick);
-          document.removeEventListener('keydown', onKey);
-        }
-      });
-    }, 0);
+    overlay.addEventListener('click', () => { overlay.remove(); document.removeEventListener('keydown', onKey); });
 
-    dialog.append(label, hint, nameInput, urlInput, status, addBtn);
+    dialog.append(header, hint, nameLabel, nameInput, urlLabel, urlInput, status, addBtn);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
 
-    const toolbar = this.element.querySelector('.live-news-toolbar') as HTMLElement | null;
-    if (toolbar) {
-      toolbar.style.position = 'relative';
-      toolbar.appendChild(dialog);
-    } else {
-      this.element.appendChild(dialog);
-    }
-
-    urlInput.focus();
+    // Focus URL input after paint
+    requestAnimationFrame(() => urlInput.focus());
   }
 
   private addCustomChannel(

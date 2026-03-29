@@ -517,7 +517,6 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
           container.querySelectorAll<HTMLInputElement>('.color-editor-swatch[data-cs-var]').forEach(swatch => {
             const varName = swatch.dataset.csVar;
             if (varName) {
-              const computed = getComputedStyle(document.documentElement).getPropertyValue('--' + varName).trim();
               const swatchVal = swatch.value;
               // Only save if the swatch has been changed from default
               // We include it if user has interacted (color input always has a value)

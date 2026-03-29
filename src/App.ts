@@ -453,6 +453,15 @@ export class App {
       loadAllData: () => this.dataLoader.loadAllData(),
       updateMonitorResults: () => this.dataLoader.updateMonitorResults(),
       loadSecurityAdvisories: () => this.dataLoader.loadSecurityAdvisories(),
+      savePanelSettings: (panels) => {
+        Object.entries(panels).forEach(([key, next]) => {
+          const cur = this.state.panelSettings[key];
+          if (!cur) { this.state.panelSettings[key] = { ...next }; return; }
+          Object.assign(cur, next);
+        });
+        saveToStorage(STORAGE_KEYS.panels, this.state.panelSettings);
+        this.eventHandlers.applyPanelSettings();
+      },
     });
 
     this.eventHandlers = new EventHandlerManager(this.state, {

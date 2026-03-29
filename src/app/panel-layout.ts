@@ -59,6 +59,13 @@ import { t } from '@/services/i18n';
 import { getCurrentTheme } from '@/utils';
 import { trackCriticalBannerAction } from '@/services/analytics';
 import { getSecretState } from '@/services/runtime-config';
+import {
+  PANEL_PRESETS,
+  getActivePresetId,
+  saveCustomSnapshot,
+  applyPreset,
+  clearActivePreset,
+} from '@/services/panel-presets';
 
 export interface PanelLayoutCallbacks {
   openCountryStory: (code: string, name: string) => void;
@@ -66,6 +73,7 @@ export interface PanelLayoutCallbacks {
   loadAllData: () => Promise<void>;
   updateMonitorResults: () => void;
   loadSecurityAdvisories?: () => Promise<void>;
+  savePanelSettings?: (panels: Record<string, PanelConfig>) => void;
 }
 
 export class PanelLayoutManager implements AppModule {
@@ -288,6 +296,13 @@ export class PanelLayoutManager implements AppModule {
         <div id="alertTickerContent" style="display:inline-block;padding-left:100%;animation:ticker-scroll 60s linear infinite">Loading alerts...</div>
       </div>
       <style>@keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }</style>
+      <div class="preset-bar" id="presetBar">
+        <span class="preset-bar-label">VIEW</span>
+        ${PANEL_PRESETS.map(p => {
+          const isActive = p.id === getActivePresetId();
+          return `<button class="preset-btn${isActive ? ' active' : ''}" data-preset="${p.id}" title="${escapeHtml(p.description)}">${p.icon} ${escapeHtml(p.name)}</button>`;
+        }).join('')}
+      </div>
       <div class="main-content">
         <div class="map-section" id="mapSection">
           <div class="panel-header">
@@ -335,6 +350,9 @@ export class PanelLayoutManager implements AppModule {
 
     // Godmode features: toggle button, alert ticker, threat badge
     this.initGodmodeFeatures();
+
+    // Panel preset bar (view switching)
+    this.initPresetBar();
 
     if (this.ctx.isMobile) {
       this.setupMobileMapToggle();
@@ -1725,6 +1743,31 @@ export class PanelLayoutManager implements AppModule {
       isDragging = false;
       dragStarted = false;
       el.classList.remove('dragging-source');
+    });
+  }
+
+  private initPresetBar(): void {
+    const bar = document.getElementById('presetBar');
+    if (!bar) return;
+
+    bar.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-preset]');
+      if (!btn?.dataset.preset) return;
+      const presetId = btn.dataset.preset;
+
+      // Save current config as snapshot before switching away from custom
+      const currentPreset = getActivePresetId();
+      if (currentPreset === 'custom' && presetId !== 'custom') {
+        saveCustomSnapshot(this.ctx.panelSettings);
+      }
+
+      // Apply the preset
+      const newSettings = applyPreset(presetId, this.ctx.panelSettings);
+      this.callbacks.savePanelSettings?.(newSettings);
+
+      // Update active button styling
+      bar.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
     });
   }
 

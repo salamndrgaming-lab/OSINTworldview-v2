@@ -410,3 +410,29 @@
 [data-theme="tactical"] .color-editor-swatch {
   border-color: #0a2a0a;
 }
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Preset bar
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .preset-bar {
+  background: #000;
+  border-bottom-color: #0a2a0a;
+}
+
+[data-theme="tactical"] .preset-btn {
+  border-color: #0a2a0a;
+  color: #00cc33;
+}
+
+[data-theme="tactical"] .preset-btn:hover {
+  border-color: #0f3f0f;
+  color: #00ff41;
+  background: rgba(0, 255, 65, 0.04);
+}
+
+[data-theme="tactical"] .preset-btn.active {
+  border-color: #00ff41;
+  color: #00ff41;
+  background: rgba(0, 255, 65, 0.06);
+  box-shadow: 0 0 4px rgba(0, 255, 65, 0.15);
+}

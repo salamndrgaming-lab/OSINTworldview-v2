@@ -19584,3 +19584,67 @@ body.has-breaking-alert .panels-grid {
   border-color: var(--border-strong, #444);
   color: var(--text, #e8e8e8);
 }
+
+/* ============================================================
+   Panel Preset Bar — view switching UI
+   ============================================================ */
+.preset-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.preset-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.preset-bar-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  margin-right: 4px;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.preset-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  outline: none;
+}
+
+.preset-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.preset-btn.active {
+  border-color: var(--accent-primary, #1aff8a);
+  color: var(--accent-primary, #1aff8a);
+  background: rgba(26, 255, 138, 0.06);
+}
+
+/* Hide on mobile — too many buttons for small screens */
+@media (max-width: 768px) {
+  .preset-bar {
+    display: none;
+  }
+}

@@ -1625,12 +1625,16 @@ export class LiveNewsPanel extends Panel {
     twitchChannel?: string;
     iframeUrl?: string;
   } | null {
+    let trimmed = raw.trim();
+    // Auto-prefix https:// if missing so bare domains work
+    if (trimmed && !trimmed.match(/^https?:\/\//i)) trimmed = 'https://' + trimmed;
     let url: URL;
     try {
-      url = new URL(raw.trim());
+      url = new URL(trimmed);
     } catch {
       return null;
     }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
 
     const href = url.href;
     const host = url.hostname.toLowerCase();

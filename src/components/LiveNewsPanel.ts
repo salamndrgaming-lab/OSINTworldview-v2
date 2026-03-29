@@ -57,8 +57,8 @@ export interface LiveChannel {
   hlsUrl?: string; // HLS manifest URL for native <video> playback (desktop)
   useFallbackOnly?: boolean; // Skip auto-detection, always use fallback
   geoAvailability?: string[]; // ISO 3166-1 alpha-2 codes; undefined = available everywhere
-  customStreamUrl?: string;   // Arbitrary URL for user-added custom streams
-  customStreamType?: 'hls' | 'iframe' | 'youtube' | 'twitch'; // Detected stream type
+  customStreamUrl?: string; // User-added custom stream URL
+  customStreamType?: 'hls' | 'iframe' | 'youtube' | 'twitch'; // Auto-detected stream type
 }
 
 
@@ -878,6 +878,7 @@ export class LiveNewsPanel extends Panel {
     toolbar.className = 'live-news-toolbar';
     toolbar.appendChild(this.channelSwitcher);
     this.createManageButton(toolbar);
+    this.createAddStreamButton(toolbar);
     this.element.insertBefore(toolbar, this.content);
   }
 
@@ -892,7 +893,6 @@ export class LiveNewsPanel extends Panel {
       this.openChannelManagementModal();
     });
     toolbar.appendChild(openBtn);
-    this.createAddStreamButton(toolbar);
   }
 
   private openChannelManagementModal(): void {
@@ -1004,6 +1004,15 @@ export class LiveNewsPanel extends Panel {
     await this.resolveChannelVideo(channel);
     if (!this.element?.isConnected) return;
 
+    // Custom stream types (non-YouTube) get their own renderer
+    if (channel.customStreamType && channel.customStreamType !== 'youtube') {
+      this.renderCustomStream(channel);
+      this.channelSwitcher?.querySelectorAll('.live-channel-btn').forEach(btn => {
+        (btn as HTMLElement).classList.remove('loading');
+      });
+      return;
+    }
+
     this.channelSwitcher?.querySelectorAll('.live-channel-btn').forEach(btn => {
       const btnEl = btn as HTMLElement;
       btnEl.classList.remove('loading');
@@ -1011,12 +1020,6 @@ export class LiveNewsPanel extends Panel {
         btnEl.classList.add('offline');
       }
     });
-
-    // Custom stream — handle before standard routing
-    if (channel.customStreamType && channel.customStreamType !== 'youtube') {
-      this.renderCustomStream(channel);
-      return;
-    }
 
     if (this.getDirectHlsUrl(channel.id) || this.getProxiedHlsUrl(channel.id)) {
       this.renderNativeHlsPlayer();
@@ -1612,376 +1615,252 @@ export class LiveNewsPanel extends Panel {
     this.refreshChannelSwitcher();
   }
 
-  // ── Custom Stream URL support ────────────────────────────────────────────
+  // ── Custom Stream Feature ──────────────────────────────────
 
-  /**
-   * Parses an arbitrary URL and classifies what kind of stream it is.
-   */
-  private parseCustomStreamUrl(raw: string): {
-    type: 'hls' | 'youtube' | 'twitch' | 'iframe';
-    videoId?: string;
-    hlsUrl?: string;
-    handle?: string;
-    twitchChannel?: string;
-    iframeUrl?: string;
-  } | null {
-    let trimmed = raw.trim();
-    // Auto-prefix https:// if missing so bare domains work
-    if (trimmed && !trimmed.match(/^https?:\/\//i)) trimmed = 'https://' + trimmed;
-    let url: URL;
+  private parseCustomStreamUrl(rawUrl: string): { url: string; type: 'hls' | 'iframe' | 'youtube' | 'twitch' } | null {
+    let url = rawUrl.trim();
+    // Auto-prefix https if missing
+    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
     try {
-      url = new URL(trimmed);
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      const path = parsed.pathname.toLowerCase();
+
+      // HLS manifest
+      if (path.endsWith('.m3u8')) {
+        return { url, type: 'hls' };
+      }
+
+      // YouTube
+      if (host.includes('youtube.com') || host.includes('youtu.be')) {
+        return { url, type: 'youtube' };
+      }
+
+      // Twitch
+      if (host.includes('twitch.tv')) {
+        return { url, type: 'twitch' };
+      }
+
+      // Everything else — try as iframe
+      return { url, type: 'iframe' };
     } catch {
       return null;
     }
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-
-    const href = url.href;
-    const host = url.hostname.toLowerCase();
-
-    // HLS manifest
-    if (href.includes('.m3u8')) {
-      return { type: 'hls', hlsUrl: href };
-    }
-
-    // YouTube
-    if (host.includes('youtube.com') || host === 'youtu.be') {
-      let videoId = url.searchParams.get('v') || null;
-      if (!videoId && host === 'youtu.be') {
-        videoId = url.pathname.slice(1).split('?')[0] ?? null;
-      }
-      if (!videoId) {
-        const m = url.pathname.match(/\/(live|embed|shorts|v)\/([^/?]+)/);
-        if (m) videoId = m[2] ?? null;
-      }
-      const handleMatch = url.pathname.match(/^\/@([^/]+)/);
-      const handle = handleMatch ? `@${handleMatch[1]}` : undefined;
-      return { type: 'youtube', videoId: videoId ?? undefined, handle };
-    }
-
-    // Twitch
-    if (host.includes('twitch.tv')) {
-      const parts = url.pathname.split('/').filter(Boolean);
-      const channel = parts[0];
-      if (channel) return { type: 'twitch', twitchChannel: channel };
-    }
-
-    // Anything else — attempt iframe
-    return { type: 'iframe', iframeUrl: href };
   }
 
-  /** Renders a custom stream based on its detected type. */
   private renderCustomStream(channel: LiveChannel): void {
-    const type = channel.customStreamType;
-    const streamUrl = channel.customStreamUrl;
-
-    if (!type || !streamUrl) {
-      this.showOfflineMessage(channel);
-      return;
-    }
-
     this.destroyPlayer();
-    this.ensurePlayerContainer();
-    if (!this.playerContainer) return;
-    this.playerContainer.innerHTML = '';
+    const url = channel.customStreamUrl;
+    if (!url) { this.showCustomStreamError(channel, 'No stream URL'); return; }
 
-    if (type === 'hls') {
+    if (channel.customStreamType === 'hls') {
+      // Render native HLS via <video>
+      this.content.innerHTML = '';
       const video = document.createElement('video');
-      video.className = 'live-news-native-video';
-      video.src = streamUrl;
-      video.autoplay = this.isPlaying;
-      video.muted = this.isMuted;
+      video.autoplay = true;
+      video.muted = true;
       video.playsInline = true;
       video.controls = true;
-      video.style.cssText = 'width:100%;height:100%;object-fit:contain;background:#000';
-      video.addEventListener('error', () => {
-        this.showCustomStreamError(channel, 'HLS stream failed to load. The URL may be offline or blocked by CORS.');
-      });
-      video.addEventListener('volumechange', () => {
-        const muted = video.muted || video.volume === 0;
-        if (muted !== this.isMuted) { this.isMuted = muted; this.updateMuteIcon(); }
-      });
-      video.addEventListener('pause', () => { if (this.isPlaying) { this.isPlaying = false; this.updateLiveIndicator(); } });
-      video.addEventListener('play', () => { if (!this.isPlaying) { this.isPlaying = true; this.updateLiveIndicator(); } });
-      this.nativeVideoElement = video;
-      this.playerContainer.appendChild(video);
-      this.isPlayerReady = true;
-      if (this.isPlaying) {
-        video.muted = true;
-        video.play()?.then(() => {
-          if (!this.isMuted && this.nativeVideoElement === video) video.muted = false;
-        }).catch(() => {});
-      }
-      return;
-    }
-
-    if (type === 'twitch') {
-      const parent = window.location.hostname || 'localhost';
+      video.style.cssText = 'width:100%;height:100%;background:#000';
+      video.src = url;
+      this.content.appendChild(video);
+      video.play().catch(() => {});
+    } else if (channel.customStreamType === 'twitch') {
+      // Extract channel name from Twitch URL
+      let twitchChannel = '';
+      try {
+        const parsed = new URL(url);
+        twitchChannel = parsed.pathname.replace(/^\//, '').split('/')[0] || '';
+      } catch { /* noop */ }
+      if (!twitchChannel) { this.showCustomStreamError(channel, 'Could not parse Twitch channel'); return; }
+      this.content.innerHTML = '';
       const iframe = document.createElement('iframe');
-      iframe.src = `https://player.twitch.tv/?channel=${encodeURIComponent(streamUrl)}&parent=${parent}&autoplay=${this.isPlaying ? 'true' : 'false'}&muted=${this.isMuted ? 'true' : 'false'}`;
-      iframe.className = 'live-news-embed-frame';
-      iframe.style.cssText = 'width:100%;height:100%;border:0';
-      iframe.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
-      iframe.allowFullscreen = true;
-      this.playerContainer.appendChild(iframe);
-      this.isPlayerReady = true;
-      return;
-    }
-
-    if (type === 'iframe') {
-      const wrapper = document.createElement('div');
-      wrapper.style.cssText = 'position:relative;width:100%;height:100%';
+      iframe.src = 'https://player.twitch.tv/?channel=' + encodeURIComponent(twitchChannel) + '&parent=' + location.hostname;
+      iframe.style.cssText = 'width:100%;height:100%;border:none';
+      iframe.allow = 'autoplay; encrypted-media';
+      iframe.setAttribute('allowfullscreen', '');
+      this.content.appendChild(iframe);
+    } else {
+      // Generic iframe
+      this.content.innerHTML = '';
       const iframe = document.createElement('iframe');
-      iframe.src = streamUrl;
-      iframe.className = 'live-news-embed-frame';
-      iframe.style.cssText = 'width:100%;height:100%;border:0';
-      iframe.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
-      iframe.allowFullscreen = true;
-      // Delayed hint if iframe appears blank (X-Frame-Options / CSP block)
-      const timeoutId = setTimeout(() => {
-        if (wrapper.isConnected) {
-          const notice = document.createElement('div');
-          notice.style.cssText = 'position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:11px;color:var(--text-secondary);pointer-events:none;padding:0 8px;';
-          notice.textContent = 'If the stream is blank, this site blocks embedding. Try a direct .m3u8 URL instead.';
-          wrapper.appendChild(notice);
-        }
-      }, 4000);
-      iframe.addEventListener('load', () => clearTimeout(timeoutId));
-      wrapper.appendChild(iframe);
-      this.playerContainer.appendChild(wrapper);
-      this.isPlayerReady = true;
-      return;
+      iframe.src = url;
+      iframe.style.cssText = 'width:100%;height:100%;border:none';
+      iframe.allow = 'autoplay; encrypted-media; fullscreen';
+      iframe.setAttribute('allowfullscreen', '');
+      iframe.addEventListener('error', () => {
+        this.showCustomStreamError(channel, 'Failed to load stream');
+      });
+      this.content.appendChild(iframe);
     }
-
-    this.showOfflineMessage(channel);
   }
 
   private showCustomStreamError(channel: LiveChannel, message: string): void {
-    this.destroyPlayer();
     const safeName = escapeHtml(channel.name);
     const safeMsg = escapeHtml(message);
-    this.ensurePlayerContainer();
-    if (this.playerContainer) {
-      this.playerContainer.innerHTML = `
-        <div class="live-offline">
-          <div class="offline-icon">📡</div>
-          <div class="offline-text"><strong>${safeName}</strong><br>${safeMsg}</div>
-          <button class="offline-retry" id="cse-retry">Retry</button>
-          <button class="offline-retry" id="cse-remove" style="margin-top:4px;background:var(--danger,#c0392b)">Remove Stream</button>
-        </div>
-      `;
-      this.playerContainer.querySelector('#cse-retry')?.addEventListener('click', () => this.renderCustomStream(channel));
-      this.playerContainer.querySelector('#cse-remove')?.addEventListener('click', () => this.removeCustomChannel(channel.id));
-    }
+    this.content.innerHTML = '<div class="live-offline">'
+      + '<div class="live-offline-icon">&#x26A0;</div>'
+      + '<div class="live-offline-title">' + safeName + '</div>'
+      + '<div class="live-offline-msg">' + safeMsg + '</div>'
+      + '<div style="display:flex;gap:8px;margin-top:10px">'
+      + '<button class="live-retry-btn" data-action="retry">Retry</button>'
+      + '<button class="live-retry-btn" data-action="remove" style="color:var(--red,#f44)">Remove</button>'
+      + '</div></div>';
+    this.content.querySelector('[data-action="retry"]')?.addEventListener('click', () => {
+      void this.switchChannel(channel);
+    });
+    this.content.querySelector('[data-action="remove"]')?.addEventListener('click', () => {
+      this.removeCustomChannel(channel.id);
+    });
   }
 
-  /** Adds the "+" add-stream button to the toolbar, just before the settings gear. */
   private createAddStreamButton(toolbar: HTMLElement): void {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'live-news-settings-btn';
-    btn.title = 'Add custom stream URL';
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+    btn.title = 'Add custom stream';
+    btn.textContent = '+';
+    btn.style.cssText = 'font-size:16px;font-weight:700;line-height:1';
     btn.addEventListener('click', () => this.openAddStreamDialog());
-    // Insert before the settings gear (last child of toolbar)
-    const gear = toolbar.lastChild;
-    toolbar.insertBefore(btn, gear);
+    toolbar.appendChild(btn);
   }
 
   private openAddStreamDialog(): void {
-    // If dialog already open, close it
     const existing = document.querySelector('.live-add-stream-overlay');
     if (existing) { existing.remove(); return; }
 
-    // Full-screen transparent backdrop to catch outside clicks — sits under the dialog
     const overlay = document.createElement('div');
     overlay.className = 'live-add-stream-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:9998;background:transparent;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center';
 
     const dialog = document.createElement('div');
-    dialog.className = 'live-add-stream-dialog';
-    dialog.style.cssText = [
-      'position:fixed',
-      'z-index:9999',
-      'bottom:80px',
-      'right:24px',
-      'background:var(--bg-panel,#1a1a2e)',
-      'border:1px solid var(--border,#444)',
-      'border-radius:10px',
-      'padding:16px',
-      'width:320px',
-      'box-shadow:0 8px 32px rgba(0,0,0,0.6)',
-      'display:flex',
-      'flex-direction:column',
-      'gap:10px',
-    ].join(';');
+    dialog.style.cssText = 'background:var(--surface,#141414);border:1px solid var(--border,#2a2a2a);border-radius:8px;padding:20px;width:400px;max-width:90vw;font-family:var(--font-mono,monospace);color:var(--text,#e8e8e8)';
 
-    // Stop clicks inside dialog from hitting the overlay
-    dialog.addEventListener('click', (e) => e.stopPropagation());
-    dialog.addEventListener('mousedown', (e) => e.stopPropagation());
+    const title = document.createElement('div');
+    title.textContent = 'Add Custom Stream';
+    title.style.cssText = 'font-size:14px;font-weight:600;margin-bottom:12px';
+    dialog.appendChild(title);
 
-    const header = document.createElement('div');
-    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+    const desc = document.createElement('div');
+    desc.textContent = 'Paste any URL — HLS (.m3u8), YouTube, Twitch, or any embeddable page.';
+    desc.style.cssText = 'font-size:11px;color:var(--text-dim,#888);margin-bottom:12px';
+    dialog.appendChild(desc);
 
-    const label = document.createElement('div');
-    label.style.cssText = 'font-size:13px;color:var(--text-primary,#fff);font-weight:600;';
-    label.textContent = 'Add Custom Stream';
-
-    const closeX = document.createElement('button');
-    closeX.type = 'button';
-    closeX.textContent = '×';
-    closeX.style.cssText = 'background:none;border:none;color:var(--text-secondary,#999);font-size:18px;cursor:pointer;padding:0;line-height:1;';
-    closeX.addEventListener('click', () => overlay.remove());
-
-    header.append(label, closeX);
-
-    const hint = document.createElement('div');
-    hint.style.cssText = 'font-size:11px;color:var(--text-secondary,#888);line-height:1.5;';
-    hint.textContent = 'Paste a .m3u8 URL, YouTube link, Twitch URL, or any site. Other sites will be tried as embeds.';
-
-    const inputStyle = [
-      'width:100%',
-      'padding:8px 10px',
-      'background:var(--bg-input,#0d0d1a)',
-      'border:1px solid var(--border,#555)',
-      'border-radius:6px',
-      'color:var(--text-primary,#fff)',
-      'font-size:12px',
-      'box-sizing:border-box',
-      'outline:none',
-      'pointer-events:auto',
-    ].join(';');
-
-    const nameLabel = document.createElement('label');
-    nameLabel.style.cssText = 'font-size:11px;color:var(--text-secondary,#999);';
+    const nameLabel = document.createElement('div');
     nameLabel.textContent = 'Name';
+    nameLabel.style.cssText = 'font-size:11px;color:var(--text-dim,#888);margin-bottom:4px';
+    dialog.appendChild(nameLabel);
 
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
-    nameInput.placeholder = 'e.g. "My Sports Feed"';
-    nameInput.style.cssText = inputStyle;
-    nameInput.autocomplete = 'off';
+    nameInput.placeholder = 'My Stream';
+    nameInput.style.cssText = 'width:100%;padding:8px;font-size:12px;font-family:inherit;background:var(--input-bg,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:4px;color:var(--text,#e8e8e8);margin-bottom:10px;box-sizing:border-box';
+    dialog.appendChild(nameInput);
 
-    const urlLabel = document.createElement('label');
-    urlLabel.style.cssText = 'font-size:11px;color:var(--text-secondary,#999);margin-top:2px;';
-    urlLabel.textContent = 'Stream URL';
+    const urlLabel = document.createElement('div');
+    urlLabel.textContent = 'URL';
+    urlLabel.style.cssText = 'font-size:11px;color:var(--text-dim,#888);margin-bottom:4px';
+    dialog.appendChild(urlLabel);
 
     const urlInput = document.createElement('input');
-    urlInput.type = 'text'; // use text not url — avoids browser validation blocking paste
+    urlInput.type = 'text';
     urlInput.placeholder = 'https://example.com/stream.m3u8';
-    urlInput.style.cssText = inputStyle;
-    urlInput.autocomplete = 'off';
-    urlInput.spellcheck = false;
+    urlInput.style.cssText = 'width:100%;padding:8px;font-size:12px;font-family:inherit;background:var(--input-bg,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:4px;color:var(--text,#e8e8e8);margin-bottom:6px;box-sizing:border-box';
+    dialog.appendChild(urlInput);
 
     const status = document.createElement('div');
-    status.style.cssText = 'font-size:11px;min-height:16px;padding:0 2px;';
+    status.style.cssText = 'font-size:11px;min-height:16px;margin-bottom:12px;color:var(--text-dim,#888)';
+    dialog.appendChild(status);
 
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.textContent = '+ Add Stream';
-    addBtn.style.cssText = [
-      'padding:9px 14px',
-      'background:var(--accent,#3498db)',
-      'color:#fff',
-      'border:none',
-      'border-radius:6px',
-      'cursor:pointer',
-      'font-size:13px',
-      'font-weight:600',
-      'width:100%',
-      'margin-top:4px',
-      'pointer-events:auto',
-    ].join(';');
-
+    // Preview detected type as user types
     urlInput.addEventListener('input', () => {
       const val = urlInput.value.trim();
       if (!val) { status.textContent = ''; return; }
       const parsed = this.parseCustomStreamUrl(val);
-      if (!parsed) {
-        status.style.color = 'var(--danger,#e74c3c)';
-        status.textContent = '✗ Invalid URL';
-        return;
-      }
-      const labels: Record<string, string> = {
-        hls: '✓ HLS stream — native player',
-        youtube: '✓ YouTube — embedded player',
-        twitch: '✓ Twitch — embedded player',
-        iframe: '⚠ Will try as embed (may be blocked)',
-      };
-      status.style.color = parsed.type === 'iframe' ? 'var(--warn,#f39c12)' : 'var(--success,#2ecc71)';
-      status.textContent = labels[parsed.type] ?? '✓ URL detected';
-      if (parsed.type === 'twitch' && parsed.twitchChannel && !nameInput.value) {
-        nameInput.value = parsed.twitchChannel;
+      if (parsed) {
+        status.textContent = 'Detected: ' + parsed.type.toUpperCase();
+        status.style.color = 'var(--green,#1aff8a)';
+      } else {
+        status.textContent = 'Invalid URL';
+        status.style.color = 'var(--red,#ff4444)';
       }
     });
 
-    const submit = () => {
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = 'padding:6px 14px;font-size:12px;font-family:inherit;background:transparent;border:1px solid var(--border,#2a2a2a);border-radius:4px;color:var(--text-secondary,#ccc);cursor:pointer';
+    cancelBtn.addEventListener('click', () => overlay.remove());
+    btnRow.appendChild(cancelBtn);
+
+    const addBtn = document.createElement('button');
+    addBtn.textContent = 'Add Stream';
+    addBtn.style.cssText = 'padding:6px 14px;font-size:12px;font-family:inherit;background:var(--accent-primary,#1aff8a);border:1px solid var(--accent-primary,#1aff8a);border-radius:4px;color:#000;font-weight:600;cursor:pointer';
+    addBtn.addEventListener('click', () => {
+      const name = nameInput.value.trim() || 'Custom Stream';
       const rawUrl = urlInput.value.trim();
-      const name = nameInput.value.trim() || rawUrl;
-      if (!rawUrl) {
-        status.style.color = 'var(--danger,#e74c3c)';
-        status.textContent = '✗ Please enter a URL';
-        urlInput.focus();
-        return;
-      }
       const parsed = this.parseCustomStreamUrl(rawUrl);
       if (!parsed) {
-        status.style.color = 'var(--danger,#e74c3c)';
-        status.textContent = '✗ Please enter a valid URL';
-        urlInput.focus();
+        status.textContent = 'Please enter a valid URL';
+        status.style.color = 'var(--red,#ff4444)';
         return;
       }
-      this.addCustomChannel(name, rawUrl, parsed);
+      this.addCustomChannel(name, parsed.url, parsed.type);
       overlay.remove();
-    };
+    });
+    btnRow.appendChild(addBtn);
+    dialog.appendChild(btnRow);
 
-    addBtn.addEventListener('click', submit);
-    urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') urlInput.focus(); });
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKey); }
-    };
-    document.addEventListener('keydown', onKey);
-    overlay.addEventListener('click', () => { overlay.remove(); document.removeEventListener('keydown', onKey); });
-
-    dialog.append(header, hint, nameLabel, nameInput, urlLabel, urlInput, status, addBtn);
     overlay.appendChild(dialog);
-    document.body.appendChild(overlay);
 
-    // Focus URL input after paint
-    requestAnimationFrame(() => urlInput.focus());
+    // Close on overlay click (not dialog click)
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+
+    // Close on Escape
+    const escHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escHandler); }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    document.body.appendChild(overlay);
+    nameInput.focus();
   }
 
-  private addCustomChannel(
-    name: string,
-    rawUrl: string,
-    parsed: NonNullable<ReturnType<typeof LiveNewsPanel.prototype.parseCustomStreamUrl>>,
-  ): void {
-    const id = `custom-${Date.now()}`;
-    let channel: LiveChannel;
+  private addCustomChannel(name: string, url: string, type: 'hls' | 'iframe' | 'youtube' | 'twitch'): void {
+    const id = 'custom-' + Date.now();
+    const channel: LiveChannel = {
+      id,
+      name,
+      customStreamUrl: url,
+      customStreamType: type,
+    };
 
-    if (parsed.type === 'hls') {
-      channel = { id, name, hlsUrl: parsed.hlsUrl, useFallbackOnly: true, customStreamUrl: parsed.hlsUrl, customStreamType: 'hls' };
-    } else if (parsed.type === 'youtube') {
-      channel = { id, name, handle: parsed.handle, fallbackVideoId: parsed.videoId, customStreamUrl: rawUrl, customStreamType: 'youtube' };
-    } else if (parsed.type === 'twitch') {
-      channel = { id, name, customStreamUrl: parsed.twitchChannel!, customStreamType: 'twitch' };
-    } else {
-      channel = { id, name, customStreamUrl: rawUrl, customStreamType: 'iframe' };
+    // For YouTube custom streams, extract video ID
+    if (type === 'youtube') {
+      try {
+        const parsed = new URL(url);
+        const vid = parsed.searchParams.get('v') || parsed.pathname.split('/').pop() || '';
+        if (vid) channel.videoId = vid;
+      } catch { /* noop */ }
     }
 
     this.channels.push(channel);
-    this.saveChannels();
-    this.channelSwitcher?.appendChild(this.createChannelButton(channel));
+    saveChannelsToStorage(this.channels);
+    this.refreshChannelSwitcher();
     void this.switchChannel(channel);
   }
 
   private removeCustomChannel(id: string): void {
     this.channels = this.channels.filter(c => c.id !== id);
-    this.saveChannels();
+    saveChannelsToStorage(this.channels);
     this.refreshChannelSwitcher();
-    if (this.channels.length > 0) {
+    if (this.activeChannel.id === id) {
       this.activeChannel = this.channels[0]!;
       void this.switchChannel(this.activeChannel);
     }

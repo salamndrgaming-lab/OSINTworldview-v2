@@ -87,7 +87,7 @@ export function applyLayout(layout: DashboardLayout): void {
     if (mapSection) {
       mapSection.style.display = 'none';
     }
-  } else if (layout !== 'focus') {
+  } else {
     // Restore map if not in focus mode (and not explicitly hidden by user)
     if (mapSection && mapSection.style.display === 'none' && !mapSection.classList.contains('hidden')) {
       mapSection.style.display = '';

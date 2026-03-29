@@ -1,6 +1,6 @@
 import type { AppContext, AppModule } from '@/app/app-context';
 import { replayPendingCalls, clearAllPendingCalls } from '@/app/pending-panel-data';
-import type { RelatedAsset } from '@/types';
+import type { RelatedAsset, PanelConfig } from '@/types';
 import type { TheaterPostureSummary } from '@/services/military-surge';
 import { POIPanel } from '@/components/POIPanel';
 import {
@@ -64,7 +64,6 @@ import {
   getActivePresetId,
   saveCustomSnapshot,
   applyPreset,
-  clearActivePreset,
 } from '@/services/panel-presets';
 
 export interface PanelLayoutCallbacks {

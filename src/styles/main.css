@@ -19741,3 +19741,198 @@ body.has-breaking-alert .panels-grid {
   color: var(--accent-primary, #1aff8a) !important;
   font-weight: 600;
 }
+
+/* ============================================================
+   Dashboard Layout Modes
+   Applied via .layout-{mode} class on .main-content
+   ============================================================ */
+
+/* 1-col: single column stack */
+.main-content.layout-1-col .panels-grid {
+  grid-template-columns: 1fr;
+}
+
+/* 2-col: two fixed columns */
+.main-content.layout-2-col .panels-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* 3-col: three fixed columns */
+.main-content.layout-3-col .panels-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* 4-col: four fixed columns */
+.main-content.layout-4-col .panels-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Split: map left 50%, panels right 50% — side by side */
+.main-content.layout-split {
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.main-content.layout-split .map-section {
+  width: 50%;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  border-bottom: none;
+}
+
+.main-content.layout-split .map-section .map-resize-handle {
+  display: none;
+}
+
+.main-content.layout-split .panels-grid {
+  width: 50%;
+  overflow-y: auto;
+  max-height: 100%;
+  grid-template-columns: 1fr;
+}
+
+.main-content.layout-split .map-bottom-grid {
+  display: none;
+}
+
+/* Focus: map hidden, panels fill the full width */
+.main-content.layout-focus .map-section {
+  display: none !important;
+}
+
+.main-content.layout-focus .panels-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+/* ============================================================
+   Layout Switcher — buttons in the preset bar
+   ============================================================ */
+.layout-switcher {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+}
+
+.layout-switcher-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-right: 4px;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.layout-btn {
+  padding: 3px 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  outline: none;
+  line-height: 1;
+}
+
+.layout-btn:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.layout-btn.active {
+  color: var(--accent-primary, #1aff8a);
+  border-color: var(--accent-primary, #1aff8a);
+  background: rgba(26, 255, 138, 0.06);
+}
+
+.tv-mode-trigger {
+  margin-left: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  outline: none;
+}
+
+.tv-mode-trigger:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.tv-mode-trigger.active {
+  border-color: var(--accent-primary, #1aff8a);
+  color: var(--accent-primary, #1aff8a);
+  background: rgba(26, 255, 138, 0.06);
+}
+
+/* Hide layout switcher on narrow screens */
+@media (max-width: 768px) {
+  .layout-switcher {
+    display: none;
+  }
+  .tv-mode-trigger {
+    display: none;
+  }
+}
+
+/* TV mode global overrides (all variants, not just happy) */
+[data-tv-mode] .header {
+  display: none;
+}
+
+[data-tv-mode] .preset-bar {
+  display: none;
+}
+
+[data-tv-mode] .site-footer {
+  display: none;
+}
+
+[data-tv-mode] .panels-grid {
+  padding: 0;
+  gap: 0;
+}
+
+[data-tv-mode] .panel.tv-hidden {
+  display: none !important;
+}
+
+[data-tv-mode] .panel.tv-active {
+  display: flex !important;
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  min-height: 100vh;
+  max-height: none;
+  border: none;
+  border-radius: 0;
+}
+
+[data-tv-mode] .main-content {
+  height: 100vh;
+  overflow: hidden;
+}
+
+[data-tv-mode] .map-section {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  min-height: 100vh;
+  border: none;
+}

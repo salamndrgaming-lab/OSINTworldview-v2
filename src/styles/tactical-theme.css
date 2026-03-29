@@ -458,3 +458,23 @@
 [data-theme="tactical"] .sv-delete:hover {
   color: #ff0040;
 }
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Layout switcher and TV mode
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .layout-btn.active {
+  color: #00ff41;
+  border-color: #00ff41;
+  background: rgba(0, 255, 65, 0.06);
+}
+
+[data-theme="tactical"] .tv-mode-trigger.active {
+  color: #00ff41;
+  border-color: #00ff41;
+  background: rgba(0, 255, 65, 0.06);
+  box-shadow: 0 0 4px rgba(0, 255, 65, 0.15);
+}
+
+[data-theme="tactical"] .layout-switcher {
+  border-left-color: #0a2a0a;
+}

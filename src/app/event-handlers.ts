@@ -137,27 +137,31 @@ export class EventHandlerManager implements AppModule {
   }
 
   private setupTvMode(): void {
-    if (SITE_VARIANT !== 'happy') return;
-
-    const tvBtn = document.getElementById('tvModeBtn');
-    const tvExitBtn = document.getElementById('tvExitBtn');
-    if (tvBtn) {
-      tvBtn.addEventListener('click', () => this.toggleTvMode());
-    }
-    if (tvExitBtn) {
-      tvExitBtn.addEventListener('click', () => this.toggleTvMode());
-    }
-    // Keyboard shortcut: Shift+T
-    this.boundTvKeydownHandler = (e: KeyboardEvent) => {
-      if (e.shiftKey && e.key === 'T' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        const active = document.activeElement;
-        if (active?.tagName !== 'INPUT' && active?.tagName !== 'TEXTAREA') {
-          e.preventDefault();
-          this.toggleTvMode();
-        }
+    // Happy variant has its own buttons
+    if (SITE_VARIANT === 'happy') {
+      const tvBtn = document.getElementById('tvModeBtn');
+      const tvExitBtn = document.getElementById('tvExitBtn');
+      if (tvBtn) {
+        tvBtn.addEventListener('click', () => this.toggleTvMode());
       }
-    };
-    document.addEventListener('keydown', this.boundTvKeydownHandler);
+      if (tvExitBtn) {
+        tvExitBtn.addEventListener('click', () => this.toggleTvMode());
+      }
+      // Keyboard shortcut: Shift+T (happy variant keeps its own handler)
+      this.boundTvKeydownHandler = (e: KeyboardEvent) => {
+        if (e.shiftKey && e.key === 'T' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          const active = document.activeElement;
+          if (active?.tagName !== 'INPUT' && active?.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+            this.toggleTvMode();
+          }
+        }
+      };
+      document.addEventListener('keydown', this.boundTvKeydownHandler);
+    }
+
+    // All variants: listen for the custom event from the preset bar TV button
+    window.addEventListener('toggle-tv-mode', () => this.toggleTvMode());
   }
 
   private toggleTvMode(): void {
@@ -175,7 +179,10 @@ export class EventHandlerManager implements AppModule {
       this.ctx.tvMode.updatePanelKeys(panelKeys);
     }
     this.ctx.tvMode.toggle();
-    document.getElementById('tvModeBtn')?.classList.toggle('active', this.ctx.tvMode.active);
+    const isActive = this.ctx.tvMode.active;
+    document.getElementById('tvModeBtn')?.classList.toggle('active', isActive);
+    // Notify the preset bar TV button
+    window.dispatchEvent(new CustomEvent('tv-mode-changed', { detail: { active: isActive } }));
   }
 
   destroy(): void {

@@ -70,6 +70,13 @@ import {
   saveView,
   deleteView,
 } from '@/services/saved-map-views';
+import {
+  LAYOUT_OPTIONS,
+  getStoredLayout,
+  applyLayout,
+  applyStoredLayout,
+  type DashboardLayout,
+} from '@/services/dashboard-layout';
 
 export interface PanelLayoutCallbacks {
   openCountryStory: (code: string, name: string) => void;
@@ -306,6 +313,14 @@ export class PanelLayoutManager implements AppModule {
           const isActive = p.id === getActivePresetId();
           return `<button class="preset-btn${isActive ? ' active' : ''}" data-preset="${p.id}" title="${escapeHtml(p.description)}">${p.icon} ${escapeHtml(p.name)}</button>`;
         }).join('')}
+        <div class="layout-switcher">
+          <span class="layout-switcher-label">LAYOUT</span>
+          ${LAYOUT_OPTIONS.map(o => {
+            const isActive = o.id === getStoredLayout();
+            return `<button class="layout-btn${isActive ? ' active' : ''}" data-layout="${o.id}" title="${escapeHtml(o.description)}">${o.icon}</button>`;
+          }).join('')}
+          <button class="tv-mode-trigger" id="tvModeTrigger" title="TV/Kiosk Mode (Shift+T) — auto-cycle through panels fullscreen">TV</button>
+        </div>
       </div>
       <div class="main-content">
         <div class="map-section" id="mapSection">
@@ -366,6 +381,12 @@ export class PanelLayoutManager implements AppModule {
 
     // Saved map views dropdown
     this.initSavedViews();
+
+    // Layout switcher (column modes + split screen)
+    this.initLayoutSwitcher();
+
+    // TV/Kiosk mode trigger (all variants)
+    this.initTvModeTrigger();
 
     if (this.ctx.isMobile) {
       this.setupMobileMapToggle();
@@ -1756,6 +1777,52 @@ export class PanelLayoutManager implements AppModule {
       isDragging = false;
       dragStarted = false;
       el.classList.remove('dragging-source');
+    });
+  }
+
+  private initLayoutSwitcher(): void {
+    // Apply stored layout on init
+    applyStoredLayout();
+
+    const bar = document.getElementById('presetBar');
+    if (!bar) return;
+
+    bar.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-layout]');
+      if (!btn?.dataset.layout) return;
+      const layout = btn.dataset.layout as DashboardLayout;
+
+      applyLayout(layout);
+
+      // Update active button styling
+      bar.querySelectorAll('.layout-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  }
+
+  private initTvModeTrigger(): void {
+    const btn = document.getElementById('tvModeTrigger');
+    if (!btn) return;
+
+    btn.addEventListener('click', () => {
+      // Dispatch a custom event that event-handlers.ts can listen for
+      window.dispatchEvent(new CustomEvent('toggle-tv-mode'));
+    });
+
+    // Listen for TV mode state changes to update button
+    window.addEventListener('tv-mode-changed', ((e: CustomEvent) => {
+      btn.classList.toggle('active', e.detail?.active ?? false);
+    }) as EventListener);
+
+    // Keyboard shortcut: Shift+T (works in all variants now)
+    document.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.shiftKey && e.key === 'T' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const active = document.activeElement;
+        if (active?.tagName !== 'INPUT' && active?.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent('toggle-tv-mode'));
+        }
+      }
     });
   }
 

@@ -436,3 +436,25 @@
   background: rgba(0, 255, 65, 0.06);
   box-shadow: 0 0 4px rgba(0, 255, 65, 0.15);
 }
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Saved views dropdown
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .saved-views-dropdown {
+  background: #020802;
+  border-color: #0a2a0a;
+  box-shadow: 0 4px 16px rgba(0, 255, 65, 0.06);
+}
+
+[data-theme="tactical"] .sv-item:hover {
+  background: rgba(0, 255, 65, 0.04);
+  color: #00ff41;
+}
+
+[data-theme="tactical"] .sv-save-current {
+  color: #00ff41 !important;
+}
+
+[data-theme="tactical"] .sv-delete:hover {
+  color: #ff0040;
+}

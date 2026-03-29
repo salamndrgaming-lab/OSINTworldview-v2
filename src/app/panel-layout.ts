@@ -65,6 +65,11 @@ import {
   saveCustomSnapshot,
   applyPreset,
 } from '@/services/panel-presets';
+import {
+  getAllViews,
+  saveView,
+  deleteView,
+} from '@/services/saved-map-views';
 
 export interface PanelLayoutCallbacks {
   openCountryStory: (code: string, name: string) => void;
@@ -310,6 +315,12 @@ export class PanelLayoutManager implements AppModule {
             </div>
             <span class="header-clock" id="headerClock" translate="no"></span>
             <div class="map-header-actions">
+              <div class="saved-views-wrapper" id="savedViewsWrapper">
+                <button class="map-pin-btn" id="savedViewsBtn" title="Saved map views">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                </button>
+                <div class="saved-views-dropdown" id="savedViewsDropdown"></div>
+              </div>
               <div class="map-dimension-toggle" id="mapDimensionToggle">
                 <button class="map-dim-btn${loadFromStorage<string>(STORAGE_KEYS.mapMode, 'flat') === 'globe' ? '' : ' active'}" data-mode="flat" title="2D Map">2D</button>
                 <button class="map-dim-btn${loadFromStorage<string>(STORAGE_KEYS.mapMode, 'flat') === 'globe' ? ' active' : ''}" data-mode="globe" title="3D Globe">3D</button>
@@ -352,6 +363,9 @@ export class PanelLayoutManager implements AppModule {
 
     // Panel preset bar (view switching)
     this.initPresetBar();
+
+    // Saved map views dropdown
+    this.initSavedViews();
 
     if (this.ctx.isMobile) {
       this.setupMobileMapToggle();
@@ -1742,6 +1756,106 @@ export class PanelLayoutManager implements AppModule {
       isDragging = false;
       dragStarted = false;
       el.classList.remove('dragging-source');
+    });
+  }
+
+  private initSavedViews(): void {
+    const wrapper = document.getElementById('savedViewsWrapper');
+    const btn = document.getElementById('savedViewsBtn');
+    const dropdown = document.getElementById('savedViewsDropdown');
+    if (!wrapper || !btn || !dropdown) return;
+
+    const renderDropdown = () => {
+      const views = getAllViews();
+      const builtins = views.filter(v => v.builtin);
+      const custom = views.filter(v => !v.builtin);
+
+      let html = '<div class="sv-section-label">INTEL HOTSPOTS</div>';
+      for (const v of builtins) {
+        html += '<button class="sv-item" data-sv-lat="' + v.lat + '" data-sv-lng="' + v.lng + '" data-sv-zoom="' + v.zoom + '">'
+          + escapeHtml(v.name) + '</button>';
+      }
+
+      if (custom.length > 0) {
+        html += '<div class="sv-divider"></div>';
+        html += '<div class="sv-section-label">MY BOOKMARKS</div>';
+        for (const v of custom) {
+          html += '<div class="sv-item-row">'
+            + '<button class="sv-item sv-item-custom" data-sv-lat="' + v.lat + '" data-sv-lng="' + v.lng + '" data-sv-zoom="' + v.zoom + '">'
+            + escapeHtml(v.name) + '</button>'
+            + '<button class="sv-delete" data-sv-delete="' + v.id + '" title="Delete">&times;</button>'
+            + '</div>';
+        }
+      }
+
+      html += '<div class="sv-divider"></div>';
+      html += '<button class="sv-item sv-save-current" id="svSaveCurrent">+ Save current view</button>';
+
+      dropdown.innerHTML = html;
+    };
+
+    // Toggle dropdown
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = wrapper.classList.toggle('open');
+      if (isOpen) renderDropdown();
+    });
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+      if (!wrapper.contains(e.target as Node)) {
+        wrapper.classList.remove('open');
+      }
+    });
+
+    // Handle clicks inside the dropdown
+    dropdown.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+
+      // Delete bookmark
+      const deleteBtn = target.closest<HTMLElement>('[data-sv-delete]');
+      if (deleteBtn?.dataset.svDelete) {
+        deleteView(deleteBtn.dataset.svDelete);
+        renderDropdown();
+        e.stopPropagation();
+        return;
+      }
+
+      // Save current view
+      if (target.closest('#svSaveCurrent')) {
+        const name = prompt('Name this view:');
+        if (!name?.trim()) return;
+        const map = this.ctx.map;
+        if (map) {
+          const state = map.getState();
+          if (state) {
+            saveView(name.trim(), state.latitude, state.longitude, state.zoom);
+            renderDropdown();
+          }
+        }
+        return;
+      }
+
+      // Fly to a saved view
+      const item = target.closest<HTMLElement>('[data-sv-lat]');
+      if (item) {
+        const lat = parseFloat(item.dataset.svLat || '0');
+        const lng = parseFloat(item.dataset.svLng || '0');
+        const zoom = parseFloat(item.dataset.svZoom || '3');
+        const map = this.ctx.map;
+        if (map) {
+          // Use the DeckGLMap's setCenter for arbitrary positions
+          const deckMap = (map as unknown as { deckGLMap?: { setCenter: (lat: number, lon: number, zoom?: number) => void } }).deckGLMap;
+          const globeMap = (map as unknown as { globeMap?: { setCenter?: (lat: number, lon: number, zoom?: number) => void } }).globeMap;
+          if (deckMap?.setCenter) {
+            deckMap.setCenter(lat, lng, zoom);
+          } else if (globeMap?.setCenter) {
+            globeMap.setCenter(lat, lng, zoom);
+          }
+        }
+        wrapper.classList.remove('open');
+        return;
+      }
     });
   }
 

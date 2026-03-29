@@ -19648,3 +19648,96 @@ body.has-breaking-alert .panels-grid {
     display: none;
   }
 }
+
+/* ============================================================
+   Saved Map Views — bookmark dropdown in map header
+   ============================================================ */
+.saved-views-wrapper {
+  position: relative;
+}
+
+.saved-views-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1000;
+  min-width: 220px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px var(--shadow-color);
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  scrollbar-width: thin;
+}
+
+.saved-views-wrapper.open .saved-views-dropdown {
+  display: block;
+}
+
+.sv-section-label {
+  padding: 6px 10px 2px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.sv-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.sv-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.sv-item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.sv-item-row {
+  display: flex;
+  align-items: center;
+}
+
+.sv-item-row .sv-item {
+  flex: 1;
+}
+
+.sv-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 14px;
+  line-height: 1;
+  transition: color 0.1s ease;
+}
+
+.sv-delete:hover {
+  color: var(--red, #ff4444);
+}
+
+.sv-save-current {
+  color: var(--accent-primary, #1aff8a) !important;
+  font-weight: 600;
+}

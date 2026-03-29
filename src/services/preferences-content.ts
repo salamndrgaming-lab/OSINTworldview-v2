@@ -22,6 +22,7 @@ import { trackLanguageChange } from '@/services/analytics';
 import { exportSettings, importSettings, type ImportResult } from '@/utils/settings-persistence';
 import { createAccentColorPicker } from '@/services/accent-color';
 import { getTelegramConfig, saveTelegramConfig, clearTelegramConfig, testTelegramConnection, sendReport } from '@/services/telegram-report';
+import { getStoredBranding as getStoredBrandingConfig, saveBranding, clearBranding } from '@/services/branding';
 const DESKTOP_RELEASES_URL = 'https://github.com/koala73/worldmonitor/releases';
 
 export interface PreferencesHost {
@@ -337,6 +338,26 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
   html += renderColorSchemeBuilder();
   html += '</div></details>';
 
+  // ── Branding group (NEW) ──
+  html += '<details class="wm-pref-group">';
+  html += '<summary>Branding</summary>';
+  html += '<div class="wm-pref-group-content">';
+  html += '<div class="ai-flow-toggle-desc" style="margin-bottom:10px">';
+  html += 'Customize the platform header, logo, and favicon. Changes persist across sessions.';
+  html += '</div>';
+  const currentBranding = getStoredBrandingConfig();
+  html += '<div class="ai-flow-toggle-row"><div class="ai-flow-toggle-label-wrap"><div class="ai-flow-toggle-label">Header Text</div><div class="ai-flow-toggle-desc">Replaces "MONITOR" in the header bar</div></div></div>';
+  html += '<input type="text" class="unified-settings-select" id="branding-header-text" placeholder="MONITOR" value="' + escapeHtml(currentBranding.headerText || '') + '" style="width:100%;font-family:var(--font-mono);font-size:11px;margin-bottom:8px" />';
+  html += '<div class="ai-flow-toggle-row"><div class="ai-flow-toggle-label-wrap"><div class="ai-flow-toggle-label">Logo URL</div><div class="ai-flow-toggle-desc">URL to a small logo image (max 32px height)</div></div></div>';
+  html += '<input type="text" class="unified-settings-select" id="branding-logo-url" placeholder="https://example.com/logo.png" value="' + escapeHtml(currentBranding.logoUrl || '') + '" style="width:100%;font-family:var(--font-mono);font-size:11px;margin-bottom:8px" />';
+  html += '<div class="ai-flow-toggle-row"><div class="ai-flow-toggle-label-wrap"><div class="ai-flow-toggle-label">Favicon URL</div><div class="ai-flow-toggle-desc">URL to a custom favicon (16x16 or 32x32)</div></div></div>';
+  html += '<input type="text" class="unified-settings-select" id="branding-favicon-url" placeholder="https://example.com/favicon.ico" value="' + escapeHtml(currentBranding.faviconUrl || '') + '" style="width:100%;font-family:var(--font-mono);font-size:11px;margin-bottom:10px" />';
+  html += '<div style="display:flex;gap:8px">';
+  html += '<button type="button" class="cs-btn-apply" id="branding-save-btn">Save Branding</button>';
+  html += '<button type="button" class="cs-btn-reset" id="branding-reset-btn">Reset to Default</button>';
+  html += '</div>';
+  html += '</div></details>';
+
   // ── Telegram Reports group ──
   html += '<details class="wm-pref-group">';
   html += '<summary>Telegram Reports</summary>';
@@ -574,6 +595,24 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
           if (btn) btn.classList.add('active');
         }
       }
+
+      // Branding button handlers
+      container.querySelector('#branding-save-btn')?.addEventListener('click', () => {
+        const headerText = (container.querySelector('#branding-header-text') as HTMLInputElement)?.value?.trim() || '';
+        const logoUrl = (container.querySelector('#branding-logo-url') as HTMLInputElement)?.value?.trim() || '';
+        const faviconUrl = (container.querySelector('#branding-favicon-url') as HTMLInputElement)?.value?.trim() || '';
+        saveBranding({ headerText: headerText || undefined, logoUrl: logoUrl || undefined, faviconUrl: faviconUrl || undefined });
+      }, { signal });
+
+      container.querySelector('#branding-reset-btn')?.addEventListener('click', () => {
+        clearBranding();
+        const headerInput = container.querySelector('#branding-header-text') as HTMLInputElement;
+        const logoInput = container.querySelector('#branding-logo-url') as HTMLInputElement;
+        const faviconInput = container.querySelector('#branding-favicon-url') as HTMLInputElement;
+        if (headerInput) headerInput.value = '';
+        if (logoInput) logoInput.value = '';
+        if (faviconInput) faviconInput.value = '';
+      }, { signal });
 
       // Telegram button handlers
       const tgStatus = container.querySelector('#tg-status-msg') as HTMLElement | null;

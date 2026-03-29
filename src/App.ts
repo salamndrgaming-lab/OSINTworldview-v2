@@ -52,6 +52,7 @@ import {
 import type { CorrelationPanel } from '@/components/CorrelationPanel';
 
 import { initAccentColor } from '@/services/accent-color';
+import { applyStoredBranding } from '@/services/branding';
 
 const CYBER_LAYER_ENABLED = import.meta.env.VITE_ENABLE_CYBER_LAYER === 'true';
 
@@ -558,6 +559,7 @@ export class App {
     // Phase 1: Layout (creates map + panels — they'll find hydrated data)
     this.panelLayout.init();
     initAccentColor();
+    applyStoredBranding();
 
     const mobileGeoCoords = await geoCoordsPromise;
     if (mobileGeoCoords && this.state.map) {

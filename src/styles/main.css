@@ -19936,3 +19936,92 @@ body.has-breaking-alert .panels-grid {
   min-height: 100vh;
   border: none;
 }
+
+/* ============================================================
+   TV Mode — Exit Overlay (all variants)
+   Shows on mouse movement, auto-hides after 3 seconds.
+   ============================================================ */
+.tv-overlay {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 99999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.tv-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tv-overlay-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tv-overlay-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tv-overlay-label {
+  font-family: var(--font-mono, monospace);
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.tv-overlay-pos {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.tv-overlay-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tv-ctl-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.tv-ctl-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.tv-exit-main {
+  background: rgba(220, 38, 38, 0.7);
+  border-color: rgba(220, 38, 38, 0.9);
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 6px 16px;
+}
+
+.tv-exit-main:hover {
+  background: rgba(220, 38, 38, 0.9);
+  border-color: #dc2626;
+}

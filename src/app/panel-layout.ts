@@ -1827,9 +1827,12 @@ export class PanelLayoutManager implements AppModule {
         if (!name?.trim()) return;
         const map = this.ctx.map;
         if (map) {
-          const state = map.getState();
-          if (state) {
-            saveView(name.trim(), state.latitude, state.longitude, state.zoom);
+          // Read current position from the underlying DeckGLMap or GlobeMap
+          const deckMap = (map as unknown as { deckGLMap?: { getCenter: () => { lat: number; lon: number } | null; maplibreMap?: { getZoom: () => number } | null } }).deckGLMap;
+          const center = deckMap?.getCenter?.();
+          const zoom = deckMap?.maplibreMap?.getZoom?.() ?? map.getState().zoom;
+          if (center) {
+            saveView(name.trim(), center.lat, center.lon, zoom);
             renderDropdown();
           }
         }

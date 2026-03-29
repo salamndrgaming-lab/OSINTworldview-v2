@@ -12,7 +12,7 @@ import { loadEnvFile, getRedisCredentials } from './_seed-utils.mjs';
 loadEnvFile(import.meta.url);
 
 const VERSION_KEY = 'webcam:cameras:active';
-const VERSION = 'fallback-v1';
+let VERSION = 'fallback-v1';
 
 // Each webcam has a Windy webcam ID for the embed viewer
 // Format: { id, title, lat, lng, category, country, windyId }
@@ -77,7 +77,7 @@ async function main() {
   const { url: redisUrl, token: redisToken } = getRedisCredentials();
   console.log('=== Webcam Fallback Seed ===');
 
-  // Check if primary Windy seed already populated — still run to add Shodan cams
+  // Check if primary Windy seed already populated — use its version to add cams into same keys
   let primaryRan = false;
   try {
     const resp = await fetch(`${redisUrl}/get/${encodeURIComponent(VERSION_KEY)}`, {
@@ -88,7 +88,8 @@ async function main() {
       const data = await resp.json();
       if (data.result && !data.result.includes('fallback')) {
         primaryRan = true;
-        console.log(`  Primary Windy seed ran (${data.result}) — adding Shodan + static cams on top`);
+        VERSION = data.result; // Use Windy's version so we write into the same geo/meta keys
+        console.log(`  Primary Windy seed ran — merging into version: ${VERSION}`);
       }
     }
   } catch { /* continue */ }
@@ -185,12 +186,14 @@ async function main() {
     body: JSON.stringify(['EXPIRE', metaKey, '86400']),
   }).catch(() => {});
 
-  // Set active version
-  await fetch(redisUrl, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(['SET', VERSION_KEY, VERSION, 'EX', '86400']),
-  });
+  // Only set active version if Windy didn't already set it
+  if (!primaryRan) {
+    await fetch(redisUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(['SET', VERSION_KEY, VERSION, 'EX', '86400']),
+    });
+  }
 
   console.log(`  Written ${written}/${allWebcams.length} webcams`);
   console.log('=== Done ===');

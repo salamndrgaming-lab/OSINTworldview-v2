@@ -1,0 +1,412 @@
+/* ============================================================
+   Tactical Theme — High-Contrast Green-on-Black
+   Military terminal / CRT aesthetic for maximum readability
+   in low-light conditions.
+
+   Activated via [data-theme="tactical"] on <html>.
+   ============================================================ */
+
+[data-theme="tactical"] {
+  /* Backgrounds — pure black with very subtle green tint */
+  --bg: #000000;
+  --bg-secondary: #030a03;
+  --surface: #040c04;
+  --surface-hover: #081408;
+  --surface-active: #0a1a0a;
+
+  /* Borders — dark green, barely visible */
+  --border: #0a2a0a;
+  --border-strong: #0f3f0f;
+  --border-subtle: #061206;
+
+  /* Text — green phosphor palette */
+  --text: #00ff41;
+  --text-secondary: #00cc33;
+  --text-dim: #008822;
+  --text-muted: #006618;
+  --text-faint: #004410;
+  --text-ghost: #003308;
+  --accent: #00ff41;
+
+  /* Overlays — green-tinted */
+  --overlay-subtle: rgba(0, 255, 65, 0.02);
+  --overlay-light: rgba(0, 255, 65, 0.04);
+  --overlay-medium: rgba(0, 255, 65, 0.08);
+  --overlay-heavy: rgba(0, 255, 65, 0.15);
+  --shadow-color: rgba(0, 0, 0, 0.8);
+  --darken-light: rgba(0, 0, 0, 0.3);
+  --darken-medium: rgba(0, 0, 0, 0.4);
+  --darken-heavy: rgba(0, 0, 0, 0.5);
+
+  /* Scrollbar */
+  --scrollbar-thumb: #0a2a0a;
+  --scrollbar-thumb-hover: #0f4f0f;
+
+  /* Input */
+  --input-bg: #020802;
+
+  /* Panels */
+  --panel-bg: #020802;
+  --panel-border: #0a2a0a;
+
+  /* Map — deep black with green grid */
+  --map-bg: #000000;
+  --map-grid: #0a2a0a;
+  --map-country: #020802;
+  --map-stroke: #00ff41;
+
+  /* Semantic colors — keep severity distinct but within green family
+     except for genuine alerts which keep their original colors */
+  --semantic-critical: #ff0040;
+  --semantic-high: #ff6600;
+  --semantic-elevated: #ffaa00;
+  --semantic-normal: #00ff41;
+  --semantic-low: #00aaff;
+  --semantic-info: #00ccff;
+  --semantic-positive: #00ff41;
+
+  /* Threat levels */
+  --threat-critical: #ff0040;
+  --threat-high: #ff6600;
+  --threat-medium: #ffaa00;
+  --threat-low: #00ff41;
+  --threat-info: #00ccff;
+
+  /* DEFCON levels */
+  --defcon-1: #ff0040;
+  --defcon-2: #ff4400;
+  --defcon-3: #ffaa00;
+  --defcon-4: #00ccff;
+  --defcon-5: #00ff41;
+
+  /* Status */
+  --status-live: #00ff41;
+  --status-cached: #ffaa00;
+  --status-unavailable: #ff0040;
+
+  /* Legacy aliases */
+  --red: #ff0040;
+  --green: #00ff41;
+  --yellow: #ffaa00;
+
+  /* Force monospace font for the tactical look */
+  --font-body: 'SF Mono', 'Monaco', 'Cascadia Code', 'Fira Code', 'DejaVu Sans Mono', 'Liberation Mono', monospace;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: CRT scanline overlay
+   A subtle repeating gradient over the entire page that
+   simulates CRT phosphor lines. Uses pointer-events: none
+   so it doesn't interfere with interaction.
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"]::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 99999;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.08) 0px,
+    rgba(0, 0, 0, 0.08) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: multiply;
+}
+
+/* Respect reduced motion — remove scanlines */
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="tactical"]::after {
+    display: none;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Green glow on text elements
+   Subtle text-shadow that simulates phosphor glow.
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .header,
+[data-theme="tactical"] .logo,
+[data-theme="tactical"] .logo-mobile,
+[data-theme="tactical"] .status-indicator span,
+[data-theme="tactical"] .version {
+  text-shadow: 0 0 6px rgba(0, 255, 65, 0.4), 0 0 12px rgba(0, 255, 65, 0.15);
+}
+
+[data-theme="tactical"] .panel-header .panel-title {
+  text-shadow: 0 0 4px rgba(0, 255, 65, 0.3);
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Panel styling overrides
+   Panels get a subtle green border glow and black background.
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .panel {
+  border-color: #0a2a0a;
+  box-shadow: 0 0 1px rgba(0, 255, 65, 0.1), inset 0 0 1px rgba(0, 255, 65, 0.05);
+}
+
+[data-theme="tactical"] .panel:hover {
+  border-color: #0f3f0f;
+  box-shadow: 0 0 2px rgba(0, 255, 65, 0.15), inset 0 0 1px rgba(0, 255, 65, 0.08);
+}
+
+[data-theme="tactical"] .panel-header {
+  border-bottom-color: #0a2a0a;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Header bar
+   Solid black with green accent line at the bottom.
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .header {
+  background: #000000;
+  border-bottom: 1px solid #00ff41;
+  box-shadow: 0 1px 4px rgba(0, 255, 65, 0.1);
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Buttons get green borders and glow on hover
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .search-btn,
+[data-theme="tactical"] .copy-link-btn,
+[data-theme="tactical"] .fullscreen-btn,
+[data-theme="tactical"] .download-btn {
+  border-color: #0a2a0a;
+  color: #00ff41;
+}
+
+[data-theme="tactical"] .search-btn:hover,
+[data-theme="tactical"] .copy-link-btn:hover,
+[data-theme="tactical"] .fullscreen-btn:hover,
+[data-theme="tactical"] .download-btn:hover {
+  border-color: #00ff41;
+  box-shadow: 0 0 4px rgba(0, 255, 65, 0.2);
+  background: rgba(0, 255, 65, 0.05);
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Status dot glow
+   The live indicator dot gets a pulsing green glow.
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .status-dot {
+  background: #00ff41;
+  box-shadow: 0 0 4px #00ff41, 0 0 8px rgba(0, 255, 65, 0.4);
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Variant switcher
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .variant-option.active {
+  color: #00ff41;
+  border-color: #00ff41;
+  background: rgba(0, 255, 65, 0.08);
+}
+
+[data-theme="tactical"] .variant-option:hover:not(.active) {
+  color: #00cc33;
+  background: rgba(0, 255, 65, 0.04);
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Scrollbars — thin green on black
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] ::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+[data-theme="tactical"] ::-webkit-scrollbar-thumb {
+  background: #0a2a0a;
+  border: 1px solid #061206;
+}
+
+[data-theme="tactical"] ::-webkit-scrollbar-thumb:hover {
+  background: #0f3f0f;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Select/input fields
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] select,
+[data-theme="tactical"] input[type="text"],
+[data-theme="tactical"] input[type="search"],
+[data-theme="tactical"] input[type="number"],
+[data-theme="tactical"] textarea {
+  background: #020802;
+  border-color: #0a2a0a;
+  color: #00ff41;
+}
+
+[data-theme="tactical"] select:focus,
+[data-theme="tactical"] input[type="text"]:focus,
+[data-theme="tactical"] input[type="search"]:focus,
+[data-theme="tactical"] textarea:focus {
+  border-color: #00ff41;
+  box-shadow: 0 0 4px rgba(0, 255, 65, 0.2);
+  outline: none;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Modal overlays
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.9);
+}
+
+[data-theme="tactical"] .unified-settings-panel,
+[data-theme="tactical"] .search-modal-panel {
+  background: #020802;
+  border: 1px solid #0a2a0a;
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.08);
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Links
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] a {
+  color: #00ff41;
+}
+
+[data-theme="tactical"] a:hover {
+  color: #33ff66;
+  text-shadow: 0 0 4px rgba(0, 255, 65, 0.3);
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Godmode extras
+   The God Mode toggle and threat badge should feel extra
+   intense in tactical mode.
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] #godmodeToggle {
+  color: #00ff41;
+  border-color: #0f3f0f;
+}
+
+[data-theme="tactical"] #godmodeToggle:hover {
+  background: rgba(0, 255, 65, 0.08);
+  border-color: #00ff41;
+  box-shadow: 0 0 6px rgba(0, 255, 65, 0.2);
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Alert ticker chyron
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .alert-ticker {
+  background: #020802;
+  border-top: 1px solid #0a2a0a;
+  border-bottom: 1px solid #0a2a0a;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Settings panel tabs and toggles
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .unified-settings-tab.active {
+  color: #00ff41;
+  border-bottom-color: #00ff41;
+}
+
+[data-theme="tactical"] .ai-flow-slider {
+  background: #0a2a0a;
+}
+
+[data-theme="tactical"] input:checked + .ai-flow-slider {
+  background: #006618;
+}
+
+[data-theme="tactical"] .wm-pref-group summary {
+  color: #00ff41;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Mobile menu
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .mobile-menu {
+  background: #000000;
+  border-right: 1px solid #0a2a0a;
+}
+
+[data-theme="tactical"] .mobile-menu-item {
+  color: #00cc33;
+}
+
+[data-theme="tactical"] .mobile-menu-item:hover,
+[data-theme="tactical"] .mobile-menu-item.active {
+  color: #00ff41;
+  background: rgba(0, 255, 65, 0.05);
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Table and data grid styling
+   Subtle green alternating rows for readability.
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] tr:nth-child(even),
+[data-theme="tactical"] .data-row:nth-child(even) {
+  background: rgba(0, 255, 65, 0.02);
+}
+
+[data-theme="tactical"] th,
+[data-theme="tactical"] .table-header {
+  color: #00ff41;
+  border-bottom: 1px solid #0a2a0a;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 10px;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: CLASSIFIED watermark (optional, subtle)
+   A faint diagonal watermark in the background of panels.
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .panels-grid::before {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-30deg);
+  font-family: var(--font-mono);
+  font-size: 120px;
+  font-weight: 700;
+  color: rgba(0, 255, 65, 0.015);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 0;
+  letter-spacing: 20px;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Accent color picker swatches
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .accent-swatch {
+  border-color: #0a2a0a;
+}
+
+[data-theme="tactical"] .accent-swatch.active {
+  box-shadow: 0 0 6px rgba(0, 255, 65, 0.4);
+  border-color: #00ff41;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Tactical: Custom scheme builder section
+   ──────────────────────────────────────────────────────────── */
+[data-theme="tactical"] .color-scheme-preset {
+  border-color: #0a2a0a;
+  background: #020802;
+}
+
+[data-theme="tactical"] .color-scheme-preset:hover {
+  border-color: #0f3f0f;
+  background: rgba(0, 255, 65, 0.03);
+}
+
+[data-theme="tactical"] .color-scheme-preset.active {
+  border-color: #00ff41;
+  box-shadow: 0 0 4px rgba(0, 255, 65, 0.2);
+}
+
+[data-theme="tactical"] .color-editor-swatch {
+  border-color: #0a2a0a;
+}

@@ -1,5 +1,6 @@
 @import './rtl-overrides.css';
 @import './panels.css';
+@import './tactical-theme.css';
 
 /* ============================================================
    Theme Colors — overridden by [data-theme="light"] below
@@ -19417,4 +19418,169 @@ body.has-breaking-alert .panels-grid {
   background: rgba(255, 68, 85, 0.08);
   border: 1px solid rgba(255, 68, 85, 0.2);
   color: #ff4455;
+}
+
+/* ============================================================
+   Color Scheme Builder — custom theme editor UI
+   ============================================================ */
+.color-scheme-section {
+  padding: 12px 0 4px;
+}
+
+.color-scheme-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-dim, #888);
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+}
+
+.color-scheme-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.color-scheme-preset {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 4px;
+  background: var(--surface, #141414);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary, #ccc);
+  transition: all 0.15s ease;
+  outline: none;
+}
+
+.color-scheme-preset:hover {
+  border-color: var(--border-strong, #444);
+  background: var(--surface-hover, #1e1e1e);
+  color: var(--text, #e8e8e8);
+}
+
+.color-scheme-preset.active {
+  border-color: var(--accent-primary, #1aff8a);
+  color: var(--accent-primary, #1aff8a);
+  box-shadow: 0 0 4px rgba(26, 255, 138, 0.15);
+}
+
+.color-scheme-preset-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.color-editor-group {
+  margin-bottom: 10px;
+}
+
+.color-editor-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted, #666);
+  margin-bottom: 4px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-subtle, #1a1a1a);
+}
+
+.color-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.color-editor-swatch {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 4px;
+  border: 1px solid var(--border, #2a2a2a);
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.color-editor-swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-editor-swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.color-editor-swatch::-moz-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.color-editor-label {
+  font-size: 11px;
+  color: var(--text-secondary, #ccc);
+  flex: 1;
+  min-width: 0;
+}
+
+.color-editor-value {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-dim, #888);
+  width: 60px;
+  text-align: right;
+}
+
+.color-scheme-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle, #1a1a1a);
+}
+
+.color-scheme-actions button {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+}
+
+.cs-btn-apply {
+  background: var(--accent-primary, #1aff8a);
+  color: #000;
+  border: 1px solid var(--accent-primary, #1aff8a);
+  font-weight: 600;
+}
+
+.cs-btn-apply:hover {
+  opacity: 0.9;
+}
+
+.cs-btn-reset {
+  background: transparent;
+  color: var(--text-secondary, #ccc);
+  border: 1px solid var(--border, #2a2a2a);
+}
+
+.cs-btn-reset:hover {
+  border-color: var(--border-strong, #444);
+  color: var(--text, #e8e8e8);
 }

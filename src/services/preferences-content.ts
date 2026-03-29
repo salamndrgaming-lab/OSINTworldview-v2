@@ -4,7 +4,18 @@ import { getMapProvider, setMapProvider, MAP_PROVIDER_OPTIONS, MAP_THEME_OPTIONS
 import { getLiveStreamsAlwaysOn, setLiveStreamsAlwaysOn } from '@/services/live-stream-settings';
 import { getGlobeVisualPreset, setGlobeVisualPreset, GLOBE_VISUAL_PRESET_OPTIONS, type GlobeVisualPreset } from '@/services/globe-render-settings';
 import type { StreamQuality } from '@/services/ai-flow-settings';
-import { getThemePreference, setThemePreference, type ThemePreference } from '@/utils/theme-manager';
+import {
+  getThemePreference,
+  setThemePreference,
+  getCurrentTheme,
+  getStoredCustomScheme,
+  saveCustomScheme,
+  clearCustomScheme,
+  getEditableColorGroups,
+  CUSTOM_SCHEME_PRESETS,
+  type ThemePreference,
+  type CustomColorScheme,
+} from '@/utils/theme-manager';
 import { getFontFamily, setFontFamily, type FontFamily } from '@/services/font-settings';
 import { escapeHtml } from '@/utils/sanitize';
 import { trackLanguageChange } from '@/services/analytics';
@@ -69,17 +80,76 @@ function updateAiStatus(container: HTMLElement): void {
   }
 }
 
+// ────────────────────────────────────────────────────────────
+// Color scheme builder HTML generator
+// ────────────────────────────────────────────────────────────
+
+function renderColorSchemeBuilder(): string {
+  const storedScheme = getStoredCustomScheme();
+  const groups = getEditableColorGroups();
+
+  let html = '';
+
+  // Preset buttons
+  html += '<div class="color-scheme-section-label">PRESETS</div>';
+  html += '<div class="color-scheme-presets">';
+  for (let i = 0; i < CUSTOM_SCHEME_PRESETS.length; i++) {
+    const preset = CUSTOM_SCHEME_PRESETS[i]!;
+    const isActive = storedScheme?.name === preset.name;
+    const bgColor = preset.overrides['bg'] || preset.overrides['surface'] || '#141414';
+    const accentColor = preset.overrides['accent-primary'] || preset.overrides['accent'] || '#1aff8a';
+    html += `<button class="color-scheme-preset${isActive ? ' active' : ''}" data-cs-preset="${i}" title="${escapeHtml(preset.name)} (based on ${preset.base})">`;
+    html += `<span class="color-scheme-preset-swatch" style="background:linear-gradient(135deg, ${bgColor} 50%, ${accentColor} 50%)"></span>`;
+    html += `${escapeHtml(preset.name)}`;
+    html += '</button>';
+  }
+  html += '</div>';
+
+  // Color editor groups
+  html += '<div class="color-scheme-section-label">CUSTOM EDITOR</div>';
+  html += '<div id="cs-editor">';
+
+  for (const group of groups) {
+    html += '<div class="color-editor-group">';
+    html += `<div class="color-editor-group-label">${escapeHtml(group.label)}</div>`;
+    for (const v of group.vars) {
+      // Read the current computed value for this CSS variable
+      const currentVal = storedScheme?.overrides[v.name] || '';
+      html += '<div class="color-editor-row">';
+      html += `<input type="color" class="color-editor-swatch" data-cs-var="${v.name}" value="${currentVal || '#000000'}" title="${escapeHtml(v.label)}">`;
+      html += `<span class="color-editor-label">${escapeHtml(v.label)}</span>`;
+      html += `<span class="color-editor-value" data-cs-val="${v.name}">${currentVal || '—'}</span>`;
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  html += '</div>';
+
+  // Action buttons
+  html += '<div class="color-scheme-actions">';
+  html += '<button class="cs-btn-apply" id="cs-apply-btn">Apply Custom Colors</button>';
+  html += '<button class="cs-btn-reset" id="cs-reset-btn">Reset to Default</button>';
+  html += '</div>';
+
+  return html;
+}
+
+// ────────────────────────────────────────────────────────────
+// Main render function
+// ────────────────────────────────────────────────────────────
+
 export function renderPreferences(host: PreferencesHost): PreferencesResult {
   const settings = getAiFlowSettings();
   const currentLang = getCurrentLanguage();
   let html = '';
 
   // ── Display group ──
-  html += `<details class="wm-pref-group" open>`;
+  html += '<details class="wm-pref-group" open>';
   html += `<summary>${t('preferences.display')}</summary>`;
-  html += `<div class="wm-pref-group-content">`;
+  html += '<div class="wm-pref-group-content">';
 
-  // Appearance
+  // Appearance — now includes tactical
   const currentThemePref = getThemePreference();
   html += `<div class="ai-flow-toggle-row">
     <div class="ai-flow-toggle-label-wrap">
@@ -87,16 +157,17 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
       <div class="ai-flow-toggle-desc">${t('preferences.themeDesc')}</div>
     </div>
   </div>`;
-  html += `<select class="unified-settings-select" id="us-theme">`;
+  html += '<select class="unified-settings-select" id="us-theme">';
   for (const opt of [
     { value: 'auto', label: t('preferences.themeAuto') },
     { value: 'dark', label: t('preferences.themeDark') },
     { value: 'light', label: t('preferences.themeLight') },
+    { value: 'tactical', label: 'Tactical (Green-on-Black)' },
   ] as { value: ThemePreference; label: string }[]) {
     const selected = opt.value === currentThemePref ? ' selected' : '';
     html += `<option value="${opt.value}"${selected}>${escapeHtml(opt.label)}</option>`;
   }
-  html += `</select>`;
+  html += '</select>';
 
   // Font family
   const currentFont = getFontFamily();
@@ -106,7 +177,7 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
       <div class="ai-flow-toggle-desc">${t('preferences.fontFamilyDesc')}</div>
     </div>
   </div>`;
-  html += `<select class="unified-settings-select" id="us-font-family">`;
+  html += '<select class="unified-settings-select" id="us-font-family">';
   for (const opt of [
     { value: 'mono', label: t('preferences.fontMono') },
     { value: 'system', label: t('preferences.fontSystem') },
@@ -114,7 +185,7 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
     const selected = opt.value === currentFont ? ' selected' : '';
     html += `<option value="${opt.value}"${selected}>${escapeHtml(opt.label)}</option>`;
   }
-  html += `</select>`;
+  html += '</select>';
 
   // Map tile provider
   const currentProvider = getMapProvider();
@@ -124,12 +195,12 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
       <div class="ai-flow-toggle-desc">${t('preferences.mapProviderDesc')}</div>
     </div>
   </div>`;
-  html += `<select class="unified-settings-select" id="us-map-provider">`;
+  html += '<select class="unified-settings-select" id="us-map-provider">';
   for (const opt of MAP_PROVIDER_OPTIONS) {
     const selected = opt.value === currentProvider ? ' selected' : '';
     html += `<option value="${opt.value}"${selected}>${escapeHtml(opt.label)}</option>`;
   }
-  html += `</select>`;
+  html += '</select>';
 
   // Map theme
   const currentMapTheme = getMapTheme(currentProvider);
@@ -139,12 +210,12 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
       <div class="ai-flow-toggle-desc">${t('preferences.mapThemeDesc')}</div>
     </div>
   </div>`;
-  html += `<select class="unified-settings-select" id="us-map-theme">`;
+  html += '<select class="unified-settings-select" id="us-map-theme">';
   for (const opt of MAP_THEME_OPTIONS[currentProvider]) {
     const selected = opt.value === currentMapTheme ? ' selected' : '';
     html += `<option value="${opt.value}"${selected}>${escapeHtml(opt.label)}</option>`;
   }
-  html += `</select>`;
+  html += '</select>';
 
   html += toggleRowHtml('us-map-flash', t('components.insights.mapFlashLabel'), t('components.insights.mapFlashDesc'), settings.mapNewsFlash);
 
@@ -156,31 +227,31 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
       <div class="ai-flow-toggle-desc">${t('preferences.globePresetDesc')}</div>
     </div>
   </div>`;
-  html += `<select class="unified-settings-select" id="us-globe-visual-preset">`;
+  html += '<select class="unified-settings-select" id="us-globe-visual-preset">';
   for (const opt of GLOBE_VISUAL_PRESET_OPTIONS) {
     const selected = opt.value === currentPreset ? ' selected' : '';
     html += `<option value="${opt.value}"${selected}>${escapeHtml(opt.label)}</option>`;
   }
-  html += `</select>`;
+  html += '</select>';
 
   // Language
   html += `<div class="ai-flow-section-label">${t('header.languageLabel')}</div>`;
-  html += `<select class="unified-settings-lang-select" id="us-language">`;
+  html += '<select class="unified-settings-lang-select" id="us-language">';
   for (const lang of LANGUAGES) {
     const selected = lang.code === currentLang ? ' selected' : '';
     html += `<option value="${lang.code}"${selected}>${lang.flag} ${escapeHtml(lang.label)}</option>`;
   }
-  html += `</select>`;
+  html += '</select>';
   if (currentLang === 'vi') {
     html += `<div class="ai-flow-toggle-desc">${t('components.languageSelector.mapLabelsFallbackVi')}</div>`;
   }
 
-  html += `</div></details>`;
+  html += '</div></details>';
 
   // ── Intelligence group ──
-  html += `<details class="wm-pref-group">`;
+  html += '<details class="wm-pref-group">';
   html += `<summary>${t('preferences.intelligence')}</summary>`;
-  html += `<div class="wm-pref-group-content">`;
+  html += '<div class="wm-pref-group-content">';
 
   if (!host.isDesktopApp) {
     html += toggleRowHtml('us-cloud', t('components.insights.aiFlowCloudLabel'), t('components.insights.aiFlowCloudDesc'), settings.cloudLlm);
@@ -197,12 +268,12 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
 
   html += toggleRowHtml('us-headline-memory', t('components.insights.headlineMemoryLabel'), t('components.insights.headlineMemoryDesc'), settings.headlineMemory);
 
-  html += `</div></details>`;
+  html += '</div></details>';
 
   // ── Media group ──
-  html += `<details class="wm-pref-group">`;
+  html += '<details class="wm-pref-group">';
   html += `<summary>${t('preferences.media')}</summary>`;
-  html += `<div class="wm-pref-group-content">`;
+  html += '<div class="wm-pref-group-content">';
 
   const currentQuality = getStreamQuality();
   html += `<div class="ai-flow-toggle-row">
@@ -211,12 +282,12 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
       <div class="ai-flow-toggle-desc">${t('components.insights.streamQualityDesc')}</div>
     </div>
   </div>`;
-  html += `<select class="unified-settings-select" id="us-stream-quality">`;
+  html += '<select class="unified-settings-select" id="us-stream-quality">';
   for (const opt of STREAM_QUALITY_OPTIONS) {
     const selected = opt.value === currentQuality ? ' selected' : '';
     html += `<option value="${opt.value}"${selected}>${escapeHtml(opt.label)}</option>`;
   }
-  html += `</select>`;
+  html += '</select>';
 
   html += toggleRowHtml(
     'us-live-streams-always-on',
@@ -225,19 +296,19 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
     getLiveStreamsAlwaysOn(),
   );
 
-  html += `</div></details>`;
+  html += '</div></details>';
 
   // ── Panels group ──
-  html += `<details class="wm-pref-group">`;
+  html += '<details class="wm-pref-group">';
   html += `<summary>${t('preferences.panels')}</summary>`;
-  html += `<div class="wm-pref-group-content">`;
+  html += '<div class="wm-pref-group-content">';
   html += toggleRowHtml('us-badge-anim', t('components.insights.badgeAnimLabel'), t('components.insights.badgeAnimDesc'), settings.badgeAnimation);
-  html += `</div></details>`;
+  html += '</div></details>';
 
   // ── Data & Community group ──
-  html += `<details class="wm-pref-group">`;
+  html += '<details class="wm-pref-group">';
   html += `<summary>${t('preferences.dataAndCommunity')}</summary>`;
-  html += `<div class="wm-pref-group-content">`;
+  html += '<div class="wm-pref-group-content">';
   html += `
     <div class="us-data-mgmt">
       <button type="button" class="settings-btn settings-btn-secondary" id="usExportBtn">${t('components.settings.exportSettings')}</button>
@@ -247,25 +318,35 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
     <div class="us-data-mgmt-toast" id="usDataMgmtToast"></div>
   `;
   
-  html += `</div></details>`;
+  html += '</div></details>';
 
   // ── Accent Color group ──
-  html += `<details class="wm-pref-group">`;
-  html += `<summary>Accent Color</summary>`;
-  html += `<div class="wm-pref-group-content">`;
-  html += `<div id="accent-color-picker-mount"></div>`;
-  html += `</div></details>`;
+  html += '<details class="wm-pref-group">';
+  html += '<summary>Accent Color</summary>';
+  html += '<div class="wm-pref-group-content">';
+  html += '<div id="accent-color-picker-mount"></div>';
+  html += '</div></details>';
+
+  // ── Color Scheme Builder group (NEW) ──
+  html += '<details class="wm-pref-group">';
+  html += '<summary>Color Scheme</summary>';
+  html += '<div class="wm-pref-group-content">';
+  html += '<div class="ai-flow-toggle-desc" style="margin-bottom:10px">';
+  html += 'Choose a preset color scheme or build your own. Custom colors overlay the current base theme (dark, light, or tactical). Changes apply in real-time.';
+  html += '</div>';
+  html += renderColorSchemeBuilder();
+  html += '</div></details>';
 
   // ── Telegram Reports group ──
-  html += `<details class="wm-pref-group">`;
-  html += `<summary>📬 Telegram Reports</summary>`;
-  html += `<div class="wm-pref-group-content">`;
+  html += '<details class="wm-pref-group">';
+  html += '<summary>Telegram Reports</summary>';
+  html += '<div class="wm-pref-group-content">';
   const tgCfg = getTelegramConfig();
   html += `
     <div class="ai-flow-toggle-desc" style="margin-bottom:10px">
       Send aggregated intelligence reports to a Telegram bot on demand.
       <br><br>
-      <b>Setup:</b> Message <code>@BotFather</code> on Telegram → <code>/newbot</code> → copy the token.
+      <b>Setup:</b> Message <code>@BotFather</code> on Telegram, use <code>/newbot</code>, then copy the token.
       Then message your bot and visit
       <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> to find your chat ID.
     </div>
@@ -286,18 +367,18 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
       placeholder="-1001234567890" value="${tgCfg?.chatId ?? ''}"
       style="width:100%;font-family:var(--font-mono);font-size:11px;margin-bottom:10px" />
     <div style="display:flex;gap:6px;flex-wrap:wrap">
-      <button type="button" class="settings-btn settings-btn-secondary" id="tg-test-btn">🧪 Test</button>
-      <button type="button" class="settings-btn settings-btn-secondary" id="tg-save-btn">💾 Save</button>
-      <button type="button" class="settings-btn settings-btn-secondary" id="tg-send-btn">📬 Send Report</button>
+      <button type="button" class="settings-btn settings-btn-secondary" id="tg-test-btn">Test</button>
+      <button type="button" class="settings-btn settings-btn-secondary" id="tg-save-btn">Save</button>
+      <button type="button" class="settings-btn settings-btn-secondary" id="tg-send-btn">Send Report</button>
       ${tgCfg ? '<button type="button" class="settings-btn settings-btn-secondary" id="tg-disconnect-btn" style="color:#ff4455">Disconnect</button>' : ''}
     </div>
     <div id="tg-status-msg" style="font-size:11px;margin-top:8px"></div>
   `;
-  html += `</div></details>`;
+  html += '</div></details>';
 
   // AI status footer (web-only)
   if (!host.isDesktopApp) {
-    html += `<div class="ai-flow-popup-footer"><span class="ai-flow-status-dot" id="usStatusDot"></span><span class="ai-flow-status-text" id="usStatusText"></span></div>`;
+    html += '<div class="ai-flow-popup-footer"><span class="ai-flow-status-dot" id="usStatusDot"></span><span class="ai-flow-status-text" id="usStatusText"></span></div>';
   }
 
   return {
@@ -331,6 +412,8 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
         }
         if (target.id === 'us-theme') {
           setThemePreference(target.value as ThemePreference);
+          // Update color editor swatches to show current computed values
+          updateColorEditorFromComputed(container);
           return;
         }
         if (target.id === 'us-font-family') {
@@ -375,6 +458,17 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
         } else if (target.id === 'us-badge-anim') {
           setAiFlowSetting('badgeAnimation', target.checked);
         }
+
+        // Color editor swatch change — live preview
+        if (target.classList.contains('color-editor-swatch')) {
+          const varName = target.dataset.csVar;
+          if (varName) {
+            const valLabel = container.querySelector(`[data-cs-val="${varName}"]`);
+            if (valLabel) valLabel.textContent = target.value;
+            // Live-preview: set the CSS variable immediately
+            document.documentElement.style.setProperty('--' + varName, target.value);
+          }
+        }
       }, { signal });
 
       container.addEventListener('click', (e) => {
@@ -392,6 +486,74 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
           container.querySelector<HTMLInputElement>('#usImportInput')?.click();
           return;
         }
+
+        // ── Color scheme preset click ──
+        const presetBtn = target.closest<HTMLElement>('[data-cs-preset]');
+        if (presetBtn) {
+          const idx = parseInt(presetBtn.dataset.csPreset ?? '0', 10);
+          const preset = CUSTOM_SCHEME_PRESETS[idx];
+          if (preset) {
+            // Apply the preset: switch to its base theme, then save the scheme
+            setThemePreference(preset.base);
+            saveCustomScheme(preset);
+
+            // Update the theme dropdown to match
+            const themeSelect = container.querySelector<HTMLSelectElement>('#us-theme');
+            if (themeSelect) themeSelect.value = preset.base;
+
+            // Highlight the active preset button
+            container.querySelectorAll('.color-scheme-preset').forEach(b => b.classList.remove('active'));
+            presetBtn.classList.add('active');
+
+            // Update the color editor swatches
+            updateColorEditorFromScheme(container, preset);
+          }
+          return;
+        }
+
+        // ── Apply custom colors button ──
+        if (target.closest('#cs-apply-btn')) {
+          const overrides: Record<string, string> = {};
+          container.querySelectorAll<HTMLInputElement>('.color-editor-swatch[data-cs-var]').forEach(swatch => {
+            const varName = swatch.dataset.csVar;
+            if (varName) {
+              const computed = getComputedStyle(document.documentElement).getPropertyValue('--' + varName).trim();
+              const swatchVal = swatch.value;
+              // Only save if the swatch has been changed from default
+              // We include it if user has interacted (color input always has a value)
+              if (swatchVal && swatchVal !== '#000000') {
+                overrides[varName] = swatchVal;
+              }
+            }
+          });
+
+          const currentTheme = getCurrentTheme();
+          const scheme: CustomColorScheme = {
+            name: 'Custom',
+            base: currentTheme,
+            overrides,
+          };
+          saveCustomScheme(scheme);
+
+          // Clear preset highlights
+          container.querySelectorAll('.color-scheme-preset').forEach(b => b.classList.remove('active'));
+          return;
+        }
+
+        // ── Reset button ──
+        if (target.closest('#cs-reset-btn')) {
+          clearCustomScheme();
+          // Re-apply current theme cleanly
+          const currentTheme = getCurrentTheme();
+          setThemePreference(currentTheme);
+
+          // Reset all swatch values to computed
+          updateColorEditorFromComputed(container);
+
+          // Clear preset highlights
+          container.querySelectorAll('.color-scheme-preset').forEach(b => b.classList.remove('active'));
+          return;
+        }
       }, { signal });
 
       // Mount accent color picker
@@ -399,6 +561,19 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
       if (accentMount) {
         const picker = createAccentColorPicker();
         accentMount.appendChild(picker);
+      }
+
+      // Initialize color editor swatches with current computed values
+      updateColorEditorFromComputed(container);
+
+      // Highlight active preset if one is stored
+      const storedScheme = getStoredCustomScheme();
+      if (storedScheme) {
+        const presetIndex = CUSTOM_SCHEME_PRESETS.findIndex(p => p.name === storedScheme.name);
+        if (presetIndex >= 0) {
+          const btn = container.querySelector(`[data-cs-preset="${presetIndex}"]`);
+          if (btn) btn.classList.add('active');
+        }
       }
 
       // Telegram button handlers
@@ -426,9 +601,9 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
         const res = await testTelegramConnection(token, chatId);
         if (res.ok) {
           saveTelegramConfig({ botToken: token, chatId });
-          showTgStatus('✅ Test message sent! Check Telegram.', true);
+          showTgStatus('Test message sent! Check Telegram.', true);
         } else {
-          showTgStatus('❌ ' + (res.error ?? 'Failed'), false);
+          showTgStatus(res.error ?? 'Failed', false);
         }
       }, { signal });
 
@@ -438,7 +613,7 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
         if (!token || !chatId) { showTgStatus('Save your config first', false); return; }
         showTgStatus('Generating report...', true);
         const res = await sendReport({ botToken: token, chatId });
-        showTgStatus(res.ok ? '✅ Report sent!' : '❌ ' + (res.error ?? 'Failed'), res.ok);
+        showTgStatus(res.ok ? 'Report sent!' : (res.error ?? 'Failed'), res.ok);
       }, { signal });
 
       container.querySelector('#tg-disconnect-btn')?.addEventListener('click', () => {
@@ -455,6 +630,92 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
       return () => ac.abort();
     },
   };
+}
+
+// ────────────────────────────────────────────────────────────
+// Color editor helpers
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Read current computed CSS variable values and populate the
+ * color editor swatches with them.
+ */
+function updateColorEditorFromComputed(container: HTMLElement): void {
+  const style = getComputedStyle(document.documentElement);
+  container.querySelectorAll<HTMLInputElement>('.color-editor-swatch[data-cs-var]').forEach(swatch => {
+    const varName = swatch.dataset.csVar;
+    if (!varName) return;
+    const raw = style.getPropertyValue('--' + varName).trim();
+    const hex = cssColorToHex(raw);
+    if (hex) {
+      swatch.value = hex;
+      const valLabel = container.querySelector(`[data-cs-val="${varName}"]`);
+      if (valLabel) valLabel.textContent = hex;
+    }
+  });
+}
+
+/**
+ * Populate color editor swatches from a CustomColorScheme's overrides.
+ */
+function updateColorEditorFromScheme(container: HTMLElement, scheme: CustomColorScheme): void {
+  // First update from computed (which now includes the scheme)
+  // Small delay to let CSS variables propagate
+  requestAnimationFrame(() => {
+    updateColorEditorFromComputed(container);
+    // Then overwrite with the scheme's explicit overrides
+    for (const [varName, value] of Object.entries(scheme.overrides)) {
+      const swatch = container.querySelector<HTMLInputElement>(`.color-editor-swatch[data-cs-var="${varName}"]`);
+      if (swatch) {
+        const hex = cssColorToHex(value);
+        if (hex) {
+          swatch.value = hex;
+          const valLabel = container.querySelector(`[data-cs-val="${varName}"]`);
+          if (valLabel) valLabel.textContent = hex;
+        }
+      }
+    }
+  });
+}
+
+/**
+ * Convert a CSS color string (hex, rgb, named) to a 6-digit hex string.
+ * Returns null if parsing fails.
+ */
+function cssColorToHex(color: string): string | null {
+  if (!color) return null;
+
+  // Already hex
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) return color.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(color)) {
+    const r = color[1]!, g = color[2]!, b = color[3]!;
+    return ('#' + r + r + g + g + b + b).toLowerCase();
+  }
+
+  // rgb/rgba
+  const rgbMatch = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (rgbMatch) {
+    const r = parseInt(rgbMatch[1]!, 10);
+    const g = parseInt(rgbMatch[2]!, 10);
+    const b = parseInt(rgbMatch[3]!, 10);
+    return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
+  }
+
+  // Use a hidden element to resolve named colors
+  try {
+    const el = document.createElement('div');
+    el.style.color = color;
+    document.body.appendChild(el);
+    const computed = getComputedStyle(el).color;
+    document.body.removeChild(el);
+    const m = computed.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (m) {
+      return '#' + [parseInt(m[1]!, 10), parseInt(m[2]!, 10), parseInt(m[3]!, 10)]
+        .map(c => c.toString(16).padStart(2, '0')).join('');
+    }
+  } catch { /* noop */ }
+
+  return null;
 }
 
 function showToast(container: HTMLElement, msg: string, success: boolean): void {

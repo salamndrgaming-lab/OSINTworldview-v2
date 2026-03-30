@@ -988,7 +988,8 @@ export class LiveNewsPanel extends Panel {
   }
 
   private async switchChannel(channel: LiveChannel): Promise<void> {
-    if (channel.id === this.activeChannel.id) return;
+    // Skip if same channel — unless it's a custom stream (allow retry)
+    if (channel.id === this.activeChannel.id && !channel.customStreamUrl) return;
 
     this.activeChannel = channel;
     saveToStorage(STORAGE_KEYS.activeChannel, channel.id);
@@ -1801,13 +1802,17 @@ export class LiveNewsPanel extends Panel {
     addBtn.textContent = 'Add Stream';
     addBtn.style.cssText = 'padding:6px 14px;font-size:12px;font-family:inherit;background:var(--accent-primary,#1aff8a);border:1px solid var(--accent-primary,#1aff8a);border-radius:4px;color:#000;font-weight:600;cursor:pointer';
     addBtn.addEventListener('click', () => {
-      const name = nameInput.value.trim() || 'Custom Stream';
       const rawUrl = urlInput.value.trim();
       const parsed = this.parseCustomStreamUrl(rawUrl);
       if (!parsed) {
         status.textContent = 'Please enter a valid URL';
         status.style.color = 'var(--red,#ff4444)';
         return;
+      }
+      // Default name: extract domain from URL if user didn't provide a name
+      let name = nameInput.value.trim();
+      if (!name) {
+        try { name = new URL(parsed.url).hostname.replace(/^www\./, ''); } catch { name = 'Stream'; }
       }
       this.addCustomChannel(name, parsed.url, parsed.type);
       overlay.remove();

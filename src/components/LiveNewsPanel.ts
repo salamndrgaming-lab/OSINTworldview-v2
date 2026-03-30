@@ -322,7 +322,7 @@ export function loadChannelsFromStorage(): LiveChannel[] {
   for (const c of TECH_LIVE_CHANNELS) channelMap.set(c.id, { ...c });
   for (const c of OPTIONAL_LIVE_CHANNELS) channelMap.set(c.id, { ...c });
   for (const c of stored.custom ?? []) {
-    if (c.id && (c.handle || c.hlsUrl || c.customStreamUrl)) channelMap.set(c.id, { ...c });
+    if (c.id && (c.handle || c.hlsUrl || c.customStreamUrl || c.id.startsWith('custom-'))) channelMap.set(c.id, { ...c });
   }
   const overrides = stored.displayNameOverrides ?? {};
   for (const [id, name] of Object.entries(overrides)) {
@@ -1011,6 +1011,15 @@ export class LiveNewsPanel extends Panel {
       this.channelSwitcher?.querySelectorAll('.live-channel-btn').forEach(btn => {
         (btn as HTMLElement).classList.remove('loading');
       });
+      return;
+    }
+
+    // Legacy custom streams (added before code update) — no customStreamType set
+    if (channel.id.startsWith('custom-') && !channel.customStreamType) {
+      this.channelSwitcher?.querySelectorAll('.live-channel-btn').forEach(btn => {
+        (btn as HTMLElement).classList.remove('loading');
+      });
+      this.showCustomStreamError(channel, 'This stream was added before the custom stream update. Please remove it and re-add using the + button.');
       return;
     }
 

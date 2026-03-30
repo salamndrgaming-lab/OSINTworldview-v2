@@ -23,6 +23,7 @@ import { exportSettings, importSettings, type ImportResult } from '@/utils/setti
 import { createAccentColorPicker } from '@/services/accent-color';
 import { getTelegramConfig, saveTelegramConfig, clearTelegramConfig, testTelegramConnection, sendReport } from '@/services/telegram-report';
 import { getStoredBranding as getStoredBrandingConfig, saveBranding, clearBranding } from '@/services/branding';
+import { getWatchlist, addToWatchlist, removeFromWatchlist, clearWatchlist, type WatchlistCategory } from '@/services/watchlist';
 const DESKTOP_RELEASES_URL = 'https://github.com/koala73/worldmonitor/releases';
 
 export interface PreferencesHost {
@@ -358,6 +359,31 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
   html += '</div>';
   html += '</div></details>';
 
+  // ── Watchlist group (NEW) ──
+  html += '<details class="wm-pref-group">';
+  html += '<summary>Watchlist</summary>';
+  html += '<div class="wm-pref-group-content">';
+  html += '<div class="ai-flow-toggle-desc" style="margin-bottom:10px">';
+  html += 'Track specific countries, people, stocks, or keywords. Watched items are highlighted across the platform.';
+  html += '</div>';
+
+  // Add item form
+  html += '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">';
+  html += '<select class="unified-settings-select" id="wl-category" style="width:auto;font-size:11px;padding:4px 8px">';
+  html += '<option value="country">Country</option>';
+  html += '<option value="poi">Person</option>';
+  html += '<option value="stock">Stock/Ticker</option>';
+  html += '<option value="keyword">Keyword</option>';
+  html += '</select>';
+  html += '<input type="text" class="unified-settings-select" id="wl-value" placeholder="e.g. UA, AAPL, Putin, drone strike" style="flex:1;min-width:120px;font-size:11px;padding:4px 8px" />';
+  html += '<button type="button" class="cs-btn-apply" id="wl-add-btn" style="padding:4px 12px;font-size:11px">+ Add</button>';
+  html += '</div>';
+
+  // Current watchlist
+  html += '<div id="wl-items-list"></div>';
+  html += '<div style="margin-top:8px"><button type="button" class="cs-btn-reset" id="wl-clear-btn" style="font-size:10px;padding:3px 10px">Clear All</button></div>';
+  html += '</div></details>';
+
   // ── Telegram Reports group ──
   html += '<details class="wm-pref-group">';
   html += '<summary>Telegram Reports</summary>';
@@ -612,6 +638,51 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
         if (headerInput) headerInput.value = '';
         if (logoInput) logoInput.value = '';
         if (faviconInput) faviconInput.value = '';
+      }, { signal });
+
+      // Watchlist handlers
+      const renderWatchlistItems = () => {
+        const listEl = container.querySelector('#wl-items-list');
+        if (!listEl) return;
+        const items = getWatchlist();
+        if (items.length === 0) {
+          listEl.innerHTML = '<div style="font-size:11px;color:var(--text-dim,#888);padding:4px 0">No items in watchlist</div>';
+          return;
+        }
+        const categoryIcons: Record<string, string> = { country: '\uD83C\uDF0D', poi: '\uD83D\uDC64', stock: '\uD83D\uDCC8', keyword: '\uD83D\uDD0D' };
+        listEl.innerHTML = items.map(item =>
+          '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px">'
+          + '<span style="width:16px;text-align:center">' + (categoryIcons[item.category] || '') + '</span>'
+          + '<span style="color:var(--text-secondary,#ccc);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(item.label) + '</span>'
+          + '<span style="color:var(--text-dim,#888);font-size:9px;text-transform:uppercase">' + escapeHtml(item.category) + '</span>'
+          + '<button data-wl-remove="' + escapeHtml(item.id) + '" style="background:none;border:none;color:var(--text-muted,#666);cursor:pointer;font-size:14px;padding:0 4px" title="Remove">&times;</button>'
+          + '</div>'
+        ).join('');
+      };
+      renderWatchlistItems();
+
+      container.querySelector('#wl-add-btn')?.addEventListener('click', () => {
+        const catEl = container.querySelector('#wl-category') as HTMLSelectElement;
+        const valEl = container.querySelector('#wl-value') as HTMLInputElement;
+        const cat = (catEl?.value || 'keyword') as WatchlistCategory;
+        const val = valEl?.value?.trim();
+        if (!val) return;
+        addToWatchlist(cat, val, val);
+        if (valEl) valEl.value = '';
+        renderWatchlistItems();
+      }, { signal });
+
+      container.addEventListener('click', (e) => {
+        const removeBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-wl-remove]');
+        if (removeBtn?.dataset.wlRemove) {
+          removeFromWatchlist(removeBtn.dataset.wlRemove);
+          renderWatchlistItems();
+        }
+      }, { signal });
+
+      container.querySelector('#wl-clear-btn')?.addEventListener('click', () => {
+        clearWatchlist();
+        renderWatchlistItems();
       }, { signal });
 
       // Telegram button handlers

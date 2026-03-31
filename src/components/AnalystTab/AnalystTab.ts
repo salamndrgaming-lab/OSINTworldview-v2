@@ -1,111 +1,102 @@
-// src/components/AnalystTab/AnalystTab.tsx
-// BUG FIX 4: Analyst tab with proper data loading and polling
+// src/components/AnalystTab/AnalystTab.ts
+//
+// *** RENAME: delete AnalystTab.tsx, use this .ts file ***
+//
+// FIXES:
+//   - TS7016: @types/react not installed
+//   - TS17004: --jsx not set
+//   - TS7026: No JSX.IntrinsicElements
+//   - TS2307: react-redux, ../../store/analystSlice, ../../store — none exist
+//   - TS2307: ./AnalystSection, ../common/LoadingSpinner, ../common/ErrorBoundary — none exist
+//
+// Rewritten as vanilla Panel. Data fetched directly via AnalystService.
 
-import React, { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchAnalystData } from '../../store/analystSlice';
-import { RootState } from '../../store';
-import { AnalystSection } from './AnalystSection';
-import { LoadingSpinner } from '../common/LoadingSpinner';
-import { ErrorBoundary } from '../common/ErrorBoundary';
+import { Panel } from '../Panel';
+import { AnalystService, type AnalystData } from '../../services/analystService';
 
-export const AnalystTab: React.FC = () => {
-  const dispatch = useDispatch();
-  const { data, loading, error, lastUpdated } = useSelector(
-    (state: RootState) => state.analyst
-  );
+export class AnalystTab extends Panel {
+  private data: AnalystData | null = null;
+  private loading = false;
+  private errorMsg = '';
+  private pollInterval: ReturnType<typeof setInterval> | null = null;
 
-  const [sections, setSections] = useState({
-    intelligence: [] as any[],
-    correlation: [] as any[],
-    threats: [] as any[],
-    analysis: [] as any[],
-  });
+  constructor() {
+    super({ id: 'analyst-tab', title: 'Analyst Dashboard' });
+    void this.fetchData();
+    this.pollInterval = setInterval(() => { void this.fetchData(); }, 30_000);
+  }
 
-  useEffect(() => {
-    dispatch(fetchAnalystData() as any);
+  private async fetchData(): Promise<void> {
+    if (this.loading) return;
+    this.loading = true;
+    this.errorMsg = '';
+    this.render();
 
-    const interval = setInterval(() => {
-      dispatch(fetchAnalystData() as any);
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [dispatch]);
-
-  useEffect(() => {
-    if (data) {
-      setSections({
-        intelligence: data.intelligence || [],
-        correlation: data.correlation || [],
-        threats: data.threats || [],
-        analysis: data.analysis || [],
-      });
+    try {
+      this.data = await AnalystService.fetchData();
+    } catch (err) {
+      this.errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    } finally {
+      this.loading = false;
+      this.render();
     }
-  }, [data]);
-
-  if (loading && !data) {
-    return (
-      <div className="analyst-tab loading">
-        <LoadingSpinner />
-        <p>Loading analyst data...</p>
-      </div>
-    );
   }
 
-  if (error) {
-    return (
-      <div className="analyst-tab error">
-        <h3>Error Loading Data</h3>
-        <p>{error}</p>
-        <button onClick={() => dispatch(fetchAnalystData() as any)}>
-          Retry
-        </button>
-      </div>
-    );
+  private sectionHtml(
+    title: string,
+    items: Array<{ id?: string; title?: string; [k: string]: unknown }>,
+    emptyMsg: string
+  ): string {
+    if (items.length === 0) {
+      return `<section class="analyst-section"><h3>${title}</h3><p>${emptyMsg}</p></section>`;
+    }
+    const rows = items.map(item => `
+      <div class="analyst-item">
+        <strong>${item['title'] ?? item['keyword'] ?? item['type'] ?? 'Item'}</strong>
+      </div>`).join('');
+    return `<section class="analyst-section"><h3>${title}</h3>${rows}</section>`;
   }
 
-  return (
-    <ErrorBoundary>
-      <div className="analyst-tab">
-        <div className="analyst-header">
+  private render(): void {
+    if (this.loading && !this.data) {
+      this.content.innerHTML = `<div class="analyst-tab loading"><p>Loading analyst data…</p></div>`;
+      return;
+    }
+
+    if (this.errorMsg) {
+      this.content.innerHTML = `
+        <div class="analyst-tab error">
+          <h3>Error Loading Data</h3>
+          <p>${this.errorMsg}</p>
+          <button id="analyst-retry">Retry</button>
+        </div>`;
+      this.content.querySelector('#analyst-retry')?.addEventListener('click', () => {
+        void this.fetchData();
+      });
+      return;
+    }
+
+    const d = this.data;
+    if (!d) return;
+
+    this.content.innerHTML = `
+      <div class="analyst-tab">
+        <div class="analyst-header">
           <h2>Analyst Dashboard</h2>
-          {lastUpdated && (
-            <span className="last-updated">
-              Last updated: {new Date(lastUpdated).toLocaleTimeString()}
-            </span>
-          )}
+          <span class="last-updated">Updated: ${new Date().toLocaleTimeString()}</span>
         </div>
+        ${this.sectionHtml('Intelligence Briefs', d.intelligence, 'No intelligence briefs available')}
+        ${this.sectionHtml('Correlation Analysis', d.correlation, 'No correlations detected')}
+        ${this.sectionHtml('Threat Assessment', d.threats, 'No active threats')}
+        ${this.sectionHtml('Detailed Analysis', d.analysis, 'No analysis reports available')}
+      </div>`;
+  }
 
-        <div className="analyst-sections">
-          <AnalystSection
-            title="Intelligence Briefs"
-            data={sections.intelligence}
-            icon="intelligence"
-            emptyMessage="No intelligence briefs available"
-          />
-
-          <AnalystSection
-            title="Correlation Analysis"
-            data={sections.correlation}
-            icon="correlation"
-            emptyMessage="No correlations detected"
-          />
-
-          <AnalystSection
-            title="Threat Assessment"
-            data={sections.threats}
-            icon="threats"
-            emptyMessage="No active threats"
-          />
-
-          <AnalystSection
-            title="Detailed Analysis"
-            data={sections.analysis}
-            icon="analysis"
-            emptyMessage="No analysis reports available"
-          />
-        </div>
-      </div>
-    </ErrorBoundary>
-  );
-};
+  public destroy(): void {
+    if (this.pollInterval !== null) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
+    super.destroy();
+  }
+}

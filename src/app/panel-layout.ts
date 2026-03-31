@@ -77,9 +77,10 @@ import {
   applyStoredLayout,
   type DashboardLayout,
 } from '@/services/dashboard-layout';
-import { renderWorkspaceTabBar, initWorkspaceTabBar } from '@/services/workspaces';
-import { renderNotificationBell, initNotificationBell } from '@/services/notification-shell';
+import { renderWorkspaceTabBar, initWorkspaceTabBar, getWorkspaces } from '@/services/workspaces';
+import { renderNotificationBell, initNotificationBell, pushNotification } from '@/services/notification-shell';
 import { renderAuthPlaceholder, initAuthPlaceholder } from '@/services/auth-placeholder';
+import { renderAnalystWorkspace, initAnalystWorkspace, showAnalystView, showMonitorView } from '@/services/analyst-tab';
 
 export interface PanelLayoutCallbacks {
   openCountryStory: (code: string, name: string) => void;
@@ -312,6 +313,17 @@ export class PanelLayoutManager implements AppModule {
         <div id="alertTickerContent" style="display:inline-block;padding-left:100%;animation:ticker-scroll 60s linear infinite">Loading alerts...</div>
       </div>
       <style>@keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }</style>
+      <div class="primary-nav-bar" id="primaryNavBar">
+        <button class="primary-nav-tab active" data-nav="monitor">
+          <span class="primary-nav-tab-icon">📡</span>
+          <span>Monitor</span>
+        </button>
+        <span class="primary-nav-sep"></span>
+        <button class="primary-nav-tab" data-nav="analyst">
+          <span class="primary-nav-tab-icon">🔬</span>
+          <span>Analyst</span>
+        </button>
+      </div>
       ${renderWorkspaceTabBar()}
       <div class="preset-bar" id="presetBar">
         <span class="preset-bar-label">VIEW</span>
@@ -328,6 +340,7 @@ export class PanelLayoutManager implements AppModule {
           <button class="tv-mode-trigger" id="tvModeTrigger" title="TV/Kiosk Mode (Shift+T) — auto-cycle through panels fullscreen">TV</button>
         </div>
       </div>
+      ${renderAnalystWorkspace()}
       <div class="main-content">
         <div class="map-section" id="mapSection">
           <div class="panel-header">
@@ -397,11 +410,42 @@ export class PanelLayoutManager implements AppModule {
     // Workspace tab bar
     initWorkspaceTabBar();
 
+    // Wire workspace switches to preset system
+    window.addEventListener('workspace-changed', ((e: CustomEvent<{ id: string }>) => {
+      const wsId = e.detail?.id;
+      if (!wsId) return;
+      const ws = getWorkspaces().find(w => w.id === wsId);
+      if (ws?.presetId) {
+        const newSettings = applyPreset(ws.presetId, this.ctx.panelSettings);
+        this.callbacks.savePanelSettings?.(newSettings);
+        // Update preset bar active state
+        const bar = document.getElementById('presetBar');
+        if (bar) {
+          bar.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+          const matching = bar.querySelector(`[data-preset="${ws.presetId}"]`);
+          matching?.classList.add('active');
+        }
+      }
+    }) as EventListener);
+
     // Notification bell
     initNotificationBell();
 
+    // Wire breaking news alerts → notification bell
+    document.addEventListener('wm:breaking-news', ((e: CustomEvent) => {
+      const alert = e.detail;
+      if (!alert) return;
+      const level = alert.threatLevel || 'medium';
+      const type = (level === 'critical' || level === 'high') ? 'threat' : 'intel';
+      pushNotification(type, alert.source || 'Breaking News', alert.title || 'New alert', 'us');
+    }) as EventListener);
+
     // Auth placeholder
     initAuthPlaceholder();
+
+    // Analyst workspace
+    initAnalystWorkspace();
+    this.initPrimaryNav();
 
     if (this.ctx.isMobile) {
       this.setupMobileMapToggle();
@@ -1981,6 +2025,32 @@ export class PanelLayoutManager implements AppModule {
       // Update active button styling
       bar.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+    });
+  }
+
+  private initPrimaryNav(): void {
+    const nav = document.getElementById('primaryNavBar');
+    if (!nav) return;
+
+    nav.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-nav]');
+      if (!btn?.dataset.nav) return;
+      const view = btn.dataset.nav;
+
+      // Update active tab
+      nav.querySelectorAll('.primary-nav-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Toggle workspace tab bar visibility
+      const wsBar = document.getElementById('workspaceTabBar');
+
+      if (view === 'analyst') {
+        showAnalystView();
+        if (wsBar) wsBar.style.display = 'none';
+      } else {
+        showMonitorView();
+        if (wsBar) wsBar.style.display = '';
+      }
     });
   }
 

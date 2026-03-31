@@ -815,7 +815,6 @@
 [data-theme="tactical"] .panel[data-panel] {
   border-left-color: rgba(0, 255, 65, 0.3);
 }
-<<<<<<< HEAD
 
 /* ----------------------------------------------------------
    11. INTELLIGENCE LINK GRAPH PANEL
@@ -1113,5 +1112,3 @@
 [data-theme="light"] .igp-tooltip {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
-=======
->>>>>>> 0148296dadade08b842c1fcde9778803382eb824

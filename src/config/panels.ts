@@ -69,6 +69,9 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'airline-intel': { name: 'Airline Intelligence', enabled: true, priority: 2 },
   'tech-readiness': { name: 'Tech Readiness Index', enabled: true, priority: 2 },
   'world-clock': { name: 'World Clock', enabled: true, priority: 2 },
+  'chokepoint-flow': { name: 'Global Chokepoint Flow', enabled: true, priority: 2 },
+  'telegram-osint': { name: 'OSINT Telegram Channels', enabled: true, priority: 2 },
+  'supply-chain-prices': { name: 'Consumer Economy Snapshot', enabled: true, priority: 2 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {

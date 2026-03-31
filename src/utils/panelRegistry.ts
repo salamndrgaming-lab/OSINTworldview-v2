@@ -1,26 +1,56 @@
 // src/utils/panelRegistry.ts
-// BUG FIX 1: Central panel registration system to ensure all panels appear in the sidebar.
+// FIXES:
+//   - TS6133: 'PanelType' declared but never read
+//   - TS2307: Cannot find module '../types/panels' — this module does not exist.
+//     The real project types live in '@/types' (src/types/index.ts).
+//     PanelConfig there is { name, enabled, priority?, premium? } — it has no
+//     component/category/icon/order fields. We define our own extended type here.
+//   - TS2833: Cannot find namespace 'React' — project uses Preact/vanilla TS,
+//     not React. Component type replaced with a vanilla constructor signature.
 
-import { PanelType, PanelConfig, PanelCategory } from '../types/panels';
+/** A panel constructor — the class itself (not an instance). */
+export type PanelConstructor = new () => { destroy?(): void };
 
-interface RegisteredPanel {
+export type PanelCategory =
+  | 'analysis'
+  | 'maritime'
+  | 'economic'
+  | 'social'
+  | 'aviation'
+  | 'compliance'
+  | 'space'
+  | 'cyber'
+  | 'verification'
+  | 'tracking'
+  | 'finance'
+  | 'infrastructure'
+  | 'political'
+  | 'commodities'
+  | 'tools'
+  | 'enterprise';
+
+export interface RegistryPanelConfig {
   id: string;
   name: string;
-  component: React.ComponentType<any>;
+  component: PanelConstructor;
   icon: string;
   category: PanelCategory;
   order: number;
-  enabled: boolean;
+  enabled?: boolean;
   description?: string;
   requiresAuth?: boolean;
   permissions?: string[];
+}
+
+interface RegisteredPanel extends Required<Omit<RegistryPanelConfig, 'permissions'>> {
+  permissions: string[];
 }
 
 class PanelRegistry {
   private panels: Map<string, RegisteredPanel> = new Map();
   private categories: Map<PanelCategory, RegisteredPanel[]> = new Map();
 
-  register(config: PanelConfig): void {
+  register(config: RegistryPanelConfig): void {
     if (this.panels.has(config.id)) {
       console.warn(`Panel ${config.id} is already registered. Skipping.`);
       return;
@@ -30,13 +60,13 @@ class PanelRegistry {
       id: config.id,
       name: config.name,
       component: config.component,
-      icon: config.icon || 'default-icon',
-      category: config.category || 'analysis',
-      order: config.order || 999,
+      icon: config.icon,
+      category: config.category,
+      order: config.order,
       enabled: config.enabled !== false,
-      description: config.description,
-      requiresAuth: config.requiresAuth || false,
-      permissions: config.permissions || [],
+      description: config.description ?? '',
+      requiresAuth: config.requiresAuth ?? false,
+      permissions: config.permissions ?? [],
     };
 
     this.panels.set(panel.id, panel);
@@ -50,7 +80,7 @@ class PanelRegistry {
     console.log(`✓ Registered panel: ${panel.name} (${panel.id})`);
   }
 
-  registerAll(configs: PanelConfig[]): void {
+  registerAll(configs: RegistryPanelConfig[]): void {
     configs.forEach(config => this.register(config));
   }
 
@@ -59,7 +89,7 @@ class PanelRegistry {
   }
 
   getPanelsByCategory(category: PanelCategory): RegisteredPanel[] {
-    return this.categories.get(category) || [];
+    return this.categories.get(category) ?? [];
   }
 
   getEnabledPanels(): RegisteredPanel[] {

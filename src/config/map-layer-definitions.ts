@@ -17,7 +17,8 @@ export type LayerCategory =
   | 'economic'
   | 'tech'
   | 'positive'
-  | 'monitoring';
+  | 'monitoring'
+  | 'orbital-surveillance';
 
 export interface LayerCategoryMeta {
   id: LayerCategory;
@@ -38,7 +39,7 @@ export const LAYER_CATEGORIES: LayerCategoryMeta[] = [
   { id: 'tech',               label: 'Technology',             icon: '💻',  accentColor: 'var(--cat-infra, #38b2ac)' },
   { id: 'positive',           label: 'Positive Signals',       icon: '☀',   accentColor: 'var(--cat-positive, #48bb78)' },
   { id: 'monitoring',         label: 'Monitoring & Overlays',  icon: '📡',  accentColor: 'var(--cat-monitor, #718096)' },
-  { id: 'orbital-surveillance', enabled: true, variantSupport: ['world', 'tech'] },
+  { id: 'orbital-surveillance', label: 'Orbital Surveillance', icon: '🛰', accentColor: 'var(--cat-monitor, #718096)' },
 ];
 
 export interface LayerDefinition {
@@ -345,29 +346,3 @@ export function bindLayerSearch(container: HTMLElement): void {
     });
   });
 }
-
-const orbitalLayer = def(
-  'orbital-surveillance',
-  '🛰',
-  'orbital_surveillance',
-  'Orbital Surveillance + GPS Jamming',
-  'monitoring',                    // valid existing LayerCategory
-  ['flat', 'globe']
-);
-
-// Register it
-LAYER_REGISTRY['orbital-surveillance'] = orbitalLayer;
-
-// Also ensure the type includes it (add this line inside the LayerCategory union if not already present)
-export type LayerCategory =
-  | 'conflict'
-  | 'military'
-  | 'infrastructure'
-  | 'maritime-aviation'
-  | 'intelligence'
-  | 'environmental'
-  | 'economic'
-  | 'tech'
-  | 'positive'
-  | 'monitoring'
-  | 'orbital-surveillance';        // ← now valid

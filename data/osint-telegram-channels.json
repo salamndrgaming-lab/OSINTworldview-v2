@@ -1,0 +1,6 @@
+{
+  "channels": [
+    {"id": "osint_1", "name": "OSINT Technical", "handle": "@osinttech"},
+    {"id": "osint_2", "name": "Geopolitics Watch", "handle": "@geowatch"}
+  ]
+}

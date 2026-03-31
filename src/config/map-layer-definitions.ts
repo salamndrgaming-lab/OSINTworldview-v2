@@ -38,6 +38,7 @@ export const LAYER_CATEGORIES: LayerCategoryMeta[] = [
   { id: 'tech',               label: 'Technology',             icon: '💻',  accentColor: 'var(--cat-infra, #38b2ac)' },
   { id: 'positive',           label: 'Positive Signals',       icon: '☀',   accentColor: 'var(--cat-positive, #48bb78)' },
   { id: 'monitoring',         label: 'Monitoring & Overlays',  icon: '📡',  accentColor: 'var(--cat-monitor, #718096)' },
+  { id: 'orbital-surveillance', enabled: true, variantSupport: ['world', 'tech'] },
 ];
 
 export interface LayerDefinition {

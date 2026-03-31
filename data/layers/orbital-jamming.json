@@ -1,0 +1,7 @@
+{
+  "id": "orbital-surveillance",
+  "name": "Orbital + GPS Jamming",
+  "type": "deck.gl",
+  "sources": ["public TLE", "free Wingbits H3"],
+  "tlesUrl": "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json"
+}

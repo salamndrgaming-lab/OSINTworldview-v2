@@ -1,10 +1,11 @@
 // src/services/chokepoint-monitor.ts
-import { getRedis } from '../utils/redis';
+// Uses your repo's persistent-cache pattern (no direct Redis in client services)
+import { getPersistentCache } from './persistent-cache'; // ← your existing service
 
 export async function getChokepointFlow() {
-  const redis = getRedis();
-  // fetch keys matching your pattern
+  // Data is seeded to Redis by the .mjs script; persistent-cache reads it safely
+  const cache = getPersistentCache();
   const keys = ['malacca', 'suez', 'hormuz'].map(id => `chokepoint:flow:${id}`);
-  const raw = await redis.mget(keys);
-  return raw.map(r => r ? JSON.parse(r) : null).filter(Boolean);
+  const raw = await cache.mget(keys);           // matches your repo style
+  return raw.map((r: any) => r ? JSON.parse(r) : null).filter(Boolean);
 }

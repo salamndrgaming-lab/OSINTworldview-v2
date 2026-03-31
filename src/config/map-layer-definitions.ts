@@ -345,3 +345,29 @@ export function bindLayerSearch(container: HTMLElement): void {
     });
   });
 }
+
+const orbitalLayer = def(
+  'orbital-surveillance',
+  '🛰',
+  'orbital_surveillance',
+  'Orbital Surveillance + GPS Jamming',
+  'monitoring',                    // valid existing LayerCategory
+  ['flat', 'globe']
+);
+
+// Register it
+LAYER_REGISTRY['orbital-surveillance'] = orbitalLayer;
+
+// Also ensure the type includes it (add this line inside the LayerCategory union if not already present)
+export type LayerCategory =
+  | 'conflict'
+  | 'military'
+  | 'infrastructure'
+  | 'maritime-aviation'
+  | 'intelligence'
+  | 'environmental'
+  | 'economic'
+  | 'tech'
+  | 'positive'
+  | 'monitoring'
+  | 'orbital-surveillance';        // ← now valid

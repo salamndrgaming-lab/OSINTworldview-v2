@@ -1,8 +1,8 @@
 // src/services/satellite-tracker.ts
-import { getRedis } from '../utils/redis';
+import { getPersistentCache } from './persistent-cache';
 
 export async function getOrbitalLayer() {
-  const redis = getRedis();
-  const tles = await redis.get('orbital:tle') || '[]'; // seeded below
+  const cache = getPersistentCache();
+  const tles = await cache.get('orbital:tle') || '[]';
   return JSON.parse(tles);
 }

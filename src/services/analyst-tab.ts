@@ -384,7 +384,7 @@ function initToolkit(): void {
   if (!grid) return;
 
   // Dynamically import OSINT tools data from the panel
-  void import('@/components/OsintToolkitPanel').then(mod => {
+  void import('@/components/OsintToolkitPanel').then(_mod => {
     // The panel exports a class — we need to extract the tools data
     // For now, render a curated set inline
     grid.innerHTML = renderToolkitCards();

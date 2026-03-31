@@ -101,7 +101,7 @@ import {
 } from '@/config';
 import type { GulfInvestment } from '@/types';
 import { resolveTradeRouteSegments, TRADE_ROUTES as TRADE_ROUTES_LIST, type TradeRouteSegment } from '@/config/trade-routes';
-import { getLayersForVariant, resolveLayerLabel, bindLayerSearch, type MapVariant } from '@/config/map-layer-definitions';
+import { getLayersForVariant, getGroupedLayersForVariant, resolveLayerLabel, bindLayerSearch, type MapVariant } from '@/config/map-layer-definitions';
 import { getSecretState } from '@/services/runtime-config';
 import { MapPopup, type PopupType } from './MapPopup';
 import {
@@ -4268,14 +4268,35 @@ export class DeckGLMap {
     const toggles = document.createElement('div');
     toggles.className = 'layer-toggles deckgl-layer-toggles';
 
-    const layerDefs = getLayersForVariant((SITE_VARIANT || 'full') as MapVariant, 'flat');
     const _wmKey = getSecretState('WORLDMONITOR_API_KEY').present;
-    const layerConfig = layerDefs.map(def => ({
-      key: def.key,
-      label: resolveLayerLabel(def, t),
-      icon: def.icon,
-      premium: def.premium,
-    }));
+    const grouped = getGroupedLayersForVariant((SITE_VARIANT || 'full') as MapVariant, 'flat');
+
+    // Build category-grouped HTML
+    const groupsHtml = grouped.map(({ category, layers }) => {
+      const activeCount = layers.filter(d => this.state.layers[d.key as keyof MapLayers]).length;
+      const layerItems = layers.map(layerDef => {
+        const isLocked = layerDef.premium === 'locked' && !_wmKey;
+        const isEnhanced = layerDef.premium === 'enhanced' && !_wmKey;
+        const label = resolveLayerLabel(layerDef, t);
+        return `
+          <label class="layer-toggle${isLocked ? ' layer-toggle-locked' : ''}" data-layer="${layerDef.key}">
+            <input type="checkbox" ${this.state.layers[layerDef.key as keyof MapLayers] ? 'checked' : ''}${isLocked ? ' disabled' : ''}>
+            <span class="toggle-icon">${layerDef.icon}</span>
+            <span class="toggle-label">${label}${isLocked ? ' \uD83D\uDD12' : ''}${isEnhanced ? ' <span class="layer-pro-badge">PRO</span>' : ''}</span>
+          </label>`;
+      }).join('');
+
+      return `
+        <details class="layer-category-group" open data-category="${category.id}">
+          <summary class="layer-category-header" style="--cat-accent:${category.accentColor}">
+            <span class="layer-cat-icon">${category.icon}</span>
+            <span class="layer-cat-label">${category.label}</span>
+            <span class="layer-cat-count" data-cat-id="${category.id}">${activeCount > 0 ? activeCount : ''}</span>
+            <span class="layer-cat-chevron">&#9660;</span>
+          </summary>
+          <div class="layer-cat-items">${layerItems}</div>
+        </details>`;
+    }).join('');
 
     toggles.innerHTML = `
       <div class="toggle-header">
@@ -4285,16 +4306,7 @@ export class DeckGLMap {
       </div>
       <input type="text" class="layer-search" placeholder="${t('components.deckgl.layerSearch')}" autocomplete="off" spellcheck="false" />
       <div class="toggle-list" style="max-height: 32vh; overflow-y: auto; scrollbar-width: thin;">
-        ${layerConfig.map(({ key, label, icon, premium }) => {
-          const isLocked = premium === 'locked' && !_wmKey;
-          const isEnhanced = premium === 'enhanced' && !_wmKey;
-          return `
-          <label class="layer-toggle${isLocked ? ' layer-toggle-locked' : ''}" data-layer="${key}">
-            <input type="checkbox" ${this.state.layers[key as keyof MapLayers] ? 'checked' : ''}${isLocked ? ' disabled' : ''}>
-            <span class="toggle-icon">${icon}</span>
-            <span class="toggle-label">${label}${isLocked ? ' \uD83D\uDD12' : ''}${isEnhanced ? ' <span class="layer-pro-badge">PRO</span>' : ''}</span>
-          </label>`;
-        }).join('')}
+        ${groupsHtml}
       </div>
     `;
 
@@ -4318,6 +4330,14 @@ export class DeckGLMap {
             if (ciiLeg) ciiLeg.style.display = (input as HTMLInputElement).checked ? 'block' : 'none';
           }
           this.enforceLayerLimit();
+          // Update category active count badge
+          const catGroup = (input as HTMLInputElement).closest('.layer-category-group');
+          if (catGroup) {
+            const catId = catGroup.getAttribute('data-category') || '';
+            const checked = catGroup.querySelectorAll('.layer-toggle input:checked').length;
+            const badge = catGroup.querySelector('.layer-cat-count');
+            if (badge) badge.textContent = checked > 0 ? String(checked) : '';
+          }
         }
       });
     });

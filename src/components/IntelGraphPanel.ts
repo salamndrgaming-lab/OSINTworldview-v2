@@ -180,6 +180,8 @@ export class IntelGraphPanel extends Panel {
 
   private buildUI(): void {
     const content = this.content;
+    // Clear the base-class loading spinner before building our UI
+    content.innerHTML = '';
     content.style.cssText = 'padding:0;display:flex;flex-direction:column;overflow:hidden;';
 
     // Toolbar

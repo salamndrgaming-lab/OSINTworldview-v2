@@ -1,0 +1,877 @@
+/* ==========================================================
+   Visual Identity — OSINT Worldview
+   Distinct design language: Amber intel accent, slate chrome,
+   weighted typography, redesigned panel chrome and header.
+   Replaces generic green-terminal look with agency-grade UI.
+   ========================================================== */
+
+/* ----------------------------------------------------------
+   0. DESIGN TOKENS — the new color identity
+   ---------------------------------------------------------- */
+:root {
+  /* Primary accent: amber/gold — intelligence signals */
+  --intel-accent: #d4a843;
+  --intel-accent-dim: #b8922f;
+  --intel-accent-glow: rgba(212, 168, 67, 0.25);
+  --intel-accent-subtle: rgba(212, 168, 67, 0.08);
+  --intel-accent-border: rgba(212, 168, 67, 0.2);
+
+  /* Secondary accent: cool blue — data/systems */
+  --data-accent: #5b8dd9;
+  --data-accent-dim: #4a7bc4;
+  --data-accent-glow: rgba(91, 141, 217, 0.2);
+
+  /* Surface hierarchy (darker, more contrast than koala73) */
+  --vi-bg-deep: #060608;
+  --vi-bg: #0c0c10;
+  --vi-surface: #12121a;
+  --vi-surface-raised: #181822;
+  --vi-surface-hover: #1e1e2a;
+  --vi-border: #252535;
+  --vi-border-strong: #35354a;
+  --vi-border-subtle: #1a1a28;
+
+  /* Typography — shift from pure monospace to mixed */
+  --vi-font-display: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --vi-font-data: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+  --vi-font-body: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Panel category accents (refined from session 5) */
+  --cat-threat: #e53e3e;
+  --cat-intel: #9f7aea;
+  --cat-markets: #4299e1;
+  --cat-news: #ed8936;
+  --cat-infra: #38b2ac;
+  --cat-positive: #48bb78;
+  --cat-monitor: #718096;
+}
+
+[data-theme="light"] {
+  --intel-accent: #b8922f;
+  --intel-accent-dim: #9a7a20;
+  --intel-accent-glow: rgba(184, 146, 47, 0.15);
+  --intel-accent-subtle: rgba(184, 146, 47, 0.06);
+  --intel-accent-border: rgba(184, 146, 47, 0.15);
+  --vi-bg-deep: #f5f5f7;
+  --vi-bg: #fafafa;
+  --vi-surface: #ffffff;
+  --vi-surface-raised: #ffffff;
+  --vi-surface-hover: #f0f0f5;
+  --vi-border: #e0e0e8;
+  --vi-border-strong: #c8c8d4;
+  --vi-border-subtle: #eaeaf0;
+}
+
+/* Load fonts */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ----------------------------------------------------------
+   1. GLOBAL OVERRIDES — surface, text, scrollbars
+   ---------------------------------------------------------- */
+
+body {
+  background: var(--vi-bg-deep) !important;
+  font-family: var(--vi-font-body) !important;
+}
+
+#app {
+  background: var(--vi-bg-deep);
+}
+
+/* Scrollbar theming */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--vi-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vi-border-strong);
+}
+
+/* ----------------------------------------------------------
+   2. HEADER — completely redesigned
+   ---------------------------------------------------------- */
+
+.header {
+  height: 48px !important;
+  padding: 0 20px !important;
+  background: var(--vi-surface) !important;
+  border-bottom: 1px solid var(--vi-border) !important;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.2) !important;
+  position: relative;
+  z-index: 500;
+  gap: 12px !important;
+}
+
+/* Logo redesign — amber accent line, not green dot */
+.header .logo {
+  font-family: var(--vi-font-display) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: 3px !important;
+  color: var(--text) !important;
+  text-transform: uppercase;
+  position: relative;
+  padding-left: 14px;
+}
+
+.header .logo::before {
+  content: '' !important;
+  display: block !important;
+  width: 3px !important;
+  height: 18px !important;
+  border-radius: 2px !important;
+  background: var(--intel-accent) !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  margin-right: 0 !important;
+  box-shadow: 0 0 8px var(--intel-accent-glow) !important;
+  animation: none !important;
+}
+
+/* Kill the version label */
+.header .version {
+  display: none !important;
+}
+
+/* Status indicator — amber instead of green */
+.status-indicator {
+  color: var(--intel-accent) !important;
+}
+.status-indicator .status-dot {
+  background: var(--intel-accent) !important;
+  box-shadow: 0 0 6px var(--intel-accent-glow) !important;
+}
+
+/* Header buttons — refined, not green */
+.header-right .search-btn,
+.header-right .copy-link-btn,
+.header-right .fullscreen-btn {
+  font-family: var(--vi-font-body) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.3px !important;
+  background: var(--vi-surface-raised) !important;
+  border: 1px solid var(--vi-border) !important;
+  color: var(--text-dim) !important;
+  border-radius: 6px !important;
+  padding: 5px 10px !important;
+  transition: all 0.15s ease !important;
+}
+
+.header-right .search-btn:hover,
+.header-right .copy-link-btn:hover,
+.header-right .fullscreen-btn:hover {
+  border-color: var(--intel-accent-border) !important;
+  color: var(--text) !important;
+  background: var(--vi-surface-hover) !important;
+}
+
+/* Keyboard shortcut badge */
+.header-right .search-btn kbd {
+  font-family: var(--vi-font-data) !important;
+  font-size: 10px !important;
+  background: var(--vi-bg) !important;
+  border: 1px solid var(--vi-border) !important;
+  border-radius: 3px !important;
+  padding: 1px 4px !important;
+  margin-right: 4px !important;
+}
+
+/* God Mode button — more dramatic */
+#godmodeToggle {
+  background: var(--vi-surface-raised) !important;
+  border: 1px solid var(--intel-accent-border) !important;
+  color: var(--intel-accent) !important;
+}
+#godmodeToggle:hover {
+  background: var(--intel-accent-subtle) !important;
+  border-color: var(--intel-accent) !important;
+  box-shadow: 0 0 12px var(--intel-accent-glow) !important;
+}
+
+/* Variant switcher — subtler */
+.variant-switcher {
+  background: var(--vi-bg) !important;
+  border: 1px solid var(--vi-border) !important;
+  border-radius: 8px !important;
+}
+
+.variant-option.active {
+  color: var(--intel-accent) !important;
+  background: var(--intel-accent-subtle) !important;
+}
+.variant-option.active .variant-icon {
+  filter: grayscale(0%) drop-shadow(0 0 4px var(--intel-accent)) !important;
+}
+
+/* Region selector */
+.region-select {
+  font-family: var(--vi-font-body) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  background: var(--vi-surface-raised) !important;
+  border: 1px solid var(--vi-border) !important;
+  border-radius: 6px !important;
+}
+
+/* ----------------------------------------------------------
+   3. WORKSPACE TAB BAR — refined with amber active state
+   ---------------------------------------------------------- */
+
+.workspace-tabbar {
+  background: var(--vi-bg) !important;
+  border-bottom: 1px solid var(--vi-border-subtle) !important;
+}
+
+.workspace-tab.active {
+  color: var(--intel-accent) !important;
+  border-bottom-color: var(--intel-accent) !important;
+}
+
+/* ----------------------------------------------------------
+   4. PRESET BAR — cleaner styling
+   ---------------------------------------------------------- */
+
+.preset-bar {
+  background: var(--vi-bg) !important;
+  border-bottom: 1px solid var(--vi-border-subtle) !important;
+  padding: 4px 16px !important;
+}
+
+.preset-bar .preset-bar-label {
+  font-family: var(--vi-font-body) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 1.5px !important;
+  color: var(--text-ghost) !important;
+}
+
+.preset-btn {
+  font-family: var(--vi-font-body) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.2px !important;
+  border-radius: 6px !important;
+  padding: 4px 10px !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: var(--text-dim) !important;
+  transition: all 0.15s ease !important;
+}
+
+.preset-btn:hover {
+  background: var(--vi-surface-hover) !important;
+  color: var(--text) !important;
+  border-color: var(--vi-border) !important;
+}
+
+.preset-btn.active {
+  background: var(--intel-accent-subtle) !important;
+  color: var(--intel-accent) !important;
+  border-color: var(--intel-accent-border) !important;
+  font-weight: 600 !important;
+}
+
+/* ----------------------------------------------------------
+   5. PANELS — the biggest visual break
+   Panel chrome: top accent bar, new typography, subtle glass
+   ---------------------------------------------------------- */
+
+/* Override panel grid gap */
+#panelsGrid {
+  gap: 8px !important;
+}
+
+/* Base panel chrome */
+.panel {
+  background: var(--vi-surface) !important;
+  border: 1px solid var(--vi-border) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease !important;
+}
+
+.panel:hover {
+  border-color: var(--vi-border-strong) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Panel header redesign */
+.panel-header {
+  background: var(--vi-surface) !important;
+  border-bottom: 1px solid var(--vi-border-subtle) !important;
+  padding: 8px 12px !important;
+  min-height: 36px !important;
+  position: relative;
+}
+
+/* Category accent — top border instead of left */
+.panel-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--cat-monitor); /* default gray */
+  opacity: 0.6;
+}
+
+/* Category-specific top accents */
+[data-panel="insights"] .panel-header::before,
+[data-panel="intel"] .panel-header::before,
+[data-panel="gdelt-intel"] .panel-header::before,
+[data-panel="poi"] .panel-header::before,
+[data-panel="telegram-intel"] .panel-header::before,
+[data-panel="cii"] .panel-header::before,
+[data-panel="deduction"] .panel-header::before,
+[data-panel="cascade"] .panel-header::before,
+[data-panel="correlation-engine"] .panel-header::before,
+[data-panel="geo-risk-radar"] .panel-header::before,
+[data-panel="intel-timeline"] .panel-header::before,
+[data-panel="intel-graph"] .panel-header::before {
+  background: var(--cat-intel);
+}
+
+[data-panel="markets"] .panel-header::before,
+[data-panel="economic"] .panel-header::before,
+[data-panel="commodities"] .panel-header::before,
+[data-panel="crypto"] .panel-header::before,
+[data-panel="heatmap"] .panel-header::before,
+[data-panel="macro-signals"] .panel-header::before,
+[data-panel="etf-flows"] .panel-header::before,
+[data-panel="stablecoins"] .panel-header::before,
+[data-panel="stock-analysis"] .panel-header::before,
+[data-panel="stock-backtest"] .panel-header::before,
+[data-panel="ai-stock-analyst"] .panel-header::before,
+[data-panel="daily-market-brief"] .panel-header::before {
+  background: var(--cat-markets);
+}
+
+[data-panel="strategic-risk"] .panel-header::before,
+[data-panel="strategic-posture"] .panel-header::before,
+[data-panel="ucdp-events"] .panel-header::before,
+[data-panel="oref-sirens"] .panel-header::before,
+[data-panel="satellite-fires"] .panel-header::before,
+[data-panel="security-advisories"] .panel-header::before,
+[data-panel="missile-tracker"] .panel-header::before {
+  background: var(--cat-threat);
+}
+
+[data-panel="us"] .panel-header::before,
+[data-panel="europe"] .panel-header::before,
+[data-panel="middleeast"] .panel-header::before,
+[data-panel="africa"] .panel-header::before,
+[data-panel="latam"] .panel-header::before,
+[data-panel="asia"] .panel-header::before,
+[data-panel="energy"] .panel-header::before,
+[data-panel="politics"] .panel-header::before,
+[data-panel="live-news"] .panel-header::before,
+[data-panel="polymarket"] .panel-header::before {
+  background: var(--cat-news);
+}
+
+[data-panel="supply-chain"] .panel-header::before,
+[data-panel="tech"] .panel-header::before,
+[data-panel="ai"] .panel-header::before,
+[data-panel="tech-readiness"] .panel-header::before,
+[data-panel="climate"] .panel-header::before {
+  background: var(--cat-infra);
+}
+
+[data-panel="giving"] .panel-header::before,
+[data-panel="good-things"] .panel-header::before,
+[data-panel="positive-news"] .panel-header::before,
+[data-panel="hero-spotlight"] .panel-header::before,
+[data-panel="species-comeback"] .panel-header::before,
+[data-panel="breakthroughs"] .panel-header::before,
+[data-panel="progress-charts"] .panel-header::before,
+[data-panel="renewable-energy"] .panel-header::before,
+[data-panel="counters"] .panel-header::before {
+  background: var(--cat-positive);
+}
+
+/* Panel title — sans-serif, weighted */
+.panel-title {
+  font-family: var(--vi-font-display) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.8px !important;
+  text-transform: uppercase !important;
+  color: var(--text-secondary) !important;
+}
+
+/* Panel LIVE badge — amber */
+.panel-header .live-badge,
+.panel-header .live-indicator,
+.panel-header [class*="live"] {
+  color: var(--intel-accent) !important;
+}
+
+/* Panel tabs — clean underline style */
+.panel-tab {
+  font-family: var(--vi-font-body) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.2px !important;
+  color: var(--text-dim) !important;
+  border-bottom: 2px solid transparent !important;
+  transition: all 0.15s ease !important;
+}
+
+.panel-tab:hover {
+  color: var(--text) !important;
+}
+
+.panel-tab.active {
+  color: var(--intel-accent) !important;
+  border-bottom-color: var(--intel-accent) !important;
+}
+
+/* Panel content area */
+.panel-content {
+  font-family: var(--vi-font-body) !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+/* Override the session 5 left-border accents (we use top borders now) */
+[data-panel]::before {
+  display: none !important;
+}
+
+/* ----------------------------------------------------------
+   6. MAP SECTION — refined chrome
+   ---------------------------------------------------------- */
+
+.map-section {
+  border-radius: 8px !important;
+  overflow: hidden;
+  border: 1px solid var(--vi-border) !important;
+}
+
+.map-section .panel-header {
+  background: var(--vi-surface) !important;
+  border-bottom: 1px solid var(--vi-border-subtle) !important;
+}
+
+.map-section .panel-title {
+  font-family: var(--vi-font-display) !important;
+  font-weight: 600 !important;
+  letter-spacing: 1px !important;
+}
+
+/* Map header clock — data font */
+.header-clock {
+  font-family: var(--vi-font-data) !important;
+  font-size: 11px !important;
+  color: var(--text-dim) !important;
+  letter-spacing: 0.5px !important;
+}
+
+/* Legend bar at bottom of map */
+.map-legend,
+.legend-bar {
+  font-family: var(--vi-font-body) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.3px !important;
+}
+
+/* ----------------------------------------------------------
+   7. LAYER SIDEBAR — category groups with collapsible sections
+   Overrides the flat checkbox list inherited from koala73
+   ---------------------------------------------------------- */
+
+.layers-sidebar,
+.layer-panel,
+.layers-panel {
+  background: var(--vi-surface) !important;
+  border: 1px solid var(--vi-border) !important;
+  border-radius: 8px !important;
+}
+
+.layers-sidebar .search-layers,
+.layer-panel input[type="search"],
+input.layer-search {
+  font-family: var(--vi-font-body) !important;
+  font-size: 12px !important;
+  background: var(--vi-bg) !important;
+  border: 1px solid var(--vi-border) !important;
+  border-radius: 6px !important;
+  color: var(--text) !important;
+  padding: 6px 10px !important;
+}
+
+/* Layer toggle items */
+.layer-toggle,
+.layer-item {
+  font-family: var(--vi-font-body) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.2px !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  transition: background 0.1s ease !important;
+}
+
+.layer-toggle:hover,
+.layer-item:hover {
+  background: var(--vi-surface-hover) !important;
+}
+
+/* Layer checkboxes — amber accent */
+.layer-toggle input[type="checkbox"]:checked + *,
+.layer-item input[type="checkbox"]:checked + * {
+  color: var(--intel-accent) !important;
+}
+
+/* ----------------------------------------------------------
+   7b. LAYER CATEGORY GROUPS — collapsible <details> sections
+   ---------------------------------------------------------- */
+
+.layer-category-group {
+  border-bottom: 1px solid var(--vi-border-subtle, #1a1a28);
+}
+
+.layer-category-group:last-child {
+  border-bottom: none;
+}
+
+.layer-category-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--vi-font-body, sans-serif);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-dim, #888);
+  border-left: 2px solid var(--cat-accent, transparent);
+  transition: background 0.1s ease, color 0.1s ease;
+  list-style: none;
+}
+
+.layer-category-header::-webkit-details-marker {
+  display: none;
+}
+
+.layer-category-header:hover {
+  background: var(--vi-surface-hover, #1e1e2a);
+  color: var(--text, #e8e8e8);
+}
+
+.layer-cat-icon {
+  font-size: 12px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.layer-cat-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.layer-cat-count {
+  font-family: var(--vi-font-data, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  background: var(--intel-accent-subtle, rgba(212, 168, 67, 0.08));
+  color: var(--intel-accent, #d4a843);
+}
+
+.layer-cat-count:empty {
+  display: none;
+}
+
+.layer-cat-chevron {
+  font-size: 8px;
+  color: var(--text-ghost, #444);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.layer-category-group[open] > .layer-category-header .layer-cat-chevron {
+  transform: rotate(0deg);
+}
+
+.layer-category-group:not([open]) > .layer-category-header .layer-cat-chevron {
+  transform: rotate(-90deg);
+}
+
+.layer-cat-items {
+  padding: 2px 0 4px 0;
+}
+
+.layer-cat-items .layer-toggle {
+  padding-left: 28px !important;
+}
+
+/* ----------------------------------------------------------
+   8. NOTIFICATION & AUTH DROPDOWNS — consistent glass style
+   ---------------------------------------------------------- */
+
+.notif-dropdown,
+.auth-dropdown {
+  background: var(--vi-surface-raised) !important;
+  border: 1px solid var(--vi-border-strong) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+/* ----------------------------------------------------------
+   9. ALERT TICKER (godmode) — amber pulse
+   ---------------------------------------------------------- */
+
+#alertTicker {
+  background: rgba(212, 168, 67, 0.05) !important;
+  border-bottom: 1px solid var(--intel-accent-border) !important;
+  color: var(--intel-accent) !important;
+  font-family: var(--vi-font-data) !important;
+  font-size: 11px !important;
+}
+
+/* ----------------------------------------------------------
+   10. DEFCON BADGE — redesigned, not green-default
+   ---------------------------------------------------------- */
+
+/* Threat badge in header */
+#threatBadge {
+  font-family: var(--vi-font-data) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  border-radius: 4px !important;
+}
+
+/* ----------------------------------------------------------
+   11. BUTTONS & INPUTS — consistent styling
+   ---------------------------------------------------------- */
+
+button, .btn {
+  font-family: var(--vi-font-body) !important;
+}
+
+input, select, textarea {
+  font-family: var(--vi-font-body) !important;
+}
+
+/* Data-heavy content keeps monospace */
+.data-value,
+.mono,
+.stat-value,
+pre,
+code,
+.mtp-event-time,
+.igp-add-input {
+  font-family: var(--vi-font-data) !important;
+}
+
+/* ----------------------------------------------------------
+   12. FOOTER — refined
+   ---------------------------------------------------------- */
+
+.footer, .site-footer {
+  font-family: var(--vi-font-body) !important;
+  font-size: 11px !important;
+  color: var(--text-ghost) !important;
+  border-top: 1px solid var(--vi-border-subtle) !important;
+}
+
+/* ----------------------------------------------------------
+   13. SEARCH MODAL (CMD+K) — glass morphism
+   ---------------------------------------------------------- */
+
+.search-modal {
+  border-radius: 12px !important;
+  border: 1px solid var(--vi-border-strong) !important;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4) !important;
+  background: var(--vi-surface-raised) !important;
+}
+
+.search-modal input {
+  font-family: var(--vi-font-body) !important;
+  font-size: 15px !important;
+  font-weight: 400 !important;
+}
+
+/* ----------------------------------------------------------
+   14. MISSILE TRACKER PANEL — styled loading/error states
+   ---------------------------------------------------------- */
+
+.mtp-loading,
+.mtp-empty {
+  font-family: var(--vi-font-body) !important;
+  font-size: 12px !important;
+  color: var(--text-dim) !important;
+  text-align: center;
+  padding: 24px 16px !important;
+}
+
+.mtp-tabs .panel-tab.active {
+  color: var(--cat-threat) !important;
+  border-bottom-color: var(--cat-threat) !important;
+}
+
+.mtp-event {
+  border-bottom: 1px solid var(--vi-border-subtle) !important;
+  padding: 8px 12px !important;
+  transition: background 0.1s ease;
+}
+
+.mtp-event:hover {
+  background: var(--vi-surface-hover) !important;
+  cursor: pointer;
+}
+
+/* ----------------------------------------------------------
+   15. INTEL GRAPH PANEL — styled
+   ---------------------------------------------------------- */
+
+.igp-toolbar {
+  background: var(--vi-surface) !important;
+  border-bottom: 1px solid var(--vi-border-subtle) !important;
+  padding: 6px 10px !important;
+}
+
+.igp-toolbar input,
+.igp-toolbar select,
+.igp-toolbar button {
+  font-family: var(--vi-font-body) !important;
+  font-size: 11px !important;
+  background: var(--vi-bg) !important;
+  border: 1px solid var(--vi-border) !important;
+  border-radius: 4px !important;
+  color: var(--text) !important;
+}
+
+.igp-action-btn {
+  color: var(--intel-accent) !important;
+}
+
+.igp-legend {
+  font-family: var(--vi-font-body) !important;
+  font-size: 10px !important;
+}
+
+/* ----------------------------------------------------------
+   16. POI PANEL — amber active states
+   ---------------------------------------------------------- */
+
+[data-panel="poi"] .panel-tab.active {
+  color: var(--cat-intel) !important;
+  border-bottom-color: var(--cat-intel) !important;
+}
+
+/* ----------------------------------------------------------
+   17. STRATEGIC RISK PANEL — threat category colors
+   ---------------------------------------------------------- */
+
+[data-panel="strategic-risk"] .panel-header::before {
+  background: linear-gradient(90deg, var(--cat-threat), var(--cat-intel));
+}
+
+/* ----------------------------------------------------------
+   18. COMMUNITY WIDGET — match new style
+   ---------------------------------------------------------- */
+
+.community-widget {
+  font-family: var(--vi-font-body) !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--vi-border) !important;
+  background: var(--vi-surface-raised) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* ----------------------------------------------------------
+   19. TACTICAL THEME OVERRIDE — preserve tactical identity
+   but use amber instead of green for accents
+   ---------------------------------------------------------- */
+
+.tactical-theme .panel-header::before {
+  background: rgba(212, 168, 67, 0.3) !important;
+}
+
+/* ----------------------------------------------------------
+   20. DATA CONTENT TYPOGRAPHY
+   ---------------------------------------------------------- */
+
+/* News items */
+.news-item-title,
+.feed-item-title {
+  font-family: var(--vi-font-body) !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+}
+
+/* Source tags */
+.source-tag,
+.mtp-source-tag {
+  font-family: var(--vi-font-data) !important;
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  border-radius: 3px !important;
+}
+
+/* Badges */
+.badge,
+.alert-badge,
+.conflict-badge {
+  font-family: var(--vi-font-data) !important;
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+}
+
+/* Severity badges */
+.sev-badge {
+  font-family: var(--vi-font-data) !important;
+}
+
+/* ----------------------------------------------------------
+   21. RESPONSIVE ADJUSTMENTS
+   ---------------------------------------------------------- */
+
+@media (max-width: 1400px) {
+  #intelSearchBtn,
+  #graphBtn {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1200px) {
+  #sitrepBtn {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    height: 44px !important;
+    padding: 0 12px !important;
+  }
+  .header .logo {
+    font-size: 12px !important;
+    letter-spacing: 2px !important;
+  }
+}

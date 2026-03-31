@@ -64,6 +64,8 @@ export class MissileTrackerPanel extends Panel {
 
   private buildUI(): void {
     const content = this.content;
+    // Clear the base-class loading spinner before building our UI
+    content.innerHTML = '';
     content.style.cssText = 'padding:0;display:flex;flex-direction:column;overflow:hidden;';
 
     // Filter tabs
@@ -87,7 +89,7 @@ export class MissileTrackerPanel extends Panel {
     const list = document.createElement('div');
     list.className = 'mtp-list';
     list.id = 'mtpList';
-    list.innerHTML = '<div class="mtp-loading">Loading strike data...</div>';
+    list.innerHTML = '<div class="mtp-loading" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:32px 16px;color:var(--text-dim)"><div style="width:24px;height:24px;border:2px solid var(--vi-border,#333);border-top-color:var(--intel-accent,#d4a843);border-radius:50%;animation:mtp-spin 0.8s linear infinite"></div><span style="font-size:12px">Scanning for strike events...</span></div><style>@keyframes mtp-spin{to{transform:rotate(360deg)}}</style>';
     content.appendChild(list);
 
     // Tab click handler
@@ -115,7 +117,13 @@ export class MissileTrackerPanel extends Panel {
     } catch {
       const list = this.content.querySelector('#mtpList');
       if (list) {
-        list.innerHTML = '<div class="mtp-empty">Strike data temporarily unavailable. Enable the Missile Strikes map layer and ensure the seed is running.</div>';
+        list.innerHTML = `<div class="mtp-empty" style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:32px 16px;text-align:center">
+          <span style="font-size:28px;opacity:0.5">🚀</span>
+          <div style="font-size:12px;color:var(--text-dim);line-height:1.6">
+            <div style="font-weight:600;margin-bottom:4px">No Strike Data Available</div>
+            <div style="font-size:11px;color:var(--text-muted)">The missile/drone event seed may not have run yet.<br>Data refreshes every 4 hours via GitHub Actions.</div>
+          </div>
+        </div>`;
       }
     }
   }

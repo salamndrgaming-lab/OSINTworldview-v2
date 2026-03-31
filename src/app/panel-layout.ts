@@ -913,6 +913,16 @@ export class PanelLayoutManager implements AppModule {
       import('@/components/IntelGraphPanel').then(m => new m.IntelGraphPanel()),
     );
 
+    // Missile / Drone Strike Tracker
+    this.lazyPanel('missile-tracker', () =>
+      import('@/components/MissileTrackerPanel').then(m => new m.MissileTrackerPanel()),
+    );
+
+    // OSINT Toolkit — curated resource directory
+    this.lazyPanel('osint-toolkit', () =>
+      import('@/components/OsintToolkitPanel').then(m => new m.OsintToolkitPanel()),
+    );
+
         // Godmode-exclusive panels — these only load when godmode variant is active
     if (SITE_VARIANT === 'godmode') {
       this.lazyPanel('ai-stock-analyst', () =>

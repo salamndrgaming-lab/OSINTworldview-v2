@@ -23,6 +23,8 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'gdelt-intel': { name: 'Live Intelligence', enabled: true, priority: 1, ...(_desktop && { premium: 'enhanced' as const }) },
   poi: { name: 'Persons of Interest', enabled: true, priority: 1 },
   'intel-graph': { name: 'Intel Link Graph', enabled: true, priority: 1 },
+  'missile-tracker': { name: 'Missile / Drone Tracker', enabled: true, priority: 1 },
+  'osint-toolkit': { name: 'OSINT Toolkit', enabled: true, priority: 2 },
   cascade: { name: 'Infrastructure Cascade', enabled: true, priority: 1 },
   'military-correlation': { name: 'Force Posture', enabled: true, priority: 2 },
   'escalation-correlation': { name: 'Escalation Monitor', enabled: true, priority: 2 },

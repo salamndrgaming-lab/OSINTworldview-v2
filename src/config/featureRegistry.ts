@@ -1,6 +1,9 @@
-import { panelRegistry } from '../utils/panelRegistry';
+// src/config/featureRegistry.ts
+// No changes to imports of panel components — those stubs are delivered separately.
+// Updated to use RegistryPanelConfig (not the project's PanelConfig from @/types).
 
-// Import all panel components
+import { panelRegistry, type RegistryPanelConfig } from '../utils/panelRegistry';
+
 import { ChokepointSimulatorPanel } from '../components/panels/ChokepointSimulatorPanel';
 import { SupplierRiskPanel } from '../components/panels/SupplierRiskPanel';
 import { NarrativeVelocityPanel } from '../components/panels/NarrativeVelocityPanel';
@@ -22,12 +25,8 @@ import { MineralsFlowPanel } from '../components/panels/MineralsFlowPanel';
 import { ReportCompilerPanel } from '../components/panels/ReportCompilerPanel';
 import { AirGappedFusionPanel } from '../components/panels/AirGappedFusionPanel';
 
-/**
- * Register all features in the system
- */
 export function registerAllFeatures(): void {
-  // Koala-Inspired Features
-  panelRegistry.registerAll([
+  const koalaFeatures: RegistryPanelConfig[] = [
     {
       id: 'chokepoint-simulator',
       name: 'Chokepoint Flow Simulator',
@@ -118,10 +117,9 @@ export function registerAllFeatures(): void {
       order: 100,
       description: 'Automated intelligence briefs with probability trees',
     },
-  ]);
-  
-  // Original Features
-  panelRegistry.registerAll([
+  ];
+
+  const originalFeatures: RegistryPanelConfig[] = [
     {
       id: 'elite-travel',
       name: 'Elite Travel Tracker',
@@ -214,11 +212,13 @@ export function registerAllFeatures(): void {
       requiresAuth: true,
       permissions: ['enterprise'],
     },
-  ]);
-  
+  ];
+
+  panelRegistry.registerAll(koalaFeatures);
+  panelRegistry.registerAll(originalFeatures);
+
   console.log('✓ All 20 features registered successfully');
-  
-  // Validate registration
+
   const validation = panelRegistry.validate();
   if (!validation.valid) {
     console.error('Feature registration errors:', validation.errors);

@@ -100,7 +100,19 @@ jobs:
       # Entity graph — builds knowledge graph in Neo4j
       - run: node scripts/seed-entity-graph.mjs
         continue-on-error: true
-
+      # Telegram Narrative
+      - run: node scripts/seed-telegram-narrative.mjs
+        continue-on-error: true
+      # Chokepoint monitoring — detects critical infrastructure outages
+      - run: node scripts/seed-chokepoints.mjs
+        continue-on-error: true 
+      # Chokepoint SimulatorSeed — simulates impact of chokepoint disruptions using network analysis
+      - run: node scripts/chokepointSimulatorSeed.mjs
+        continue-on-error: true 
+      # Supplier Risk — identifies supply chain vulnerabilities from news and market data
+      - run: node scripts/supplierRiskSeed.mjs
+        continue-on-error: true
+        
     env:
       UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}

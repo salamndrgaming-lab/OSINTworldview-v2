@@ -1,88 +1,95 @@
-// src/components/toolkit/ToolFrame.tsx
-// BUG FIX 6 (companion): Tool frame for embedded OSINT tools
+// src/components/toolkit/ToolFrame.ts
+//
+// *** RENAME: delete ToolFrame.tsx → ToolFrame.ts ***
+//
+// FIXES:
+//   - TS7016: @types/react not installed
+//   - TS17004: --jsx not set
+//   - TS7026: No JSX.IntrinsicElements
+//   - TS2307: Cannot find module './toolDefinitions' — now created
+//   - TS7031: Binding element 'tool' implicitly has any
+//
+// Rewritten as a plain class that builds DOM directly.
 
-import React, { useState, useEffect } from 'react';
-import { ToolDefinition } from './toolDefinitions';
+import { type ToolDefinition } from './toolDefinitions';
 
-interface ToolFrameProps {
-  tool: ToolDefinition;
-}
+export class ToolFrame {
+  readonly element: HTMLElement;
+  private currentTool: ToolDefinition | null = null;
 
-export const ToolFrame: React.FC<ToolFrameProps> = ({ tool }) => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  constructor() {
+    this.element = document.createElement('div');
+    this.element.className = 'tool-frame-container';
+  }
 
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-  }, [tool.id]);
-
-  const handleLoad = () => {
-    setLoading(false);
-  };
-
-  const handleError = () => {
-    setLoading(false);
-    setError('Failed to load tool. Click "Open in New Tab" to use externally.');
-  };
-
-  return (
-    <div className="tool-frame-container">
-      <div className="tool-frame-header">
-        <h3>{tool.name}</h3>
-        <div className="tool-actions">
-          <a
-            href={tool.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-open-external"
-          >
+  show(tool: ToolDefinition): void {
+    this.currentTool = tool;
+    this.element.innerHTML = `
+      <div class="tool-frame-header">
+        <h3>${tool.name}</h3>
+        <div class="tool-actions">
+          <a href="${tool.url}" target="_blank" rel="noopener noreferrer" class="btn-open-external">
             Open in New Tab
           </a>
         </div>
       </div>
-
-      <div className="tool-description">
-        <p>{tool.description}</p>
-        {tool.usage && (
-          <details className="tool-usage">
+      <div class="tool-description">
+        <p>${tool.description}</p>
+        ${tool.usage ? `
+          <details class="tool-usage">
             <summary>How to use</summary>
-            <p>{tool.usage}</p>
-          </details>
-        )}
+            <p>${tool.usage}</p>
+          </details>` : ''}
       </div>
-
-      <div className="tool-frame-wrapper">
-        {loading && (
-          <div className="tool-loading">
-            <div className="spinner"></div>
-            <p>Loading {tool.name}...</p>
-          </div>
-        )}
-
-        {error && (
-          <div className="tool-error">
-            <p>{error}</p>
-          </div>
-        )}
-
-        {tool.embedType === 'iframe' && (
+      <div class="tool-frame-wrapper">
+        <div class="tool-loading" id="tool-loading-${tool.id}">
+          <div class="spinner"></div>
+          <p>Loading ${tool.name}…</p>
+        </div>
+        <div class="tool-error" id="tool-error-${tool.id}" style="display:none">
+          <p>Failed to load tool. Click "Open in New Tab" to use externally.</p>
+        </div>
+        ${tool.embedType === 'iframe' ? `
           <iframe
-            src={tool.url}
-            title={tool.name}
-            className="tool-iframe"
-            onLoad={handleLoad}
-            onError={handleError}
+            src="${tool.url}"
+            title="${tool.name}"
+            class="tool-iframe"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          />
-        )}
+          ></iframe>` : ''}
+        ${tool.embedType === 'native' && tool.nativeComponent ? `
+          <div class="tool-native" id="tool-native-${tool.id}"></div>` : ''}
+      </div>`;
 
-        {tool.embedType === 'native' && (
-          <div className="tool-native">
-            {tool.nativeComponent && <tool.nativeComponent />}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+    if (tool.embedType === 'iframe') {
+      const iframe = this.element.querySelector<HTMLIFrameElement>('.tool-iframe');
+      const loading = this.element.querySelector<HTMLElement>(`#tool-loading-${tool.id}`);
+      const error = this.element.querySelector<HTMLElement>(`#tool-error-${tool.id}`);
+
+      iframe?.addEventListener('load', () => {
+        if (loading) loading.style.display = 'none';
+      });
+      iframe?.addEventListener('error', () => {
+        if (loading) loading.style.display = 'none';
+        if (error) error.style.display = '';
+      });
+    }
+
+    if (tool.embedType === 'native' && tool.nativeComponent) {
+      const container = this.element.querySelector<HTMLElement>(`#tool-native-${tool.id}`);
+      if (container) {
+        const instance = new tool.nativeComponent();
+        // If the native component mounts itself to a container, pass it
+        void instance;
+      }
+    }
+  }
+
+  clear(): void {
+    this.currentTool = null;
+    this.element.innerHTML = '';
+  }
+
+  getCurrentTool(): ToolDefinition | null {
+    return this.currentTool;
+  }
+}

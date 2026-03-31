@@ -101,7 +101,7 @@ import {
 } from '@/config';
 import type { GulfInvestment } from '@/types';
 import { resolveTradeRouteSegments, TRADE_ROUTES as TRADE_ROUTES_LIST, type TradeRouteSegment } from '@/config/trade-routes';
-import { getLayersForVariant, getGroupedLayersForVariant, resolveLayerLabel, bindLayerSearch, type MapVariant } from '@/config/map-layer-definitions';
+import { getGroupedLayersForVariant, resolveLayerLabel, bindLayerSearch, type MapVariant } from '@/config/map-layer-definitions';
 import { getSecretState } from '@/services/runtime-config';
 import { MapPopup, type PopupType } from './MapPopup';
 import {
@@ -4333,7 +4333,6 @@ export class DeckGLMap {
           // Update category active count badge
           const catGroup = (input as HTMLInputElement).closest('.layer-category-group');
           if (catGroup) {
-            const catId = catGroup.getAttribute('data-category') || '';
             const checked = catGroup.querySelectorAll('.layer-toggle input:checked').length;
             const badge = catGroup.querySelector('.layer-cat-count');
             if (badge) badge.textContent = checked > 0 ? String(checked) : '';

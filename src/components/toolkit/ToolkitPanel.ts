@@ -1,78 +1,119 @@
-// src/components/toolkit/ToolkitPanel.tsx
-// BUG FIX 6: OSINT Toolkit embedded tools panel
+// src/components/toolkit/ToolkitPanel.ts
+//
+// *** RENAME: delete ToolkitPanel.tsx → ToolkitPanel.ts ***
+//
+// FIXES:
+//   - TS7016: @types/react not installed
+//   - TS17004: --jsx not set
+//   - TS6142: ToolFrame.tsx resolved but --jsx not set
+//   - TS2307: Cannot find module './toolDefinitions' — now created
+//   - TS7006: 'tool'/'t'/'e' implicitly any
+//   - TS7026: No JSX.IntrinsicElements
+//
+// Rewritten as vanilla Panel class.
 
-import React, { useState } from 'react';
+import { Panel } from '../Panel';
 import { ToolFrame } from './ToolFrame';
-import { toolDefinitions } from './toolDefinitions';
-import './ToolkitPanel.css';
+import { toolDefinitions, type ToolDefinition } from './toolDefinitions';
 
-export const ToolkitPanel: React.FC = () => {
-  const [selectedTool, setSelectedTool] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+export class ToolkitPanel extends Panel {
+  private toolFrame: ToolFrame;
+  private selectedToolId: string | null = null;
+  private searchQuery = '';
 
-  const filteredTools = toolDefinitions.filter(tool =>
-    tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    tool.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    tool.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  constructor() {
+    super({ id: 'osint-toolkit', title: 'OSINT Toolkit' });
+    this.toolFrame = new ToolFrame();
+    this.render();
+  }
 
-  const categories = [...new Set(toolDefinitions.map(t => t.category))];
+  private getFilteredTools(): ToolDefinition[] {
+    const q = this.searchQuery.toLowerCase();
+    if (!q) return toolDefinitions;
+    return toolDefinitions.filter(
+      (t: ToolDefinition) =>
+        t.name.toLowerCase().includes(q) ||
+        t.description.toLowerCase().includes(q) ||
+        t.category.toLowerCase().includes(q)
+    );
+  }
 
-  return (
-    <div className="toolkit-panel">
-      <div className="toolkit-header">
-        <h2>OSINT Toolkit</h2>
-        <input
-          type="text"
-          placeholder="Search tools..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="toolkit-search"
-        />
-      </div>
+  private render(): void {
+    const filtered = this.getFilteredTools();
+    const categories = [...new Set(toolDefinitions.map((t: ToolDefinition) => t.category))];
 
-      <div className="toolkit-content">
-        <div className="toolkit-sidebar">
-          <div className="toolkit-categories">
-            {categories.map(category => {
-              const categoryTools = filteredTools.filter(t => t.category === category);
+    const sidebarHtml = categories.map((category: string) => {
+      const catTools = filtered.filter((t: ToolDefinition) => t.category === category);
+      if (catTools.length === 0) return '';
+      return `
+        <div class="category-group">
+          <h3>${category}</h3>
+          <ul>
+            ${catTools.map((tool: ToolDefinition) => `
+              <li class="toolkit-tool-item${this.selectedToolId === tool.id ? ' active' : ''}"
+                  data-tool-id="${tool.id}">
+                <span class="tool-icon">${tool.icon}</span>
+                <span class="tool-name">${tool.name}</span>
+              </li>`).join('')}
+          </ul>
+        </div>`;
+    }).join('');
 
-              return (
-                <div key={category} className="category-group">
-                  <h3>{category}</h3>
-                  <ul>
-                    {categoryTools.map(tool => (
-                      <li
-                        key={tool.id}
-                        className={selectedTool === tool.id ? 'active' : ''}
-                        onClick={() => setSelectedTool(tool.id)}
-                      >
-                        <span className="tool-icon">{tool.icon}</span>
-                        <span className="tool-name">{tool.name}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
+    const mainHtml = this.selectedToolId
+      ? '' // ToolFrame element inserted via DOM after render
+      : `<div class="toolkit-welcome">
+           <h3>Select a tool to get started</h3>
+           <p>Choose from ${toolDefinitions.length} OSINT tools on the left</p>
+         </div>`;
+
+    this.content.innerHTML = `
+      <div class="toolkit-panel">
+        <div class="toolkit-header">
+          <h2>OSINT Toolkit</h2>
+          <input
+            type="text"
+            id="toolkit-search"
+            placeholder="Search tools…"
+            value="${this.searchQuery}"
+            class="toolkit-search"
+          />
+        </div>
+        <div class="toolkit-content">
+          <div class="toolkit-sidebar">
+            <div class="toolkit-categories">${sidebarHtml}</div>
           </div>
+          <div class="toolkit-main" id="toolkit-main">${mainHtml}</div>
         </div>
+      </div>`;
 
-        <div className="toolkit-main">
-          {selectedTool ? (
-            <ToolFrame
-              tool={toolDefinitions.find(t => t.id === selectedTool)!}
-            />
-          ) : (
-            <div className="toolkit-welcome">
-              <h3>Select a tool to get started</h3>
-              <p>Choose from {toolDefinitions.length} OSINT tools on the left</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
+    // Mount ToolFrame if a tool is selected
+    if (this.selectedToolId) {
+      const mainContainer = this.content.querySelector<HTMLElement>('#toolkit-main');
+      if (mainContainer) {
+        mainContainer.appendChild(this.toolFrame.element);
+      }
+    }
+
+    // Wire up search
+    this.content.querySelector<HTMLInputElement>('#toolkit-search')
+      ?.addEventListener('input', (e: Event) => {
+        this.searchQuery = (e.target as HTMLInputElement).value;
+        this.render();
+      });
+
+    // Wire up tool selection
+    this.content.querySelectorAll<HTMLElement>('.toolkit-tool-item')
+      .forEach((li: HTMLElement) => {
+        li.addEventListener('click', () => {
+          const id = li.dataset['toolId'];
+          if (!id) return;
+          this.selectedToolId = id;
+          const tool = toolDefinitions.find((t: ToolDefinition) => t.id === id);
+          if (tool) this.toolFrame.show(tool);
+          this.render();
+        });
+      });
+  }
+}
 
 export default ToolkitPanel;

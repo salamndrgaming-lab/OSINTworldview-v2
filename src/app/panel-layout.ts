@@ -77,6 +77,9 @@ import {
   applyStoredLayout,
   type DashboardLayout,
 } from '@/services/dashboard-layout';
+import { renderWorkspaceTabBar, initWorkspaceTabBar } from '@/services/workspaces';
+import { renderNotificationBell, initNotificationBell } from '@/services/notification-shell';
+import { renderAuthPlaceholder, initAuthPlaceholder } from '@/services/auth-placeholder';
 
 export interface PanelLayoutCallbacks {
   openCountryStory: (code: string, name: string) => void;
@@ -237,7 +240,9 @@ export class PanelLayoutManager implements AppModule {
           ${this.ctx.isDesktopApp ? '' : `<button class="copy-link-btn" id="copyLinkBtn">${t('header.copyLink')}</button>`}
           ${this.ctx.isDesktopApp ? '' : `<button class="fullscreen-btn" id="fullscreenBtn" title="${t('header.fullscreen')}">⛶</button>`}
           ${SITE_VARIANT === 'happy' ? `<button class="tv-mode-btn" id="tvModeBtn" title="TV Mode (Shift+T)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></button>` : ''}
+          ${renderNotificationBell()}
           <span id="unifiedSettingsMount"></span>
+          ${renderAuthPlaceholder()}
         </div>
       </div>
       <div class="mobile-menu-overlay" id="mobileMenuOverlay"></div>
@@ -307,6 +312,7 @@ export class PanelLayoutManager implements AppModule {
         <div id="alertTickerContent" style="display:inline-block;padding-left:100%;animation:ticker-scroll 60s linear infinite">Loading alerts...</div>
       </div>
       <style>@keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }</style>
+      ${renderWorkspaceTabBar()}
       <div class="preset-bar" id="presetBar">
         <span class="preset-bar-label">VIEW</span>
         ${PANEL_PRESETS.map(p => {
@@ -387,6 +393,15 @@ export class PanelLayoutManager implements AppModule {
 
     // TV/Kiosk mode trigger (all variants)
     this.initTvModeTrigger();
+
+    // Workspace tab bar
+    initWorkspaceTabBar();
+
+    // Notification bell
+    initNotificationBell();
+
+    // Auth placeholder
+    initAuthPlaceholder();
 
     if (this.ctx.isMobile) {
       this.setupMobileMapToggle();
@@ -892,6 +907,11 @@ export class PanelLayoutManager implements AppModule {
 
     this.createPanel('insights', () => new InsightsPanel());
     this.createPanel('poi', () => new POIPanel());
+
+    // Intel Link Graph — lazy loaded since it imports D3 force simulation
+    this.lazyPanel('intel-graph', () =>
+      import('@/components/IntelGraphPanel').then(m => new m.IntelGraphPanel()),
+    );
 
         // Godmode-exclusive panels — these only load when godmode variant is active
     if (SITE_VARIANT === 'godmode') {

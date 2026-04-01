@@ -1093,6 +1093,26 @@ export class PanelLayoutManager implements AppModule {
       import('@/components/CounterfactualSimPanel').then(m => new m.CounterfactualSimPanel()),
     );
 
+    this.lazyPanel('hypothesis-generator', () =>
+      import('@/components/HypothesisGeneratorPanel').then(m => new m.HypothesisGeneratorPanel()),
+    );
+
+    this.lazyPanel('narrative-drift', () =>
+      import('@/components/NarrativeDriftPanel').then(m => new m.NarrativeDriftPanel()),
+    );
+
+    this.lazyPanel('time-travel', () =>
+      import('@/components/TimeTravelPanel').then(m => new m.TimeTravelPanel()),
+    );
+
+    this.lazyPanel('signal-confidence', () =>
+      import('@/components/SignalConfidencePanel').then(m => new m.SignalConfidencePanel()),
+    );
+
+    this.lazyPanel('auto-brief', () =>
+      import('@/components/AutoBriefPanel').then(m => new m.AutoBriefPanel()),
+    );
+
     const defaultOrder = Object.keys(DEFAULT_PANELS).filter(k => k !== 'map');
     const activePanelKeys = Object.keys(this.ctx.panelSettings).filter(k => k !== 'map');
     const bottomSet = this.getSavedBottomSet();

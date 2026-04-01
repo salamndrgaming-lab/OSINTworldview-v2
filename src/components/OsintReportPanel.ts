@@ -81,7 +81,7 @@ export class OsintReportPanel extends Panel {
           generatedAt: now.toISOString(),
           classification: 'OPEN SOURCE / UNCLASSIFIED',
           platform: 'OSINT Worldview',
-          version: (window as unknown as Record<string, unknown>).__APP_VERSION__ || 'unknown',
+          version: (window as Record<string, unknown>).__APP_VERSION__ || 'unknown',
           sections: sections.map(s => ({
             title: s.title,
             content: s.content,
@@ -223,7 +223,7 @@ export class OsintReportPanel extends Panel {
     return header + body;
   }
 
-  private generateHash(_seed: number): string {
+  private generateHash(seed: number): string {
     return 'sha256:' + Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
   }
 

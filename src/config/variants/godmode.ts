@@ -70,6 +70,11 @@ export const DEFAULT_PANELS: Record<string, PanelConfig> = {
   'supply-chain-prices': { name: 'Commodity Basket', enabled: true, priority: 1 },
   'osint-report': { name: 'OSINT Report', enabled: true, priority: 1 },
   'counterfactual-sim': { name: 'Counterfactual Engine', enabled: true, priority: 1 },
+  'hypothesis-generator': { name: 'Hypothesis Generator', enabled: true, priority: 1 },
+  'narrative-drift': { name: 'Narrative Drift', enabled: true, priority: 1 },
+  'time-travel': { name: 'Time Machine', enabled: true, priority: 1 },
+  'signal-confidence': { name: 'Signal Confidence', enabled: true, priority: 1 },
+  'auto-brief': { name: 'Auto-Briefs', enabled: true, priority: 1 },
   insights: { name: 'AI Insights', enabled: true, priority: 1 },
 };
 
@@ -200,6 +205,8 @@ export const PANEL_LAYOUT_CONFIG = {
     'geo-risk-radar', 'correlation-engine', 'nl-query',
     'ai-stock-analyst', 'intel-timeline', 'stock-backtest-gm', 'data-health', 'warcam',
     'counterfactual-sim', 'osint-report',
+    'hypothesis-generator', 'auto-brief', 'narrative-drift',
+    'signal-confidence', 'time-travel',
     // Core intelligence
     'cii', 'strategic-risk', 'intel', 'gdelt-intel', 'cascade',
     'telegram-intel', 'satellite-fires', 'poi', 'chokepoint-flow',

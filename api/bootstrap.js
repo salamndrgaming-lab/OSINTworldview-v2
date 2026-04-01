@@ -47,7 +47,9 @@ const BOOTSTRAP_CACHE_KEYS = {
   correlationCards:  'correlation:cards-bootstrap:v1',
   poi:               'intelligence:poi:v1',
   telegramNarratives: 'telegram:narratives:v1',
-  entityGraph:       'intelligence:entity-graph:v1', // Added for Session 8
+  entityGraph:       'intelligence:entity-graph:v1',
+  hypotheses:        'intelligence:hypotheses:v1',
+  narrativeDrift:    'intelligence:narrative-drift:v1',
 };
 
 const SLOW_KEYS = new Set([
@@ -56,7 +58,8 @@ const SLOW_KEYS = new Set([
   'cyberThreats', 'techReadiness', 'progressData', 'renewableEnergy',
   'naturalEvents',
   'cryptoQuotes', 'gulfQuotes', 'stablecoinMarkets', 'unrestEvents', 'ucdpEvents',
-  'techEvents', 'poi', 'telegramNarratives', 'entityGraph', // entityGraph added here
+  'techEvents', 'poi', 'telegramNarratives', 'entityGraph',
+  'hypotheses', 'narrativeDrift',
 ]);
 
 const FAST_KEYS = new Set([

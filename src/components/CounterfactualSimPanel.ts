@@ -219,7 +219,7 @@ export class CounterfactualSimPanel extends Panel {
       ]);
 
       const commodities = commodityResp?.ok ? await commodityResp.json() : null;
-      const _chokepoints = chokepointResp?.ok ? await chokepointResp.json() : null;
+      if (chokepointResp?.ok) await chokepointResp.json(); // consumed for future enrichment
 
       // Enrich oil market impact with current price
       if (commodities?.quotes) {
@@ -262,8 +262,7 @@ export class CounterfactualSimPanel extends Panel {
 
   private async getAINarrative(scenarioId: string): Promise<string> {
     try {
-      const scenario = PRESET_SCENARIOS.find(s => s.id === scenarioId);
-      const _desc = scenario?.description || scenarioId;
+      void scenarioId; // will be used for custom Groq prompts in future
       // Use the existing insights endpoint which connects to Groq
       const resp = await fetch('/api/insights', { signal: AbortSignal.timeout(10000) });
       if (!resp.ok) return '';

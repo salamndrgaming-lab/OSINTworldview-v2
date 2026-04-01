@@ -34,13 +34,17 @@ interface NarrativeDriftData {
   generatedAt: string | null;
 }
 
-const DIRECTION_META: Record<string, { label: string; icon: string; color: string }> = {
+const DIRECTION_META_MAP: Record<string, { label: string; icon: string; color: string }> = {
   surging:   { label: 'SURGING',   icon: '🔺', color: '#ef4444' },
   rising:    { label: 'RISING',    icon: '📈', color: '#f97316' },
   stable:    { label: 'STABLE',    icon: '➡',  color: '#6b7280' },
   fading:    { label: 'FADING',    icon: '📉', color: '#3b82f6' },
   collapsed: { label: 'COLLAPSED', icon: '🔻', color: '#8b5cf6' },
 };
+const DIRECTION_META_FALLBACK = { label: 'STABLE', icon: '➡', color: '#6b7280' };
+function getDirectionMeta(direction: string): { label: string; icon: string; color: string } {
+  return DIRECTION_META_MAP[direction] ?? DIRECTION_META_FALLBACK;
+}
 
 const THEME_LABELS: Record<string, string> = {
   conflict:   'Conflict & War',
@@ -193,7 +197,7 @@ export class NarrativeDriftPanel extends Panel {
   }
 
   private renderThemeRow(t: ThemeDrift, hasBaseline: boolean): string {
-    const meta = DIRECTION_META[t.direction] ?? DIRECTION_META.stable;
+    const { icon, color, label: dirLabel } = getDirectionMeta(t.direction);
     const label = THEME_LABELS[t.id] ?? t.id;
 
     // Bar fill: show relative volume as fraction of a reference max
@@ -207,14 +211,14 @@ export class NarrativeDriftPanel extends Panel {
 
     return `<div style="background:var(--vi-surface,#12121a);border:1px solid var(--vi-border,#252535);border-radius:6px;padding:7px 9px;margin-bottom:5px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <div style="font-size:11px;font-weight:600;color:var(--text)">${meta.icon} ${this.esc(label)}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text)">${icon} ${this.esc(label)}</div>
         <div style="display:flex;align-items:center;gap:6px">
-          ${changeStr ? `<span style="font-size:10px;font-weight:700;color:${meta.color}">${changeStr}</span>` : ''}
-          <span style="font-size:9px;font-weight:600;color:${meta.color};text-transform:uppercase;letter-spacing:0.4px">${meta.label}</span>
+          ${changeStr ? `<span style="font-size:10px;font-weight:700;color:${color}">${changeStr}</span>` : ''}
+          <span style="font-size:9px;font-weight:600;color:${color};text-transform:uppercase;letter-spacing:0.4px">${dirLabel}</span>
         </div>
       </div>
       <div style="height:3px;background:var(--vi-bg,#0c0c10);border-radius:2px;overflow:hidden">
-        <div style="height:100%;width:${barPct}%;background:${meta.color};border-radius:2px;opacity:0.65;transition:width 0.4s ease"></div>
+        <div style="height:100%;width:${barPct}%;background:${color};border-radius:2px;opacity:0.65;transition:width 0.4s ease"></div>
       </div>
       <div style="font-size:8px;color:var(--text-ghost);margin-top:3px">Vol: ${t.totalVolume} ${t.baselineVolume !== null ? `· Base: ${t.baselineVolume}` : ''}</div>
     </div>`;

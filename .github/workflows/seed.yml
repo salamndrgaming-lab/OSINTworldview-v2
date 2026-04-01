@@ -5,10 +5,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  # JOB 1: The Fast Lane (Completes quickly)
-  seed-fast:
+  # JOB 1: Master GDELT Crawl (runs FIRST — all other jobs wait on this)
+  # Does one sequential pass of gdeltproject.org and stores everything in
+  # Redis under gdelt:raw:v1. All consumer seeds read from that key instead
+  # of calling GDELT themselves, dropping ~91 direct API calls to ~26.
+  seed-gdelt-raw:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,7 +25,32 @@ jobs:
           node-version: 22
       - run: npm install --ignore-scripts
 
-      # Free data sources
+      # Single master GDELT crawl — topics + persons + GKG
+      - run: node scripts/seed-gdelt-raw.mjs
+
+    env:
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+  # JOB 2: Fast Lane — all non-GDELT seeds + GDELT consumers (read from cache)
+  seed-fast:
+    needs: [seed-gdelt-raw]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts
+            shared
+            package.json
+            package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --ignore-scripts
+
+      # Free data sources (no GDELT dependency)
       - run: node scripts/seed-earthquakes.mjs
       - run: node scripts/seed-natural-events.mjs
       - run: node scripts/seed-weather-alerts.mjs
@@ -51,29 +79,35 @@ jobs:
       - run: node scripts/seed-military-flights.mjs
         continue-on-error: true
 
-      # Webcams — Windy API camera metadata for map layer
+      # Webcams
       - run: node scripts/seed-webcams.mjs
         continue-on-error: true
-
-      # Webcam fallback — ensures webcam layer always has data
       - run: node scripts/seed-webcams-fallback.mjs
         continue-on-error: true
       - run: node scripts/fetch-gpsjam.mjs
         continue-on-error: true
 
-      # AI-powered
+      # GDELT consumers — read from gdelt:raw:v1, zero direct GDELT calls
+      - run: node scripts/seed-gdelt-intel.mjs
+        continue-on-error: true
+      - run: node scripts/seed-missile-events.mjs
+        continue-on-error: true
+      - run: node scripts/seed-warcam.mjs
+        continue-on-error: true
+      - run: node scripts/seed-telegram-narratives.mjs
+        continue-on-error: true
+      - run: node scripts/seed-narrative-drift.mjs
+        continue-on-error: true
+
+      # AI-powered (Groq) — read GDELT data from cache, not from GDELT directly
       - run: node scripts/seed-insights-from-cache.mjs
         continue-on-error: true
       - run: node scripts/seed-persons-of-interest.mjs
         continue-on-error: true
       - run: node scripts/seed-poi-discovery.mjs
         continue-on-error: true
-      - run: node scripts/seed-missile-events.mjs
-        continue-on-error: true
 
-      # Warcam — conflict zone media with geolocation
-      - run: node scripts/seed-warcam.mjs
-        continue-on-error: true
+      # Conflict forecast, disease, radiation — non-GDELT
       - run: node scripts/seed-conflict-forecast.mjs
         continue-on-error: true
       - run: node scripts/seed-disease-outbreaks.mjs
@@ -81,38 +115,22 @@ jobs:
       - run: node scripts/seed-radiation.mjs
         continue-on-error: true
 
-      # Telegram narrative cache — GDELT-based fallback for when relay is down
-      - run: node scripts/seed-telegram-narratives.mjs
-        continue-on-error: true
-
-      # Alert stream — runs LAST since it reads output from all other seeds
+      # Derivative seeds — read everything written above
       - run: node scripts/seed-alerts.mjs
         continue-on-error: true
-
-      # Agent SITREP — autonomous AI-generated intelligence brief (runs after alerts)
       - run: node scripts/agent-sitrep.mjs
         continue-on-error: true
-
-      # Hypothesis Generator — Groq AI generates future-event predictions from signals
       - run: node scripts/seed-hypothesis-generator.mjs
         continue-on-error: true
 
-      # Narrative Drift — GDELT velocity comparison vs 24h baseline
-      - run: node scripts/seed-narrative-drift.mjs
-        continue-on-error: true
-
-      # Vector index — indexes all intel data for semantic search (runs last)
+      # Indexing and archival — runs last
       - run: node scripts/seed-vector-index.mjs
         continue-on-error: true
-
-      # Daily snapshot — archives data for time-machine replay
       - run: node scripts/seed-snapshot.mjs
         continue-on-error: true
-
-      # Entity graph — builds knowledge graph in Neo4j
       - run: node scripts/seed-entity-graph.mjs
         continue-on-error: true
-        
+
     env:
       UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
@@ -136,33 +154,9 @@ jobs:
       SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
       NEO4J_DATABASE: ${{ secrets.NEO4J_DATABASE }}
 
-  # JOB 2: The GDELT Lane (Isolated & Patient)
-  seed-gdelt:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            scripts
-            shared
-            package.json
-            package-lock.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install --ignore-scripts
-
-      - run: node scripts/seed-gdelt-intel.mjs
-        continue-on-error: true
-
-    env:
-      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
-
-  # JOB 3: Telegram Notification (Waits for both lanes)
+  # JOB 3: Telegram Notification (waits for fast lane)
   notify:
-    needs: [seed-fast, seed-gdelt]
+    needs: [seed-fast]
     if: always()
     runs-on: ubuntu-latest
     steps:

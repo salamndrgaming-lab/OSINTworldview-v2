@@ -1,31 +1,28 @@
 #!/usr/bin/env node
-
 /**
- * seed-poi-discovery.mjs  (Phase 5)
+ * seed-poi-discovery.mjs (Phase 5 — cache-backed)
+ * Reads headlines from gdelt:raw:v1 instead of calling GDELT directly.
+ * Requires seed-gdelt-raw.mjs to have run first in this seed cycle.
  *
  * Organic POI Auto-Discovery — finds new persons of interest by:
- *   1. Querying GDELT for top headlines across multiple geopolitical topics
+ *   1. Reading pre-fetched GDELT headlines from Redis cache
  *   2. Using Groq NER to extract person names from those headlines
  *   3. Counting mention frequency per person
  *   4. Filtering out anyone already in the tracked persons list
- *   5. Building provisional profiles for high-volume new names (15+ mentions)
+ *   5. Building provisional profiles for high-volume new names (5+ mentions)
  *   6. Merging discovered persons into the existing POI Redis key
- *
- * Usage: node scripts/seed-poi-discovery.mjs
- * Requires: GROQ_API_KEY
  */
 
-import { loadEnvFile, CHROME_UA, getRedisCredentials, sleep } from './_seed-utils.mjs';
+import { loadEnvFile, getRedisCredentials, sleep } from './_seed-utils.mjs';
+import { getGdeltPoiDiscoveryArticles } from './_gdelt-cache.mjs';
 
 loadEnvFile(import.meta.url);
 
-const CANONICAL_KEY = 'intelligence:poi:v1';
-const GDELT_DOC_API = 'https://api.gdeltproject.org/api/v2/doc/doc';
-const GROQ_MODEL = 'llama-3.1-8b-instant';
+const CANONICAL_KEY          = 'intelligence:poi:v1';
+const GROQ_MODEL             = 'llama-3.1-8b-instant';
 const MIN_MENTIONS_THRESHOLD = 5;
-const MAX_DISCOVERED = 10; // Cap auto-discovered persons per run
+const MAX_DISCOVERED         = 10;
 
-// These names are already tracked by seed-persons-of-interest.mjs — skip them
 const TRACKED_NAMES = new Set([
   'vladimir putin', 'volodymyr zelenskyy', 'xi jinping', 'kim jong un',
   'ali khamenei', 'benjamin netanyahu', 'bashar al-assad', 'recep tayyip erdogan',
@@ -35,87 +32,17 @@ const TRACKED_NAMES = new Set([
   'joe biden', 'donald trump', 'keir starmer', 'emmanuel macron',
 ]);
 
-// ── GDELT: fetch top headlines by topic ──
-
-const DISCOVERY_QUERIES = [
-  '"president" OR "prime minister" OR "leader"',
-  '"military" OR "armed forces" OR "defense minister"',
-  '"summit" OR "negotiations" OR "ceasefire"',
-  '"sanctions" OR "nuclear" OR "missile"',
-  '"coup" OR "protest" OR "uprising" OR "revolution"',
-];
-
-async function fetchGdeltHeadlines(query, maxRecords = 100) {
-  const url = new URL(GDELT_DOC_API);
-  url.searchParams.set('query', `${query} sourcelang:eng`);
-  url.searchParams.set('mode', 'artlist');
-  url.searchParams.set('maxrecords', String(maxRecords));
-  url.searchParams.set('format', 'json');
-  url.searchParams.set('sort', 'hybridrel');
-  url.searchParams.set('timespan', '72h');
-
-  try {
-    const resp = await fetch(url.toString(), {
-      headers: { 'User-Agent': CHROME_UA },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    return (data.articles || []).map(a => a.title || '').filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-
-async function fetchRedisHeadlines() {
-  const { url, token } = getRedisCredentials();
-  const headlines = [];
-  const keysToRead = [
-    'intelligence:gdelt-intel:v1',
-    'intelligence:missile-events:v1',
-    'unrest:events:v1',
-    'health:outbreaks:v1',
-  ];
-  for (const key of keysToRead) {
-    try {
-      const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      if (!data.result) continue;
-      const parsed = JSON.parse(data.result);
-      if (parsed.topics) {
-        for (const topic of parsed.topics) {
-          for (const article of (topic.articles || [])) {
-            if (article.title) headlines.push(article.title);
-          }
-        }
-      }
-      if (parsed.events) {
-        for (const event of parsed.events) {
-          if (event.title) headlines.push(event.title);
-          if (event.description) headlines.push(event.description);
-        }
-      }
-    } catch { /* skip */ }
-  }
-  return headlines;
-}
-
 // ── Groq NER: extract person names from headlines ──
 
 async function extractPersonNames(headlines) {
   const groqKey = process.env.GROQ_API_KEY;
   if (!groqKey) return [];
 
-  // Batch headlines into chunks to stay within token limits
   const batchSize = 50;
-  const allNames = [];
+  const allNames  = [];
 
   for (let i = 0; i < headlines.length; i += batchSize) {
-    const batch = headlines.slice(i, i + batchSize);
+    const batch        = headlines.slice(i, i + batchSize);
     const headlineBlock = batch.map((h, idx) => `${idx + 1}. ${h}`).join('\n');
 
     const prompt = `Extract ALL person names (full names only, no titles like "President" or "PM") from these news headlines. Return ONLY a JSON array of strings. No markdown, no backticks, no explanation.
@@ -128,10 +55,7 @@ ${headlineBlock}`;
     try {
       const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${groqKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: GROQ_MODEL,
           messages: [
@@ -145,10 +69,9 @@ ${headlineBlock}`;
       });
 
       if (!resp.ok) continue;
-      const json = await resp.json();
-      const text = json.choices?.[0]?.message?.content?.trim() || '';
+      const json    = await resp.json();
+      const text    = json.choices?.[0]?.message?.content?.trim() || '';
       const cleaned = text.replace(/```json\s*\n?/g, '').replace(/```\s*$/g, '').trim();
-
       try {
         const names = JSON.parse(cleaned);
         if (Array.isArray(names)) {
@@ -156,87 +79,59 @@ ${headlineBlock}`;
         }
       } catch { /* skip unparseable batch */ }
 
-      // Rate limit: Groq free tier
-      await sleep(2200);
+      await sleep(2200); // Groq free-tier rate limit
     } catch { /* skip failed batch */ }
   }
 
   return allNames;
 }
 
-// ── Organic high-value POI check ──
+// ── High-value POI check ──
 
-/**
- * Determines if a person should be tracked as a POI.
- * @param {Object} entity - The extracted person entity
- * @param {number} entity.count - How many times they were mentioned
- * @param {string[]} [entity.relatedHeadlines] - Array of article titles they appear in
- * @returns {boolean} True if they meet threshold OR organic criteria
- */
 function isHighValuePOI(entity, allHeadlines = []) {
   let effectiveCount = entity.count;
-  const nameLower = entity.name.toLowerCase();
-  const relatedHeadlines = allHeadlines.filter(h => h.toLowerCase().includes(nameLower));
-  const crisisTerms = ['kill', 'dead', 'attack', 'bomb', 'crisis', 'war', 'strike', 'threat',
+  const nameLower    = entity.name.toLowerCase();
+  const related      = allHeadlines.filter(h => h.toLowerCase().includes(nameLower));
+  const crisisTerms  = ['kill', 'dead', 'attack', 'bomb', 'crisis', 'war', 'strike', 'threat',
     'sanction', 'nuclear', 'missile', 'arrest', 'coup', 'resign', 'flee', 'invasion',
     'collapse', 'emergency', 'urgent', 'breaking'];
-  const crisisCount = relatedHeadlines.filter(h => {
-    const lower = h.toLowerCase();
-    return crisisTerms.some(t => lower.includes(t));
-  }).length;
+  const crisisCount  = related.filter(h => crisisTerms.some(t => h.toLowerCase().includes(t))).length;
   effectiveCount += Math.round(crisisCount * 1.5);
   if (effectiveCount >= MIN_MENTIONS_THRESHOLD) return true;
 
   const highValueRoles = ['commander', 'minister', 'general', 'ceo', 'envoy', 'leader',
     'president', 'prime minister', 'chief', 'director', 'secretary'];
-  const triggerEvents = [
-    'sanctioned', 'detained', 'arrested', 'disappeared',
-    'assassinated', 'threatened', 'resigned', 'fled',
-    'indicted', 'charged', 'expelled', 'deported',
-  ];
-
-  // Search headlines that contain this person's name (reuse from above)
-  const contextBlock = relatedHeadlines.join(' ').toLowerCase();
-
-  const hasRole = highValueRoles.some(role => contextBlock.includes(role));
-  const isCritical = triggerEvents.some(event => contextBlock.includes(event));
-
+  const triggerEvents  = ['sanctioned', 'detained', 'arrested', 'disappeared',
+    'assassinated', 'threatened', 'resigned', 'fled', 'indicted', 'charged', 'expelled', 'deported'];
+  const contextBlock   = related.join(' ').toLowerCase();
+  const hasRole        = highValueRoles.some(r => contextBlock.includes(r));
+  const isCritical     = triggerEvents.some(e => contextBlock.includes(e));
   if (hasRole && isCritical) {
-    console.log(`[ORGANIC INTEL] Fast-tracking POI: ${entity.name} (Role/Event matched)`);
+    console.log(`[ORGANIC INTEL] Fast-tracking POI: ${entity.name}`);
     return true;
   }
-
   return false;
 }
 
-// ── Count name frequency and find new high-volume persons ──
-
 function findNewPersons(extractedNames, allHeadlines = []) {
   const counts = new Map();
-
   for (const name of extractedNames) {
     const normalized = name.trim();
-    const key = normalized.toLowerCase();
-
+    const key        = normalized.toLowerCase();
     if (TRACKED_NAMES.has(key)) continue;
     if (!normalized.includes(' ') || normalized.length < 5) continue;
     if (/^\d/.test(normalized)) continue;
-
     const existing = counts.get(key);
-    if (existing) {
-      existing.count++;
-    } else {
-      counts.set(key, { name: normalized, count: 1 });
-    }
+    if (existing) existing.count++;
+    else counts.set(key, { name: normalized, count: 1 });
   }
-
   return Array.from(counts.values())
     .filter(p => isHighValuePOI(p, allHeadlines))
     .sort((a, b) => b.count - a.count)
     .slice(0, MAX_DISCOVERED);
 }
 
-// ── Groq: build provisional profile for a discovered person ──
+// ── Groq: provisional profile ──
 
 async function buildProvisionalProfile(personName, mentionCount) {
   const groqKey = process.env.GROQ_API_KEY;
@@ -264,10 +159,7 @@ Respond with ONLY valid JSON:
   try {
     const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${groqKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: GROQ_MODEL,
         messages: [
@@ -279,15 +171,12 @@ Respond with ONLY valid JSON:
       }),
       signal: AbortSignal.timeout(15000),
     });
-
     if (!resp.ok) return null;
-    const json = await resp.json();
-    const text = json.choices?.[0]?.message?.content?.trim() || '';
+    const json    = await resp.json();
+    const text    = json.choices?.[0]?.message?.content?.trim() || '';
     const cleaned = text.replace(/```json\s*\n?/g, '').replace(/```\s*$/g, '').trim();
-
     try {
       const parsed = JSON.parse(cleaned);
-      // Normalize
       if (typeof parsed.locationConfidence !== 'number') parsed.locationConfidence = 0.2;
       parsed.locationConfidence = Math.max(0, Math.min(1, parsed.locationConfidence));
       if (typeof parsed.recentActivity === 'string') parsed.recentActivity = [parsed.recentActivity];
@@ -300,35 +189,30 @@ Respond with ONLY valid JSON:
   } catch { return null; }
 }
 
-// ── Read existing POI data from Redis ──
+// ── Read / write existing POI from Redis ──
 
 async function readExistingPOI() {
   const { url, token } = getRedisCredentials();
   try {
     const resp = await fetch(`${url}/get/${encodeURIComponent(CANONICAL_KEY)}`, {
       headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5000),
+      signal:  AbortSignal.timeout(5000),
     });
     if (!resp.ok) return null;
     const data = await resp.json();
     if (!data.result) return null;
-    const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
-    return parsed;
-  } catch {
-    return null;
-  }
+    return typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+  } catch { return null; }
 }
-
-// ── Write merged POI data back to Redis ──
 
 async function writeMergedPOI(data) {
   const { url, token } = getRedisCredentials();
   const payload = JSON.stringify(data);
-  const resp = await fetch(`${url}/set/${encodeURIComponent(CANONICAL_KEY)}`, {
-    method: 'POST',
+  const resp = await fetch(url, {
+    method:  'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ EX: 7200, value: payload }),
-    signal: AbortSignal.timeout(5000),
+    body:    JSON.stringify(['SET', CANONICAL_KEY, payload, 'EX', 7200]),
+    signal:  AbortSignal.timeout(5000),
   });
   if (!resp.ok) throw new Error(`Redis write failed: ${resp.status}`);
 }
@@ -342,29 +226,46 @@ async function main() {
     process.exit(0);
   }
 
-  console.log('=== POI Auto-Discovery ===');
-  console.log(`  Threshold: ${MIN_MENTIONS_THRESHOLD}+ mentions`);
-  console.log(`  Max discover: ${MAX_DISCOVERED} persons per run`);
+  console.log('=== POI Auto-Discovery (cache-backed) ===');
+  console.log(`  Threshold: ${MIN_MENTIONS_THRESHOLD}+ mentions, Max: ${MAX_DISCOVERED} per run`);
 
-  // Step 1: Gather headlines from multiple GDELT queries
-  console.log('  Step 1: Fetching GDELT headlines...');
-  const allHeadlines = [];
-  for (const query of DISCOVERY_QUERIES) {
-    const headlines = await fetchGdeltHeadlines(query, 100);
-    allHeadlines.push(...headlines);
-    console.log(`    "${query.slice(0, 40)}..." → ${headlines.length} headlines`);
-    await sleep(1500); // GDELT rate limit
-  }
-  console.log(`  GDELT headlines: ${allHeadlines.length}`);
+  // Step 1: Pull headlines from gdelt:raw:v1 — zero GDELT API calls
+  console.log('  Step 1: Reading headlines from GDELT cache...');
+  const articles     = await getGdeltPoiDiscoveryArticles();
+  const allHeadlines = articles.map(a => a.title).filter(Boolean);
+  console.log(`  Cache headlines: ${allHeadlines.length}`);
 
+  // Fallback: if cache was empty, pull titles from other seeded Redis keys
   if (allHeadlines.length < 20) {
-    console.log('  Step 1b: GDELT rate-limited — pulling from Redis fallback...');
-    const redisHeadlines = await fetchRedisHeadlines();
-    allHeadlines.push(...redisHeadlines);
-    console.log(`  Redis fallback: ${redisHeadlines.length} headlines`);
+    console.log('  Step 1b: Cache thin — pulling from Redis intel keys...');
+    const { url, token } = getRedisCredentials();
+    const fallbackKeys = ['intelligence:gdelt-intel:v1', 'intelligence:missile-events:v1', 'unrest:events:v1'];
+    for (const key of fallbackKeys) {
+      try {
+        const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal:  AbortSignal.timeout(5000),
+        });
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        if (!data.result) continue;
+        const parsed = JSON.parse(data.result);
+        if (parsed.topics) {
+          for (const topic of parsed.topics) {
+            for (const article of (topic.articles || [])) {
+              if (article.title) allHeadlines.push(article.title);
+            }
+          }
+        }
+        if (parsed.events) {
+          for (const event of parsed.events) {
+            if (event.title) allHeadlines.push(event.title);
+          }
+        }
+      } catch { /* skip */ }
+    }
+    console.log(`  Total headlines after fallback: ${allHeadlines.length}`);
   }
-
-  console.log(`  Total headlines: ${allHeadlines.length}`);
 
   if (allHeadlines.length < 10) {
     console.log('  SKIP: Too few headlines for meaningful discovery');
@@ -395,43 +296,36 @@ async function main() {
   const discoveredProfiles = [];
   for (const person of newPersons) {
     const profile = await buildProvisionalProfile(person.name, person.count);
-    if (!profile) {
-      console.log(`    ✗ ${person.name} — profile generation failed`);
-      continue;
-    }
+    if (!profile) { console.log(`    ✗ ${person.name} — profile generation failed`); continue; }
 
     discoveredProfiles.push({
-      id: person.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      name: person.name,
-      role: profile.role || 'Unknown',
+      id:     person.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      name:   person.name,
+      role:   profile.role   || 'Unknown',
       region: profile.region || 'Unknown',
-      tags: Array.isArray(profile.tags) ? profile.tags : [],
+      tags:   Array.isArray(profile.tags) ? profile.tags : [],
       source: 'auto-discovered',
       discoveredAt: new Date().toISOString(),
-
-      lastKnownLocation: profile.lastKnownLocation || 'Unknown',
+      lastKnownLocation:  profile.lastKnownLocation || 'Unknown',
       locationConfidence: profile.locationConfidence || 0.2,
-      locationSource: 'ai-likely',
-      locationReasoning: 'Auto-discovered via GDELT headline analysis',
-
-      summary: profile.summary || `Trending person with ${person.count} mentions in 24h.`,
+      locationSource:     'ai-likely',
+      locationReasoning:  'Auto-discovered via GDELT headline analysis',
+      summary:        profile.summary || `Trending person with ${person.count} mentions in 24h.`,
       recentActivity: profile.recentActivity || [`${person.count} mentions in global media in the past 24 hours`],
-      riskLevel: profile.riskLevel || 'medium',
-      riskReason: profile.riskReason || `High media volume (${person.count} mentions/24h)`,
+      riskLevel:         profile.riskLevel  || 'medium',
+      riskReason:        profile.riskReason || `High media volume (${person.count} mentions/24h)`,
       associatedEntities: profile.associatedEntities || [],
-      sentiment: profile.sentiment || 'neutral',
-
-      mentionCount: person.count,
+      sentiment:         profile.sentiment  || 'neutral',
+      mentionCount:  person.count,
       activityScore: Math.min(100, Math.round(60 * Math.log10(Math.max(1, person.count)) / Math.log10(200)) + 30),
-      averageTone: 0,
-
+      averageTone:   0,
       recentArticles: [],
       profileGeneratedAt: new Date().toISOString(),
       dataFreshness: '24h',
     });
 
     console.log(`    ✓ ${person.name} — ${profile.role} (${profile.region})`);
-    await sleep(2200); // Groq rate limit
+    await sleep(2200);
   }
 
   if (discoveredProfiles.length === 0) {
@@ -439,34 +333,29 @@ async function main() {
     process.exit(0);
   }
 
-  // Step 5: Read existing POI data and merge
+  // Step 5: Merge with existing POI data
   console.log('  Step 5: Merging with existing POI data...');
-  const existing = await readExistingPOI();
+  const existing        = await readExistingPOI();
   const existingPersons = existing?.persons || [];
-
-  // Remove old auto-discovered entries (they'll be replaced with fresh ones)
-  const tracked = existingPersons.filter(p => p.source !== 'auto-discovered');
-  const merged = [...tracked, ...discoveredProfiles];
-
-  // Sort by activity score
+  const tracked         = existingPersons.filter(p => p.source !== 'auto-discovered');
+  const merged          = [...tracked, ...discoveredProfiles];
   merged.sort((a, b) => (b.activityScore || 0) - (a.activityScore || 0));
 
   const result = {
-    persons: merged,
-    generatedAt: new Date().toISOString(),
-    trackedCount: tracked.length,
+    persons:        merged,
+    generatedAt:    new Date().toISOString(),
+    trackedCount:   tracked.length,
     discoveredCount: discoveredProfiles.length,
-    withAiProfile: merged.filter(p => p.riskReason).length,
+    withAiProfile:  merged.filter(p => p.riskReason).length,
     version: 2,
   };
 
   await writeMergedPOI(result);
-
   console.log(`  Written ${merged.length} total POIs (${tracked.length} tracked + ${discoveredProfiles.length} discovered)`);
   console.log('=== POI Auto-Discovery Complete ===');
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error('FATAL:', err.message || err);
   process.exit(0);
 });

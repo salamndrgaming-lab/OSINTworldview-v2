@@ -1,141 +1,116 @@
-#!/usr/bin/env node
 /**
- * seed-telegram-narratives.mjs — GDELT-based narrative tracker
- *
- * Fetches trending narrative topics from GDELT DOC API across key
- * OSINT-relevant themes, transforms them into a format compatible
- * with the TelegramOSINT panel, and stores in Redis under
- * `telegram:narratives:v1`. This serves as a fallback data source
- * when the Telegram WS relay is unavailable.
- *
- * Runs as part of the seed.yml GitHub Actions workflow.
+ * scripts/seed-telegram-narratives.mjs
+ * 
+ * Fetches narrative data from GDELT DOC API across 10 OSINT-relevant themes.
+ * Uses sequential fetching with 3-second backoff delays to prevent GDELT rate 
+ * limiting and HTTP 429 / connection drop errors.
  */
+import { runSeed } from './_seed-runner.mjs';
 
-import { loadEnvFile, runSeed, CHROME_UA } from './_seed-utils.mjs';
-
-loadEnvFile(import.meta.url);
-
-const GDELT_DOC_BASE = 'https://api.gdeltproject.org/api/v2/doc/doc';
-
-// Themes aligned with curated Telegram OSINT channels
-const NARRATIVE_QUERIES = [
-  { query: 'military conflict attack', theme: 'conflict' },
-  { query: 'drone strike missile', theme: 'military' },
-  { query: 'cyber attack hacking', theme: 'cyber' },
-  { query: 'Ukraine Russia frontline', theme: 'ukraine' },
-  { query: 'Iran Israel tensions', theme: 'middleeast' },
-  { query: 'intelligence espionage OSINT', theme: 'osint' },
-  { query: 'geopolitical sanctions diplomacy', theme: 'geopolitics' },
-  { query: 'protest unrest uprising', theme: 'unrest' },
-  { query: 'nuclear weapons proliferation', theme: 'nuclear' },
-  { query: 'supply chain disruption trade', theme: 'trade' },
+const THEMES =[
+  { id: 'conflict',   query: '(conflict OR war OR attack OR strike)' },
+  { id: 'military',   query: '(military OR army OR navy OR troops)' },
+  { id: 'cyber',      query: '(cyber OR hack OR malware OR ransomware)' },
+  { id: 'ukraine',    query: '(ukraine OR kyiv OR russia)' },
+  { id: 'middleeast', query: '(israel OR gaza OR iran OR lebanon OR syria)' },
+  { id: 'osint',      query: '(osint OR "open source intelligence" OR satellite)' },
+  { id: 'geopolitics',query: '(geopolitics OR sanctions OR diplomacy)' },
+  { id: 'unrest',     query: '(protest OR riot OR coup OR unrest)' },
+  { id: 'nuclear',    query: '(nuclear OR uranium OR missile)' },
+  { id: 'trade',      query: '(trade OR tariff OR export OR supply chain)' }
 ];
 
-async function fetchGdeltTimeline(queryStr) {
-  const params = new URLSearchParams({
-    query: queryStr,
-    mode: 'TimelineVolInfo',
-    format: 'json',
-    timespan: '24h',
-    maxrecords: '20',
-  });
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  const resp = await fetch(`${GDELT_DOC_BASE}?${params}`, {
-    headers: { 'User-Agent': CHROME_UA },
-    signal: AbortSignal.timeout(12000),
-  });
+async function fetchGdelt(query, mode) {
+  const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(query)}&mode=${mode}&format=json&maxrecords=15`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout prevents CI hanging
 
-  if (!resp.ok) return null;
-  const data = await resp.json();
-  return data;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        // GDELT often blocks default generic node-fetch agents
+        'User-Agent': 'OSINTWorldview/2.0 (Analysis Seed Engine - https://github.com/salamndrgaming-lab)'
+      },
+      signal: controller.signal
+    });
+    
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
-async function fetchGdeltArticles(queryStr) {
-  const params = new URLSearchParams({
-    query: queryStr,
-    mode: 'ArtList',
-    format: 'json',
-    timespan: '12h',
-    maxrecords: '15',
-    sort: 'DateDesc',
-  });
-
-  const resp = await fetch(`${GDELT_DOC_BASE}?${params}`, {
-    headers: { 'User-Agent': CHROME_UA },
-    signal: AbortSignal.timeout(12000),
-  });
-
-  if (!resp.ok) return [];
-  const data = await resp.json();
-  return data.articles || [];
+// Convert GDELT timestamp (YYYYMMDDTHHMMSSZ) to standard ISO string
+function parseGdeltDate(gdeltDateStr) {
+  if (!gdeltDateStr || gdeltDateStr.length < 15) return new Date().toISOString();
+  try {
+    const y = gdeltDateStr.substring(0, 4);
+    const m = gdeltDateStr.substring(4, 6);
+    const d = gdeltDateStr.substring(6, 8);
+    const h = gdeltDateStr.substring(9, 11);
+    const min = gdeltDateStr.substring(11, 13);
+    const s = gdeltDateStr.substring(13, 15);
+    return `${y}-${m}-${d}T${h}:${min}:${s}Z`;
+  } catch {
+    return new Date().toISOString();
+  }
 }
 
-async function fetchNarratives() {
-  const messages = [];
-  const topicVelocities = [];
-
-  for (const nq of NARRATIVE_QUERIES) {
+async function fetchAllNarratives() {
+  const allMessages =[];
+  
+  // SEQUENTIAL EXECUTION REQUIRED.
+  // GDELT DOC API instantly rate limits/drops connections if multiple queries fire simultaneously.
+  for (const theme of THEMES) {
+    console.log(`[info] Fetching narratives for theme: ${theme.id}`);
+    
     try {
-      // Fetch both timeline (for velocity) and articles (for content)
-      const [timeline, articles] = await Promise.all([
-        fetchGdeltTimeline(nq.query),
-        fetchGdeltArticles(nq.query),
-      ]);
-
-      // Calculate velocity from timeline data
-      let velocity = 0;
-      if (timeline && timeline.timeline) {
-        const series = timeline.timeline[0];
-        if (series && series.data) {
-          const recent = series.data.slice(-6); // last 6 time intervals
-          velocity = recent.reduce((sum, d) => sum + (d.value || 0), 0);
-        }
-      }
-
-      topicVelocities.push({
-        topic: nq.query.split(' ').slice(0, 2).join(' '),
-        theme: nq.theme,
-        velocity,
-        articleCount: articles.length,
-        trending: velocity > 100,
-      });
-
-      // Transform articles into telegram-like messages
+      // 1. Fetch recent articles (Message Content)
+      const artData = await fetchGdelt(theme.query, 'artlist');
+      await sleep(3000); // 3-second mandatory backoff
+      
+      // 2. Fetch timeline (Velocity/Trend Metrics)
+      const timeData = await fetchGdelt(theme.query, 'timelinevol');
+      await sleep(3000); // 3-second mandatory backoff before next theme
+      
+      const articles = artData?.articles ||[];
+      
       for (const art of articles) {
-        messages.push({
-          channelName: art.domain || art.source || 'GDELT',
-          channelHandle: '@gdelt_' + nq.theme,
-          text: (art.title || '') + (art.seendate ? '' : ''),
-          date: art.seendate || new Date().toISOString(),
-          timestamp: art.seendate ? new Date(art.seendate.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/, '$1-$2-$3T$4:$5:$6Z')).getTime() : Date.now(),
-          url: art.url || '',
-          source: 'gdelt',
-          theme: nq.theme,
-          tone: art.tone || 0,
+        if (!art.title || !art.url) continue;
+        
+        allMessages.push({
+          channelName: art.domain || 'gdelt.source',
+          text: art.title,
+          timestamp: parseGdeltDate(art.seendate),
+          url: art.url,
+          theme: theme.id
         });
       }
-
-      // Small delay between GDELT calls to be polite
-      await new Promise(r => setTimeout(r, 500));
     } catch (err) {
-      console.warn(`  [warn] Failed to fetch ${nq.theme}: ${err.message}`);
+      console.warn(`[warn] Failed to fetch ${theme.id}: ${err.message}`);
     }
   }
 
-  // Sort by timestamp descending
-  messages.sort((a, b) => b.timestamp - a.timestamp);
+  // If all failed, return null to gracefully trigger "preserving existing cache"
+  if (allMessages.length === 0) {
+    console.error('[error] All GDELT fetches failed. Aborting write to preserve existing Redis cache.');
+    return null; 
+  }
 
-  return {
-    messages: messages.slice(0, 200),
-    velocities: topicVelocities,
-    cachedAt: new Date().toISOString(),
-    source: 'gdelt-doc-api',
-    count: messages.length,
-  };
+  // Sort by newest timestamp first
+  allMessages.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  return { telegramNarratives: allMessages };
 }
 
-await runSeed('telegram', 'narratives', 'telegram:narratives:v1', fetchNarratives, {
-  ttlSeconds: 7200, // 2 hours
-  validateFn: (data) => data && data.messages && data.messages.length > 0,
-  recordCount: (data) => data?.messages?.length || 0,
+runSeed({
+  name: 'telegram:narratives Seed',
+  redisKey: 'telegram:narratives:v1',
+  fetcher: fetchAllNarratives,
+  ttl: 7200
 });

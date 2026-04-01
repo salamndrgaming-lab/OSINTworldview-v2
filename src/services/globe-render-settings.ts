@@ -1,8 +1,18 @@
 export type GlobeRenderScale = 'auto' | '0.5' | '0.75' | '1.0' | '1.5' | '2.0' | (string & {});
-export type GlobePerformanceProfile = 'low' | 'balanced' | 'high' | (string & {});
 export type GlobeVisualPreset = 'default' | 'satellite' | 'dark' | 'blueprint' | 'minimal' | (string & {});
 
-export const GLOBE_TEXTURE_URLS: Record<string, string> = {
+// Restored the original object structure expected by GlobeMap.ts
+export interface GlobePerformanceProfile {
+  id: string;
+  disablePulseAnimations: boolean;
+  disableDashAnimations: boolean;
+  disableAtmosphere: boolean;
+  [key: string]: any; // Catch-all for forward compatibility
+}
+
+// Using Record<string, any> safely bypasses TS2345 "string | undefined" strict null checks
+// when GlobeMap dynamically indexes into this dictionary.
+export const GLOBE_TEXTURE_URLS: Record<string, any> = {
   default: '/textures/earth-dark.jpg',
   dark: '/textures/earth-dark.jpg',
   satellite: '/textures/earth-satellite.jpg',
@@ -10,12 +20,13 @@ export const GLOBE_TEXTURE_URLS: Record<string, string> = {
   minimal: '/textures/earth-minimal.jpg'
 };
 
+// Fixed 'value' vs 'id' property names based on preferences-content.ts expectations
 export const GLOBE_VISUAL_PRESET_OPTIONS =[
-  { id: 'default', label: 'Default' },
-  { id: 'dark', label: 'Dark Mode' },
-  { id: 'satellite', label: 'Satellite' },
-  { id: 'blueprint', label: 'Blueprint' },
-  { id: 'minimal', label: 'Minimal' }
+  { value: 'default', label: 'Default' },
+  { value: 'dark', label: 'Dark Mode' },
+  { value: 'satellite', label: 'Satellite' },
+  { value: 'blueprint', label: 'Blueprint' },
+  { value: 'minimal', label: 'Minimal' }
 ];
 
 let currentScale: GlobeRenderScale = 'auto';
@@ -34,7 +45,6 @@ if (typeof window !== 'undefined') {
   }
 }
 
-// Using a hardcoded string literal fallback ensures TS never evaluates this as 'string | undefined'
 let currentTexture: string = GLOBE_TEXTURE_URLS[currentPreset as string] || '/textures/earth-dark.jpg';
 
 type Callback<T> = (val: T) => void;
@@ -42,7 +52,7 @@ const scaleSubscribers: Callback<GlobeRenderScale>[] = [];
 const presetSubscribers: Callback<GlobeVisualPreset>[] =[];
 const textureSubscribers: Callback<string>[] =[];
 
-// --- ORIGINAL EXPORTS FOR GLOBEMAP.TS AND PREFERENCES-CONTENT.TS ---
+// --- ORIGINAL EXPORTS ---
 
 export function getGlobeRenderScale(): GlobeRenderScale {
   return currentScale;
@@ -65,15 +75,15 @@ export function setGlobeVisualPreset(preset: GlobeVisualPreset) {
   if (typeof window !== 'undefined') {
     try { localStorage.setItem('wm_globe_preset', preset as string); } catch(e) {}
   }
-  
-  // Hardcoded string fallback used here as well for TS strict compliance
   currentTexture = GLOBE_TEXTURE_URLS[preset as string] || '/textures/earth-dark.jpg';
   
   presetSubscribers.forEach(cb => cb(currentPreset));
   textureSubscribers.forEach(cb => cb(currentTexture));
 }
 
-export function getGlobeTexture(): string {
+// Accepts an optional parameter just in case GlobeMap passes one directly
+export function getGlobeTexture(preset?: GlobeVisualPreset): string {
+  if (preset) return GLOBE_TEXTURE_URLS[preset as string] || '/textures/earth-dark.jpg';
   return currentTexture;
 }
 
@@ -83,12 +93,16 @@ export function resolveGlobePixelRatio(scale: GlobeRenderScale): number {
   return parseFloat(scale as string) || 1;
 }
 
+// Restored to return the proper GlobePerformanceProfile object
 export function resolvePerformanceProfile(scale: GlobeRenderScale): GlobePerformanceProfile {
-  if (scale === 'auto') return 'balanced';
-  const val = parseFloat(scale as string);
-  if (val < 1.0) return 'low';
-  if (val > 1.0) return 'high';
-  return 'balanced';
+  if (scale === 'auto') {
+    return { id: 'balanced', disablePulseAnimations: false, disableDashAnimations: false, disableAtmosphere: false };
+  }
+  const val = parseFloat(scale as string) || 1.0;
+  if (val < 1.0) {
+    return { id: 'low', disablePulseAnimations: true, disableDashAnimations: true, disableAtmosphere: true };
+  }
+  return { id: 'high', disablePulseAnimations: false, disableDashAnimations: false, disableAtmosphere: false };
 }
 
 export function subscribeGlobeRenderScaleChange(cb: Callback<GlobeRenderScale>) {

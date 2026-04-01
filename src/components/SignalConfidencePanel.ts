@@ -184,8 +184,12 @@ export class SignalConfidencePanel extends Panel {
     // Group by category
     const grouped: Record<string, typeof scored> = {};
     for (const d of scored) {
-      if (!grouped[d.category]) grouped[d.category] = [];
-      grouped[d.category].push(d);
+      const bucket = grouped[d.category];
+      if (bucket === undefined) {
+        grouped[d.category] = [d];
+      } else {
+        bucket.push(d);
+      }
     }
 
     let html = '';
@@ -214,25 +218,30 @@ export class SignalConfidencePanel extends Panel {
     icon: string; label: string; confidence: string;
     ageMin: number | null; present: boolean;
   }): string {
-    const colors: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+    type ColorEntry = { bg: string; border: string; text: string; dot: string };
+    const colors: Record<string, ColorEntry> = {
       fresh:   { bg: 'rgba(34,197,94,0.08)',   border: 'rgba(34,197,94,0.25)',   text: '#22c55e', dot: '#22c55e' },
       amber:   { bg: 'rgba(212,168,67,0.08)',   border: 'rgba(212,168,67,0.25)',  text: '#d4a843', dot: '#d4a843' },
       stale:   { bg: 'rgba(239,68,68,0.08)',    border: 'rgba(239,68,68,0.25)',   text: '#ef4444', dot: '#ef4444' },
       missing: { bg: 'rgba(75,75,90,0.08)',     border: 'rgba(75,75,90,0.2)',     text: '#444',    dot: '#333' },
     };
-    const c = colors[d.confidence] ?? colors.missing;
+    const missing: ColorEntry = { bg: 'rgba(75,75,90,0.08)', border: 'rgba(75,75,90,0.2)', text: '#444', dot: '#333' };
+    const c: ColorEntry = colors[d.confidence] ?? missing;
+    const bg: string = c.bg;
+    const border: string = c.border;
+    const text: string = c.text;
 
     const ageStr = d.ageMin !== null
       ? (d.ageMin < 60 ? `${d.ageMin}m` : `${Math.round(d.ageMin / 60)}h`) + ' ago'
       : 'No data';
 
     return `<div style="
-      background:${c.bg};border:1px solid ${c.border};border-radius:6px;
+      background:${bg};border:1px solid ${border};border-radius:6px;
       padding:6px 7px;text-align:center;cursor:default;
     " title="${this.esc(d.label)}: ${ageStr}">
       <div style="font-size:16px;line-height:1;margin-bottom:3px">${d.icon}</div>
       <div style="font-size:9px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${this.esc(d.label)}</div>
-      <div style="font-size:8px;color:${c.text};margin-top:1px">${ageStr}</div>
+      <div style="font-size:8px;color:${text};margin-top:1px">${ageStr}</div>
     </div>`;
   }
 

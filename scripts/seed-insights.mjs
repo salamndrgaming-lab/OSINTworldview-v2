@@ -2,12 +2,33 @@
 
 import { loadEnvFile, CHROME_UA, getRedisCredentials, runSeed } from './_seed-utils.mjs';
 import { clusterItems, selectTopStories } from './_clustering.mjs';
+import { extractCountryCode } from './shared/geo-extract.mjs';
 
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'news:insights:v1';
 const DIGEST_KEY = 'news:digest:v1:full:en';
-const CACHE_TTL = 1800; // 30 min — matches health maxStaleMin; survives missed cron runs
+
+// Digest items may carry proto enum strings (THREAT_LEVEL_HIGH etc.) from the
+// pipeline. Normalise to lowercase client-side values before publishing so the
+// UI never has to handle both forms.
+const PROTO_TO_LEVEL = {
+  THREAT_LEVEL_CRITICAL: 'critical',
+  THREAT_LEVEL_HIGH: 'high',
+  THREAT_LEVEL_MEDIUM: 'medium',
+  THREAT_LEVEL_LOW: 'low',
+  THREAT_LEVEL_UNSPECIFIED: 'info',
+};
+
+function normalizeThreat(threat) {
+  if (!threat) return undefined;
+  const level = PROTO_TO_LEVEL[threat.level] ?? threat.level;
+  return { ...threat, level };
+}
+
+// 3h — 6× the 30 min cron interval so the key survives any single missed run
+// (was 30 min = expired between runs whenever GDELT was slow)
+const CACHE_TTL = 10_800;
 const MAX_HEADLINES = 10;
 const MAX_HEADLINE_LEN = 500;
 const GROQ_MODEL = 'llama-3.1-8b-instant';
@@ -56,24 +77,9 @@ async function readExistingInsights() {
   return data.result ? JSON.parse(data.result) : null;
 }
 
-// Provider config — mirrors server/worldmonitor/news/v1/_shared.ts getProviderCredentials()
+// LLM provider chain: ollama (local) → groq → openrouter
+// Mirrors the server-side provider chain so seed output is consistent with API output.
 const LLM_PROVIDERS = [
-  {
-    name: 'groq',
-    envKey: 'GROQ_API_KEY',
-    apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
-    model: GROQ_MODEL,
-    headers: (key) => ({ 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', 'User-Agent': CHROME_UA }),
-    timeout: 15_000,
-  },
-  {
-    name: 'openrouter',
-    envKey: 'OPENROUTER_API_KEY',
-    apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
-    model: 'google/gemini-2.5-flash',
-    headers: (key) => ({ 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://worldmonitor.app', 'X-Title': 'World Monitor', 'User-Agent': CHROME_UA }),
-    timeout: 20_000,
-  },
   {
     name: 'ollama',
     envKey: 'OLLAMA_API_URL',
@@ -87,6 +93,28 @@ const LLM_PROVIDERS = [
     },
     extraBody: { think: false },
     timeout: 25_000,
+  },
+  {
+    name: 'groq',
+    envKey: 'GROQ_API_KEY',
+    apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
+    model: GROQ_MODEL,
+    headers: (key) => ({ Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'User-Agent': CHROME_UA }),
+    timeout: 15_000,
+  },
+  {
+    name: 'openrouter',
+    envKey: 'OPENROUTER_API_KEY',
+    apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
+    model: 'google/gemini-2.5-flash',
+    headers: (key) => ({
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://osint.worldview.app',
+      'X-Title': 'OSINT Worldview',
+      'User-Agent': CHROME_UA,
+    }),
+    timeout: 20_000,
   },
 ];
 
@@ -139,10 +167,7 @@ Rules:
 
       const json = await resp.json();
       const rawText = json.choices?.[0]?.message?.content?.trim();
-      if (!rawText) {
-        console.warn(`  ${provider.name}: empty response`);
-        continue;
-      }
+      if (!rawText) { console.warn(`  ${provider.name}: empty response`); continue; }
 
       const text = stripReasoningPreamble(rawText)
         .replace(/<think>[\s\S]*?<\/think>/gi, '')
@@ -150,10 +175,7 @@ Rules:
         .replace(/<think>[\s\S]*/gi, '')
         .trim();
 
-      if (text.length < 20) {
-        console.warn(`  ${provider.name}: output too short (${text.length} chars)`);
-        continue;
-      }
+      if (text.length < 20) { console.warn(`  ${provider.name}: output too short (${text.length} chars)`); continue; }
 
       return { text, model: json.model || model, provider: provider.name };
     } catch (err) {
@@ -176,11 +198,8 @@ function categorizeStory(title) {
     { keywords: ['election', 'vote', 'parliament', 'legislation'], cat: 'political', threat: 'moderate' },
     { keywords: ['market', 'economy', 'trade', 'tariff', 'inflation'], cat: 'economic', threat: 'moderate' },
   ];
-
   for (const { keywords, cat, threat } of categories) {
-    if (keywords.some(kw => lower.includes(kw))) {
-      return { category: cat, threatLevel: threat };
-    }
+    if (keywords.some(kw => lower.includes(kw))) return { category: cat, threatLevel: threat };
   }
   return { category: 'general', threatLevel: 'moderate' };
 }
@@ -204,12 +223,11 @@ async function fetchInsights() {
   if (!digest) {
     console.log('  Digest not in Redis, warming cache via RPC...');
     await warmDigestCache();
-    // Wait for RPC write to propagate to Redis
     await new Promise(r => setTimeout(r, 3_000));
     digest = await readDigestFromRedis();
   }
   if (!digest) {
-    // LKG fallback: reuse existing insights if digest is unavailable
+    // LKG fallback: reuse existing insights when digest is unavailable
     const existing = await readExistingInsights();
     if (existing?.topStories?.length) {
       console.log('  Digest unavailable — reusing existing insights (LKG)');
@@ -218,7 +236,6 @@ async function fetchInsights() {
     throw new Error('No news digest found in Redis');
   }
 
-  // Digest shape: { categories: { politics: { items: [...] }, ... }, feedStatuses, generatedAt }
   let items;
   if (Array.isArray(digest)) {
     items = digest;
@@ -235,7 +252,6 @@ async function fetchInsights() {
     const keys = typeof digest === 'object' && digest !== null ? Object.keys(digest).join(', ') : typeof digest;
     throw new Error(`Digest has no items (shape: ${keys})`);
   }
-
   console.log(`  Digest items: ${items.length}`);
 
   const normalizedItems = items.map(item => ({
@@ -245,6 +261,7 @@ async function fetchInsights() {
     pubDate: item.pubDate || item.publishedAt || item.date || new Date().toISOString(),
     isAlert: item.isAlert || false,
     tier: item.tier,
+    threat: normalizeThreat(item.threat),
   })).filter(item => item.title.length > 10);
 
   const clusters = clusterItems(normalizedItems);
@@ -255,9 +272,7 @@ async function fetchInsights() {
 
   if (topStories.length === 0) throw new Error('No top stories after scoring');
 
-  const headlines = topStories
-    .slice(0, MAX_HEADLINES)
-    .map(s => sanitizeTitle(s.primaryTitle));
+  const headlines = topStories.slice(0, MAX_HEADLINES).map(s => sanitizeTitle(s.primaryTitle));
 
   let worldBrief = '';
   let briefProvider = '';
@@ -276,10 +291,19 @@ async function fetchInsights() {
   }
 
   const multiSourceCount = clusters.filter(c => c.sourceCount >= 2).length;
-  const fastMovingCount = 0; // velocity not available in digest items
 
   const enrichedStories = topStories.map(story => {
-    const { category, threatLevel } = categorizeStory(story.primaryTitle);
+    // Prefer digest-provided threat data over keyword fallback — digest threats
+    // come from the upstream ML classifier and are more precise.
+    const hasDigestThreat = story.threat?.level && story.threat?.source !== 'keyword';
+    const { category, threatLevel } = hasDigestThreat
+      ? { category: story.threat.category ?? 'general', threatLevel: story.threat.level }
+      : categorizeStory(story.primaryTitle);
+
+    // extractCountryCode returns the first geo-entity in the headline as ISO2.
+    // null = no country detected or supranational (NATO, EU).
+    const countryCode = extractCountryCode(story.primaryTitle) ?? null;
+
     return {
       primaryTitle: story.primaryTitle,
       primarySource: story.primarySource,
@@ -291,6 +315,7 @@ async function fetchInsights() {
       isAlert: story.isAlert,
       category,
       threatLevel,
+      countryCode,
     };
   });
 
@@ -303,10 +328,10 @@ async function fetchInsights() {
     generatedAt: new Date().toISOString(),
     clusterCount: clusters.length,
     multiSourceCount,
-    fastMovingCount,
+    fastMovingCount: 0,
   };
 
-  // LKG preservation: don't overwrite "ok" with "degraded"
+  // LKG preservation: never overwrite an "ok" payload with a "degraded" one
   if (status === 'degraded') {
     const existing = await readExistingInsights();
     if (existing?.status === 'ok') {
@@ -327,7 +352,7 @@ runSeed('news', 'insights', CANONICAL_KEY, fetchInsights, {
   ttlSeconds: CACHE_TTL,
   sourceVersion: 'digest-clustering-v1',
 }).catch((err) => {
-  console.error('FATAL:', err.message || err);
-  // Exit gracefully for cron — health endpoint flags stale data via seed-meta.
+  const cause = err.cause ? ` (cause: ${err.cause.message || err.cause.code || err.cause})` : '';
+  console.error('FATAL:', (err.message || err) + cause);
   process.exit(0);
 });

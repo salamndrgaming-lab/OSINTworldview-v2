@@ -4,11 +4,23 @@
  * When active, hides the main dashboard (map + panels) and shows
  * a full-screen investigation workspace with 5 functional sub-tabs:
  *   1. Entity Intel — POI search with profile cards
- *   2. Link Graph — Force-directed entity relationship graph
+ *   2. Link Graph — Force-directed entity relationship graph (FIXED)
  *   3. Timeline — Cross-source event correlation
  *   4. Notepad — Auto-saving markdown scratchpad
  *   5. OSINT Toolkit — Embedded tools (iframes + built-in utilities)
  */
+
+import {
+  D3LinkGraph,
+  addNodeToGraph,
+  addLinkToGraph,
+  clearStoredGraph,
+  getStoredGraph,
+  startAutoDiscovery,
+  stopAutoDiscovery,
+  type GraphNode,
+  type GraphData,
+} from '../utils/D3LinkGraph';
 
 const ANALYST_CONTAINER_ID = 'analystWorkspace';
 const ACTIVE_SUBTAB_KEY = 'worldmonitor-analyst-subtab';
@@ -92,27 +104,42 @@ function renderEntities(): string {
 }
 
 function renderGraph(): string {
-  return `<div class="analyst-pane" data-pane="graph">
-    <div class="analyst-pane-header">
+  return `<div class="analyst-pane" data-pane="graph" style="display:flex;flex-direction:column;height:100%">
+    <div class="analyst-pane-header" style="flex-shrink:0">
       <h2 class="analyst-pane-title">Intelligence Link Graph</h2>
-      <div class="analyst-graph-toolbar">
-        <select class="analyst-graph-category" id="analystGraphCategory">
-          <option value="country">🌍 Country</option>
-          <option value="person">👤 Person</option>
-          <option value="organization">🏢 Organization</option>
-          <option value="event">⚡ Event</option>
+      <div class="analyst-graph-toolbar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select class="analyst-graph-category" id="analystGraphCategory" style="font-size:11px;padding:4px 6px;background:var(--vi-surface,#12121a);border:1px solid var(--vi-border,#252535);border-radius:4px;color:var(--text,#e5e7eb)">
+          <option value="Person">👤 Person</option>
+          <option value="Organization">🏢 Organization</option>
+          <option value="Country">🌍 Country</option>
+          <option value="Event">⚡ Event</option>
+          <option value="Location">📍 Location</option>
         </select>
-        <input type="text" class="analyst-graph-input" id="analystGraphInput" placeholder="Add entity..." spellcheck="false" />
-        <button class="analyst-btn" id="analystGraphAddBtn">+ Add</button>
-        <button class="analyst-btn analyst-btn-ghost" id="analystGraphClearBtn">Clear</button>
+        <input type="text" class="analyst-graph-input" id="analystGraphInput" placeholder="Entity name..." spellcheck="false"
+          style="flex:1;min-width:120px;max-width:220px;font-size:11px;padding:4px 8px;background:var(--vi-bg,#0c0c10);border:1px solid var(--vi-border,#252535);border-radius:4px;color:var(--text,#e5e7eb);outline:none" />
+        <button class="analyst-btn" id="analystGraphAddBtn" style="white-space:nowrap">+ Add</button>
+        <button class="analyst-btn analyst-btn-ghost" id="analystGraphLoadApiBtn" style="font-size:10px;white-space:nowrap" title="Load full entity graph from Neo4j/Redis">⬇ Load Neo4j</button>
+        <button class="analyst-btn analyst-btn-ghost" id="analystGraphClearBtn" style="font-size:10px">Clear</button>
+        <span id="analystGraphStatus" style="font-size:9px;color:var(--text-muted,#666);font-family:'JetBrains Mono',monospace;margin-left:4px"></span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+        <span style="font-size:9px;color:#f59e0b">● Person</span>
+        <span style="font-size:9px;color:#3b82f6">● Org</span>
+        <span style="font-size:9px;color:#8b5cf6">● Country</span>
+        <span style="font-size:9px;color:#ef4444">● Event</span>
+        <span style="font-size:9px;color:#10b981">● Location</span>
+        <span style="font-size:9px;color:var(--text-muted,#666);margin-left:8px">— manual &nbsp; - - inferred &nbsp; auto-links in green</span>
       </div>
     </div>
-    <div class="analyst-graph-canvas-wrap" id="analystGraphCanvasWrap">
-      <div class="analyst-empty-state">
-        <span class="analyst-empty-icon">🕸</span>
-        <div class="analyst-empty-text">
-          <div class="analyst-empty-title">Build an intelligence link graph</div>
-          <div class="analyst-empty-hint">Add entities above. The full-screen graph is also available as the "Intelligence Link Graph" panel on the Monitor tab.</div>
+    <div id="analystGraphCanvasWrap" style="flex:1;position:relative;overflow:hidden;background:#060608;border-radius:0 0 6px 6px">
+      <div id="analystGraphCanvas" style="width:100%;height:100%"></div>
+      <div id="analystGraphEmptyState" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+        <div class="analyst-empty-state" style="text-align:center">
+          <span class="analyst-empty-icon">🕸</span>
+          <div class="analyst-empty-text">
+            <div class="analyst-empty-title">Intelligence link graph is empty</div>
+            <div class="analyst-empty-hint">Add entities manually above, click map pins, or load from Neo4j.<br>Once you add 2+ nodes, the engine auto-discovers related entities in the background.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -188,18 +215,15 @@ interface ToolDef {
   desc: string;
   cat: string;
   icon: string;
-  embed: boolean;     // can iframe
-  builtin?: string;   // built-in tool ID (no iframe needed)
+  embed: boolean;
+  builtin?: string;
 }
 
 const TOOLS: ToolDef[] = [
-  // Built-in lookup tools (run in-browser, no iframe needed)
   { name: 'WHOIS Lookup', url: '', desc: 'Domain registration & ownership data', cat: 'lookup', icon: '🔍', embed: false, builtin: 'whois' },
   { name: 'DNS Lookup', url: '', desc: 'DNS record query (A, MX, NS, TXT)', cat: 'lookup', icon: '🌐', embed: false, builtin: 'dns' },
   { name: 'IP Geolocation', url: '', desc: 'Geolocate any IP address with ISP/ASN', cat: 'lookup', icon: '📍', embed: false, builtin: 'ipgeo' },
   { name: 'Subnet Calculator', url: '', desc: 'CIDR range calculator & IP breakdown', cat: 'lookup', icon: '🧮', embed: false, builtin: 'subnet' },
-
-  // External tools — open in new tab (iframe blocked by these sites)
   { name: 'Shodan', url: 'https://www.shodan.io', desc: 'Internet-connected device search engine', cat: 'threat', icon: '🛡', embed: false },
   { name: 'Censys Search', url: 'https://search.censys.io', desc: 'Internet asset discovery platform', cat: 'threat', icon: '🔎', embed: false },
   { name: 'VirusTotal', url: 'https://www.virustotal.com', desc: 'File & URL threat analysis', cat: 'threat', icon: '🦠', embed: false },
@@ -237,20 +261,23 @@ export function initAnalystWorkspace(): void {
   const ws = document.getElementById(ANALYST_CONTAINER_ID);
   if (!ws) return;
 
-  // Render initial subtab
   const content = document.getElementById('analystContent');
   if (content) {
     content.innerHTML = renderSubtab(getActiveSubtab());
     initSubtab(getActiveSubtab());
   }
 
-  // Sub-tab switching
   const bar = ws.querySelector('.analyst-subtab-bar');
   bar?.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('.analyst-subtab') as HTMLElement;
     if (!btn) return;
     const id = btn.dataset.subtab as AnalystSubtab;
     if (!id) return;
+
+    // Stop auto-discovery when leaving graph tab
+    if (getActiveSubtab() === 'graph' && id !== 'graph') {
+      stopAutoDiscovery();
+    }
 
     setActiveSubtab(id);
     bar.querySelectorAll('.analyst-subtab').forEach(b => b.classList.remove('active'));
@@ -266,9 +293,236 @@ export function initAnalystWorkspace(): void {
 function initSubtab(id: AnalystSubtab): void {
   switch (id) {
     case 'entities': initEntitySearch(); break;
+    case 'graph': initLinkGraph(); break;  // ← THE MISSING CASE — now fixed
     case 'timeline': void loadTimeline('24h'); initTimelineControls(); break;
     case 'notepad': initNotepad(); break;
     case 'toolkit': initToolkit(); break;
+  }
+}
+
+// ── Link Graph ──────────────────────────────────────────────
+
+let graphInstance: D3LinkGraph | null = null;
+
+function setGraphStatus(msg: string, color = '#666'): void {
+  const el = document.getElementById('analystGraphStatus');
+  if (el) {
+    el.textContent = msg;
+    el.style.color = color;
+  }
+}
+
+function updateEmptyState(nodeCount: number): void {
+  const empty = document.getElementById('analystGraphEmptyState');
+  if (empty) empty.style.display = nodeCount === 0 ? 'flex' : 'none';
+}
+
+function addManualNode(label: string, type: string): void {
+  if (!label.trim()) return;
+  const id = `${type.toLowerCase()}-${label.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
+  const node: GraphNode = {
+    id,
+    label: label.trim(),
+    type: type as GraphNode['type'],
+    source: 'manual',
+    confidence: 1,
+    lastSeen: Date.now(),
+  };
+
+  addNodeToGraph(node);
+
+  const stored = getStoredGraph();
+  updateEmptyState(stored.nodes.length);
+
+  if (graphInstance) {
+    graphInstance.addToGraph([node], []);
+  } else {
+    mountGraph(stored);
+  }
+
+  setGraphStatus(`Added: ${label}`, '#22c55e');
+  setTimeout(() => setGraphStatus(`${stored.nodes.length} nodes · auto-discovering...`), 2000);
+}
+
+function mountGraph(data: GraphData): void {
+  const canvas = document.getElementById('analystGraphCanvas');
+  if (!canvas) return;
+
+  if (graphInstance) {
+    graphInstance.destroy();
+    graphInstance = null;
+  }
+
+  if (data.nodes.length === 0) {
+    updateEmptyState(0);
+    return;
+  }
+
+  try {
+    graphInstance = new D3LinkGraph('analystGraphCanvas');
+    graphInstance.render(data.nodes, data.links);
+    updateEmptyState(data.nodes.length);
+    setGraphStatus(`${data.nodes.length} nodes · ${data.links.length} links`);
+  } catch (err) {
+    console.error('[LinkGraph] Mount error:', err);
+    setGraphStatus('Render error — see console', '#ef4444');
+  }
+}
+
+function initLinkGraph(): void {
+  // Load persisted graph from localStorage and render it
+  const stored = getStoredGraph();
+  mountGraph(stored);
+
+  // ── Add button ────────────────────────────────────────────
+  const addBtn = document.getElementById('analystGraphAddBtn');
+  const input = document.getElementById('analystGraphInput') as HTMLInputElement;
+  const categorySelect = document.getElementById('analystGraphCategory') as HTMLSelectElement;
+
+  function handleAdd(): void {
+    const label = input?.value.trim();
+    const type = categorySelect?.value || 'Person';
+    if (!label) {
+      input?.focus();
+      return;
+    }
+    addManualNode(label, type);
+    if (input) input.value = '';
+    input?.focus();
+  }
+
+  addBtn?.addEventListener('click', handleAdd);
+
+  input?.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter') handleAdd();
+  });
+
+  // ── Clear button ──────────────────────────────────────────
+  document.getElementById('analystGraphClearBtn')?.addEventListener('click', () => {
+    if (!confirm('Clear all nodes and links from the graph?')) return;
+    clearStoredGraph();
+    stopAutoDiscovery();
+    if (graphInstance) {
+      graphInstance.destroy();
+      graphInstance = null;
+    }
+    updateEmptyState(0);
+    setGraphStatus('');
+  });
+
+  // ── Load from Neo4j/Redis ─────────────────────────────────
+  document.getElementById('analystGraphLoadApiBtn')?.addEventListener('click', async () => {
+    setGraphStatus('Loading from Neo4j...', '#f59e0b');
+    try {
+      const res = await fetch('/api/intelligence/entity-graph', { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json() as GraphData;
+
+      if (!data.nodes || data.nodes.length === 0) {
+        setGraphStatus('Neo4j graph is empty — run the entity seed first', '#ef4444');
+        return;
+      }
+
+      // Tag all API nodes with source
+      const taggedNodes: GraphNode[] = (data.nodes || []).map(n => ({ ...n, source: 'api' as const, confidence: n.confidence ?? 0.9 }));
+      const taggedLinks = (data.links || []).map(l => ({ ...l, source_type: 'api' as const }));
+
+      // Merge into local store (don't overwrite manual nodes)
+      const current = getStoredGraph();
+      const existingIds = new Set(current.nodes.map(n => n.id));
+
+      for (const n of taggedNodes) {
+        if (!existingIds.has(n.id)) {
+          addNodeToGraph(n);
+          existingIds.add(n.id);
+        }
+      }
+      for (const l of taggedLinks) {
+        addLinkToGraph(l);
+      }
+
+      const fresh = getStoredGraph();
+      mountGraph(fresh);
+      setGraphStatus(`Loaded ${taggedNodes.length} nodes from Neo4j`, '#22c55e');
+      setTimeout(() => setGraphStatus(`${fresh.nodes.length} nodes · auto-discovering...`), 3000);
+
+      // Start auto-discovery now that we have nodes
+      startAutoDiscovery((updated) => {
+        if (graphInstance) graphInstance.addToGraph(updated.nodes, updated.links);
+        setGraphStatus(`${updated.nodes.length} nodes · ${updated.links.length} links (live)`);
+      });
+    } catch (err) {
+      console.error('[LinkGraph] API load error:', err);
+      setGraphStatus('Failed to load from Neo4j — is the entity seed running?', '#ef4444');
+    }
+  });
+
+  // ── Map-click → add node ──────────────────────────────────
+  // Listen for the custom event dispatched by POIMapLayer and other map layers
+  // when a user clicks a feature. Format: { name, type, country }
+  function handleMapFeatureClick(e: Event): void {
+    const detail = (e as CustomEvent).detail as { name?: string; type?: string; country?: string; role?: string } | undefined;
+    if (!detail?.name) return;
+
+    const label = detail.name;
+    const type = (detail.type as GraphNode['type']) || 'Person';
+    const id = `${type.toLowerCase()}-${label.toLowerCase().replace(/\s+/g, '-')}`;
+
+    const stored = getStoredGraph();
+    if (stored.nodes.find(n => n.id === id)) {
+      setGraphStatus(`Already in graph: ${label}`, '#f59e0b');
+      return;
+    }
+
+    const node: GraphNode = {
+      id,
+      label,
+      type,
+      source: 'map-click',
+      confidence: 0.9,
+      country: detail.country,
+      lastSeen: Date.now(),
+    };
+
+    addNodeToGraph(node);
+    const updated = getStoredGraph();
+    updateEmptyState(updated.nodes.length);
+
+    if (graphInstance) {
+      graphInstance.addToGraph([node], []);
+    } else {
+      mountGraph(updated);
+    }
+
+    setGraphStatus(`Added from map: ${label}`, '#22c55e');
+    setTimeout(() => setGraphStatus(`${updated.nodes.length} nodes · auto-discovering...`), 2000);
+  }
+
+  window.addEventListener('wm:map-feature-click', handleMapFeatureClick);
+
+  // Clean up listener when subtab changes (via MutationObserver on parent)
+  const pane = document.querySelector('[data-pane="graph"]');
+  if (pane) {
+    const obs = new MutationObserver(() => {
+      if (!document.body.contains(pane)) {
+        window.removeEventListener('wm:map-feature-click', handleMapFeatureClick);
+        stopAutoDiscovery();
+        obs.disconnect();
+      }
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+  }
+
+  // ── Start auto-discovery if we already have nodes ─────────
+  if (stored.nodes.length >= 1) {
+    startAutoDiscovery((updated) => {
+      if (graphInstance) graphInstance.addToGraph(updated.nodes, updated.links);
+      const n = getStoredGraph();
+      setGraphStatus(`${n.nodes.length} nodes · ${n.links.length} links (live)`);
+    });
+    setGraphStatus(`${stored.nodes.length} nodes · auto-discovering...`);
+  } else {
+    setGraphStatus('Empty — add an entity to begin');
   }
 }
 
@@ -287,7 +541,6 @@ function initEntitySearch(): void {
     }, 300);
   });
 
-  // Auto-load all POI on open
   void searchEntities('');
 
   const filters = document.querySelectorAll('.analyst-search-filters .analyst-filter-btn');
@@ -339,9 +592,9 @@ async function searchEntities(query: string): Promise<void> {
       const mentions = Number(p.mentions || 0);
       const initials = name.split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
       const colors: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#d4a843', low: '#22c55e' };
-      const c = colors[threat] || colors.low;
+      const c = colors[threat] ?? colors['low'] ?? '#22c55e';
 
-      return `<div class="analyst-entity-card">
+      return `<div class="analyst-entity-card" data-name="${esc(name)}" data-country="${esc(country)}" style="cursor:pointer" title="Click to add to Link Graph">
         <div class="analyst-entity-avatar" style="background:${c}20;color:${c};border-color:${c}40">${initials}</div>
         <div class="analyst-entity-info">
           <div class="analyst-entity-name">${esc(name)}</div>
@@ -350,9 +603,36 @@ async function searchEntities(query: string): Promise<void> {
         <div class="analyst-entity-stats">
           <span class="analyst-entity-threat" style="color:${c}">${threat.toUpperCase()}</span>
           <span class="analyst-entity-mentions">${mentions} mentions</span>
+          <span style="font-size:9px;color:var(--text-muted,#666)">+Graph</span>
         </div>
       </div>`;
     }).join('');
+
+    // Click entity card → add to link graph
+    results.querySelectorAll('.analyst-entity-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const el = card as HTMLElement;
+        const name = el.dataset.name || '';
+        const country = el.dataset.country;
+        if (!name) return;
+        const id = `person-${name.toLowerCase().replace(/\s+/g, '-')}`;
+        const node: GraphNode = {
+          id,
+          label: name,
+          type: 'Person',
+          source: 'manual',
+          confidence: 1,
+          country,
+          lastSeen: Date.now(),
+          mentions: 0,
+        };
+        addNodeToGraph(node);
+        // Fire the map-click event so graph tab picks it up even if open
+        window.dispatchEvent(new CustomEvent('wm:map-feature-click', { detail: { name, type: 'Person', country } }));
+        el.style.outline = '1px solid #22c55e';
+        setTimeout(() => { el.style.outline = ''; }, 1500);
+      });
+    });
   } catch {
     results.innerHTML = `<div class="analyst-empty-state">
       <span class="analyst-empty-icon">⚠</span>
@@ -388,7 +668,6 @@ async function loadTimeline(_range: string): Promise<void> {
   view.innerHTML = '<div class="analyst-searching">Loading events...</div>';
 
   try {
-    // Fetch from multiple existing sources in parallel
     const [newsResp, insightsResp] = await Promise.all([
       fetch('/api/news/headlines?limit=30', { signal: AbortSignal.timeout(6000) }).catch(() => null),
       fetch('/api/insights', { signal: AbortSignal.timeout(6000) }).catch(() => null),
@@ -426,7 +705,7 @@ async function loadTimeline(_range: string): Promise<void> {
     const sevColors: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#d4a843', low: '#22c55e', info: '#5b8dd9' };
 
     view.innerHTML = events.map(ev => {
-      const c = sevColors[ev.severity] || sevColors.low;
+      const c = sevColors[ev.severity] ?? sevColors['low'] ?? '#22c55e';
       const age = formatAge(ev.time);
       return `<div style="display:flex;gap:10px;padding:8px 10px;border-bottom:1px solid var(--vi-border-subtle,#1a1a28)">
         <div style="width:3px;border-radius:2px;background:${c};flex-shrink:0"></div>
@@ -482,23 +761,19 @@ function initToolkit(): void {
   const search = document.getElementById('analystToolkitSearch') as HTMLInputElement;
   if (!grid) return;
 
-  // Card click → open tool
   grid.addEventListener('click', (e) => {
     const card = (e.target as HTMLElement).closest('.analyst-tool-card') as HTMLElement;
     if (!card) return;
     const idx = parseInt(card.dataset.idx || '0', 10);
     const tool = TOOLS[idx];
     if (!tool) return;
-
     if (tool.builtin) {
       openBuiltinTool(tool);
     } else if (tool.url) {
-      // External tools — open in new tab (most sites block iframes)
       window.open(tool.url, '_blank', 'noopener');
     }
   });
 
-  // Search
   search?.addEventListener('input', () => {
     const q = search.value.trim().toLowerCase();
     grid.querySelectorAll('.analyst-tool-card').forEach(card => {
@@ -508,7 +783,6 @@ function initToolkit(): void {
     });
   });
 
-  // Category filter
   document.getElementById('toolkitCatFilters')?.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('.analyst-filter-btn') as HTMLElement;
     if (!btn) return;
@@ -521,7 +795,6 @@ function initToolkit(): void {
     });
   });
 
-  // Close button
   document.getElementById('builtinToolClose')?.addEventListener('click', closeBuiltinTool);
 }
 
@@ -581,7 +854,6 @@ function initBuiltinTool(id: string): void {
         result.style.display = 'block';
         result.textContent = 'Looking up...';
         try {
-          // Use Cloudflare's DNS-over-HTTPS to get basic info, then link to full WHOIS
           const resp = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(input)}&type=SOA`);
           const data = await resp.json();
           const lines = [`Domain: ${input}\n`];
@@ -591,7 +863,6 @@ function initBuiltinTool(id: string): void {
               lines.push(`TTL: ${a.TTL}s`);
             }
           }
-          // Also get NS records
           const nsResp = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(input)}&type=NS`);
           const nsData = await nsResp.json();
           if (nsData.Answer) {
@@ -615,7 +886,6 @@ function initBuiltinTool(id: string): void {
         try {
           const typeMap: Record<number, string> = { 1: 'A', 5: 'CNAME', 15: 'MX', 28: 'AAAA', 16: 'TXT', 2: 'NS' };
           const lines = [`DNS Records for: ${input}\n`];
-
           for (const qtype of ['A', 'AAAA', 'MX', 'NS', 'TXT']) {
             const resp = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(input)}&type=${qtype}`);
             const data = await resp.json();
@@ -628,7 +898,6 @@ function initBuiltinTool(id: string): void {
               lines.push('');
             }
           }
-
           if (lines.length <= 1) lines.push('No records found');
           result.textContent = lines.join('\n');
         } catch {
@@ -644,8 +913,7 @@ function initBuiltinTool(id: string): void {
         result.style.display = 'block';
         result.textContent = 'Geolocating...';
         try {
-          // ip-api.com supports CORS and is free for non-commercial use
-          const target = input || ''; // empty = your own IP
+          const target = input || '';
           const resp = await fetch(`http://ip-api.com/json/${encodeURIComponent(target)}?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query`);
           const data = await resp.json() as Record<string, unknown>;
           if (data.status === 'fail') {
@@ -726,6 +994,8 @@ export function showMonitorView(): void {
   if (monitor) monitor.style.display = '';
   if (analyst) analyst.style.display = 'none';
   if (presetBar) presetBar.style.display = '';
+  // Stop background graph processes when leaving Analyst view
+  stopAutoDiscovery();
 }
 
 // ── Utilities ───────────────────────────────────────────────

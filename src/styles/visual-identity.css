@@ -384,8 +384,19 @@ body {
 [data-panel="tech"] .panel-header::before,
 [data-panel="ai"] .panel-header::before,
 [data-panel="tech-readiness"] .panel-header::before,
-[data-panel="climate"] .panel-header::before {
+[data-panel="climate"] .panel-header::before,
+[data-panel="chokepoint-flow"] .panel-header::before,
+[data-panel="supply-chain-prices"] .panel-header::before {
   background: var(--cat-infra);
+}
+
+[data-panel="telegram-osint"] .panel-header::before {
+  background: var(--cat-intel);
+}
+
+[data-panel="osint-report"] .panel-header::before,
+[data-panel="counterfactual-sim"] .panel-header::before {
+  background: var(--intel-accent);
 }
 
 [data-panel="giving"] .panel-header::before,

@@ -1089,6 +1089,10 @@ export class PanelLayoutManager implements AppModule {
       import('@/components/OsintReportPanel').then(m => new m.OsintReportPanel()),
     );
 
+    this.lazyPanel('counterfactual-sim', () =>
+      import('@/components/CounterfactualSimPanel').then(m => new m.CounterfactualSimPanel()),
+    );
+
     const defaultOrder = Object.keys(DEFAULT_PANELS).filter(k => k !== 'map');
     const activePanelKeys = Object.keys(this.ctx.panelSettings).filter(k => k !== 'map');
     const bottomSet = this.getSavedBottomSet();

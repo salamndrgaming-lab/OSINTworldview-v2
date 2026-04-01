@@ -63,3 +63,4 @@ export { ChokepointFlowPanel } from './ChokepointFlowPanel';
 export { TelegramOSINTPanel } from './TelegramOSINTPanel';
 export { SupplyChainPricesPanel } from './SupplyChainPricesPanel';
 export { OsintReportPanel } from './OsintReportPanel';
+export { CounterfactualSimPanel } from './CounterfactualSimPanel';

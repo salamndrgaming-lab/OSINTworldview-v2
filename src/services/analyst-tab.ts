@@ -170,13 +170,6 @@ function renderToolkit(): string {
       </div>
     </div>
     <div class="analyst-toolkit-grid" id="analystToolkitGrid">${renderToolkitCards()}</div>
-    <div id="toolFrameWrap" style="display:none;flex:1;min-height:0;margin-top:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--vi-surface,#12121a);border:1px solid var(--vi-border,#252535);border-bottom:none;border-radius:8px 8px 0 0">
-        <span id="toolFrameTitle" style="font-size:11px;font-weight:600;color:var(--text)"></span>
-        <button class="analyst-btn analyst-btn-ghost" id="toolFrameClose" style="font-size:10px;padding:2px 8px">✕ Close</button>
-      </div>
-      <iframe id="toolFrame" style="width:100%;height:500px;border:1px solid var(--vi-border,#252535);border-radius:0 0 8px 8px;background:#fff" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
-    </div>
     <div id="builtinToolWrap" style="display:none;margin-top:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--vi-surface,#12121a);border:1px solid var(--vi-border,#252535);border-radius:8px 8px 0 0">
         <span id="builtinToolTitle" style="font-size:11px;font-weight:600;color:var(--text)"></span>
@@ -200,48 +193,40 @@ interface ToolDef {
 }
 
 const TOOLS: ToolDef[] = [
-  // Lookup tools (built-in)
-  { name: 'WHOIS Lookup', url: '', desc: 'Domain registration lookup', cat: 'lookup', icon: '🔍', embed: false, builtin: 'whois' },
+  // Built-in lookup tools (run in-browser, no iframe needed)
+  { name: 'WHOIS Lookup', url: '', desc: 'Domain registration & ownership data', cat: 'lookup', icon: '🔍', embed: false, builtin: 'whois' },
   { name: 'DNS Lookup', url: '', desc: 'DNS record query (A, MX, NS, TXT)', cat: 'lookup', icon: '🌐', embed: false, builtin: 'dns' },
-  { name: 'IP Geolocation', url: '', desc: 'Geolocate any IP address', cat: 'lookup', icon: '📍', embed: false, builtin: 'ipgeo' },
-  { name: 'HTTP Headers', url: '', desc: 'Inspect HTTP response headers', cat: 'lookup', icon: '📋', embed: false, builtin: 'headers' },
+  { name: 'IP Geolocation', url: '', desc: 'Geolocate any IP address with ISP/ASN', cat: 'lookup', icon: '📍', embed: false, builtin: 'ipgeo' },
+  { name: 'Subnet Calculator', url: '', desc: 'CIDR range calculator & IP breakdown', cat: 'lookup', icon: '🧮', embed: false, builtin: 'subnet' },
 
-  // Embeddable external tools
-  { name: 'Shodan', url: 'https://www.shodan.io', desc: 'Internet-connected device search', cat: 'threat', icon: '🛡', embed: true },
-  { name: 'Censys Search', url: 'https://search.censys.io', desc: 'Internet asset discovery', cat: 'threat', icon: '🔎', embed: true },
-  { name: 'VirusTotal', url: 'https://www.virustotal.com', desc: 'File & URL threat analysis', cat: 'threat', icon: '🦠', embed: true },
-  { name: 'GreyNoise', url: 'https://viz.greynoise.io', desc: 'Internet scanner identification', cat: 'threat', icon: '📡', embed: true },
-  { name: 'Have I Been Pwned', url: 'https://haveibeenpwned.com', desc: 'Breach exposure checker', cat: 'threat', icon: '🔓', embed: true },
-  { name: 'URLhaus', url: 'https://urlhaus.abuse.ch/browse/', desc: 'Malware URL database', cat: 'threat', icon: '🕷', embed: true },
-
-  // Geospatial
-  { name: 'Google Earth', url: 'https://earth.google.com/web/', desc: '3D satellite imagery', cat: 'geo', icon: '🌍', embed: true },
-  { name: 'Sentinel Hub', url: 'https://apps.sentinel-hub.com/eo-browser/', desc: 'Satellite imagery browser', cat: 'geo', icon: '🛰', embed: true },
-  { name: 'Overpass Turbo', url: 'https://overpass-turbo.eu', desc: 'OpenStreetMap query engine', cat: 'geo', icon: '🗺', embed: true },
-
-  // Social
-  { name: 'TGStat', url: 'https://tgstat.com', desc: 'Telegram channel analytics', cat: 'social', icon: '📱', embed: true },
-  { name: 'Social Searcher', url: 'https://www.social-searcher.com', desc: 'Cross-platform social search', cat: 'social', icon: '🔎', embed: true },
-
-  // Maritime
-  { name: 'MarineTraffic', url: 'https://www.marinetraffic.com', desc: 'Real-time vessel tracking', cat: 'maritime', icon: '🚢', embed: true },
-  { name: 'VesselFinder', url: 'https://www.vesselfinder.com', desc: 'Free AIS vessel tracking', cat: 'maritime', icon: '⚓', embed: true },
-
-  // Aviation
-  { name: 'FlightRadar24', url: 'https://www.flightradar24.com', desc: 'Live global flight tracking', cat: 'aviation', icon: '✈', embed: true },
-  { name: 'ADS-B Exchange', url: 'https://globe.adsbexchange.com', desc: 'Unfiltered ADS-B data', cat: 'aviation', icon: '📡', embed: true },
+  // External tools — open in new tab (iframe blocked by these sites)
+  { name: 'Shodan', url: 'https://www.shodan.io', desc: 'Internet-connected device search engine', cat: 'threat', icon: '🛡', embed: false },
+  { name: 'Censys Search', url: 'https://search.censys.io', desc: 'Internet asset discovery platform', cat: 'threat', icon: '🔎', embed: false },
+  { name: 'VirusTotal', url: 'https://www.virustotal.com', desc: 'File & URL threat analysis', cat: 'threat', icon: '🦠', embed: false },
+  { name: 'GreyNoise', url: 'https://viz.greynoise.io', desc: 'Internet scanner identification', cat: 'threat', icon: '📡', embed: false },
+  { name: 'Have I Been Pwned', url: 'https://haveibeenpwned.com', desc: 'Breach exposure checker', cat: 'threat', icon: '🔓', embed: false },
+  { name: 'URLhaus', url: 'https://urlhaus.abuse.ch/browse/', desc: 'Malware URL database', cat: 'threat', icon: '🕷', embed: false },
+  { name: 'Google Earth', url: 'https://earth.google.com/web/', desc: '3D satellite & aerial imagery', cat: 'geo', icon: '🌍', embed: false },
+  { name: 'Sentinel Hub', url: 'https://apps.sentinel-hub.com/eo-browser/', desc: 'Multi-spectral satellite imagery', cat: 'geo', icon: '🛰', embed: false },
+  { name: 'Overpass Turbo', url: 'https://overpass-turbo.eu', desc: 'OpenStreetMap query engine', cat: 'geo', icon: '🗺', embed: false },
+  { name: 'TGStat', url: 'https://tgstat.com', desc: 'Telegram channel analytics & stats', cat: 'social', icon: '📱', embed: false },
+  { name: 'Social Searcher', url: 'https://www.social-searcher.com', desc: 'Cross-platform social media search', cat: 'social', icon: '🔎', embed: false },
+  { name: 'MarineTraffic', url: 'https://www.marinetraffic.com', desc: 'Real-time vessel tracking & port data', cat: 'maritime', icon: '🚢', embed: false },
+  { name: 'VesselFinder', url: 'https://www.vesselfinder.com', desc: 'Free AIS vessel tracking', cat: 'maritime', icon: '⚓', embed: false },
+  { name: 'FlightRadar24', url: 'https://www.flightradar24.com', desc: 'Live global flight tracking', cat: 'aviation', icon: '✈', embed: false },
+  { name: 'ADS-B Exchange', url: 'https://globe.adsbexchange.com', desc: 'Unfiltered military & civil ADS-B', cat: 'aviation', icon: '📡', embed: false },
 ];
 
 function renderToolkitCards(): string {
   return TOOLS.map((t, i) =>
-    `<div class="analyst-tool-card" data-cat="${t.cat}" data-idx="${i}">
+    `<div class="analyst-tool-card" data-cat="${t.cat}" data-idx="${i}" style="cursor:pointer">
       <div class="analyst-tool-icon">${t.icon}</div>
       <div class="analyst-tool-info">
         <div class="analyst-tool-name">${t.name}</div>
         <div class="analyst-tool-desc">${t.desc}</div>
       </div>
       <span class="analyst-tool-cat">${t.cat}</span>
-      <span style="font-size:9px;color:var(--text-ghost)">${t.builtin ? '⚡ Built-in' : t.embed ? '🔗 Embed' : '↗ External'}</span>
+      <span style="font-size:9px;padding:2px 6px;border-radius:3px;${t.builtin ? 'background:var(--intel-accent-subtle);color:var(--intel-accent)' : 'background:var(--vi-bg);color:var(--text-muted)'}">${t.builtin ? '⚡ Run' : '↗ Launch'}</span>
     </div>`
   ).join('');
 }
@@ -507,9 +492,8 @@ function initToolkit(): void {
 
     if (tool.builtin) {
       openBuiltinTool(tool);
-    } else if (tool.embed) {
-      openIframeTool(tool);
-    } else {
+    } else if (tool.url) {
+      // External tools — open in new tab (most sites block iframes)
       window.open(tool.url, '_blank', 'noopener');
     }
   });
@@ -537,31 +521,11 @@ function initToolkit(): void {
     });
   });
 
-  // Close buttons
-  document.getElementById('toolFrameClose')?.addEventListener('click', closeToolFrame);
+  // Close button
   document.getElementById('builtinToolClose')?.addEventListener('click', closeBuiltinTool);
 }
 
-function openIframeTool(tool: ToolDef): void {
-  closeBuiltinTool();
-  const wrap = document.getElementById('toolFrameWrap');
-  const frame = document.getElementById('toolFrame') as HTMLIFrameElement;
-  const title = document.getElementById('toolFrameTitle');
-  if (!wrap || !frame) return;
-  if (title) title.textContent = `${tool.icon} ${tool.name}`;
-  frame.src = tool.url;
-  wrap.style.display = 'block';
-}
-
-function closeToolFrame(): void {
-  const wrap = document.getElementById('toolFrameWrap');
-  const frame = document.getElementById('toolFrame') as HTMLIFrameElement;
-  if (wrap) wrap.style.display = 'none';
-  if (frame) frame.src = 'about:blank';
-}
-
 function openBuiltinTool(tool: ToolDef): void {
-  closeToolFrame();
   const wrap = document.getElementById('builtinToolWrap');
   const body = document.getElementById('builtinToolBody');
   const title = document.getElementById('builtinToolTitle');
@@ -594,16 +558,16 @@ function renderBuiltinTool(id: string): string {
       </div><div id="dnsResult" style="${resultStyle};display:none"></div>`;
     case 'ipgeo':
       return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="ipgeoInput" placeholder="Enter IP address" style="${inputStyle}" />
+        <input type="text" id="ipgeoInput" placeholder="Enter IP address (or leave blank for yours)" style="${inputStyle}" />
         <button class="analyst-btn" id="ipgeoBtn">Geolocate</button>
       </div><div id="ipgeoResult" style="${resultStyle};display:none"></div>`;
-    case 'headers':
+    case 'subnet':
       return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="headersInput" placeholder="Enter URL (https://...)" style="${inputStyle}" />
-        <button class="analyst-btn" id="headersBtn">Inspect</button>
-      </div><div id="headersResult" style="${resultStyle};display:none"></div>`;
+        <input type="text" id="subnetInput" placeholder="Enter CIDR (e.g. 192.168.1.0/24)" style="${inputStyle}" />
+        <button class="analyst-btn" id="subnetBtn">Calculate</button>
+      </div><div id="subnetResult" style="${resultStyle};display:none"></div>`;
     default:
-      return '<div>Tool not implemented</div>';
+      return '<div style="padding:12px;color:var(--text-dim)">Tool not implemented</div>';
   }
 }
 
@@ -617,14 +581,27 @@ function initBuiltinTool(id: string): void {
         result.style.display = 'block';
         result.textContent = 'Looking up...';
         try {
-          // Use a public WHOIS API
-          const resp = await fetch(`https://api.api-ninjas.com/v1/whois?domain=${encodeURIComponent(input)}`);
-          if (!resp.ok) throw new Error('Lookup failed');
+          // Use Cloudflare's DNS-over-HTTPS to get basic info, then link to full WHOIS
+          const resp = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(input)}&type=SOA`);
           const data = await resp.json();
-          result.textContent = JSON.stringify(data, null, 2);
+          const lines = [`Domain: ${input}\n`];
+          if (data.Answer) {
+            for (const a of data.Answer as Array<{ data: string; TTL: number }>) {
+              lines.push(`SOA: ${a.data}`);
+              lines.push(`TTL: ${a.TTL}s`);
+            }
+          }
+          // Also get NS records
+          const nsResp = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(input)}&type=NS`);
+          const nsData = await nsResp.json();
+          if (nsData.Answer) {
+            lines.push('\nNameservers:');
+            for (const a of nsData.Answer as Array<{ data: string }>) lines.push(`  NS: ${a.data}`);
+          }
+          lines.push(`\nFull WHOIS: https://who.is/whois/${input}`);
+          result.textContent = lines.join('\n');
         } catch {
-          // Fallback: show basic info
-          result.textContent = `WHOIS lookup for: ${input}\n\nNote: Direct WHOIS requires a backend proxy.\nTry: https://who.is/whois/${input}`;
+          result.textContent = `Lookup failed for: ${input}\n\nTry: https://who.is/whois/${input}`;
         }
       });
       break;
@@ -636,21 +613,23 @@ function initBuiltinTool(id: string): void {
         result.style.display = 'block';
         result.textContent = 'Querying DNS...';
         try {
-          const resp = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(input)}&type=A`);
-          const data = await resp.json();
+          const typeMap: Record<number, string> = { 1: 'A', 5: 'CNAME', 15: 'MX', 28: 'AAAA', 16: 'TXT', 2: 'NS' };
           const lines = [`DNS Records for: ${input}\n`];
-          if (data.Answer) {
-            for (const a of data.Answer) lines.push(`${a.type === 1 ? 'A' : a.type === 5 ? 'CNAME' : a.type === 28 ? 'AAAA' : 'TYPE' + a.type}: ${a.data} (TTL: ${a.TTL})`);
-          } else {
-            lines.push('No records found');
+
+          for (const qtype of ['A', 'AAAA', 'MX', 'NS', 'TXT']) {
+            const resp = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(input)}&type=${qtype}`);
+            const data = await resp.json();
+            if (data.Answer && (data.Answer as Array<{ type: number; data: string; TTL: number }>).length > 0) {
+              lines.push(`${qtype} Records:`);
+              for (const a of data.Answer as Array<{ type: number; data: string; TTL: number }>) {
+                const label = typeMap[a.type] || `TYPE${a.type}`;
+                lines.push(`  ${label}: ${a.data} (TTL: ${a.TTL})`);
+              }
+              lines.push('');
+            }
           }
-          // Also try MX
-          const mxResp = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(input)}&type=MX`);
-          const mxData = await mxResp.json();
-          if (mxData.Answer) {
-            lines.push('\nMX Records:');
-            for (const a of mxData.Answer) lines.push(`  MX: ${a.data}`);
-          }
+
+          if (lines.length <= 1) lines.push('No records found');
           result.textContent = lines.join('\n');
         } catch {
           result.textContent = `DNS query failed for: ${input}`;
@@ -661,42 +640,68 @@ function initBuiltinTool(id: string): void {
       document.getElementById('ipgeoBtn')?.addEventListener('click', async () => {
         const input = (document.getElementById('ipgeoInput') as HTMLInputElement)?.value.trim();
         const result = document.getElementById('ipgeoResult');
-        if (!input || !result) return;
+        if (!result) return;
         result.style.display = 'block';
         result.textContent = 'Geolocating...';
         try {
-          const resp = await fetch(`https://ipapi.co/${encodeURIComponent(input)}/json/`);
-          const data = await resp.json();
+          // ip-api.com supports CORS and is free for non-commercial use
+          const target = input || ''; // empty = your own IP
+          const resp = await fetch(`http://ip-api.com/json/${encodeURIComponent(target)}?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query`);
+          const data = await resp.json() as Record<string, unknown>;
+          if (data.status === 'fail') {
+            result.textContent = `Geolocation failed: ${String(data.message || 'Unknown error')}`;
+            return;
+          }
           result.textContent = [
-            `IP: ${data.ip}`,
+            `IP: ${data.query}`,
             `City: ${data.city}`,
-            `Region: ${data.region}`,
-            `Country: ${data.country_name} (${data.country_code})`,
-            `Lat/Lon: ${data.latitude}, ${data.longitude}`,
-            `ISP: ${data.org}`,
-            `ASN: ${data.asn}`,
+            `Region: ${data.regionName} (${data.region})`,
+            `Country: ${data.country} (${data.countryCode})`,
+            `Coordinates: ${data.lat}, ${data.lon}`,
             `Timezone: ${data.timezone}`,
+            `ISP: ${data.isp}`,
+            `Organization: ${data.org}`,
+            `ASN: ${data.as}`,
           ].join('\n');
         } catch {
-          result.textContent = `Geolocation failed for: ${input}`;
+          result.textContent = `Geolocation failed for: ${input || 'your IP'}`;
         }
       });
       break;
-    case 'headers':
-      document.getElementById('headersBtn')?.addEventListener('click', async () => {
-        const input = (document.getElementById('headersInput') as HTMLInputElement)?.value.trim();
-        const result = document.getElementById('headersResult');
+    case 'subnet':
+      document.getElementById('subnetBtn')?.addEventListener('click', () => {
+        const input = (document.getElementById('subnetInput') as HTMLInputElement)?.value.trim();
+        const result = document.getElementById('subnetResult');
         if (!input || !result) return;
         result.style.display = 'block';
-        result.textContent = 'Fetching headers...';
         try {
-          const resp = await fetch(input, { method: 'HEAD', mode: 'no-cors' });
-          const lines = [`Headers for: ${input}\n`];
-          resp.headers.forEach((v, k) => lines.push(`${k}: ${v}`));
-          if (lines.length <= 1) lines.push('(CORS may block header visibility. Try a same-origin URL.)');
-          result.textContent = lines.join('\n');
+          const [ipStr, prefixStr] = input.split('/');
+          if (!ipStr || !prefixStr) throw new Error('Invalid CIDR');
+          const prefix = parseInt(prefixStr, 10);
+          if (isNaN(prefix) || prefix < 0 || prefix > 32) throw new Error('Invalid prefix');
+          const octets = ipStr.split('.').map(Number);
+          if (octets.length !== 4 || octets.some(o => isNaN(o) || o < 0 || o > 255)) throw new Error('Invalid IP');
+
+          const ipNum = ((octets[0] ?? 0) << 24) | ((octets[1] ?? 0) << 16) | ((octets[2] ?? 0) << 8) | (octets[3] ?? 0);
+          const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0;
+          const network = (ipNum & mask) >>> 0;
+          const broadcast = (network | ~mask) >>> 0;
+          const hostCount = Math.max(0, Math.pow(2, 32 - prefix) - 2);
+
+          const toIP = (n: number) => `${(n >>> 24) & 255}.${(n >>> 16) & 255}.${(n >>> 8) & 255}.${n & 255}`;
+
+          result.textContent = [
+            `CIDR: ${input}`,
+            `Network: ${toIP(network)}`,
+            `Broadcast: ${toIP(broadcast)}`,
+            `Subnet Mask: ${toIP(mask)}`,
+            `Host Range: ${toIP(network + 1)} — ${toIP(broadcast - 1)}`,
+            `Total Hosts: ${hostCount.toLocaleString()}`,
+            `Prefix Length: /${prefix}`,
+            `Wildcard: ${toIP(~mask >>> 0)}`,
+          ].join('\n');
         } catch {
-          result.textContent = `Header fetch failed for: ${input}\n\nCORS restrictions may prevent cross-origin requests.`;
+          result.textContent = 'Invalid CIDR notation. Use format: 192.168.1.0/24';
         }
       });
       break;

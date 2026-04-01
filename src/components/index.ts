@@ -64,3 +64,8 @@ export { TelegramOSINTPanel } from './TelegramOSINTPanel';
 export { SupplyChainPricesPanel } from './SupplyChainPricesPanel';
 export { OsintReportPanel } from './OsintReportPanel';
 export { CounterfactualSimPanel } from './CounterfactualSimPanel';
+export { HypothesisGeneratorPanel } from './HypothesisGeneratorPanel';
+export { NarrativeDriftPanel } from './NarrativeDriftPanel';
+export { TimeTravelPanel } from './TimeTravelPanel';
+export { SignalConfidencePanel } from './SignalConfidencePanel';
+export { AutoBriefPanel } from './AutoBriefPanel';

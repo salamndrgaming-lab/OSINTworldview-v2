@@ -65,6 +65,8 @@ const STANDALONE_KEYS = {
   corridorrisk:          'supply_chain:corridorrisk:v1',
   chokepointTransits:    'supply_chain:chokepoint_transits:v1',
   transitSummaries:      'supply_chain:transit-summaries:v1',
+  poi:                   'intelligence:poi:v1',
+  telegramNarratives:    'telegram:narratives:v1',
 };
 
 const SEED_META = {

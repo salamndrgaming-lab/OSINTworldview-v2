@@ -3,6 +3,27 @@ import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
 
 export const config = { runtime: 'edge' };
 
+/** Try to read cached telegram data from Redis */
+async function getRedisNarratives() {
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!redisUrl || !redisToken) return null;
+
+  try {
+    const resp = await fetch(`${redisUrl}/get/telegram:narratives:v1`, {
+      headers: { Authorization: `Bearer ${redisToken}` },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    if (!json.result) return null;
+    const data = typeof json.result === 'string' ? JSON.parse(json.result) : json.result;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(req) {
   const corsHeaders = getCorsHeaders(req, 'GET, OPTIONS');
 
@@ -24,9 +45,26 @@ export default async function handler(req) {
 
   const relayBaseUrl = getRelayBaseUrl();
 
-  // If relay is not configured, return empty feed (200, not 503)
-  // so the frontend doesn't throw and spam console errors
+  // If relay is not configured, try Redis narrative cache as fallback
   if (!relayBaseUrl) {
+    const cached = await getRedisNarratives();
+    if (cached) {
+      return new Response(JSON.stringify({
+        items: cached.messages || [],
+        count: (cached.messages || []).length,
+        configured: false,
+        source: 'redis-narrative-cache',
+        cachedAt: cached.cachedAt || null,
+      }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=60',
+          ...corsHeaders,
+        },
+      });
+    }
+
     return new Response(JSON.stringify({
       items: [],
       count: 0,
@@ -78,7 +116,27 @@ export default async function handler(req) {
     });
   } catch (error) {
     const isTimeout = error?.name === 'AbortError';
-    // On relay failure, return empty feed (200) not 502/504
+
+    // On relay failure, try Redis fallback before returning empty
+    const cached = await getRedisNarratives();
+    if (cached) {
+      return new Response(JSON.stringify({
+        items: cached.messages || [],
+        count: (cached.messages || []).length,
+        configured: true,
+        source: 'redis-narrative-cache',
+        relayError: isTimeout ? 'timeout' : 'failed',
+        cachedAt: cached.cachedAt || null,
+      }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=30',
+          ...corsHeaders,
+        },
+      });
+    }
+
     return new Response(JSON.stringify({
       items: [],
       count: 0,

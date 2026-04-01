@@ -80,8 +80,23 @@ export class TelegramOSINTPanel extends Panel {
       const resp = await fetch('/api/telegram-feed', { signal: AbortSignal.timeout(8000) });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
-      this.messages = (data?.messages || data || []).slice(0, 200);
+      // Handle both relay format (items/messages) and GDELT narrative cache format
+      const raw = data?.items || data?.messages || data || [];
+      this.messages = Array.isArray(raw) ? raw.slice(0, 200) : [];
       this.setCount(this.messages.length);
+
+      // Show source indicator if using fallback
+      const source = data?.source;
+      if (source === 'redis-narrative-cache') {
+        const body = this.content.querySelector('#telegramOsintBody');
+        if (body) {
+          const badge = document.createElement('div');
+          badge.style.cssText = 'padding:4px 8px;font-size:9px;color:var(--text-muted);text-align:center;background:var(--vi-border-subtle,#1a1a28);border-radius:0 0 4px 4px;';
+          badge.textContent = '📡 Relay offline — showing GDELT narrative cache' + (data.cachedAt ? ' (' + new Date(data.cachedAt).toLocaleTimeString() + ')' : '');
+          body.prepend(badge);
+        }
+      }
+
       this.renderNarratives();
     } catch {
       const body = this.content.querySelector('#telegramOsintBody');

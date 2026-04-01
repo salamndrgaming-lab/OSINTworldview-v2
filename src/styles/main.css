@@ -3,6 +3,7 @@
 @import './tactical-theme.css';
 @import './ui-overhaul.css';
 @import './visual-identity.css';
+@import './mobile-enhancements.css';
 
 /* ============================================================
    Theme Colors — overridden by [data-theme="light"] below

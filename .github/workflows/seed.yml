@@ -81,6 +81,10 @@ jobs:
       - run: node scripts/seed-radiation.mjs
         continue-on-error: true
 
+      # Telegram narrative cache — GDELT-based fallback for when relay is down
+      - run: node scripts/seed-telegram-narratives.mjs
+        continue-on-error: true
+
       # Alert stream — runs LAST since it reads output from all other seeds
       - run: node scripts/seed-alerts.mjs
         continue-on-error: true

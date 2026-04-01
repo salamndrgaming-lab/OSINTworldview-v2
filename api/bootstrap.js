@@ -45,6 +45,8 @@ const BOOTSTRAP_CACHE_KEYS = {
   techEvents:        'research:tech-events-bootstrap:v1',
   gdeltIntel:        'intelligence:gdelt-intel:v1',
   correlationCards:   'correlation:cards-bootstrap:v1',
+  poi:               'intelligence:poi:v1',
+  telegramNarratives: 'telegram:narratives:v1',
 };
 
 const SLOW_KEYS = new Set([
@@ -53,7 +55,7 @@ const SLOW_KEYS = new Set([
   'cyberThreats', 'techReadiness', 'progressData', 'renewableEnergy',
   'naturalEvents',
   'cryptoQuotes', 'gulfQuotes', 'stablecoinMarkets', 'unrestEvents', 'ucdpEvents',
-  'techEvents',
+  'techEvents', 'poi', 'telegramNarratives',
 ]);
 const FAST_KEYS = new Set([
   'earthquakes', 'outages', 'serviceStatuses', 'macroSignals', 'chokepoints', 'chokepointTransits',

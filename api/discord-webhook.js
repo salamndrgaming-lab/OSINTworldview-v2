@@ -253,6 +253,7 @@ function generateHelpMessage() {
     '`/threats` — Active threats\n' +
     '`/quakes` — Seismic activity\n' +
     '`/poi` — Persons of interest\n' +
+    '`/poi query:<name>` — Search POI by name/role/location\n' +
     '`/status` — System status\n' +
     '`/help` — This message\n\n' +
     '🔗 Dashboard: https://osintworldview.vercel.app';
@@ -301,7 +302,9 @@ async function registerCommands(appId, botToken) {
     { name: 'markets', description: 'Market and commodity price summary' },
     { name: 'threats', description: 'Active threats and security alerts' },
     { name: 'quakes', description: 'Significant seismic activity' },
-    { name: 'poi', description: 'Persons of interest summary' },
+    { name: 'poi', description: 'Persons of interest summary or search', options: [
+      { name: 'query', description: 'Search by name, role, or location', type: 3, required: false }
+    ] },
     { name: 'status', description: 'System and data feed status' },
     { name: 'help', description: 'Show available commands' },
   ];
@@ -470,12 +473,44 @@ export default async function handler(req) {
           case 'poi': {
             var poiData = data.poi;
             if (!poiData || !poiData.persons || poiData.persons.length === 0) { report = 'No POI data available.'; break; }
-            var plines = ['## 👤 Persons of Interest (' + poiData.persons.length + ')'];
-            for (var pi = 0; pi < Math.min(poiData.persons.length, 8); pi++) {
-              var pp = poiData.persons[pi];
-              plines.push('**' + esc(pp.name) + '** (' + esc(pp.role || '?') + ') — ' + (pp.riskLevel || '?').toUpperCase() + ' — ' + esc(pp.region || '?'));
+            var poiOptions = (interaction.data && interaction.data.options) || [];
+            var poiQuery = '';
+            for (var oi = 0; oi < poiOptions.length; oi++) {
+              if (poiOptions[oi].name === 'query') poiQuery = String(poiOptions[oi].value || '').toLowerCase();
             }
-            report = plines.join('\n');
+            if (poiQuery.length > 0) {
+              var poiMatches = poiData.persons.filter(function(p) {
+                return (p.name || '').toLowerCase().indexOf(poiQuery) !== -1
+                  || (p.role || '').toLowerCase().indexOf(poiQuery) !== -1
+                  || (p.lastKnownLocation || '').toLowerCase().indexOf(poiQuery) !== -1
+                  || (p.country || '').toLowerCase().indexOf(poiQuery) !== -1;
+              });
+              if (poiMatches.length === 0) {
+                report = 'No matches for "' + esc(poiQuery) + '". Use `/poi` to see all tracked persons.';
+              } else {
+                var slines = ['## 🔍 POI Search: ' + esc(poiQuery) + ' (' + poiMatches.length + ' match' + (poiMatches.length > 1 ? 'es' : '') + ')'];
+                for (var si = 0; si < Math.min(poiMatches.length, 5); si++) {
+                  var sp = poiMatches[si];
+                  var srisk = (sp.riskLevel || '?').toUpperCase();
+                  slines.push('**' + esc(sp.name) + '** — ' + srisk);
+                  slines.push('> Role: ' + esc(sp.role || 'Unknown'));
+                  slines.push('> Location: ' + esc(sp.lastKnownLocation || 'Unknown') + ' (' + (sp.locationConfidence || '?') + ')');
+                  if (sp.recentActivity) slines.push('> Activity: *' + esc(String(sp.recentActivity).slice(0, 180)) + '*');
+                  if (sp.aiProfile) slines.push('> Profile: *' + esc(String(sp.aiProfile).slice(0, 180)) + '*');
+                  slines.push('> Mentions: ' + (sp.mentionCount || 0) + ' | Score: ' + (sp.activityScore || 0));
+                  slines.push('');
+                }
+                if (poiMatches.length > 5) slines.push('... and ' + (poiMatches.length - 5) + ' more');
+                report = slines.join('\n');
+              }
+            } else {
+              var plines = ['## 👤 Persons of Interest (' + poiData.persons.length + ')'];
+              for (var pi = 0; pi < Math.min(poiData.persons.length, 8); pi++) {
+                var pp = poiData.persons[pi];
+                plines.push('**' + esc(pp.name) + '** (' + esc(pp.role || '?') + ') — ' + (pp.riskLevel || '?').toUpperCase() + ' — ' + esc(pp.region || '?'));
+              }
+              report = plines.join('\n');
+            }
             break;
           }
           case 'status': {

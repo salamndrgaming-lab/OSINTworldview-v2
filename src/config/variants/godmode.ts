@@ -64,6 +64,13 @@ export const DEFAULT_PANELS: Record<string, PanelConfig> = {
   'data-health': { name: 'Data Source Health', enabled: true, priority: 1 },
   warcam: { name: 'Conflict Zone Media', enabled: true, priority: 1 },
   poi: { name: 'Persons of Interest', enabled: true, priority: 1 },
+  // Session 6 panels
+  'chokepoint-flow': { name: 'Chokepoint Flow', enabled: true, priority: 1 },
+  'telegram-osint': { name: 'Telegram Narrative', enabled: true, priority: 1 },
+  'supply-chain-prices': { name: 'Commodity Basket', enabled: true, priority: 1 },
+  'osint-report': { name: 'OSINT Report', enabled: true, priority: 1 },
+  'counterfactual-sim': { name: 'Counterfactual Engine', enabled: true, priority: 1 },
+  insights: { name: 'AI Insights', enabled: true, priority: 1 },
 };
 
 // ALL map layers ON — the full intelligence picture
@@ -192,9 +199,11 @@ export const PANEL_LAYOUT_CONFIG = {
     // Godmode-exclusive panels first — the reason you toggle godmode
     'geo-risk-radar', 'correlation-engine', 'nl-query',
     'ai-stock-analyst', 'intel-timeline', 'stock-backtest-gm', 'data-health', 'warcam',
+    'counterfactual-sim', 'osint-report',
     // Core intelligence
     'cii', 'strategic-risk', 'intel', 'gdelt-intel', 'cascade',
-    'telegram-intel', 'satellite-fires', 'poi',
+    'telegram-intel', 'satellite-fires', 'poi', 'chokepoint-flow',
+    'telegram-osint', 'supply-chain-prices', 'insights',
     // News feeds
     'live-news', 'politics', 'us', 'europe', 'middleeast', 'africa', 'latam', 'asia',
     'energy', 'gov', 'thinktanks', 'tech', 'ai',

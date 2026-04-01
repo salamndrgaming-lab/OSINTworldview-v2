@@ -418,12 +418,41 @@ function generatePoiReport(data) {
   return s.join('\n');
 }
 
+function generatePoiSearch(data, query) {
+  var persons = unwrap(data.poi);
+  if (persons.length === 0) return '<b>POI SEARCH</b>\n\nNo POI data available.';
+  var q = query.toLowerCase();
+  var matches = persons.filter(function(p) {
+    var name = (p.name || '').toLowerCase();
+    var role = (p.role || '').toLowerCase();
+    var loc = (p.lastKnownLocation || '').toLowerCase();
+    var country = (p.country || '').toLowerCase();
+    return name.indexOf(q) !== -1 || role.indexOf(q) !== -1 || loc.indexOf(q) !== -1 || country.indexOf(q) !== -1;
+  });
+  if (matches.length === 0) return '<b>POI SEARCH</b>\n\nNo matches for "' + esc(query) + '".\nTry /poi to see all tracked persons.';
+  var s = ['<b>POI SEARCH: ' + esc(query) + '</b>', '(' + matches.length + ' match' + (matches.length > 1 ? 'es' : '') + ')', ''];
+  for (var i = 0; i < Math.min(matches.length, 5); i++) {
+    var p = matches[i];
+    var risk = p.riskLevel === 'critical' ? '[!!!]' : p.riskLevel === 'high' ? '[!!]' : p.riskLevel === 'elevated' ? '[!]' : '[ok]';
+    s.push(risk + ' <b>' + esc(p.name) + '</b>');
+    s.push('   Role: ' + esc(p.role || 'Unknown'));
+    s.push('   Location: ' + esc(p.lastKnownLocation || 'Unknown') + ' (' + (p.locationConfidence || '?') + ')');
+    if (p.recentActivity) s.push('   Activity: <i>' + esc(String(p.recentActivity).slice(0, 200)) + '</i>');
+    if (p.aiProfile) s.push('   Profile: <i>' + esc(String(p.aiProfile).slice(0, 200)) + '</i>');
+    s.push('   Mentions: ' + (p.mentionCount || 0) + ' | Score: ' + (p.activityScore || 0));
+    s.push('');
+  }
+  if (matches.length > 5) s.push('... and ' + (matches.length - 5) + ' more');
+  return s.join('\n');
+}
+
 function generateHelpMessage() {
   return [
     '<b>World Monitor Bot</b>', '',
     'Intelligence:',
     '/report - Full intelligence brief',
     '/poi - Persons of interest',
+    '/poi &lt;name&gt; - Search POI by name/role/location',
     '/threats - Conflicts + cyber',
     '',
     'Data:',
@@ -519,7 +548,12 @@ export default async function handler(req) {
       }
       case '/poi': {
         var pdata = await getBootstrapData();
-        report = generatePoiReport(pdata);
+        var poiArgs = text.slice(4).trim();
+        if (poiArgs.length > 0) {
+          report = generatePoiSearch(pdata, poiArgs);
+        } else {
+          report = generatePoiReport(pdata);
+        }
         break;
       }
       case '/seed': {

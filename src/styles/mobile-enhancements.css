@@ -1,0 +1,375 @@
+/* ═══════════════════════════════════════════════════════════
+   Mobile Enhancements — World Monitor
+   Touch-optimized panels, responsive layout, gesture-friendly
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Base Touch Targets ──────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Ensure all interactive elements meet 44px minimum touch target */
+  button,
+  [role="button"],
+  .panel-header,
+  .layer-toggle,
+  .tab-button,
+  .preset-button,
+  .notification-bell {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* ── Panel Layout ───────────────────────────────────────── */
+  .panel-container {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
+
+  .panel-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0;
+  }
+
+  .panel {
+    border-radius: 0;
+    margin: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .panel-header {
+    padding: 12px 16px;
+    font-size: 14px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .panel-content {
+    padding: 8px 12px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* ── Bottom Sheet Pattern ───────────────────────────────── */
+  .bottom-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 85vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    border-radius: 16px 16px 0 0;
+    background: var(--surface-primary, #0a0a12);
+    z-index: 1000;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+  }
+
+  .bottom-sheet.open {
+    transform: translateY(0);
+  }
+
+  .bottom-sheet-handle {
+    width: 36px;
+    height: 4px;
+    background: var(--text-tertiary, #555);
+    border-radius: 2px;
+    margin: 8px auto 12px;
+  }
+
+  /* ── Map Controls Mobile ────────────────────────────────── */
+  .map-controls {
+    bottom: 80px;
+    right: 8px;
+  }
+
+  .map-controls button {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+  }
+
+  /* ── Layer Sidebar Mobile ───────────────────────────────── */
+  .layer-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 85vw;
+    max-width: 320px;
+    height: 100vh;
+    z-index: 1100;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--surface-primary, #0a0a12);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .layer-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .layer-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1099;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .layer-sidebar-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .layer-toggle {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border-subtle, #1a1a2e);
+  }
+
+  .layer-toggle label {
+    flex: 1;
+    font-size: 14px;
+  }
+
+  /* ── Header Mobile ──────────────────────────────────────── */
+  .app-header {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .app-header .logo-text {
+    font-size: 14px;
+  }
+
+  .header-actions {
+    gap: 4px;
+  }
+
+  .header-actions button {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  /* ── Primary Nav Tabs ───────────────────────────────────── */
+  .primary-nav {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0;
+    padding: 0 8px;
+  }
+
+  .primary-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .primary-nav button {
+    flex: 0 0 auto;
+    padding: 10px 16px;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+
+  /* ── Workspace Tabs ─────────────────────────────────────── */
+  .workspace-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    padding: 0 8px;
+  }
+
+  .workspace-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .workspace-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+
+  /* ── Preset Bar ─────────────────────────────────────────── */
+  .preset-bar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .preset-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .preset-button {
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  /* ── Analyst Tab Mobile ─────────────────────────────────── */
+  .analyst-workspace {
+    height: calc(100vh - 120px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .analyst-sub-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+
+  .analyst-sub-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .analyst-sub-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+
+  /* ── OSINT Toolkit Grid ─────────────────────────────────── */
+  .osint-tools-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px;
+  }
+
+  /* ── Notification Bell ──────────────────────────────────── */
+  .notification-dropdown {
+    right: 0;
+    left: 0;
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 60vh;
+    border-radius: 0 0 12px 12px;
+  }
+
+  /* ── Counterfactual / POI / Panel Cards ─────────────────── */
+  .poi-card,
+  .scenario-card,
+  .commodity-card {
+    padding: 12px;
+  }
+
+  .poi-card .poi-name {
+    font-size: 14px;
+  }
+
+  /* ── Chyron / Alert Ticker ──────────────────────────────── */
+  .alert-chyron {
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+
+  /* ── Threat Badge ───────────────────────────────────────── */
+  .threat-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+  }
+
+  /* ── Scrollbar Hiding for Swipe Areas ───────────────────── */
+  .swipe-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .swipe-container::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ── Small Mobile (< 400px) ──────────────────────────────── */
+@media (max-width: 400px) {
+  .panel-header {
+    font-size: 13px;
+    padding: 10px 12px;
+  }
+
+  .panel-content {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  .app-header .logo-text {
+    font-size: 12px;
+  }
+
+  .primary-nav button {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+
+/* ── Landscape Phone ─────────────────────────────────────── */
+@media (max-height: 500px) and (orientation: landscape) {
+  .panel-container {
+    max-height: 100vh;
+  }
+
+  .bottom-sheet {
+    max-height: 70vh;
+  }
+
+  .analyst-workspace {
+    height: calc(100vh - 90px);
+  }
+}
+
+/* ── Tablet (769px - 1024px) ─────────────────────────────── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .panel-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .osint-tools-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .layer-sidebar {
+    width: 320px;
+  }
+}
+
+/* ── Safe Area Insets (Notched Phones) ────────────────────── */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .app-header {
+    padding-top: max(8px, env(safe-area-inset-top));
+  }
+
+  .bottom-sheet {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .map-controls {
+    bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ── Reduce Motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .bottom-sheet,
+  .layer-sidebar,
+  .layer-sidebar-overlay {
+    transition: none;
+  }
+}

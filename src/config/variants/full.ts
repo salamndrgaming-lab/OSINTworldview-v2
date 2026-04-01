@@ -48,6 +48,14 @@ export const DEFAULT_PANELS: Record<string, PanelConfig> = {
   'etf-flows': { name: 'BTC ETF Tracker', enabled: true, priority: 2 },
   stablecoins: { name: 'Stablecoins', enabled: true, priority: 2 },
   monitors: { name: 'My Monitors', enabled: true, priority: 2 },
+  // Session 6 panels
+  'chokepoint-flow': { name: 'Chokepoint Flow', enabled: true, priority: 2 },
+  'telegram-osint': { name: 'Telegram Narrative', enabled: true, priority: 2 },
+  'supply-chain-prices': { name: 'Commodity Basket', enabled: true, priority: 2 },
+  'osint-report': { name: 'OSINT Report', enabled: true, priority: 2 },
+  'counterfactual-sim': { name: 'Counterfactual Engine', enabled: true, priority: 2 },
+  insights: { name: 'AI Insights', enabled: true, priority: 2 },
+  poi: { name: 'Persons of Interest', enabled: true, priority: 2 },
 };
 
 // Map layers for geopolitical view

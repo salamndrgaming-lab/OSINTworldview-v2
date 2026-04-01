@@ -47,12 +47,16 @@ interface Brief {
   isAI: boolean;
 }
 
-const DOMAIN_META: Record<string, { icon: string; color: string; label: string }> = {
+const DOMAIN_META_MAP: Record<string, { icon: string; color: string; label: string }> = {
   military:   { icon: '⚔️',  color: '#ef4444', label: 'Military' },
   escalation: { icon: '📈', color: '#f97316', label: 'Escalation' },
   economic:   { icon: '💹', color: '#d4a843', label: 'Economic' },
   disaster:   { icon: '🌪', color: '#8b5cf6', label: 'Disaster' },
 };
+const DOMAIN_META_FALLBACK = { icon: '⚡', color: '#d4a843', label: 'Intelligence' };
+function getDomainMeta(domain: string): { icon: string; color: string; label: string } {
+  return DOMAIN_META_MAP[domain] ?? DOMAIN_META_FALLBACK;
+}
 
 const AUTO_BRIEF_THRESHOLD = 85;
 
@@ -223,20 +227,21 @@ export class AutoBriefPanel extends Panel {
   }
 
   private composeBrief(card: CorrelationCard, signals: string[], worldContext: string): string {
-    const domMeta = DOMAIN_META[card.domain] ?? DOMAIN_META.military;
+    const { label } = getDomainMeta(card.domain);
     const signalList = signals.slice(0, 3).join('; ');
-    return `${domMeta.label} correlation cluster detected with score ${card.score}/100. ` +
+    return `${label} correlation cluster detected with score ${card.score}/100. ` +
       `Converging signals: ${signalList || 'multiple sources'}. ` +
       `Current global context: ${worldContext.slice(0, 150)}`;
   }
 
   private templateBrief(card: CorrelationCard, signals: string[]): string {
-    const domMeta = DOMAIN_META[card.domain] ?? DOMAIN_META.military;
+    const { label } = getDomainMeta(card.domain);
     const countries = card.countries?.slice(0, 3).join(', ') || 'multiple regions';
     const signalCount = card.signals?.length ?? 0;
-    return `${domMeta.label} event cluster in ${countries} reached correlation score ${card.score}/100. ` +
+    const leadSignal = signals[0] ?? '';
+    return `${label} event cluster in ${countries} reached correlation score ${card.score}/100. ` +
       `${signalCount} cross-source signal${signalCount !== 1 ? 's' : ''} converging. ` +
-      (signals[0] ? `Leading indicator: ${signals[0]}.` : 'Multiple independent sources confirm activity.');
+      (leadSignal ? `Leading indicator: ${leadSignal}.` : 'Multiple independent sources confirm activity.');
   }
 
   private renderBriefs(highCards: CorrelationCard[]): void {
@@ -262,7 +267,7 @@ export class AutoBriefPanel extends Panel {
   }
 
   private renderBriefCard(brief: Brief): string {
-    const meta = DOMAIN_META[brief.domain] ?? DOMAIN_META.military;
+    const { color, icon, label: domainLabel } = getDomainMeta(brief.domain);
     const age = Math.round((Date.now() - brief.generatedAt) / 60000);
     const ageStr = age < 60 ? `${age}m ago` : `${Math.round(age / 60)}h ago`;
     const countriesStr = brief.countries.length > 0 ? brief.countries.join(', ') : '';
@@ -270,21 +275,21 @@ export class AutoBriefPanel extends Panel {
       `<span style="display:inline-block;background:var(--vi-bg,#0c0c10);border:1px solid var(--vi-border,#252535);border-radius:4px;padding:1px 5px;font-size:8px;color:var(--text-muted);margin:1px 2px 1px 0">${this.esc(s)}</span>`
     ).join('');
 
-    return `<div style="background:var(--vi-surface,#12121a);border:1px solid var(--vi-border,#252535);border-radius:7px;padding:10px;margin-bottom:7px;border-left:3px solid ${meta.color}">
+    return `<div style="background:var(--vi-surface,#12121a);border:1px solid var(--vi-border,#252535);border-radius:7px;padding:10px;margin-bottom:7px;border-left:3px solid ${color}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:5px">
         <div>
-          <div style="font-size:11px;font-weight:700;color:var(--text);line-height:1.4">${meta.icon} ${this.esc(brief.title)}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text);line-height:1.4">${icon} ${this.esc(brief.title)}</div>
           ${countriesStr ? `<div style="font-size:9px;color:var(--text-muted);margin-top:1px">📍 ${this.esc(countriesStr)}</div>` : ''}
         </div>
         <div style="flex-shrink:0;text-align:right">
-          <div style="font-size:17px;font-weight:800;color:${meta.color};line-height:1">${brief.score}</div>
+          <div style="font-size:17px;font-weight:800;color:${color};line-height:1">${brief.score}</div>
           <div style="font-size:7px;color:var(--text-muted)">score</div>
         </div>
       </div>
       <div style="font-size:10px;color:var(--text-dim);line-height:1.5;margin-bottom:6px">${this.esc(brief.summary)}</div>
       ${signalBadges ? `<div style="margin-bottom:4px">${signalBadges}</div>` : ''}
       <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:9px;font-weight:600;color:${meta.color};text-transform:uppercase;letter-spacing:0.4px">${meta.label}</span>
+        <span style="font-size:9px;font-weight:600;color:${color};text-transform:uppercase;letter-spacing:0.4px">${domainLabel}</span>
         <span style="font-size:8px;color:var(--text-ghost)">${brief.isAI ? '🤖 AI-enriched · ' : ''}${ageStr}</span>
       </div>
     </div>`;

@@ -54,6 +54,11 @@ export const DEFAULT_PANELS: Record<string, PanelConfig> = {
   'supply-chain-prices': { name: 'Commodity Basket', enabled: true, priority: 2 },
   'osint-report': { name: 'OSINT Report', enabled: true, priority: 2 },
   'counterfactual-sim': { name: 'Counterfactual Engine', enabled: true, priority: 2 },
+  'hypothesis-generator': { name: 'Hypothesis Generator', enabled: true, priority: 2 },
+  'narrative-drift': { name: 'Narrative Drift', enabled: true, priority: 2 },
+  'time-travel': { name: 'Time Machine', enabled: true, priority: 2 },
+  'signal-confidence': { name: 'Signal Confidence', enabled: true, priority: 2 },
+  'auto-brief': { name: 'Auto-Briefs', enabled: true, priority: 2 },
   insights: { name: 'AI Insights', enabled: true, priority: 2 },
   poi: { name: 'Persons of Interest', enabled: true, priority: 2 },
 };

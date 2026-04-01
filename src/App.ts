@@ -1,9 +1,3 @@
-import { registerAllFeatures } from './config/featureRegistry';
-
-export default function initApp() {
-  registerAllFeatures();
-  return null;
-}
 import type { Monitor, PanelConfig, MapLayers } from '@/types';
 import type { AppContext } from '@/app/app-context';
 import {

@@ -27,7 +27,6 @@ interface Snapshot {
 
 export class TimeTravelPanel extends Panel {
   private availableDates: string[] = [];
-  private currentSnapshot: Snapshot | null = null;
   private isLoading = false;
 
   constructor() {
@@ -208,7 +207,6 @@ export class TimeTravelPanel extends Panel {
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const snapshot: Snapshot = await resp.json();
-      this.currentSnapshot = snapshot;
       this.renderSnapshot(snapshot);
     } catch (err) {
       if (body) {

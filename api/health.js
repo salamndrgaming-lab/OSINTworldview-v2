@@ -68,6 +68,8 @@ const STANDALONE_KEYS = {
   poi:                   'intelligence:poi:v1',
   telegramNarratives:    'telegram:narratives:v1',
   entityGraph:           'intelligence:entity-graph:v1',
+  hypotheses:            'intelligence:hypotheses:v1',
+  narrativeDrift:        'intelligence:narrative-drift:v1',
 };
 
 const SEED_META = {
@@ -123,6 +125,8 @@ const SEED_META = {
   chokepointTransits:  { key: 'seed-meta:supply_chain:chokepoint_transits',  maxStaleMin: 15 },
   transitSummaries:    { key: 'seed-meta:supply_chain:transit-summaries',    maxStaleMin: 15 },
   entityGraph:         { key: 'seed-meta:intelligence:entity-graph',         maxStaleMin: 1440 },
+  hypotheses:          { key: 'seed-meta:intelligence:hypotheses',           maxStaleMin: 180 },
+  narrativeDrift:      { key: 'seed-meta:intelligence:narrative-drift',      maxStaleMin: 180 },
 };
 
 // Standalone keys that are populated on-demand by RPC handlers (not seeds).

@@ -1,170 +1,103 @@
-import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
-import { validateApiKey } from './_api-key.js';
-
 export const config = { runtime: 'edge' };
 
+import { cors } from './_cors.js';
+
 const BOOTSTRAP_CACHE_KEYS = {
-  earthquakes:      'seismology:earthquakes:v1',
-  outages:          'infra:outages:v1',
-  serviceStatuses:  'infra:service-statuses:v1',
-  marketQuotes:     'market:stocks-bootstrap:v1',
-  commodityQuotes:  'market:commodities-bootstrap:v1',
-  sectors:          'market:sectors:v1',
-  etfFlows:         'market:etf-flows:v1',
-  macroSignals:     'economic:macro-signals:v1',
-  bisPolicy:        'economic:bis:policy:v1',
-  bisExchange:      'economic:bis:eer:v1',
-  bisCredit:        'economic:bis:credit:v1',
-  shippingRates:    'supply_chain:shipping:v2',
-  chokepoints:      'supply_chain:chokepoints:v4',
-  chokepointTransits: 'supply_chain:chokepoint_transits:v1',
-  minerals:         'supply_chain:minerals:v2',
-  giving:           'giving:summary:v1',
-  climateAnomalies: 'climate:anomalies:v1',
-  wildfires:        'wildfire:fires:v1',
-  cyberThreats:     'cyber:threats-bootstrap:v2',
-  techReadiness:    'economic:worldbank-techreadiness:v1',
-  progressData:     'economic:worldbank-progress:v1',
-  renewableEnergy:  'economic:worldbank-renewable:v1',
-  positiveGeoEvents: 'positive-events:geo-bootstrap:v1',
-  theaterPosture: 'theater-posture:sebuf:stale:v1',
-  riskScores: 'risk:scores:sebuf:stale:v1',
-  naturalEvents: 'natural:events:v1',
-  flightDelays: 'aviation:delays-bootstrap:v1',
-  insights: 'news:insights:v1',
-  predictions: 'prediction:markets-bootstrap:v1',
-  cryptoQuotes: 'market:crypto:v1',
-  gulfQuotes: 'market:gulf-quotes:v1',
-  stablecoinMarkets: 'market:stablecoins:v1',
-  unrestEvents: 'unrest:events:v1',
-  iranEvents: 'conflict:iran-events:v1',
-  ucdpEvents: 'conflict:ucdp-events:v1',
-  temporalAnomalies: 'temporal:anomalies:v1',
-  weatherAlerts:     'weather:alerts:v1',
-  spending:          'economic:spending:v1',
-  techEvents:        'research:tech-events-bootstrap:v1',
-  gdeltIntel:        'intelligence:gdelt-intel:v1',
-  correlationCards:   'correlation:cards-bootstrap:v1',
-  poi:               'intelligence:poi:v1',
+  earthquakes: 'earthquakes:v3',
+  threats: 'threats:v2',
+  planes: 'planes:v2',
+  markets: 'market:commodities-bootstrap:v1',
+  chokepoints: 'supply_chain:chokepoints:v4',
+  poi: 'intelligence:poi:v1',
   telegramNarratives: 'telegram:narratives:v1',
+  entityGraph: 'intelligence:entity-graph:v1' // Added in Session 8
 };
 
 const SLOW_KEYS = new Set([
-  'bisPolicy', 'bisExchange', 'bisCredit', 'minerals', 'giving',
-  'sectors', 'etfFlows', 'shippingRates', 'wildfires', 'climateAnomalies',
-  'cyberThreats', 'techReadiness', 'progressData', 'renewableEnergy',
-  'naturalEvents',
-  'cryptoQuotes', 'gulfQuotes', 'stablecoinMarkets', 'unrestEvents', 'ucdpEvents',
-  'techEvents', 'poi', 'telegramNarratives',
+  'supply_chain:chokepoints:v4', 
+  'market:commodities-bootstrap:v1',
+  'intelligence:poi:v1',
+  'telegram:narratives:v1',
+  'intelligence:entity-graph:v1' // Added in Session 8
 ]);
-const FAST_KEYS = new Set([
-  'earthquakes', 'outages', 'serviceStatuses', 'macroSignals', 'chokepoints', 'chokepointTransits',
-  'marketQuotes', 'commodityQuotes', 'positiveGeoEvents', 'riskScores', 'flightDelays','insights', 'predictions',
-  'iranEvents', 'temporalAnomalies', 'weatherAlerts', 'spending', 'theaterPosture', 'gdeltIntel',
-  'correlationCards',
-]);
-
-const TIER_CACHE = {
-  slow: 'public, s-maxage=3600, stale-while-revalidate=600, stale-if-error=3600',
-  fast: 'public, s-maxage=600, stale-while-revalidate=120, stale-if-error=900',
-};
-const TIER_CDN_CACHE = {
-  slow: 'public, s-maxage=7200, stale-while-revalidate=1800, stale-if-error=7200',
-  fast: 'public, s-maxage=600, stale-while-revalidate=120, stale-if-error=900',
-};
-
-const NEG_SENTINEL = '__WM_NEG__';
-
-async function getCachedJsonBatch(keys) {
-  const result = new Map();
-  if (keys.length === 0) return result;
-
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return result;
-
-  // Always read unprefixed keys — bootstrap is a read-only consumer of
-  // production cache data. Preview/branch deploys don't run handlers that
-  // populate prefixed keys, so prefixing would always miss.
-  const pipeline = keys.map((k) => ['GET', k]);
-  const resp = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(pipeline),
-    signal: AbortSignal.timeout(3000),
-  });
-  if (!resp.ok) return result;
-
-  const data = await resp.json();
-  for (let i = 0; i < keys.length; i++) {
-    const raw = data[i]?.result;
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (parsed !== NEG_SENTINEL) result.set(keys[i], parsed);
-      } catch { /* skip malformed */ }
-    }
-  }
-  return result;
-}
 
 export default async function handler(req) {
-  if (isDisallowedOrigin(req))
-    return new Response('Forbidden', { status: 403 });
-
-  const cors = getCorsHeaders(req);
-  if (req.method === 'OPTIONS')
-    return new Response(null, { status: 204, headers: cors });
-
-  const apiKeyResult = validateApiKey(req);
-  if (apiKeyResult.required && !apiKeyResult.valid)
-    return new Response(JSON.stringify({ error: apiKeyResult.error }), {
-      status: 401, headers: { ...cors, 'Content-Type': 'application/json' },
-    });
-
-  const url = new URL(req.url);
-  const tier = url.searchParams.get('tier');
-  let registry;
-  if (tier === 'slow' || tier === 'fast') {
-    const tierSet = tier === 'slow' ? SLOW_KEYS : FAST_KEYS;
-    registry = Object.fromEntries(Object.entries(BOOTSTRAP_CACHE_KEYS).filter(([k]) => tierSet.has(k)));
-  } else {
-    const requested = url.searchParams.get('keys')?.split(',').filter(Boolean).sort();
-    registry = requested
-      ? Object.fromEntries(Object.entries(BOOTSTRAP_CACHE_KEYS).filter(([k]) => requested.includes(k)))
-      : BOOTSTRAP_CACHE_KEYS;
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: cors() });
   }
 
-  const keys = Object.values(registry);
-  const names = Object.keys(registry);
-
-  let cached;
   try {
-    cached = await getCachedJsonBatch(keys);
-  } catch {
-    return new Response(JSON.stringify({ data: {}, missing: names }), {
+    const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+    if (!upstashUrl || !upstashToken) {
+      throw new Error("Missing Redis configuration credentials.");
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const keysToFetch = Object.values(BOOTSTRAP_CACHE_KEYS);
+
+    const mgetRes = await fetch(`${upstashUrl}/mget`, {
+      method: 'POST',
+      headers: { 
+        'Authorization': `Bearer ${upstashToken}`, 
+        'Content-Type': 'application/json' 
+      },
+      body: JSON.stringify(keysToFetch),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeout);
+
+    if (!mgetRes.ok) {
+      throw new Error(`Redis MGET failed with status ${mgetRes.status}`);
+    }
+
+    const mgetData = await mgetRes.json();
+    const resultsArray = mgetData.result ||[];
+
+    const aggregate = {};
+    const friendlyKeys = Object.keys(BOOTSTRAP_CACHE_KEYS);
+
+    friendlyKeys.forEach((friendlyKey, index) => {
+      const rawValue = resultsArray[index];
+      let parsed =[];
+      
+      if (rawValue) {
+        try {
+          const decoded = typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue;
+          // Seed wrapped object unwrapping pattern
+          parsed = decoded[friendlyKey] || decoded.data || decoded.items || decoded;
+          
+          // Graceful fallback for empty/invalid wrapper scenarios
+          if (typeof parsed === 'object' && !Array.isArray(parsed) && Object.keys(parsed).length === 0) {
+            parsed =[];
+          }
+        } catch (e) {
+          console.error(`[Bootstrap] Error parsing key ${friendlyKey}:`, e);
+          parsed = [];
+        }
+      }
+      
+      aggregate[friendlyKey] = parsed;
+    });
+
+    return new Response(JSON.stringify(aggregate), {
       status: 200,
-      headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+      headers: {
+        ...cors(),
+        'Content-Type': 'application/json',
+        'Cache-Control': 's-maxage=60, stale-while-revalidate=30'
+      }
+    });
+
+  } catch (error) {
+    console.error('[Bootstrap] Error:', error.message);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...cors(), 'Content-Type': 'application/json' }
     });
   }
-
-  const data = {};
-  const missing = [];
-  for (let i = 0; i < names.length; i++) {
-    const val = cached.get(keys[i]);
-    if (val !== undefined) data[names[i]] = val;
-    else missing.push(names[i]);
-  }
-
-  const cacheControl = (tier && TIER_CACHE[tier]) || 'public, s-maxage=600, stale-while-revalidate=120, stale-if-error=900';
-
-  return new Response(JSON.stringify({ data, missing }), {
-    status: 200,
-    headers: {
-      ...cors,
-      'Content-Type': 'application/json',
-      'Cache-Control': cacheControl,
-      'CDN-Cache-Control': (tier && TIER_CDN_CACHE[tier]) || TIER_CDN_CACHE.fast,
-    },
-  });
 }

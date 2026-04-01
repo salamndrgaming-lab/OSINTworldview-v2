@@ -29,7 +29,7 @@ const BOOTSTRAP_KEYS = {
   spending:          'economic:spending:v1',
   techEvents:        'research:tech-events-bootstrap:v1',
   gdeltIntel:        'intelligence:gdelt-intel:v1',
-  correlationCards:   'correlation:cards-bootstrap:v1',
+  correlationCards:  'correlation:cards-bootstrap:v1',
 };
 
 const STANDALONE_KEYS = {
@@ -67,6 +67,7 @@ const STANDALONE_KEYS = {
   transitSummaries:      'supply_chain:transit-summaries:v1',
   poi:                   'intelligence:poi:v1',
   telegramNarratives:    'telegram:narratives:v1',
+  entityGraph:           'intelligence:entity-graph:v1',
 };
 
 const SEED_META = {
@@ -121,6 +122,7 @@ const SEED_META = {
   corridorrisk:        { key: 'seed-meta:supply_chain:corridorrisk',         maxStaleMin: 120 },
   chokepointTransits:  { key: 'seed-meta:supply_chain:chokepoint_transits',  maxStaleMin: 15 },
   transitSummaries:    { key: 'seed-meta:supply_chain:transit-summaries',    maxStaleMin: 15 },
+  entityGraph:         { key: 'seed-meta:intelligence:entity-graph',         maxStaleMin: 1440 },
 };
 
 // Standalone keys that are populated on-demand by RPC handlers (not seeds).
@@ -140,9 +142,9 @@ const EMPTY_DATA_OK_KEYS = new Set(['notamClosures']);
 // Cascade groups: if any key in the group has data, all empty siblings are OK.
 // Theater posture uses live → stale → backup fallback chain.
 const CASCADE_GROUPS = {
-  theaterPosture:       ['theaterPosture', 'theaterPostureLive', 'theaterPostureBackup'],
-  theaterPostureLive:   ['theaterPosture', 'theaterPostureLive', 'theaterPostureBackup'],
-  theaterPostureBackup: ['theaterPosture', 'theaterPostureLive', 'theaterPostureBackup'],
+  theaterPosture:['theaterPosture', 'theaterPostureLive', 'theaterPostureBackup'],
+  theaterPostureLive:['theaterPosture', 'theaterPostureLive', 'theaterPostureBackup'],
+  theaterPostureBackup:['theaterPosture', 'theaterPostureLive', 'theaterPostureBackup'],
   militaryFlights:      ['militaryFlights', 'militaryFlightsStale'],
   militaryFlightsStale: ['militaryFlights', 'militaryFlightsStale'],
 };
@@ -173,7 +175,7 @@ function dataSize(parsed) {
   if (!parsed) return 0;
   if (Array.isArray(parsed)) return parsed.length;
   if (typeof parsed === 'object') {
-    for (const k of ['quotes', 'hexes', 'events', 'stablecoins', 'fires', 'threats',
+    for (const k of['quotes', 'hexes', 'events', 'stablecoins', 'fires', 'threats',
                       'earthquakes', 'outages', 'delays', 'items', 'predictions', 'alerts', 'awards',
                       'papers', 'repos', 'articles', 'signals', 'rates', 'countries',
                       'chokepoints', 'minerals', 'anomalies', 'flows', 'bases', 'flights',
@@ -200,12 +202,12 @@ export default async function handler(req) {
 
   const now = Date.now();
 
-  const allDataKeys = [
+  const allDataKeys =[
     ...Object.values(BOOTSTRAP_KEYS),
     ...Object.values(STANDALONE_KEYS),
   ];
   const allMetaKeys = Object.values(SEED_META).map(s => s.key);
-  const allKeys = [...allDataKeys, ...allMetaKeys];
+  const allKeys =[...allDataKeys, ...allMetaKeys];
 
   let results;
   try {
@@ -271,7 +273,7 @@ export default async function handler(req) {
     checks[name] = entry;
   }
 
-  for (const [name, redisKey] of Object.entries(STANDALONE_KEYS)) {
+  for (const[name, redisKey] of Object.entries(STANDALONE_KEYS)) {
     totalChecks++;
     const raw = keyValues.get(redisKey);
     const parsed = parseRedisValue(raw);

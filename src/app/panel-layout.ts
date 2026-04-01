@@ -1072,6 +1072,23 @@ export class PanelLayoutManager implements AppModule {
       );
     }
 
+    // ── New Feature Panels ────────────────────────────────────
+    this.lazyPanel('chokepoint-flow', () =>
+      import('@/components/ChokepointFlowPanel').then(m => new m.ChokepointFlowPanel()),
+    );
+
+    this.lazyPanel('telegram-osint', () =>
+      import('@/components/TelegramOSINTPanel').then(m => new m.TelegramOSINTPanel()),
+    );
+
+    this.lazyPanel('supply-chain-prices', () =>
+      import('@/components/SupplyChainPricesPanel').then(m => new m.SupplyChainPricesPanel()),
+    );
+
+    this.lazyPanel('osint-report', () =>
+      import('@/components/OsintReportPanel').then(m => new m.OsintReportPanel()),
+    );
+
     const defaultOrder = Object.keys(DEFAULT_PANELS).filter(k => k !== 'map');
     const activePanelKeys = Object.keys(this.ctx.panelSettings).filter(k => k !== 'map');
     const bottomSet = this.getSavedBottomSet();

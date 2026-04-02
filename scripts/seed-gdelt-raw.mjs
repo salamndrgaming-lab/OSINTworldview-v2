@@ -8,82 +8,89 @@
  *   single Redis key (gdelt:raw:v1). All consumer seeds read from this key
  *   instead of calling GDELT directly, cutting total API calls from ~91 → ~26.
  *
- * RATE-LIMIT STRATEGY (informed by GdeltSeedFix.md analysis):
- *   - Strictly sequential execution. Parallel phases saturate GDELT instantly.
- *   - COOLDOWN_BASE_MS = 35s: GDELT DOC API is globally rate-limited (not
- *     per-client). Shared Railway/Vercel outbound IPs compound this. 35s gives
- *     meaningful burst-relief vs the previous 20s default.
- *   - SLOW DECAY: on success, cooldown decreases by 5s per call (not reset to
- *     base). Rapid reset was re-triggering 429s after quiet gaps within a burst.
- *   - Exponential back-off on 429/error: doubles up to MAX_BACKOFF_MS (90s).
- *   - POST_EXHAUST cooldown of 120s after any topic that exhausts retries.
- *   - Circuit breaker trips after CIRCUIT_TRIP_THRESHOLD consecutive failures.
- *   - GKG runs as Phase 3 but is fully independent — GKG 429s do NOT increment
- *     the main circuit breaker (GKG endpoint is more aggressive than DOC API).
- *   - Snapshot merge: on circuit trip, merges fresh partial results with the
- *     previous Redis snapshot so good data is never overwritten by empty arrays.
- *   - FIRST-RUN GUARD: if circuit trips with no prior snapshot and 0 populated
- *     topics, skips the write entirely. Downstream consumers keep whatever they
- *     have from previous individual Redis keys.
- *   - TTL extension: if merged result still thin, extends existing key TTL
- *     instead of overwriting with near-empty data.
+ * ARCHITECTURE (Patch 5):
+ *   - Loads tracked persons from shared/tracked-persons.json (single source of truth)
+ *   - All GDELT fetches go through _gdelt-cache.mjs (fetchArtlist, fetchTimelineVol,
+ *     fetchPersonArticles, fetchGkg) which handle per-endpoint circuit breakers,
+ *     exponential backoff, validation, and per-call Redis caching.
+ *   - Telemetry flushed at end of run via error-telemetry.mjs
+ *   - Breaker summary logged at the end
+ *   - --force flag resets all breakers and bypasses cache
  *
- * CACHE-FIRST:
- *   Skips crawl if gdelt:raw:v1 is < MIN_CACHE_AGE_MIN old (default 30 min).
- *   Override with --force.
+ * RATE-LIMIT STRATEGY:
+ *   - Strictly sequential (topics → persons → GKG)
+ *   - cooldownDelay() provides adaptive inter-request pacing (starts 20s, decays to 5s)
+ *   - Per-endpoint circuit breakers (artlist, timelinevol, gkg, person)
+ *   - Snapshot merge when circuit trips — never overwrites good data with empty
+ *   - First-run guard: skip write if 0 populated and no prior snapshot
  *
  * Usage:
  *   node scripts/seed-gdelt-raw.mjs          # cache-first (recommended)
- *   node scripts/seed-gdelt-raw.mjs --force  # bypass cache check
+ *   node scripts/seed-gdelt-raw.mjs --force  # bypass cache, reset all breakers
  */
 
-import { loadEnvFile, CHROME_UA, getRedisCredentials, sleep } from './_seed-utils.mjs';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { loadEnvFile, getRedisCredentials } from './_seed-utils.mjs';
+import {
+  fetchArtlist,
+  fetchTimelineVol,
+  fetchPersonArticles,
+  fetchGkg,
+  breakerSummary,
+  resetAllBreakers,
+} from './_gdelt-cache.mjs';
+import {
+  anyBreakerOpen,
+  canRequest,
+} from './shared/circuit-breaker.mjs';
+import {
+  cooldownDelay,
+  sleep,
+} from './shared/exponential-backoff.mjs';
+import {
+  flushTelemetry,
+  sessionMetricsSummary,
+} from './shared/error-telemetry.mjs';
 
 loadEnvFile(import.meta.url);
 
-export const RAW_KEY        = 'gdelt:raw:v1';
-const RATELIMIT_FLAG_KEY     = 'gdelt:raw:ratelimit-at';
-const TTL                    = 4 * 3600;       // 4h
-const MIN_CACHE_AGE_MIN      = 30;
-const GDELT_DOC              = 'https://api.gdeltproject.org/api/v2/doc/doc';
-const GDELT_GKG              = 'https://api.gdeltproject.org/api/v1/gkg_geojson';
+// ── Config ────────────────────────────────────────────────────────────────────
 
-// Back-off config (GdeltSeedFix.md recommendations applied)
-const COOLDOWN_BASE_MS       = 35_000;   // 35s — raised from 20s; meaningful burst-relief
-const COOLDOWN_DECAY_MS      = 5_000;   // slow decay toward base on success (not instant reset)
-const COOLDOWN_POST_EXHAUST  = 120_000; // 2 min after a topic exhausts retries
-const MAX_BACKOFF_MS         = 90_000;  // max single back-off sleep
-const CIRCUIT_TRIP_THRESHOLD = 5;
-const FETCH_TIMEOUT_MS       = 22_000;
-const MIN_TOPICS_TO_OVERWRITE = 4;
+export const RAW_KEY           = 'gdelt:raw:v1';
+const RATELIMIT_FLAG_KEY        = 'gdelt:raw:ratelimit-at';
+const TTL                       = 4 * 3600;        // 4h
+const MIN_CACHE_AGE_MIN         = 30;
+const MIN_TOPICS_TO_OVERWRITE   = 3;
+const MIN_PERSONS_TO_OVERWRITE  = 3;
+
+// Cooldown parameters (adaptive via cooldownDelay())
+const COOLDOWN_INITIAL_MS       = 20_000;  // 20s between calls on first request
+const COOLDOWN_FLOOR_MS         = 5_000;   // 5s minimum once GDELT is responding well
+const COOLDOWN_DECAY_MS         = 2_000;   // reduce by 2s per consecutive success
+const COOLDOWN_POST_EXHAUST_MS  = 120_000; // 2 min after a topic exhausts retries
 
 const FORCE = process.argv.includes('--force');
 
-// ── Rate-limit state ──────────────────────────────────────────────────────────
+// ── Load tracked persons from JSON ────────────────────────────────────────────
 
-let consecutiveFailures = 0;
-let currentCooldownMs   = COOLDOWN_BASE_MS;
-let circuitOpen         = false;
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
-function recordSuccess() {
-  consecutiveFailures = 0;
-  // Slow decay: reduce cooldown by COOLDOWN_DECAY_MS per success, floor at base.
-  // Instant reset back to base was too aggressive and re-triggered 429s.
-  currentCooldownMs = Math.max(COOLDOWN_BASE_MS, currentCooldownMs - COOLDOWN_DECAY_MS);
+/** @type {Array<{ name: string, aliases: string[], role: string, status: string, region: string, tags: string[] }>} */
+let TRACKED_PERSONS;
+try {
+  TRACKED_PERSONS = JSON.parse(
+    readFileSync(join(__dirname, 'shared', 'tracked-persons.json'), 'utf8')
+  );
+  console.log(`  Loaded ${TRACKED_PERSONS.length} persons from shared/tracked-persons.json`);
+} catch (err) {
+  console.error(`FATAL: Cannot load shared/tracked-persons.json — ${err.message}`);
+  process.exit(1);
 }
 
-function recordFailure() {
-  consecutiveFailures++;
-  currentCooldownMs = Math.min(currentCooldownMs * 2, MAX_BACKOFF_MS);
-  if (consecutiveFailures >= CIRCUIT_TRIP_THRESHOLD) {
-    circuitOpen = true;
-    console.warn(`  ⚡ CIRCUIT OPEN after ${consecutiveFailures} consecutive failures — aborting remaining GDELT calls`);
-  } else {
-    console.warn(`  ⏳ Back-off ${(currentCooldownMs / 1000).toFixed(0)}s (${consecutiveFailures}/${CIRCUIT_TRIP_THRESHOLD} trip threshold)`);
-  }
-}
-
-// ── Topics ────────────────────────────────────────────────────────────────────
+// ── Topic definitions ─────────────────────────────────────────────────────────
 
 const TOPICS = [
   { id: 'military',      query: '(military exercise OR troop deployment OR airstrike OR "naval exercise") sourcelang:eng', artlist: true, timelinevol: true,  timespan_art: '24h', timespan_vol: '6h',  maxrecords: 50 },
@@ -113,252 +120,6 @@ const TOPICS = [
   { id: 'poi-wmd',       query: '"sanctions" OR "nuclear" OR "missile" sourcelang:eng',                                   artlist: true, timelinevol: false, timespan_art: '72h', maxrecords: 100 },
   { id: 'poi-unrest',    query: '"coup" OR "protest" OR "uprising" OR "revolution" sourcelang:eng',                       artlist: true, timelinevol: false, timespan_art: '72h', maxrecords: 100 },
 ];
-
-const TRACKED_PERSONS = [
-  { name: 'Vladimir Putin',         status: 'active' },
-  { name: 'Volodymyr Zelenskyy',    status: 'active' },
-  { name: 'Xi Jinping',             status: 'active' },
-  { name: 'Kim Jong Un',            status: 'active' },
-  { name: 'Ali Khamenei',           status: 'active' },
-  { name: 'Benjamin Netanyahu',     status: 'active' },
-  { name: 'Bashar al-Assad',        status: 'active' },
-  { name: 'Recep Tayyip Erdogan',   status: 'active' },
-  { name: 'Narendra Modi',          status: 'active' },
-  { name: 'Mohammed bin Salman',    status: 'active' },
-  { name: 'Abdel Fattah el-Sisi',   status: 'active' },
-  { name: 'Masoud Pezeshkian',      status: 'active' },
-  { name: 'Abu Mohammed al-Julani', status: 'active' },
-  { name: 'Joe Biden',              status: 'active' },
-  { name: 'Donald Trump',           status: 'active' },
-  { name: 'Keir Starmer',           status: 'active' },
-  { name: 'Emmanuel Macron',        status: 'active' },
-  // Deceased — skip live GDELT queries; snapshot merge restores last known data
-  { name: 'Yevgeny Prigozhin',      status: 'inactive' },
-  { name: 'Yahya Sinwar',           status: 'inactive' },
-  { name: 'Hassan Nasrallah',       status: 'inactive' },
-  { name: 'Ismail Haniyeh',         status: 'inactive' },
-];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isValidUrl(str) {
-  try { const u = new URL(str); return u.protocol === 'http:' || u.protocol === 'https:'; }
-  catch { return false; }
-}
-
-function normalizeArticle(raw) {
-  const url = raw.url || '';
-  if (!isValidUrl(url)) return null;
-  return {
-    title:    String(raw.title    || '').slice(0, 500),
-    url,
-    domain:   String(raw.domain   || raw.source?.domain || '').slice(0, 200),
-    source:   String(raw.domain   || raw.source?.domain || '').slice(0, 200),
-    date:     String(raw.seendate || ''),
-    seendate: String(raw.seendate || ''),
-    image:    isValidUrl(raw.socialimage || '') ? raw.socialimage : '',
-    language: String(raw.language || ''),
-    tone:     typeof raw.tone === 'number' ? raw.tone : 0,
-  };
-}
-
-// ── Core fetch ────────────────────────────────────────────────────────────────
-
-async function gdeltFetch(params, label) {
-  if (circuitOpen) {
-    console.warn(`  ⚡ [${label}] skipped — circuit open`);
-    return null;
-  }
-
-  const url = new URL(GDELT_DOC);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
-  url.searchParams.set('format', 'json');
-
-  let resp;
-  try {
-    resp = await fetch(url.toString(), {
-      headers: { 'User-Agent': CHROME_UA },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-  } catch (err) {
-    console.warn(`  ⚠ GDELT network error [${label}]: ${err.message}`);
-    recordFailure();
-    return null;
-  }
-
-  if (resp.status === 429) {
-    recordFailure();
-    console.warn(`  ⚠ GDELT 429 [${label}] — back-off now ${(currentCooldownMs / 1000).toFixed(0)}s`);
-    return null;
-  }
-
-  if (!resp.ok) {
-    console.warn(`  ⚠ GDELT HTTP ${resp.status} [${label}]`);
-    // Non-429 HTTP errors don't count toward circuit breaker — they may be transient
-    return null;
-  }
-
-  try {
-    const json = await resp.json();
-    recordSuccess();
-    return json;
-  } catch (err) {
-    console.warn(`  ⚠ GDELT JSON parse [${label}]: ${err.message}`);
-    return null;
-  }
-}
-
-async function fetchWithBackoff(params, label, isFirstCall = false) {
-  if (!isFirstCall) await sleep(currentCooldownMs);
-  if (circuitOpen) return null;
-
-  const prevFailures = consecutiveFailures;
-  const data = await gdeltFetch(params, label);
-
-  // On failure, retry once after the updated back-off period
-  if (data === null && consecutiveFailures > prevFailures && !circuitOpen) {
-    console.log(`  🔄 Retry [${label}] after ${(currentCooldownMs / 1000).toFixed(0)}s…`);
-    await sleep(currentCooldownMs);
-    if (circuitOpen) return null;
-    return gdeltFetch(params, label);
-  }
-
-  return data;
-}
-
-// ── Crawl phases ──────────────────────────────────────────────────────────────
-
-async function crawlTopics() {
-  const results = {};
-  let isFirstCall = true;
-
-  for (const topic of TOPICS) {
-    if (circuitOpen) { console.warn(`  ⚡ Topic crawl stopped at "${topic.id}" — circuit open`); break; }
-
-    const failuresBefore = consecutiveFailures;
-
-    if (topic.artlist) {
-      console.log(`  [artlist] ${topic.id} (${topic.timespan_art ?? '24h'})`);
-      const data = await fetchWithBackoff({
-        query:      topic.query,
-        mode:       'artlist',
-        maxrecords: topic.maxrecords ?? 50,
-        timespan:   topic.timespan_art ?? '24h',
-        sort:       'date',
-      }, `${topic.id}/artlist`, isFirstCall);
-      isFirstCall = false;
-
-      results[topic.id] = results[topic.id] ?? {};
-      const articles = (data?.articles ?? []).map(normalizeArticle).filter(Boolean);
-      results[topic.id].artlist   = articles;
-      results[topic.id].fetchedAt = new Date().toISOString();
-      console.log(`    → ${articles.length} articles`);
-
-      // Post-exhaust cooldown — GDELT's rate window for popular queries exceeds 50s
-      if (articles.length === 0 && consecutiveFailures > failuresBefore && !circuitOpen) {
-        console.log(`    Rate-limit cooldown: waiting ${COOLDOWN_POST_EXHAUST / 1000}s before next topic…`);
-        await sleep(COOLDOWN_POST_EXHAUST);
-      }
-    }
-
-    if (circuitOpen) break;
-
-    if (topic.timelinevol) {
-      console.log(`  [timelinevol] ${topic.id} (${topic.timespan_vol ?? '6h'})`);
-      const data = await fetchWithBackoff({
-        query:     topic.query,
-        mode:      'timelinevol',
-        timespan:  topic.timespan_vol ?? '6h',
-        smoothing: '3',
-      }, `${topic.id}/timelinevol`);
-
-      results[topic.id] = results[topic.id] ?? {};
-      const tl = data?.timeline ?? data?.timelines ?? null;
-      results[topic.id].timelinevol = Array.isArray(tl) && tl.length > 0 ? tl : null;
-      console.log(`    → timeline ${results[topic.id].timelinevol ? 'ok' : 'empty'}`);
-    }
-  }
-
-  return results;
-}
-
-async function crawlPersons() {
-  const results = {};
-  const activePersons = TRACKED_PERSONS.filter(p => p.status === 'active');
-
-  for (const person of activePersons) {
-    if (circuitOpen) { console.warn(`  ⚡ Stopping person crawl at "${person.name}" — circuit open`); break; }
-
-    results[person.name] = {};
-
-    // 7d window: reduce maxrecords to 100 (was 250) — heavy queries trigger
-    // GDELT's "large query" throttle more aggressively (GdeltSeedFix.md §3)
-    console.log(`  [person 7d] ${person.name}`);
-    const broad = await fetchWithBackoff({
-      query:      `"${person.name}" sourcelang:eng`,
-      mode:       'artlist',
-      maxrecords: '100',
-      timespan:   '7d',
-    }, `person:${person.name}/7d`);
-    const articles7d = (broad?.articles ?? []).map(normalizeArticle).filter(Boolean);
-    results[person.name].articles7d   = articles7d;
-    results[person.name].mentionCount = articles7d.length;
-
-    if (circuitOpen) break;
-
-    console.log(`  [person 72h] ${person.name}`);
-    const narrow = await fetchWithBackoff({
-      query:      `"${person.name}" sourcelang:eng`,
-      mode:       'artlist',
-      maxrecords: '10',
-      timespan:   '72h',
-    }, `person:${person.name}/72h`);
-    results[person.name].headlines = (narrow?.articles ?? []).map(normalizeArticle).filter(Boolean);
-  }
-
-  return results;
-}
-
-// GKG runs independently — its 429s do NOT increment the main circuit breaker.
-// GKG v1 endpoint is more sensitive than DOC API and was previously causing
-// the circuit to trip right at the end of an otherwise successful crawl.
-async function crawlGkg() {
-  if (circuitOpen) { console.warn('  ⚡ GKG skipped — circuit open'); return null; }
-
-  console.log('  [gkg] unrest geojson');
-  await sleep(currentCooldownMs); // still respect pacing
-
-  let resp;
-  try {
-    const url = new URL(GDELT_GKG);
-    url.searchParams.set('query',      'protest riot demonstration unrest coup');
-    url.searchParams.set('timespan',   '24h');
-    url.searchParams.set('format',     'geojson');
-    url.searchParams.set('maxrecords', '500');
-    resp = await fetch(url.toString(), {
-      headers: { 'User-Agent': CHROME_UA },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-  } catch (err) {
-    console.warn(`  ⚠ GKG network error: ${err.message} — skipping (GKG failures do not affect main circuit)`);
-    return null;
-  }
-
-  if (resp.status === 429) {
-    console.warn('  ⚠ GKG 429 — skipping (GKG failures do not affect main circuit)');
-    return null;
-  }
-  if (!resp.ok) { console.warn(`  ⚠ GKG HTTP ${resp.status} — skipping`); return null; }
-
-  try {
-    const data = await resp.json();
-    console.log(`    → ${data?.features?.length ?? 0} GKG features`);
-    return data;
-  } catch (err) {
-    console.warn(`  ⚠ GKG JSON parse: ${err.message}`);
-    return null;
-  }
-}
 
 // ── Redis helpers ─────────────────────────────────────────────────────────────
 
@@ -434,7 +195,7 @@ function mergeWithSnapshot(newTopics, newPersons, existing) {
     }
   }
 
-  // Always carry forward inactive persons from the prior snapshot
+  // Inactive persons: always preserve from snapshot
   const inactiveNames = TRACKED_PERSONS.filter(p => p.status === 'inactive').map(p => p.name);
   for (const name of inactiveNames) {
     if (!mergedPersons[name] && existing.persons?.[name]) {
@@ -445,23 +206,172 @@ function mergeWithSnapshot(newTopics, newPersons, existing) {
   return { topics: mergedTopics, persons: mergedPersons };
 }
 
+// ── Crawl phases ──────────────────────────────────────────────────────────────
+
+async function crawlTopics() {
+  const results = {};
+  let consecutiveSuccesses = 0;
+  let isFirstCall = true;
+
+  for (const topic of TOPICS) {
+    if (anyBreakerOpen()) {
+      console.warn(`  ⚡ Topic crawl stopped at "${topic.id}" — artlist circuit open`);
+      break;
+    }
+
+    const cooldownMs = isFirstCall ? 0 : cooldownDelay(consecutiveSuccesses, {
+      initialMs: COOLDOWN_INITIAL_MS,
+      floorMs:   COOLDOWN_FLOOR_MS,
+      decayPerSuccess: COOLDOWN_DECAY_MS,
+    });
+
+    if (!isFirstCall && cooldownMs > 0) {
+      await sleep(cooldownMs, `before ${topic.id}`);
+    }
+    isFirstCall = false;
+
+    const topicResult = {};
+    let topicFailed = false;
+
+    if (topic.artlist) {
+      console.log(`  [artlist] ${topic.id} (${topic.timespan_art ?? '24h'})`);
+      const { articles, fromCache } = await fetchArtlist(topic.query, {
+        timespan:   topic.timespan_art ?? '24h',
+        maxrecords: topic.maxrecords ?? 50,
+        force:      FORCE,
+      });
+
+      topicResult.artlist   = articles;
+      topicResult.fetchedAt = new Date().toISOString();
+      console.log(`    → ${articles.length} articles${fromCache ? ' [cache]' : ''}`);
+
+      if (articles.length === 0 && !fromCache) {
+        topicFailed = true;
+        consecutiveSuccesses = 0;
+        if (!anyBreakerOpen()) {
+          console.log(`    Rate-limit cooldown: waiting ${COOLDOWN_POST_EXHAUST_MS / 1000}s…`);
+          await sleep(COOLDOWN_POST_EXHAUST_MS, `post-exhaust ${topic.id}`);
+        }
+      } else {
+        consecutiveSuccesses++;
+      }
+    }
+
+    if (anyBreakerOpen()) break;
+
+    if (topic.timelinevol && !topicFailed) {
+      console.log(`  [timelinevol] ${topic.id} (${topic.timespan_vol ?? '6h'})`);
+      await sleep(cooldownDelay(consecutiveSuccesses, {
+        initialMs: COOLDOWN_INITIAL_MS, floorMs: COOLDOWN_FLOOR_MS, decayPerSuccess: COOLDOWN_DECAY_MS,
+      }), `before timelinevol:${topic.id}`);
+
+      const { timeline, fromCache } = await fetchTimelineVol(topic.query, {
+        timespan: topic.timespan_vol ?? '6h',
+        force:    FORCE,
+      });
+
+      topicResult.timelinevol = timeline;
+      console.log(`    → timeline ${timeline ? 'ok' : 'empty'}${fromCache ? ' [cache]' : ''}`);
+      if (timeline) consecutiveSuccesses++;
+      else consecutiveSuccesses = Math.max(0, consecutiveSuccesses - 1);
+    }
+
+    results[topic.id] = topicResult;
+  }
+
+  return results;
+}
+
+async function crawlPersons() {
+  const results = {};
+  const activePersons = TRACKED_PERSONS.filter(p => p.status === 'active');
+  let consecutiveSuccesses = 0;
+
+  for (const person of activePersons) {
+    if (!canRequest('person')) {
+      console.warn(`  ⚡ Stopping person crawl at "${person.name}" — person circuit open`);
+      break;
+    }
+
+    results[person.name] = {};
+
+    // 7d artlist
+    const cooldown7d = cooldownDelay(consecutiveSuccesses, {
+      initialMs: COOLDOWN_INITIAL_MS, floorMs: COOLDOWN_FLOOR_MS, decayPerSuccess: COOLDOWN_DECAY_MS,
+    });
+    await sleep(cooldown7d, `before person:${person.name}/7d`);
+
+    console.log(`  [person 7d] ${person.name}`);
+    const { articles: articles7d, fromCache: fc7d } = await fetchPersonArticles(person.name, {
+      timespan: '7d', maxrecords: 100, force: FORCE,
+    });
+    results[person.name].articles7d   = articles7d;
+    results[person.name].mentionCount = articles7d.length;
+    console.log(`    → ${articles7d.length} articles${fc7d ? ' [cache]' : ''}`);
+    if (articles7d.length > 0) consecutiveSuccesses++;
+    else consecutiveSuccesses = 0;
+
+    if (!canRequest('person')) break;
+
+    // 72h headlines
+    const cooldown72h = cooldownDelay(consecutiveSuccesses, {
+      initialMs: COOLDOWN_INITIAL_MS, floorMs: COOLDOWN_FLOOR_MS, decayPerSuccess: COOLDOWN_DECAY_MS,
+    });
+    await sleep(cooldown72h, `before person:${person.name}/72h`);
+
+    console.log(`  [person 72h] ${person.name}`);
+    const { articles: headlines, fromCache: fcH } = await fetchPersonArticles(person.name, {
+      timespan: '72h', maxrecords: 10, force: FORCE,
+    });
+    results[person.name].headlines = headlines;
+    console.log(`    → ${headlines.length} headlines${fcH ? ' [cache]' : ''}`);
+  }
+
+  return results;
+}
+
+async function crawlGkg() {
+  if (!canRequest('gkg')) {
+    console.warn('  ⚡ GKG skipped — gkg circuit open');
+    return null;
+  }
+
+  const cooldownMs = cooldownDelay(0, {
+    initialMs: COOLDOWN_INITIAL_MS, floorMs: COOLDOWN_FLOOR_MS, decayPerSuccess: COOLDOWN_DECAY_MS,
+  });
+  await sleep(cooldownMs, 'before gkg');
+
+  console.log('  [gkg] unrest geojson');
+  const { geojson } = await fetchGkg('protest riot demonstration unrest coup', {
+    timespan:   '24h',
+    maxrecords: 500,
+    force:      FORCE,
+  });
+
+  return geojson;
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 async function main() {
   const start = Date.now();
   const activePersons = TRACKED_PERSONS.filter(p => p.status === 'active');
 
-  console.log('=== seed-gdelt-raw: Master GDELT Crawl ===');
-  console.log(`  Topics:    ${TOPICS.length} × artlist/timelinevol`);
-  console.log(`  Persons:   ${activePersons.length} active × 7d + 72h (${TRACKED_PERSONS.length - activePersons.length} inactive — snapshot-preserved only)`);
-  console.log(`  Cooldown:  ${COOLDOWN_BASE_MS / 1000}s base, slow-decay on success (−${COOLDOWN_DECAY_MS / 1000}s/call), max ${MAX_BACKOFF_MS / 1000}s`);
-  console.log(`  Post-exhaust pause: ${COOLDOWN_POST_EXHAUST / 1000}s`);
-  console.log(`  Circuit:   trips after ${CIRCUIT_TRIP_THRESHOLD} consecutive failures`);
-  console.log(`  Force:     ${FORCE ? 'YES — bypassing cache check' : 'NO — cache-first'}`);
+  if (FORCE) {
+    resetAllBreakers();
+  }
+
+  console.log('=== seed-gdelt-raw: Master GDELT Crawl (Patch 5) ===');
+  console.log(`  Topics:   ${TOPICS.length} × artlist/timelinevol`);
+  console.log(`  Persons:  ${activePersons.length} active × 7d + 72h (${TRACKED_PERSONS.length - activePersons.length} inactive — snapshot-preserved only)`);
+  console.log(`  Cooldown: ${COOLDOWN_INITIAL_MS / 1000}s initial → ${COOLDOWN_FLOOR_MS / 1000}s floor (adaptive)`);
+  console.log(`  Post-exhaust pause: ${COOLDOWN_POST_EXHAUST_MS / 1000}s`);
+  console.log(`  Source:   shared/tracked-persons.json`);
+  console.log(`  Force:    ${FORCE ? 'YES — bypassing cache + resetting breakers' : 'NO — cache-first'}`);
 
   const { url: redisUrl, token: redisToken } = getRedisCredentials();
 
-  // Cache-freshness gate
+  // ── Cache-freshness gate ─────────────────────────────────────────────────
   const { fresh, ageMin, existing } = await checkCacheFreshness(redisUrl, redisToken);
   if (!FORCE && fresh) {
     const tc = Object.keys(existing.topics  ?? {}).length;
@@ -478,17 +388,23 @@ async function main() {
     ? '  No existing cache — fetching from GDELT (first run)\n'
     : `  Cache is ${ageMin} min old — stale, re-fetching\n`);
 
-  // Sequential crawl
+  // ── Sequential crawl ─────────────────────────────────────────────────────
   console.log('--- Phase 1: Topics ---');
   const rawTopics = await crawlTopics();
 
   console.log('\n--- Phase 2: Persons ---');
   const rawPersons = await crawlPersons();
 
-  console.log('\n--- Phase 3: GKG (independent — failures do not affect main circuit) ---');
+  console.log('\n--- Phase 3: GKG ---');
   const gkg = await crawlGkg();
 
-  // Snapshot merge on circuit trip
+  // ── Telemetry flush ──────────────────────────────────────────────────────
+  const { url: rUrl, token: rTok } = getRedisCredentials();
+  await flushTelemetry({ url: rUrl, token: rTok });
+  console.log('\n' + breakerSummary());
+
+  // ── Snapshot merge ───────────────────────────────────────────────────────
+  const circuitOpen = anyBreakerOpen();
   let topics  = rawTopics;
   let persons = rawPersons;
 
@@ -497,11 +413,22 @@ async function main() {
     ({ topics, persons } = mergeWithSnapshot(rawTopics, rawPersons, existing));
   }
 
-  const populatedTopicCount = Object.values(topics).filter(t => t.artlist?.length > 0).length;
-  const topicCount  = Object.keys(topics).length;
-  const personCount = Object.keys(persons).length;
+  // Preserve inactive persons from prior snapshot
+  if (existing) {
+    const inactiveNames = TRACKED_PERSONS.filter(p => p.status === 'inactive').map(p => p.name);
+    for (const name of inactiveNames) {
+      if (!persons[name] && existing.persons?.[name]) {
+        persons[name] = { ...existing.persons[name], preservedFromCache: true };
+      }
+    }
+  }
 
-  // First-run guard: skip write if nothing useful to write
+  const populatedTopicCount  = Object.values(topics).filter(t => t.artlist?.length > 0).length;
+  const populatedPersonCount = Object.values(persons).filter(p => p.mentionCount > 0).length;
+  const topicCount           = Object.keys(topics).length;
+  const personCount          = Object.keys(persons).length;
+
+  // ── FIRST-RUN GUARD ──────────────────────────────────────────────────────
   if (circuitOpen && isFirstRun && populatedTopicCount === 0) {
     const flagPayload = JSON.stringify({ at: new Date().toISOString(), reason: 'first_run_circuit_trip' });
     await fetch(redisUrl, {
@@ -511,19 +438,20 @@ async function main() {
       signal: AbortSignal.timeout(5_000),
     }).catch(() => {});
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-    console.warn('\n  ⚡ First run + circuit tripped + no prior snapshot — skipping write to avoid poisoning consumers.');
-    console.warn('     Wait 15–30 minutes for GDELT rate-limit window to clear, then run:');
-    console.warn('     node scripts/seed-gdelt-raw.mjs --force');
-    console.log(`\n=== Done in ${elapsed}s — NO WRITE (first-run circuit trip, rate-limit cooldown needed) ===`);
+    console.warn('\n  ⚡ First run + circuit tripped + no prior snapshot — skipping write.');
+    console.warn('     Wait 15–30 minutes, then: node scripts/seed-gdelt-raw.mjs --force');
+    console.log(`\n=== Done in ${elapsed}s — NO WRITE (first-run circuit trip) ===`);
     return;
   }
 
-  // Prefer TTL extension over thin overwrite
-  if (circuitOpen && populatedTopicCount < MIN_TOPICS_TO_OVERWRITE && existing) {
-    const existingPopulated = Object.values(existing.topics ?? {}).filter(t => t.artlist?.length > 0).length;
-    if (existingPopulated >= MIN_TOPICS_TO_OVERWRITE) {
-      console.log(`\n  ↩ Existing key has ${existingPopulated} populated topics — extending TTL instead of overwriting with ${populatedTopicCount}`);
-      await redisPipelineRaw(redisUrl, redisToken, [['EXPIRE', RAW_KEY, TTL]]).catch(e => console.warn(`  TTL extend failed: ${e.message}`));
+  // ── Prefer TTL extension over thin overwrite ─────────────────────────────
+  if (circuitOpen && populatedTopicCount < MIN_TOPICS_TO_OVERWRITE && populatedPersonCount < MIN_PERSONS_TO_OVERWRITE && existing) {
+    const existingPopTopics   = Object.values(existing.topics ?? {}).filter(t => t.artlist?.length > 0).length;
+    const existingPopPersons  = Object.values(existing.persons ?? {}).filter(p => p.mentionCount > 0).length;
+    if (existingPopTopics >= MIN_TOPICS_TO_OVERWRITE || existingPopPersons >= MIN_PERSONS_TO_OVERWRITE) {
+      console.log(`\n  ↩ Existing key has ${existingPopTopics} pop. topics / ${existingPopPersons} pop. persons — extending TTL`);
+      await redisPipelineRaw(redisUrl, redisToken, [['EXPIRE', RAW_KEY, TTL]])
+        .catch(e => console.warn(`  TTL extend failed: ${e.message}`));
       console.log(`  ✅ ${RAW_KEY} TTL extended (${TTL}s)`);
       const flagPayload = JSON.stringify({ at: new Date().toISOString(), reason: 'circuit_tripped', ttlExtended: true });
       await fetch(redisUrl, {
@@ -538,7 +466,7 @@ async function main() {
     }
   }
 
-  // Write merged output
+  // ── Write merged output ──────────────────────────────────────────────────
   const output = {
     topics,
     persons,
@@ -546,13 +474,15 @@ async function main() {
     crawledAt:      new Date().toISOString(),
     version:        'v1',
     circuitTripped: circuitOpen,
+    patch:          5,
     ...(circuitOpen ? { rateLimitedAt: new Date().toISOString() } : {}),
   };
 
   const payload = JSON.stringify(output);
   await redisSetRaw(redisUrl, redisToken, RAW_KEY, payload, TTL);
-  console.log(`  ✅ ${RAW_KEY} written (${topicCount} topics, ${personCount} persons, ${populatedTopicCount} populated)`);
+  console.log(`  ✅ ${RAW_KEY} written (${topicCount} topics, ${personCount} persons, ${populatedTopicCount} pop. topics, ${populatedPersonCount} pop. persons)`);
 
+  // Rate-limit flag management
   if (circuitOpen) {
     const flagPayload = JSON.stringify({ at: new Date().toISOString(), topics: topicCount, persons: personCount, populatedTopics: populatedTopicCount });
     await fetch(redisUrl, {
@@ -561,7 +491,7 @@ async function main() {
       body: JSON.stringify(['SET', RATELIMIT_FLAG_KEY, flagPayload, 'EX', 3600]),
       signal: AbortSignal.timeout(5_000),
     }).catch(() => {});
-    console.warn('\n  ⚡ Crawl ended with circuit open — snapshot merge applied. Consumers will use best available data.');
+    console.warn('\n  ⚡ Crawl ended with circuit open — snapshot merge applied.');
   } else {
     await fetch(redisUrl, {
       method: 'POST',
@@ -573,6 +503,8 @@ async function main() {
 
   const elapsed = ((Date.now() - start) / 1000).toFixed(1);
   const partial = circuitOpen ? ' [PARTIAL — snapshot merge applied]' : '';
+  const { gdelt_calls, successes, failures, cache_hits } = sessionMetricsSummary();
+  console.log(`\n  Session: gdelt_calls=${gdelt_calls} successes=${successes} failures=${failures} cache_hits=${cache_hits}`);
   console.log(`\n=== Done in ${elapsed}s — ${topicCount} topics, ${personCount} persons${partial} ===`);
 }
 

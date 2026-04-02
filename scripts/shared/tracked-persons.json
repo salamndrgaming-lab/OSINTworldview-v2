@@ -1,0 +1,170 @@
+[
+  {
+    "name": "Vladimir Putin",
+    "aliases": ["Putin", "Vladimir Vladimirovich Putin"],
+    "role": "President of Russia",
+    "status": "active",
+    "region": "Russia",
+    "tags": ["head-of-state", "nuclear-power"]
+  },
+  {
+    "name": "Volodymyr Zelenskyy",
+    "aliases": ["Zelensky", "Volodymyr Zelensky"],
+    "role": "President of Ukraine",
+    "status": "active",
+    "region": "Ukraine",
+    "tags": ["head-of-state", "conflict-zone"]
+  },
+  {
+    "name": "Xi Jinping",
+    "aliases": ["Xi", "President Xi"],
+    "role": "President of China",
+    "status": "active",
+    "region": "China",
+    "tags": ["head-of-state", "nuclear-power"]
+  },
+  {
+    "name": "Kim Jong Un",
+    "aliases": ["Kim Jong-un", "Kim"],
+    "role": "Supreme Leader of North Korea",
+    "status": "active",
+    "region": "North Korea",
+    "tags": ["head-of-state", "nuclear-power"]
+  },
+  {
+    "name": "Ali Khamenei",
+    "aliases": ["Khamenei", "Ayatollah Khamenei"],
+    "role": "Supreme Leader of Iran",
+    "status": "active",
+    "region": "Iran",
+    "tags": ["head-of-state", "nuclear-program"]
+  },
+  {
+    "name": "Benjamin Netanyahu",
+    "aliases": ["Netanyahu", "Bibi"],
+    "role": "Prime Minister of Israel",
+    "status": "active",
+    "region": "Israel",
+    "tags": ["head-of-state", "conflict-zone"]
+  },
+  {
+    "name": "Bashar al-Assad",
+    "aliases": ["Assad", "al-Assad"],
+    "role": "Former President of Syria",
+    "status": "inactive",
+    "region": "Syria",
+    "tags": ["conflict-zone", "displaced"]
+  },
+  {
+    "name": "Recep Tayyip Erdogan",
+    "aliases": ["Erdogan", "Erdoğan"],
+    "role": "President of Turkey",
+    "status": "active",
+    "region": "Turkey",
+    "tags": ["head-of-state", "NATO"]
+  },
+  {
+    "name": "Narendra Modi",
+    "aliases": ["Modi"],
+    "role": "Prime Minister of India",
+    "status": "active",
+    "region": "India",
+    "tags": ["head-of-state", "nuclear-power"]
+  },
+  {
+    "name": "Mohammed bin Salman",
+    "aliases": ["MBS", "bin Salman"],
+    "role": "Crown Prince of Saudi Arabia",
+    "status": "active",
+    "region": "Saudi Arabia",
+    "tags": ["head-of-state", "energy"]
+  },
+  {
+    "name": "Abdel Fattah el-Sisi",
+    "aliases": ["Sisi", "el-Sisi"],
+    "role": "President of Egypt",
+    "status": "active",
+    "region": "Egypt",
+    "tags": ["head-of-state", "middle-east"]
+  },
+  {
+    "name": "Masoud Pezeshkian",
+    "aliases": ["Pezeshkian"],
+    "role": "President of Iran",
+    "status": "active",
+    "region": "Iran",
+    "tags": ["head-of-state", "nuclear-program"]
+  },
+  {
+    "name": "Abu Mohammed al-Julani",
+    "aliases": ["al-Julani", "Julani", "Ahmed al-Sharaa"],
+    "role": "HTS Leader / Syria transition",
+    "status": "active",
+    "region": "Syria",
+    "tags": ["non-state-actor", "conflict-zone"]
+  },
+  {
+    "name": "Joe Biden",
+    "aliases": ["Biden"],
+    "role": "Former President of the United States",
+    "status": "active",
+    "region": "United States",
+    "tags": ["head-of-state", "NATO", "nuclear-power"]
+  },
+  {
+    "name": "Donald Trump",
+    "aliases": ["Trump"],
+    "role": "President of the United States",
+    "status": "active",
+    "region": "United States",
+    "tags": ["head-of-state", "NATO", "nuclear-power"]
+  },
+  {
+    "name": "Keir Starmer",
+    "aliases": ["Starmer"],
+    "role": "Prime Minister of the United Kingdom",
+    "status": "active",
+    "region": "United Kingdom",
+    "tags": ["head-of-state", "NATO", "nuclear-power"]
+  },
+  {
+    "name": "Emmanuel Macron",
+    "aliases": ["Macron"],
+    "role": "President of France",
+    "status": "active",
+    "region": "France",
+    "tags": ["head-of-state", "NATO", "nuclear-power"]
+  },
+  {
+    "name": "Yevgeny Prigozhin",
+    "aliases": ["Prigozhin"],
+    "role": "Wagner Group (deceased)",
+    "status": "inactive",
+    "region": "Russia",
+    "tags": ["PMC", "africa-operations"]
+  },
+  {
+    "name": "Yahya Sinwar",
+    "aliases": ["Sinwar"],
+    "role": "Hamas Leader (deceased)",
+    "status": "inactive",
+    "region": "Gaza",
+    "tags": ["non-state-actor", "conflict-zone"]
+  },
+  {
+    "name": "Hassan Nasrallah",
+    "aliases": ["Nasrallah"],
+    "role": "Hezbollah Secretary-General (deceased)",
+    "status": "inactive",
+    "region": "Lebanon",
+    "tags": ["non-state-actor", "conflict-zone"]
+  },
+  {
+    "name": "Ismail Haniyeh",
+    "aliases": ["Haniyeh"],
+    "role": "Hamas Political Chief (deceased)",
+    "status": "inactive",
+    "region": "Qatar",
+    "tags": ["non-state-actor"]
+  }
+]

@@ -73,7 +73,7 @@ const STALE_WARN_MIN           = 90;
 const GDELT_DOC                = 'https://api.gdeltproject.org/api/v2/doc/doc';
 const GDELT_GKG                = 'https://api.gdeltproject.org/api/v1/gkg_geojson';
 const USER_AGENT               = 'OSINTworldview/2.0';
-const FETCH_TIMEOUT_MS         = 30_000;
+const FETCH_TIMEOUT_MS         = 15_000; // reduced from 30s — network failures fail faster, matches koala73
 
 const CACHE_TTL = {
   artlist:     1800,
@@ -177,7 +177,7 @@ async function gdeltDocFetch(endpoint, params, label) {
       maxRetries:  2,
       baseMs:      3_000,
       capMs:       60_000,
-      shouldRetry: (err) => err.status !== 429,
+      shouldRetry: (err) => err.status != null && err.status !== 429, // don't retry bare network errors (fetch failed = no status)
       onRetry: (err, attempt, delayMs) => {
         console.warn(`  🔄 Retry ${attempt + 1} [${label}] after ${(delayMs / 1000).toFixed(1)}s — ${err.message}`);
         recordError({ level: 'warn', endpoint, label, message: err.message, attempt });

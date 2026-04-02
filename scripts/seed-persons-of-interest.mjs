@@ -1,55 +1,70 @@
 #!/usr/bin/env node
 /**
- * seed-persons-of-interest.mjs (v2 — cache-backed)
- * Reads from gdelt:raw:v1 instead of calling GDELT directly.
- * Requires seed-gdelt-raw.mjs to have run first in this seed cycle.
+ * seed-persons-of-interest.mjs (Patch 5 — shared tracked-persons.json)
+ *
+ * CHANGES FROM PATCH 4:
+ *   - Import persons from shared/tracked-persons.json (no more inline array)
+ *   - LKG fallback: if all 21 persons have mentionCount === 0, preserve
+ *     previous intelligence:poi:v1 snapshot
+ *   - topDomains: top 5 domains by headline count per person
+ *   - Headline scoring: recency×0.6 + |tone|×0.4
+ *   - _meta.patch: 5
+ *
+ * Reads from gdelt:raw:v1 — zero direct GDELT calls. Requires seed-gdelt-raw.mjs
+ * to have run first in this seed cycle.
  */
 
-import { loadEnvFile, runSeed, verifySeedKey } from './_seed-utils.mjs';
-import { getGdeltPersonData, getGdeltRaw } from './_gdelt-cache.mjs';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { loadEnvFile, runSeed, getRedisCredentials } from './_seed-utils.mjs';
+import { getGdeltPersonData } from './_gdelt-cache.mjs';
 
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'intelligence:poi:v1';
-const CACHE_TTL     = 21_600; // 6h — survives 2 missed cron cycles (was 1h, expired between runs)
+const CACHE_TTL     = 6 * 3600; // 6h TTL as spec'd in Patch 5
 const GROQ_MODEL    = 'llama-3.1-8b-instant';
 
-// ── Tracked Persons ──
+// ── Load tracked persons from shared JSON ─────────────────────────────────────
 
-const TRACKED_PERSONS = [
-  { name: 'Vladimir Putin',          role: 'President of Russia',                         region: 'Russia',         tags: ['head-of-state', 'nuclear-power'] },
-  { name: 'Volodymyr Zelenskyy',     role: 'President of Ukraine',                        region: 'Ukraine',        tags: ['head-of-state', 'conflict-zone'] },
-  { name: 'Xi Jinping',              role: 'President of China',                          region: 'China',          tags: ['head-of-state', 'nuclear-power'] },
-  { name: 'Kim Jong Un',             role: 'Supreme Leader of North Korea',               region: 'North Korea',    tags: ['head-of-state', 'nuclear-power'] },
-  { name: 'Ali Khamenei',            role: 'Supreme Leader of Iran',                      region: 'Iran',           tags: ['head-of-state', 'nuclear-program'] },
-  { name: 'Benjamin Netanyahu',      role: 'Prime Minister of Israel',                    region: 'Israel',         tags: ['head-of-state', 'conflict-zone'] },
-  { name: 'Bashar al-Assad',         role: 'Former President of Syria',                   region: 'Syria',          tags: ['conflict-zone', 'displaced'] },
-  { name: 'Recep Tayyip Erdogan',    role: 'President of Turkey',                         region: 'Turkey',         tags: ['head-of-state', 'NATO'] },
-  { name: 'Narendra Modi',           role: 'Prime Minister of India',                     region: 'India',          tags: ['head-of-state', 'nuclear-power'] },
-  { name: 'Mohammed bin Salman',     role: 'Crown Prince of Saudi Arabia',                region: 'Saudi Arabia',   tags: ['head-of-state', 'energy'] },
-  { name: 'Abdel Fattah el-Sisi',    role: 'President of Egypt',                          region: 'Egypt',          tags: ['head-of-state', 'middle-east'] },
-  { name: 'Yevgeny Prigozhin',       role: 'Wagner Group (deceased)',                     region: 'Russia',         tags: ['PMC', 'africa-operations'] },
-  { name: 'Abu Mohammed al-Julani',  role: 'HTS Leader / Syria transition',               region: 'Syria',          tags: ['non-state-actor', 'conflict-zone'] },
-  { name: 'Yahya Sinwar',            role: 'Hamas Leader (deceased)',                     region: 'Gaza',           tags: ['non-state-actor', 'conflict-zone'] },
-  { name: 'Hassan Nasrallah',        role: 'Hezbollah Secretary-General (deceased)',      region: 'Lebanon',        tags: ['non-state-actor', 'conflict-zone'] },
-  { name: 'Masoud Pezeshkian',       role: 'President of Iran',                           region: 'Iran',           tags: ['head-of-state', 'nuclear-program'] },
-  { name: 'Ismail Haniyeh',          role: 'Hamas Political Chief (deceased)',            region: 'Qatar',          tags: ['non-state-actor'] },
-  { name: 'Joe Biden',               role: 'Former President of the United States',       region: 'United States',  tags: ['head-of-state', 'NATO', 'nuclear-power'] },
-  { name: 'Donald Trump',            role: 'President of the United States',              region: 'United States',  tags: ['head-of-state', 'NATO', 'nuclear-power'] },
-  { name: 'Keir Starmer',            role: 'Prime Minister of the United Kingdom',        region: 'United Kingdom', tags: ['head-of-state', 'NATO', 'nuclear-power'] },
-  { name: 'Emmanuel Macron',         role: 'President of France',                         region: 'France',         tags: ['head-of-state', 'NATO', 'nuclear-power'] },
-];
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/** @type {Array<{ name: string, aliases: string[], role: string, status: string, region: string, tags: string[] }>} */
+let TRACKED_PERSONS;
+try {
+  TRACKED_PERSONS = JSON.parse(
+    readFileSync(join(__dirname, 'shared', 'tracked-persons.json'), 'utf8')
+  );
+} catch (err) {
+  console.error(`FATAL: Cannot load shared/tracked-persons.json — ${err.message}`);
+  process.exit(1);
+}
+
+// ── Capital map (for location fallback) ──────────────────────────────────────
 
 const CAPITAL_MAP = {
-  'Russia': 'Moscow, Russia', 'Ukraine': 'Kyiv, Ukraine', 'China': 'Beijing, China',
-  'North Korea': 'Pyongyang, North Korea', 'Iran': 'Tehran, Iran', 'Israel': 'Jerusalem, Israel',
-  'Syria': 'Damascus, Syria', 'Turkey': 'Ankara, Turkey', 'India': 'New Delhi, India',
-  'Saudi Arabia': 'Riyadh, Saudi Arabia', 'Egypt': 'Cairo, Egypt', 'Gaza': 'Gaza City, Palestine',
-  'Lebanon': 'Beirut, Lebanon', 'Qatar': 'Doha, Qatar', 'United States': 'Washington D.C., United States',
-  'United Kingdom': 'London, United Kingdom', 'France': 'Paris, France',
+  'Russia':         'Moscow, Russia',
+  'Ukraine':        'Kyiv, Ukraine',
+  'China':          'Beijing, China',
+  'North Korea':    'Pyongyang, North Korea',
+  'Iran':           'Tehran, Iran',
+  'Israel':         'Jerusalem, Israel',
+  'Syria':          'Damascus, Syria',
+  'Turkey':         'Ankara, Turkey',
+  'India':          'New Delhi, India',
+  'Saudi Arabia':   'Riyadh, Saudi Arabia',
+  'Egypt':          'Cairo, Egypt',
+  'Gaza':           'Gaza City, Palestine',
+  'Lebanon':        'Beirut, Lebanon',
+  'Qatar':          'Doha, Qatar',
+  'United States':  'Washington D.C., United States',
+  'United Kingdom': 'London, United Kingdom',
+  'France':         'Paris, France',
 };
 
-// ── Groq AI Profiling ──
+// ── Groq AI Profiling ─────────────────────────────────────────────────────────
 
 async function generateProfile(person, articles) {
   const groqKey = process.env.GROQ_API_KEY;
@@ -103,14 +118,17 @@ ${headlineText}`;
     const cleaned = text.replace(/```json\s*\n?/g, '').replace(/```\s*$/g, '').trim();
     try {
       const parsed = JSON.parse(cleaned);
+      // Coerce locationConfidence
       if (typeof parsed.locationConfidence === 'string') {
         const m = { confirmed: 0.95, likely: 0.7, estimated: 0.4, unknown: 0.1 };
         parsed.locationConfidence = m[parsed.locationConfidence] ?? 0.5;
       }
       if (typeof parsed.locationConfidence !== 'number') parsed.locationConfidence = 0.5;
       parsed.locationConfidence = Math.max(0, Math.min(1, parsed.locationConfidence));
+      // Coerce recentActivity
       if (typeof parsed.recentActivity === 'string') parsed.recentActivity = [parsed.recentActivity];
       if (!Array.isArray(parsed.recentActivity)) parsed.recentActivity = [];
+      // Normalise riskLevel synonyms
       const riskMap = { elevated: 'high', moderate: 'medium' };
       if (riskMap[parsed.riskLevel]) parsed.riskLevel = riskMap[parsed.riskLevel];
       if (!['critical', 'high', 'medium', 'low'].includes(parsed.riskLevel)) parsed.riskLevel = 'medium';
@@ -118,6 +136,8 @@ ${headlineText}`;
     } catch { console.warn(`  Failed to parse Groq response for ${person.name}`); return null; }
   } catch (err) { console.warn(`  Groq failed for ${person.name}: ${err.message}`); return null; }
 }
+
+// ── Scoring helpers ───────────────────────────────────────────────────────────
 
 function resolveLocation(person, aiProfile) {
   if (aiProfile?.lastKnownLocation && aiProfile.locationConfidence > 0.2) {
@@ -130,7 +150,7 @@ function resolveLocation(person, aiProfile) {
 }
 
 function calculateActivityScore(mentionCount, articles) {
-  const volumeScore  = Math.min(60, Math.round(60 * Math.log10(Math.max(1, mentionCount)) / Math.log10(200)));
+  const volumeScore = Math.min(60, Math.round(60 * Math.log10(Math.max(1, mentionCount)) / Math.log10(200)));
   const now = Date.now();
   let recencyScore = 0;
   for (const a of articles.slice(0, 5)) {
@@ -144,38 +164,57 @@ function calculateActivityScore(mentionCount, articles) {
   return volumeScore + Math.min(40, Math.round(recencyScore));
 }
 
-// ── Main ──
+/**
+ * Score a headline by recency (0.6 weight) and absolute tone magnitude (0.4 weight).
+ * Returns a float in [0, 1].
+ */
+function scoreHeadline(article) {
+  const now = Date.now();
+  let recencyScore = 0;
+  if (article.date) {
+    try {
+      const ts = new Date(article.date.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6Z')).getTime();
+      const hoursAgo = Math.max(0, (now - ts) / 3600000);
+      recencyScore = Math.max(0, 1 - hoursAgo / 72); // decay over 72h
+    } catch { /* skip */ }
+  }
+  const toneScore = Math.min(1, Math.abs(article.tone || 0) / 10); // tone range ~-10 to +10
+  return recencyScore * 0.6 + toneScore * 0.4;
+}
+
+/**
+ * Extract top 5 domains by headline count for a person.
+ * @param {object[]} articles
+ * @returns {Array<{ domain: string, count: number }>}
+ */
+function extractTopDomains(articles) {
+  const counts = {};
+  for (const a of articles) {
+    const d = a.domain || a.source || '';
+    if (d) counts[d] = (counts[d] ?? 0) + 1;
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([domain, count]) => ({ domain, count }));
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 async function fetchPersonsOfInterest() {
   const profiles = [];
   const hasGroq = !!process.env.GROQ_API_KEY;
 
   console.log(`  Tracking ${TRACKED_PERSONS.length} persons (cache-backed, no direct GDELT calls)`);
-  // Early LKG check: if gdelt:raw:v1 is missing entirely (first-run circuit
-  // trip guard), skip the full profile loop and return the previous snapshot.
-  // This avoids printing 21 "0 mentions" lines and spamming Groq for nothing.
-  const rawCheck = await getGdeltRaw();
-  if (rawCheck._missing) {
-    const previous = await verifySeedKey(CANONICAL_KEY).catch(() => null);
-    if (previous && Array.isArray(previous.persons) && previous.persons.length > 0) {
-      console.warn('  ⚠ gdelt:raw:v1 is missing — GDELT raw seed has not written data yet.');
-      console.warn(`  ↩ LKG: returning previous snapshot (${previous.persons.length} profiles).`);
-      return previous;
-    }
-    console.warn('  ⚠ gdelt:raw:v1 missing and no prior snapshot — producing zero-data profiles.');
-    console.warn('     Run: node scripts/seed-gdelt-raw.mjs --force');
-  }
-
-
+  console.log(`  Source: shared/tracked-persons.json`);
   console.log(`  Groq AI: ${hasGroq ? 'enabled' : 'disabled'}`);
 
   for (const person of TRACKED_PERSONS) {
     console.log(`  → ${person.name}...`);
 
-    // Read pre-fetched data from gdelt:raw:v1 — zero GDELT API calls
-    const personData = await getGdeltPersonData(person.name);
+    const personData  = await getGdeltPersonData(person.name);
     const mentionCount = personData.mentionCount ?? 0;
-    const articles     = personData.headlines     ?? [];
+    const articles     = personData.headlines    ?? [];
     console.log(`    ${mentionCount} mentions (7d), ${articles.length} headlines (72h) [from cache]`);
 
     let aiProfile = null;
@@ -186,11 +225,19 @@ async function fetchPersonsOfInterest() {
       await new Promise(r => setTimeout(r, 2200));
     }
 
-    const loc          = resolveLocation(person, aiProfile);
+    const loc           = resolveLocation(person, aiProfile);
     const activityScore = calculateActivityScore(mentionCount, articles);
-    const avgTone      = articles.length > 0
+    const avgTone       = articles.length > 0
       ? articles.reduce((sum, a) => sum + (a.tone || 0), 0) / articles.length
       : 0;
+
+    // Score and sort headlines by recency×0.6 + |tone|×0.4
+    const scoredHeadlines = articles
+      .map(a => ({ ...a, _score: scoreHeadline(a) }))
+      .sort((a, b) => b._score - a._score);
+
+    // Top 5 domains
+    const topDomains = extractTopDomains(articles);
 
     profiles.push({
       id:     person.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
@@ -207,35 +254,24 @@ async function fetchPersonsOfInterest() {
       recentActivity: Array.isArray(aiProfile?.recentActivity) ? aiProfile.recentActivity
                       : aiProfile?.recentActivity ? [String(aiProfile.recentActivity)]
                       : [articles[0]?.title || 'No recent activity detected'],
-      riskLevel:         aiProfile?.riskLevel || 'medium',
-      riskReason:        aiProfile?.riskReason || '',
+      riskLevel:          aiProfile?.riskLevel || 'medium',
+      riskReason:         aiProfile?.riskReason || '',
       associatedEntities: aiProfile?.associatedEntities || [],
-      sentiment:         aiProfile?.sentiment || (avgTone > 2 ? 'positive' : avgTone < -2 ? 'negative' : 'neutral'),
+      sentiment:          aiProfile?.sentiment || (avgTone > 2 ? 'positive' : avgTone < -2 ? 'negative' : 'neutral'),
       mentionCount,
       activityScore,
-      averageTone: Math.round(avgTone * 100) / 100,
-      recentArticles: articles.slice(0, 5).map(a => ({ title: a.title, source: a.source, url: a.url, date: a.date })),
+      averageTone:    Math.round(avgTone * 100) / 100,
+      topDomains,
+      recentArticles: scoredHeadlines.slice(0, 5).map(a => ({
+        title:  a.title,
+        source: a.source,
+        url:    a.url,
+        date:   a.date,
+        score:  Math.round((a._score ?? 0) * 1000) / 1000,
+      })),
       profileGeneratedAt: new Date().toISOString(),
       dataFreshness: articles.length > 0 ? '72h' : 'stale',
     });
-  }
-
-
-  // LKG (Last Known Good) preservation: if every single person has 0 mentions
-  // and 0 headlines, the GDELT cache is empty (circuit tripped on first run or
-  // gdelt:raw:v1 key is missing). Rather than publishing 21 zero-data profiles
-  // that will overwrite valid cached profiles, return the previous snapshot.
-  const allEmpty = profiles.every(p => p.mentionCount === 0 && p.recentArticles.length === 0);
-  if (allEmpty && profiles.length > 0) {
-    const previous = await verifySeedKey(CANONICAL_KEY).catch(() => null);
-    if (previous && Array.isArray(previous.persons) && previous.persons.length > 0) {
-      const prevWithData = previous.persons.filter(p => p.mentionCount > 0 || p.recentArticles?.length > 0);
-      if (prevWithData.length > 0) {
-        console.warn(`  ⚠ All ${profiles.length} persons returned 0 data from cache — GDELT raw key is empty or stale.`);
-        console.warn(`  ↩ LKG preservation: returning previous snapshot (${previous.persons.length} profiles, ${prevWithData.length} with data).`);
-        return previous;
-      }
-    }
   }
 
   profiles.sort((a, b) => b.activityScore - a.activityScore);
@@ -243,12 +279,46 @@ async function fetchPersonsOfInterest() {
   console.log(`  With AI profiles: ${profiles.filter(p => p.riskReason).length}`);
   console.log(`  High-confidence locations: ${profiles.filter(p => p.locationConfidence >= 0.7).length}`);
 
+  // ── LKG fallback guard ────────────────────────────────────────────────────
+  // If all persons returned mentionCount === 0, the gdelt:raw:v1 cache is likely
+  // empty or the circuit tripped in phase 2. Restore the previous snapshot.
+  const allZero = profiles.every(p => p.mentionCount === 0);
+  if (allZero && profiles.length > 0) {
+    console.warn('  ⚠ All persons have mentionCount=0 — checking for LKG snapshot…');
+    try {
+      const { url, token } = getRedisCredentials();
+      const resp = await fetch(`${url}/get/${encodeURIComponent(CANONICAL_KEY)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal:  AbortSignal.timeout(8_000),
+      });
+      if (resp.ok) {
+        const body = await resp.json();
+        if (body.result) {
+          const lkg = typeof body.result === 'string' ? JSON.parse(body.result) : body.result;
+          if (Array.isArray(lkg?.persons) && lkg.persons.some(p => p.mentionCount > 0)) {
+            console.warn('  ↩ LKG fallback: preserving previous intelligence:poi:v1 snapshot (all current persons at zero)');
+            // Return LKG data so validate() passes and runSeed writes it back, refreshing TTL
+            return {
+              ...lkg,
+              generatedAt:    new Date().toISOString(),
+              lkgFallback:    true,
+              lkgPreservedAt: new Date().toISOString(),
+            };
+          }
+        }
+      }
+    } catch (lkgErr) {
+      console.warn(`  LKG read failed: ${lkgErr.message}`);
+    }
+  }
+
   return {
     persons: profiles,
     generatedAt: new Date().toISOString(),
     trackedCount: TRACKED_PERSONS.length,
     withAiProfile: profiles.filter(p => p.riskReason).length,
     version: 2,
+    _meta: { patch: 5 },
   };
 }
 
@@ -259,7 +329,7 @@ function validate(data) {
 runSeed('intelligence', 'poi', CANONICAL_KEY, fetchPersonsOfInterest, {
   validateFn: validate,
   ttlSeconds: CACHE_TTL,
-  sourceVersion: 'gdelt-raw-cache-v2',
+  sourceVersion: 'gdelt-raw-cache-patch5',
 }).catch(err => {
   console.error('FATAL:', err.message || err);
   process.exit(0);

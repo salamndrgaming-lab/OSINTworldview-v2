@@ -48,22 +48,32 @@ jobs:
       - name: Verify GDELT raw cache
         run: |
           node -e "
-            const url   = process.env.UPSTASH_REDIS_REST_URL;
-            const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-            fetch(url + '/get/' + encodeURIComponent('gdelt:raw:v1'), {
-              headers: { Authorization: 'Bearer ' + token },
-            })
-              .then(r => r.json())
-              .then(body => {
-                const raw = body.result;
-                if (!raw) { console.error('HEALTH CHECK FAILED: gdelt:raw:v1 is empty'); process.exit(1); }
-                const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                const topicCount = Object.keys(parsed.topics ?? {}).length;
+            (async () => {
+              const url   = process.env.UPSTASH_REDIS_REST_URL;
+              const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+              try {
+                const r    = await fetch(url + '/get/' + encodeURIComponent('gdelt:raw:v1'), {
+                  headers: { Authorization: 'Bearer ' + token },
+                });
+                const body = await r.json();
+                const raw  = body.result;
+                if (!raw) {
+                  console.warn('HEALTH CHECK WARN: gdelt:raw:v1 is empty — first run or rate-limit trip. Consumer seeds will use LKG data.');
+                  process.exit(0);
+                }
+                const parsed     = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                const topicCount = Object.keys(parsed.topics  ?? {}).length;
                 const populated  = Object.values(parsed.topics ?? {}).filter(t => t.artlist?.length > 0).length;
-                console.log('gdelt:raw:v1 health: topics=' + topicCount + ' populated=' + populated + ' persons=' + Object.keys(parsed.persons ?? {}).length);
-                if (populated === 0) { console.warn('WARNING: 0 populated topics — GDELT may have rate-limited'); }
-              })
-              .catch(err => { console.error('HEALTH CHECK ERROR:', err.message); process.exit(1); });
+                const persons    = Object.keys(parsed.persons ?? {}).length;
+                console.log('gdelt:raw:v1 health: topics=' + topicCount + ' populated=' + populated + ' persons=' + persons + ' circuitTripped=' + (parsed.circuitTripped ?? false));
+                if (populated === 0) {
+                  console.warn('WARNING: 0 populated topics — GDELT may have rate-limited this cycle.');
+                }
+              } catch (err) {
+                console.error('HEALTH CHECK ERROR:', err.message);
+                process.exit(1);
+              }
+            })();
           "
 
       # Notify Telegram on GDELT crawl failure

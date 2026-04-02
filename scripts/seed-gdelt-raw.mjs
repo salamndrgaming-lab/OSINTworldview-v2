@@ -11,12 +11,16 @@
  * RATE-LIMIT STRATEGY:
  *   - Strictly sequential execution (topics → persons → GKG). GDELT's limit is
  *     per-IP; parallel phases saturate it instantly.
- *   - Exponential back-off on 429/network errors (base 6s → max 90s).
+ *   - Exponential back-off on 429/network errors (base 20s → max 90s).
  *   - Circuit breaker trips after CIRCUIT_TRIP_THRESHOLD consecutive failures.
  *   - On trip: MERGES partial results with the previous Redis snapshot so good
  *     cached data is never overwritten by an empty payload. Only writes if the
  *     merged result is meaningfully better than what's already in Redis, or if
  *     the existing key is about to expire.
+ *   - FIRST-RUN GUARD: if circuit trips on the very first run (no existing
+ *     snapshot in Redis), skips the write entirely and exits 0. This prevents
+ *     writing an empty payload that would poison downstream consumers on the
+ *     next seed cycle before any good data exists.
  *   - Writes gdelt:raw:ratelimit-at flag so consumers can show a degraded banner.
  *
  * CACHE-FIRST:
@@ -25,8 +29,7 @@
  *
  * BACKOFF TUNING (informed by worldmonitor's seed-gdelt-intel.mjs):
  *   Their inter-topic delay is 20s on success, 120s after any exhausted topic.
- *   We use a 20s base cooldown on success (up from 6s) and adaptive back-off
- *   that scales with consecutive failures up to 90s.
+ *   We use 20s base cooldown on success and adaptive back-off up to 90s.
  *
  * Usage:
  *   node scripts/seed-gdelt-raw.mjs          # cache-first (recommended)
@@ -44,7 +47,7 @@ const MIN_CACHE_AGE_MIN      = 30;             // skip re-fetch if cache < 30 mi
 const GDELT_DOC              = 'https://api.gdeltproject.org/api/v2/doc/doc';
 const GDELT_GKG              = 'https://api.gdeltproject.org/api/v1/gkg_geojson';
 
-// Back-off / circuit-breaker config (informed by worldmonitor's 20s inter-topic delay)
+// Back-off / circuit-breaker config (matches worldmonitor's 20s inter-topic delay)
 const COOLDOWN_BASE_MS       = 20_000;         // 20s between calls on success
 const COOLDOWN_POST_EXHAUST  = 120_000;        // 2 min extra after a topic exhausts retries
 const MAX_BACKOFF_MS         = 90_000;         // max single back-off sleep
@@ -110,13 +113,31 @@ const TOPICS = [
   { id: 'poi-unrest',    query: '"coup" OR "protest" OR "uprising" OR "revolution" sourcelang:eng',                       artlist: true, timelinevol: false, timespan_art: '72h', maxrecords: 100 },
 ];
 
+// Person queries — fetched as two GDELT calls each (7d count + 72h headlines)
+// Marked inactive persons are excluded from live queries but preserved in snapshots.
 const TRACKED_PERSONS = [
-  'Vladimir Putin', 'Volodymyr Zelenskyy', 'Xi Jinping', 'Kim Jong Un',
-  'Ali Khamenei', 'Benjamin Netanyahu', 'Bashar al-Assad', 'Recep Tayyip Erdogan',
-  'Narendra Modi', 'Mohammed bin Salman', 'Abdel Fattah el-Sisi',
-  'Yevgeny Prigozhin', 'Abu Mohammed al-Julani', 'Yahya Sinwar',
-  'Hassan Nasrallah', 'Masoud Pezeshkian', 'Ismail Haniyeh',
-  'Joe Biden', 'Donald Trump', 'Keir Starmer', 'Emmanuel Macron',
+  { name: 'Vladimir Putin',         status: 'active' },
+  { name: 'Volodymyr Zelenskyy',    status: 'active' },
+  { name: 'Xi Jinping',             status: 'active' },
+  { name: 'Kim Jong Un',            status: 'active' },
+  { name: 'Ali Khamenei',           status: 'active' },
+  { name: 'Benjamin Netanyahu',     status: 'active' },
+  { name: 'Bashar al-Assad',        status: 'active' },
+  { name: 'Recep Tayyip Erdogan',   status: 'active' },
+  { name: 'Narendra Modi',          status: 'active' },
+  { name: 'Mohammed bin Salman',    status: 'active' },
+  { name: 'Abdel Fattah el-Sisi',   status: 'active' },
+  { name: 'Masoud Pezeshkian',      status: 'active' },
+  { name: 'Abu Mohammed al-Julani', status: 'active' },
+  { name: 'Joe Biden',              status: 'active' },
+  { name: 'Donald Trump',           status: 'active' },
+  { name: 'Keir Starmer',           status: 'active' },
+  { name: 'Emmanuel Macron',        status: 'active' },
+  // Deceased — skip live GDELT queries; snapshot merge restores last known data
+  { name: 'Yevgeny Prigozhin',      status: 'inactive' },
+  { name: 'Yahya Sinwar',           status: 'inactive' },
+  { name: 'Hassan Nasrallah',       status: 'inactive' },
+  { name: 'Ismail Haniyeh',         status: 'inactive' },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -215,7 +236,7 @@ async function crawlTopics() {
   for (const topic of TOPICS) {
     if (circuitOpen) { console.warn(`  ⚡ Topic crawl stopped at "${topic.id}" — circuit open`); break; }
 
-    const wasExhausted_before = consecutiveFailures;
+    const failuresBefore = consecutiveFailures;
 
     if (topic.artlist) {
       console.log(`  [artlist] ${topic.id} (${topic.timespan_art ?? '24h'})`);
@@ -234,9 +255,9 @@ async function crawlTopics() {
       results[topic.id].fetchedAt = new Date().toISOString();
       console.log(`    → ${articles.length} articles`);
 
-      // If this topic fully exhausted retries, give GDELT a long cooldown
-      // before hitting it again (mirrors worldmonitor's POST_EXHAUST_DELAY_MS)
-      if (articles.length === 0 && consecutiveFailures > wasExhausted_before && !circuitOpen) {
+      // After exhausting retries, give GDELT the post-exhaust cooldown before
+      // hitting it again (matches worldmonitor's POST_EXHAUST_DELAY_MS = 120s)
+      if (articles.length === 0 && consecutiveFailures > failuresBefore && !circuitOpen) {
         console.log(`    Rate-limit cooldown: waiting ${COOLDOWN_POST_EXHAUST / 1000}s before next topic…`);
         await sleep(COOLDOWN_POST_EXHAUST);
       }
@@ -265,33 +286,34 @@ async function crawlTopics() {
 
 async function crawlPersons() {
   const results = {};
+  const activePersons = TRACKED_PERSONS.filter(p => p.status === 'active');
 
-  for (const name of TRACKED_PERSONS) {
-    if (circuitOpen) { console.warn(`  ⚡ Person crawl stopped at "${name}" — circuit open`); break; }
+  for (const person of activePersons) {
+    if (circuitOpen) { console.warn(`  ⚡ Stopping person crawl at "${person.name}" — circuit open`); break; }
 
-    results[name] = {};
+    results[person.name] = {};
 
-    console.log(`  [person 7d] ${name}`);
+    console.log(`  [person 7d] ${person.name}`);
     const broad = await fetchWithBackoff({
-      query:      `"${name}" sourcelang:eng`,
+      query:      `"${person.name}" sourcelang:eng`,
       mode:       'artlist',
       maxrecords: '250',
       timespan:   '7d',
-    }, `person:${name}/7d`);
+    }, `person:${person.name}/7d`);
     const articles7d = (broad?.articles ?? []).map(normalizeArticle).filter(Boolean);
-    results[name].articles7d   = articles7d;
-    results[name].mentionCount = articles7d.length;
+    results[person.name].articles7d   = articles7d;
+    results[person.name].mentionCount = articles7d.length;
 
     if (circuitOpen) break;
 
-    console.log(`  [person 72h] ${name}`);
+    console.log(`  [person 72h] ${person.name}`);
     const narrow = await fetchWithBackoff({
-      query:      `"${name}" sourcelang:eng`,
+      query:      `"${person.name}" sourcelang:eng`,
       mode:       'artlist',
       maxrecords: '10',
       timespan:   '72h',
-    }, `person:${name}/72h`);
-    results[name].headlines = (narrow?.articles ?? []).map(normalizeArticle).filter(Boolean);
+    }, `person:${person.name}/72h`);
+    results[person.name].headlines = (narrow?.articles ?? []).map(normalizeArticle).filter(Boolean);
   }
 
   return results;
@@ -300,7 +322,6 @@ async function crawlPersons() {
 async function crawlGkg() {
   if (circuitOpen) { console.warn('  ⚡ GKG skipped — circuit open'); return null; }
 
-  // GKG v1 requires space-separated keywords (no boolean operators / parentheses)
   console.log('  [gkg] unrest geojson');
   await sleep(currentCooldownMs);
 
@@ -382,8 +403,8 @@ async function checkCacheFreshness(redisUrl, redisToken) {
 
 // ── Snapshot merge ────────────────────────────────────────────────────────────
 // When the circuit trips, merge fresh partial results with the previous snapshot.
-// This ensures consumers always get the best available data — the new crawl's
-// topics where successful, cached topics where the circuit cut us off.
+// This ensures consumers always get the best available data — fresh topics where
+// the crawl succeeded, cached topics where the circuit cut us off.
 
 function mergeWithSnapshot(newTopics, newPersons, existing) {
   if (!existing) return { topics: newTopics, persons: newPersons };
@@ -415,6 +436,14 @@ function mergeWithSnapshot(newTopics, newPersons, existing) {
     }
   }
 
+  // Inactive persons are never queried but should be preserved from snapshots
+  const inactiveNames = TRACKED_PERSONS.filter(p => p.status === 'inactive').map(p => p.name);
+  for (const name of inactiveNames) {
+    if (!mergedPersons[name] && existing.persons?.[name]) {
+      mergedPersons[name] = { ...existing.persons[name], preservedFromCache: true };
+    }
+  }
+
   return { topics: mergedTopics, persons: mergedPersons };
 }
 
@@ -422,9 +451,11 @@ function mergeWithSnapshot(newTopics, newPersons, existing) {
 
 async function main() {
   const start = Date.now();
+  const activePersons = TRACKED_PERSONS.filter(p => p.status === 'active');
+
   console.log('=== seed-gdelt-raw: Master GDELT Crawl ===');
   console.log(`  Topics:   ${TOPICS.length} × artlist/timelinevol`);
-  console.log(`  Persons:  ${TRACKED_PERSONS.length} × 7d + 72h`);
+  console.log(`  Persons:  ${activePersons.length} active × 7d + 72h (${TRACKED_PERSONS.length - activePersons.length} inactive — snapshot-preserved only)`);
   console.log(`  Cooldown: ${COOLDOWN_BASE_MS / 1000}s base (adaptive up to ${MAX_BACKOFF_MS / 1000}s)`);
   console.log(`  Post-exhaust pause: ${COOLDOWN_POST_EXHAUST / 1000}s`);
   console.log(`  Circuit:  trips after ${CIRCUIT_TRIP_THRESHOLD} consecutive failures`);
@@ -443,8 +474,10 @@ async function main() {
     console.log('=== Done (cache hit — no GDELT calls made) ===');
     return;
   }
-  console.log(ageMin === Infinity
-    ? '  No existing cache — fetching from GDELT\n'
+
+  const isFirstRun = existing === null;
+  console.log(isFirstRun
+    ? '  No existing cache — fetching from GDELT (first run)\n'
     : `  Cache is ${ageMin} min old — stale, re-fetching\n`);
 
   // ── Sequential crawl ─────────────────────────────────────────────────────
@@ -457,7 +490,7 @@ async function main() {
   console.log('\n--- Phase 3: GKG ---');
   const gkg = await crawlGkg();
 
-  // ── Snapshot merge (only when circuit tripped) ───────────────────────────
+  // ── Snapshot merge (only when circuit tripped and we have a prior snapshot) ─
   let topics  = rawTopics;
   let persons = rawPersons;
 
@@ -466,13 +499,33 @@ async function main() {
     ({ topics, persons } = mergeWithSnapshot(rawTopics, rawPersons, existing));
   }
 
+  const populatedTopicCount = Object.values(topics).filter(t => t.artlist?.length > 0).length;
   const topicCount  = Object.keys(topics).length;
   const personCount = Object.keys(persons).length;
-  const populatedTopicCount = Object.values(topics).filter(t => t.artlist?.length > 0).length;
 
-  // ── Write decision ───────────────────────────────────────────────────────
-  // If circuit tripped and we have very few fresh topics, check whether the
-  // existing key is still healthy. If it is, extend its TTL instead of overwriting.
+  // ── FIRST-RUN GUARD ──────────────────────────────────────────────────────
+  // If the circuit tripped on the very first run (no snapshot existed to merge
+  // from), we have nothing useful to write. Skip the write entirely and exit 0
+  // so the downstream consumers can serve whatever they have from their own
+  // individual Redis keys from a prior run. Writing 0 articles here would
+  // poison every consumer on the next cycle.
+  if (circuitOpen && isFirstRun && populatedTopicCount === 0) {
+    const flagPayload = JSON.stringify({ at: new Date().toISOString(), reason: 'first_run_circuit_trip' });
+    await fetch(redisUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(['SET', RATELIMIT_FLAG_KEY, flagPayload, 'EX', 3600]),
+      signal: AbortSignal.timeout(5_000),
+    }).catch(() => {});
+    const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+    console.warn('\n  ⚡ First run + circuit tripped + no prior snapshot — skipping write to avoid poisoning consumers.');
+    console.warn('     Wait 15–30 minutes for GDELT rate-limit window to clear, then run:');
+    console.warn('     node scripts/seed-gdelt-raw.mjs --force');
+    console.log(`\n=== Done in ${elapsed}s — NO WRITE (first-run circuit trip, rate-limit cooldown needed) ===`);
+    return;
+  }
+
+  // ── Prefer TTL extension over thin overwrite ─────────────────────────────
   if (circuitOpen && populatedTopicCount < MIN_TOPICS_TO_OVERWRITE && existing) {
     const existingPopulated = Object.values(existing.topics ?? {}).filter(t => t.artlist?.length > 0).length;
     if (existingPopulated >= MIN_TOPICS_TO_OVERWRITE) {
@@ -481,7 +534,6 @@ async function main() {
         ['EXPIRE', RAW_KEY, TTL],
       ]).catch(e => console.warn(`  TTL extend failed: ${e.message}`));
       console.log(`  ✅ ${RAW_KEY} TTL extended (${TTL}s)`);
-      // Still set the ratelimit flag so consumers surface the degraded banner
       const flagPayload = JSON.stringify({ at: new Date().toISOString(), reason: 'circuit_tripped', ttlExtended: true });
       await fetch(redisUrl, {
         method: 'POST',
@@ -510,18 +562,18 @@ async function main() {
   await redisSetRaw(redisUrl, redisToken, RAW_KEY, payload, TTL);
   console.log(`  ✅ ${RAW_KEY} written (${topicCount} topics, ${personCount} persons, ${populatedTopicCount} populated)`);
 
-  // Rate-limit flag for consumer degraded banners
+  // Rate-limit flag management
   if (circuitOpen) {
-    const flagPayload = JSON.stringify({ at: new Date().toISOString(), topics: topicCount, persons: personCount });
+    const flagPayload = JSON.stringify({ at: new Date().toISOString(), topics: topicCount, persons: personCount, populatedTopics: populatedTopicCount });
     await fetch(redisUrl, {
       method: 'POST',
       headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(['SET', RATELIMIT_FLAG_KEY, flagPayload, 'EX', 3600]),
       signal: AbortSignal.timeout(5_000),
     }).catch(() => {});
-    console.warn('\n  ⚡ Circuit tripped — partial data written with snapshot merge applied.');
+    console.warn('\n  ⚡ Crawl ended with circuit open — snapshot merge applied. Consumers will use best available data.');
   } else {
-    // Clear stale flag from any previous degraded run
+    // Clean run — clear any stale rate-limit flag
     await fetch(redisUrl, {
       method: 'POST',
       headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },

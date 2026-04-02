@@ -28,6 +28,9 @@ const STALE_WARN_MIN        = 90; // warn if cache > 90 min old
  *   - If the key is missing → throws (caller should soft-fail)
  *   - If the key is present but old → logs a warning, returns data
  *   - If circuitTripped flag is set → logs a degraded-mode warning
+ *
+ * This function is also exported directly so seed-gdelt-intel.mjs can import
+ * it without a dynamic import() call (static import is cleaner and type-safe).
  */
 export async function getGdeltRaw() {
   const { url, token } = getRedisCredentials();
@@ -89,6 +92,8 @@ export async function isGdeltDegraded() {
 
 /**
  * seed-gdelt-intel: returns 6 intel topics with artlist arrays.
+ * Articles only — use getGdeltIntelTopicsWithTimelines() if you also need
+ * the timelinevol data for the afterPublish tone/vol keys.
  */
 export async function getGdeltIntelTopics() {
   const raw = await getGdeltRaw();
@@ -99,6 +104,30 @@ export async function getGdeltIntelTopics() {
       articles:  raw.topics?.[id]?.artlist ?? [],
       fetchedAt: raw.topics?.[id]?.fetchedAt ?? raw.crawledAt,
     })),
+    fetchedAt: raw.crawledAt,
+  };
+}
+
+/**
+ * seed-gdelt-intel (afterPublish hook): returns 6 intel topics with both
+ * artlist AND timelinevol data attached as _vol/_tone fields.
+ * publishTransform in seed-gdelt-intel strips these before the canonical write.
+ */
+export async function getGdeltIntelTopicsWithTimelines() {
+  const raw = await getGdeltRaw();
+  const INTEL_IDS = ['military', 'cyber', 'nuclear', 'sanctions', 'intelligence', 'maritime'];
+  return {
+    topics: INTEL_IDS.map(id => {
+      const topicRaw = raw.topics?.[id] ?? {};
+      return {
+        id,
+        articles:  topicRaw.artlist   ?? [],
+        fetchedAt: topicRaw.fetchedAt ?? raw.crawledAt,
+        // Private fields — stripped by publishTransform, used only by afterPublish
+        _vol:  topicRaw.timelinevol ?? [],
+        _tone: [], // tone timeline not yet in raw cache; placeholder for future parity
+      };
+    }),
     fetchedAt: raw.crawledAt,
   };
 }

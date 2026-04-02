@@ -1,17 +1,39 @@
 name: Seed Data
 on:
   schedule:
-    - cron: '0 */3 * * *'
+    # Every 3 hours — staggered to :05 to avoid top-of-hour GDELT traffic spikes
+    # (most automated crawlers fire at :00; offsetting reduces shared-IP 429 risk)
+    - cron: '5 */3 * * *'
   workflow_dispatch:
+    inputs:
+      force_gdelt:
+        description: 'Force GDELT re-fetch (bypass cache)'
+        required: false
+        default: 'false'
+        type: boolean
 
 jobs:
-  # JOB 1: Master GDELT Crawl (runs FIRST — all other jobs wait on this)
+  # ── JOB 1: Master GDELT Crawl ────────────────────────────────────────────────
+  # Runs FIRST. All consumer jobs wait on this via needs: [seed-gdelt-raw].
   # Does one sequential pass of gdeltproject.org and stores everything in
-  # Redis under gdelt:raw:v1. All consumer seeds read from that key instead
-  # of calling GDELT themselves, dropping ~91 direct API calls to ~26.
+  # Redis under gdelt:raw:v1. Consumer seeds read from that key instead of
+  # calling GDELT themselves, cutting ~91 direct API calls to ~26.
+  #
+  # RATE-LIMIT NOTES (GdeltSeedFix.md):
+  #   - GDELT DOC API is globally rate-limited, not per-client.
+  #   - Railway/Vercel shared outbound IPs compound this.
+  #   - NODE_OPTIONS=--dns-result-order=ipv4first (set via nixpacks.toml on
+  #     Railway) is set explicitly here for GitHub Actions runners.
+  #   - 45 min timeout: worst-case with max back-off + post-exhaust cooldowns.
   seed-gdelt-raw:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      # Force IPv4 on GitHub Actions runners — reduces GDELT 429 frequency
+      # (same setting applied to Railway via nixpacks.toml)
+      NODE_OPTIONS: "--dns-result-order=ipv4first"
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,113 +47,23 @@ jobs:
           node-version: 22
       - run: npm install --ignore-scripts
 
-      # Single master GDELT crawl — topics + persons + GKG
-      - run: node scripts/seed-gdelt-raw.mjs
+      # Primary crawl — cache-first unless workflow_dispatch forced
+      - name: GDELT crawl
+        run: |
+          if [ "${{ github.event.inputs.force_gdelt }}" = "true" ]; then
+            node scripts/seed-gdelt-raw.mjs --force
+          else
+            node scripts/seed-gdelt-raw.mjs
+          fi
 
-    env:
-      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
-
-  # JOB 2: Fast Lane — all non-GDELT seeds + GDELT consumers (read from cache)
+  # ── JOB 2: Fast Lane ─────────────────────────────────────────────────────────
+  # Non-GDELT seeds + all GDELT consumers (read from gdelt:raw:v1 cache).
   seed-fast:
     needs: [seed-gdelt-raw]
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            scripts
-            shared
-            package.json
-            package-lock.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install --ignore-scripts
-
-      # Free data sources (no GDELT dependency)
-      - run: node scripts/seed-earthquakes.mjs
-      - run: node scripts/seed-natural-events.mjs
-      - run: node scripts/seed-weather-alerts.mjs
-      - run: node scripts/seed-commodity-quotes.mjs
-      - run: node scripts/seed-unrest-events.mjs
-      - run: node scripts/seed-prediction-markets.mjs
-      - run: node scripts/seed-service-statuses.mjs
-      - run: node scripts/seed-climate-anomalies.mjs
-      - run: node scripts/seed-gulf-quotes.mjs
-      - run: node scripts/seed-etf-flows.mjs
-      - run: node scripts/seed-correlation.mjs
-
-      # API key dependent (skips gracefully if key missing)
-      - run: node scripts/seed-market-quotes.mjs
-        continue-on-error: true
-      - run: node scripts/seed-cyber-threats.mjs
-        continue-on-error: true
-      - run: node scripts/seed-crypto-quotes.mjs
-        continue-on-error: true
-      - run: node scripts/seed-fire-detections.mjs
-        continue-on-error: true
-      - run: node scripts/seed-ucdp-events.mjs
-        continue-on-error: true
-      - run: node scripts/seed-internet-outages.mjs
-        continue-on-error: true
-      - run: node scripts/seed-military-flights.mjs
-        continue-on-error: true
-
-      # Webcams
-      - run: node scripts/seed-webcams.mjs
-        continue-on-error: true
-      - run: node scripts/seed-webcams-fallback.mjs
-        continue-on-error: true
-      - run: node scripts/fetch-gpsjam.mjs
-        continue-on-error: true
-
-      # GDELT consumers — read from gdelt:raw:v1, zero direct GDELT calls
-      - run: node scripts/seed-gdelt-intel.mjs
-        continue-on-error: true
-      - run: node scripts/seed-missile-events.mjs
-        continue-on-error: true
-      - run: node scripts/seed-warcam.mjs
-        continue-on-error: true
-      - run: node scripts/seed-telegram-narratives.mjs
-        continue-on-error: true
-      - run: node scripts/seed-narrative-drift.mjs
-        continue-on-error: true
-
-      # AI-powered (Groq) — read GDELT data from cache, not from GDELT directly
-      - run: node scripts/seed-insights-from-cache.mjs
-        continue-on-error: true
-      - run: node scripts/seed-persons-of-interest.mjs
-        continue-on-error: true
-      - run: node scripts/seed-poi-discovery.mjs
-        continue-on-error: true
-
-      # Conflict forecast, disease, radiation — non-GDELT
-      - run: node scripts/seed-conflict-forecast.mjs
-        continue-on-error: true
-      - run: node scripts/seed-disease-outbreaks.mjs
-        continue-on-error: true
-      - run: node scripts/seed-radiation.mjs
-        continue-on-error: true
-
-      # Derivative seeds — read everything written above
-      - run: node scripts/seed-alerts.mjs
-        continue-on-error: true
-      - run: node scripts/agent-sitrep.mjs
-        continue-on-error: true
-      - run: node scripts/seed-hypothesis-generator.mjs
-        continue-on-error: true
-
-      # Indexing and archival — runs last
-      - run: node scripts/seed-vector-index.mjs
-        continue-on-error: true
-      - run: node scripts/seed-snapshot.mjs
-        continue-on-error: true
-      - run: node scripts/seed-entity-graph.mjs
-        continue-on-error: true
-
     env:
+      NODE_OPTIONS: "--dns-result-order=ipv4first"
       UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
       FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
@@ -153,8 +85,101 @@ jobs:
       WINDY_API_KEY: ${{ secrets.WINDY_API_KEY }}
       SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
       NEO4J_DATABASE: ${{ secrets.NEO4J_DATABASE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts
+            shared
+            package.json
+            package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --ignore-scripts
 
-  # JOB 3: Telegram Notification (waits for fast lane)
+      # ── Free data sources (no GDELT dependency) ───────────────────────────
+      - run: node scripts/seed-earthquakes.mjs
+      - run: node scripts/seed-natural-events.mjs
+      - run: node scripts/seed-weather-alerts.mjs
+      - run: node scripts/seed-commodity-quotes.mjs
+      - run: node scripts/seed-unrest-events.mjs
+      - run: node scripts/seed-prediction-markets.mjs
+      - run: node scripts/seed-service-statuses.mjs
+      - run: node scripts/seed-climate-anomalies.mjs
+      - run: node scripts/seed-gulf-quotes.mjs
+      - run: node scripts/seed-etf-flows.mjs
+      - run: node scripts/seed-correlation.mjs
+
+      # ── API key dependent (skips gracefully if key missing) ───────────────
+      - run: node scripts/seed-market-quotes.mjs
+        continue-on-error: true
+      - run: node scripts/seed-cyber-threats.mjs
+        continue-on-error: true
+      - run: node scripts/seed-crypto-quotes.mjs
+        continue-on-error: true
+      - run: node scripts/seed-fire-detections.mjs
+        continue-on-error: true
+      - run: node scripts/seed-ucdp-events.mjs
+        continue-on-error: true
+      - run: node scripts/seed-internet-outages.mjs
+        continue-on-error: true
+      - run: node scripts/seed-military-flights.mjs
+        continue-on-error: true
+
+      # ── Webcams ───────────────────────────────────────────────────────────
+      - run: node scripts/seed-webcams.mjs
+        continue-on-error: true
+      - run: node scripts/seed-webcams-fallback.mjs
+        continue-on-error: true
+      - run: node scripts/fetch-gpsjam.mjs
+        continue-on-error: true
+
+      # ── GDELT consumers — read from gdelt:raw:v1, zero direct GDELT calls ─
+      - run: node scripts/seed-gdelt-intel.mjs
+        continue-on-error: true
+      - run: node scripts/seed-missile-events.mjs
+        continue-on-error: true
+      - run: node scripts/seed-warcam.mjs
+        continue-on-error: true
+      - run: node scripts/seed-telegram-narratives.mjs
+        continue-on-error: true
+      - run: node scripts/seed-narrative-drift.mjs
+        continue-on-error: true
+
+      # ── AI-powered (Groq) — cache-backed, no GDELT calls ─────────────────
+      - run: node scripts/seed-insights-from-cache.mjs
+        continue-on-error: true
+      - run: node scripts/seed-persons-of-interest.mjs
+        continue-on-error: true
+      - run: node scripts/seed-poi-discovery.mjs
+        continue-on-error: true
+
+      # ── Other intelligence seeds ──────────────────────────────────────────
+      - run: node scripts/seed-conflict-forecast.mjs
+        continue-on-error: true
+      - run: node scripts/seed-disease-outbreaks.mjs
+        continue-on-error: true
+      - run: node scripts/seed-radiation.mjs
+        continue-on-error: true
+
+      # ── Derivative seeds (read everything written above) ──────────────────
+      - run: node scripts/seed-alerts.mjs
+        continue-on-error: true
+      - run: node scripts/agent-sitrep.mjs
+        continue-on-error: true
+      - run: node scripts/seed-hypothesis-generator.mjs
+        continue-on-error: true
+
+      # ── Indexing and archival (runs last) ─────────────────────────────────
+      - run: node scripts/seed-vector-index.mjs
+        continue-on-error: true
+      - run: node scripts/seed-snapshot.mjs
+        continue-on-error: true
+      - run: node scripts/seed-entity-graph.mjs
+        continue-on-error: true
+
+  # ── JOB 3: Telegram Notification ─────────────────────────────────────────────
   notify:
     needs: [seed-fast]
     if: always()
@@ -162,10 +187,14 @@ jobs:
     steps:
       - name: Notify Telegram
         run: |
-          if [ "${{ needs.seed-fast.result }}" = "success" ]; then
-            MSG="✅ <b>Seed Complete</b>%0A%0AAll fast data sources refreshed successfully.%0ATime: $(date -u '+%Y-%m-%d %H:%M UTC')%0A%0AUse /report for the latest intelligence brief."
+          GDELT_STATUS="${{ needs.seed-gdelt-raw.result }}"
+          FAST_STATUS="${{ needs.seed-fast.result }}"
+          if [ "$FAST_STATUS" = "success" ] && [ "$GDELT_STATUS" = "success" ]; then
+            MSG="✅ <b>Seed Complete</b>%0A%0AAll data sources refreshed successfully.%0ATime: $(date -u '+%Y-%m-%d %H:%M UTC')%0A%0AUse /report for the latest intelligence brief."
+          elif [ "$GDELT_STATUS" != "success" ]; then
+            MSG="⚠️ <b>Seed: GDELT Rate-Limited</b>%0A%0AGDELT crawl hit rate limits — consumers served from snapshot cache.%0ATime: $(date -u '+%Y-%m-%d %H:%M UTC')%0A%0AData may be up to 4h old. Use /status to check."
           else
-            MSG="⚠️ <b>Seed Finished (with warnings)</b>%0A%0ASome data sources may have failed.%0ATime: $(date -u '+%Y-%m-%d %H:%M UTC')%0A%0AUse /status to check data availability."
+            MSG="⚠️ <b>Seed Finished (with warnings)</b>%0A%0ASome sources may have failed.%0ATime: $(date -u '+%Y-%m-%d %H:%M UTC')%0A%0AUse /status to check data availability."
           fi
           curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${MSG}&parse_mode=HTML" > /dev/null
         env:

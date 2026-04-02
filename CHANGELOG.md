@@ -4,6 +4,189 @@ All notable changes to World Monitor are documented here.
 
 ## [Unreleased]
 
+### Fixed — GDELT seed reliability patch 4 (GdeltSeedFix.md recommendations + Railway config)
+
+**Root cause summary (from GdeltSeedFix.md analysis)**
+
+GDELT DOC API enforces a **global** rate limit, not per-client. Shared Railway/Vercel
+outbound IP pools mean multiple tenants' traffic counts against the same limit. Even a
+perfectly-paced crawler with 20s gaps can hit 429s during high-traffic windows or when
+another service on the same IP is hitting GDELT simultaneously. Additionally, the GKG
+v1 endpoint is more aggressive than the DOC API and was previously incrementing the
+main circuit-breaker counter, causing the circuit to trip early on otherwise good runs.
+
+**`nixpacks.toml` (root) — NEW**
+
+- Created `nixpacks.toml` at repo root for the Railway root service.
+- Sets `NODE_OPTIONS=--dns-result-order=ipv4first` globally. Railway containers use
+  shared outbound IPs; forcing IPv4 meaningfully reduces GDELT 429 frequency because
+  GDELT's CDN responds differently to IPv4 vs IPv6 paths on shared-IP pools.
+- Sets `aptPkgs = ["curl"]` for OREF polling compatibility.
+
+**`scripts/nixpacks.toml` — NEW**
+
+- Created `scripts/nixpacks.toml` for the Railway relay service (rootDirectory=`scripts`).
+- Same `NODE_OPTIONS` and `curl` settings. Sets `start.cmd = "node ais-relay.cjs"`.
+
+**`seed-gdelt-raw.mjs` — three GdeltSeedFix.md improvements**
+
+- `COOLDOWN_BASE_MS` raised from 20s → **35s** (GdeltSeedFix.md §4 recommends
+  35–45s for meaningful burst-relief vs the previous 20s which was too aggressive
+  for peak-hour shared-IP conditions).
+- **Slow-decay backoff on success** (`COOLDOWN_DECAY_MS = 5s`): on each successful
+  fetch, cooldown decreases by 5s toward base rather than resetting instantly. Instant
+  reset was re-triggering 429s after quiet periods within a long burst window.
+- **GKG circuit isolation**: GKG v1 endpoint 429s and network errors no longer
+  increment the main `consecutiveFailures` counter. GKG was previously tripping the
+  circuit right at the end of an otherwise successful Phase 1 crawl. GKG failures log
+  a warning and return null — the main crawl is unaffected.
+- `maxrecords` for 7d person queries reduced from 250 → **100** (GdeltSeedFix.md §3:
+  250-record 7d queries trigger GDELT's "heavy query" throttle disproportionately).
+
+**`.github/workflows/seed.yml` — three improvements**
+
+- Cron schedule changed from `0 */3 * * *` → `5 */3 * * *` (staggered to :05).
+  Most automated crawlers fire at :00; offsetting by 5 minutes reduces shared-IP
+  collision with other services hitting GDELT simultaneously.
+- `NODE_OPTIONS: "--dns-result-order=ipv4first"` added to both `seed-gdelt-raw` and
+  `seed-fast` job env blocks. GitHub Actions runners are also on shared IPs; same IPv4
+  forcing benefit applies.
+- Added `workflow_dispatch` input `force_gdelt: boolean` — allows manual re-run with
+  `--force` flag without editing code. Notify job now distinguishes "GDELT rate-limited"
+  from "general seed warning" in its Telegram message.
+
+**`seed-persons-of-interest.mjs` — two fixes**
+
+- `CACHE_TTL` raised from 3600s (1h) → **21600s (6h)**. At 1h the POI profiles expired
+  between cron cycles whenever the GDELT raw crawl was slow. At 6h the key survives two
+  full missed cycles before going stale.
+- **LKG (Last Known Good) fallback**: if every person in the generated profiles has
+  `mentionCount === 0` AND `recentArticles.length === 0` (i.e. `gdelt:raw:v1` was empty
+  or missing), the script now reads the previous `intelligence:poi:v1` snapshot and
+  returns it instead of publishing 21 zero-data profiles. This directly fixes the
+  `0 mentions / 0 headlines` loop seen in the seed workflow logs.
+
+### Fixed — GDELT seed reliability patch 3 (first-run guard + intel key upgrades)
+
+**`seed-gdelt-raw.mjs` — first-run write guard + inactive person tracking**
+
+- Added **first-run write guard**: when the circuit breaker trips on the very first run
+  (no prior Redis snapshot exists to merge from), the script now skips the write entirely
+  and exits 0 with a recovery message. Previously it wrote an empty `gdelt:raw:v1` payload
+  which poisoned every consumer on the next cycle — directly causing the 0-article / 0-person
+  output seen in the seed workflow logs after a fresh deploy.
+- Marked deceased persons (`Prigozhin`, `Sinwar`, `Nasrallah`, `Haniyeh`) as
+  `status: 'inactive'` in `TRACKED_PERSONS`. Inactive persons are skipped in live GDELT
+  queries (saving 8 API calls per run) but their last known data is always preserved
+  via the snapshot merge. Profile consumers continue to receive historical records.
+- Log line `Cooldown: 6s base` corrected to `20s base` (the value was already 20s in
+  code — this was a copy-paste error in the initial console.log).
+
+**`seed-gdelt-intel.mjs` — worldmonitor parity: timeline keys + 24h TTL**
+
+- `CACHE_TTL` raised from 3600s (1h) → 86400s (24h). At 1h the key expired between
+  cron runs whenever GDELT was slow or the raw crawl was circuit-tripped. At 24h
+  the key always has a previous snapshot to merge from. Matches worldmonitor's value.
+- `publishTransform` added: strips `_tone`, `_vol`, `exhausted`, `preservedFromCache`
+  private fields before writing to canonical Redis key. Consumers receive a clean payload.
+- `afterPublish` hook added: writes per-topic tone/vol timeline keys
+  (`gdelt:intel:tone:{id}`, `gdelt:intel:vol:{id}`) at 12h TTL.
+- Snapshot merge: if a topic returns 0 articles from the raw cache, restores the
+  previous snapshot's articles before publishing. Matches worldmonitor's per-topic merge.
+- Validate threshold raised from 2/6 → 3/6 topics (at least half must have articles).
+
+**`_gdelt-cache.mjs` — new helper for timeline data**
+
+- Added `getGdeltIntelTopicsWithTimelines()`: returns 6 intel topics with `_vol`/`_tone`
+  attached, used by `seed-gdelt-intel.mjs`'s `afterPublish` hook. Avoids dynamic import.
+
+### Fixed — GDELT seed reliability patch 2 (worldmonitor parity + snapshot merge)
+
+**`seed-gdelt-raw.mjs` — snapshot merge & smarter circuit-trip behaviour**
+
+- Added snapshot merge on circuit trip: when the circuit breaker aborts Phase 1 or 2,
+  the script now reads the previous `gdelt:raw:v1` Redis snapshot and restores any topic
+  or person that returned 0 results in the current crawl. Consumers downstream receive
+  the best available data rather than empty arrays.
+- Added write-skip logic: if the merged result still has fewer than 4 populated topics
+  AND the existing key already has ≥4, skips the write and extends the existing key's TTL
+  instead. Healthy data in Redis is never overwritten by a near-empty circuit-trip payload.
+- Raised base inter-call cooldown from 6s → 20s (matching worldmonitor's
+  `INTER_TOPIC_DELAY_MS = 20_000` which avoids most rate limiting on a healthy IP).
+- Added post-exhaust cooldown of 120s after any topic that fully exhausts retries
+  (mirrors worldmonitor's `POST_EXHAUST_DELAY_MS = 120_000`). GDELT's rate-limit
+  window for popular queries exceeds 50s and can reach 90–120s during peak hours.
+
+**`_seed-utils.mjs` — worldmonitor parity: five missing features added**
+
+- `isTransientRedisError(err)` — detects network/timeout errors (`UND_ERR_`,
+  `ECONNRESET`, `ETIMEDOUT`, `EAI_AGAIN`, etc.) so callers can skip vs hard-fail.
+- `acquireLockSafely(...)` — wraps lock acquisition with retry and transient error
+  detection. Returns `{ locked, skipped, reason }`. If Redis is unreachable, returns
+  `skipped: true` and exits 0 instead of crashing the cron job.
+- `extendExistingTtl(keys, ttl)` — pipeline `EXPIRE` on multiple keys in one Upstash
+  request. Called by `runSeed` when fetch fails so stale data stays live during outages.
+- `publishTransform` option in `runSeed` — transform applied to fetched data before
+  writing to canonical key (strips private fields like `_tone`, `_vol`, `exhausted`).
+- `afterPublish` hook in `runSeed` — called after successful write; used for writing
+  per-topic side-channel keys (e.g. timeline keys) without coupling to main payload.
+- Graceful fetch-failure path in `runSeed` — when `fetchFn` throws after all retries,
+  extends existing key TTLs and exits 0. Was previously crashing the cron job.
+- `writeExtraKeyWithMeta` — like `writeExtraKey` but also writes a `seed-meta`
+  freshness key for health check visibility.
+- `readSeedSnapshot` — reads canonical snapshot before overwrite; enables WoW deltas.
+
+**`seed-insights.mjs` — three worldmonitor parity improvements**
+
+- `CACHE_TTL` raised from 1800s (30 min) → 10800s (3h). The 30 min TTL matched the
+  cron interval exactly, meaning any single delayed run caused the key to expire and
+  the UI to show stale data. 3h = 6× the cron interval, surviving any missed run.
+- `normalizeThreat()` added: converts proto enum strings (`THREAT_LEVEL_HIGH`) to
+  lowercase client values (`high`) before publishing. Prevents consumers from
+  receiving two different string formats for the same threat level.
+- `extractCountryCode()` from `shared/geo-extract.mjs` now attaches ISO2 country code
+  to each top story. Enables flag icons and country filtering in the UI.
+- LLM provider chain extended to `ollama → groq → openrouter` (was groq-only).
+- LKG preservation: never overwrites an `ok` payload with a `degraded` one.
+
+### Added — `scripts/shared/geo-extract.mjs` + `country-names.json`
+
+New lightweight headline → ISO2 extractor. Builds on the worldmonitor approach with:
+- `extractCountryCode(text)` — first-match ISO2 (null for supranationals).
+- `extractAllCountryCodes(text)` — all matches deduped in appearance order, for
+  multi-country stories ("US and China trade talks" → `['US', 'CN']`).
+- Extended `ALIAS_MAP` with OSINT conflict-zone terms: Donbas, Rafah, Houthi, Hamas,
+  Hezbollah, Bucha, Mariupol, Aleppo, Mosul, etc.
+- Supranational markers (NATO, EU, G7, UN, IAEA) return `null` not `'XX'`.
+- `UNIGRAM_STOPWORDS` extended for OSINT context.
+
+### Fixed — GDELT seed reliability (seed-gdelt-raw.mjs + _gdelt-cache.mjs)
+
+**Root causes addressed:**
+
+1. **Concurrent crawl causing immediate 429 saturation** — `Promise.allSettled([crawlTopics(), crawlPersons(), crawlGkg()])` fired all three phases simultaneously, sending dozens of requests to GDELT in parallel and saturating the per-IP rate limit within seconds. Replaced with strict sequential execution: Phase 1 (topics) → Phase 2 (persons) → Phase 3 (GKG). GDELT enforces a ~5s rate limit per IP; parallel execution makes this impossible to respect.
+
+2. **No circuit breaker — script ran forever despite total failure** — after 5+ consecutive 429s or network errors the script continued looping through all remaining topics and persons, emitting ⚠ warnings but never stopping. Added a circuit breaker that trips after `CIRCUIT_TRIP_THRESHOLD` (5) consecutive failures, aborts all remaining GDELT calls, writes whatever partial data was collected, and sets a `gdelt:raw:ratelimit-at` flag key so consumers can surface a degraded-mode banner.
+
+3. **No retry / exponential back-off** — every 429 was logged and silently skipped with no delay adjustment. Added exponential back-off: base cooldown doubles on each failure up to `MAX_BACKOFF_MS` (90s), then a single retry is attempted before giving up on that call.
+
+4. **Static Redis — script always re-fetched even if cache was fresh** — running `seed-gdelt-raw.mjs` twice within a 4h TTL window hammered GDELT unnecessarily. Added cache-freshness gate: if `gdelt:raw:v1` is less than 30 minutes old, the script exits immediately with a cache-hit message. Override with `--force` flag.
+
+5. **GKG v1 API called with invalid query syntax** — the GKG v1 endpoint does not support boolean operators `(OR …)` with parentheses. Changed to space-separated keywords (`protest riot demonstration unrest coup`) which GKG v1 treats as OR. Also increased `maxrecords` from 250 → 500 for better coverage.
+
+6. **`timelinevol` response not normalised** — accepted `data ?? null` which could store a non-null but malformed object. Now guards both `data.timeline` and `data.timelines` shapes and stores `null` if the array is empty.
+
+7. **`maxrecords` defaulted to 10** — most general topics were only returning 10 articles. Default raised to 50 across all general topics.
+
+8. **_gdelt-cache.mjs: no staleness warnings** — consumers had no visibility into how old the cached data was. Added a `STALE_WARN_MIN` (90 min) threshold that logs a warning when data is getting old, and surfaces the `circuitTripped` flag set by the seed script.
+
+**New behaviour summary:**
+- `node scripts/seed-gdelt-raw.mjs` → cache-first; skips if cache < 30 min old
+- `node scripts/seed-gdelt-raw.mjs --force` → always re-fetches
+- On 429: doubles cooldown, retries once, trips circuit after 5 consecutive failures
+- On circuit trip: writes partial data, sets `gdelt:raw:ratelimit-at` flag, exits cleanly
+- Consumers receive `isGdeltDegraded()` helper to check for partial-data condition
+
 ### Added
 
 - Chokepoint transit intelligence with 3 free data sources: IMF PortWatch (vessel transit counts), CorridorRisk (risk intelligence), AISStream (24h crossing counter) (#1560)

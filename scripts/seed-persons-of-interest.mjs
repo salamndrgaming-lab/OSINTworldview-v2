@@ -5,13 +5,13 @@
  * Requires seed-gdelt-raw.mjs to have run first in this seed cycle.
  */
 
-import { loadEnvFile, runSeed } from './_seed-utils.mjs';
+import { loadEnvFile, runSeed, verifySeedKey } from './_seed-utils.mjs';
 import { getGdeltPersonData } from './_gdelt-cache.mjs';
 
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'intelligence:poi:v1';
-const CACHE_TTL     = 3600;
+const CACHE_TTL     = 21_600; // 6h — survives 2 missed cron cycles (was 1h, expired between runs)
 const GROQ_MODEL    = 'llama-3.1-8b-instant';
 
 // ── Tracked Persons ──
@@ -202,6 +202,24 @@ async function fetchPersonsOfInterest() {
       profileGeneratedAt: new Date().toISOString(),
       dataFreshness: articles.length > 0 ? '72h' : 'stale',
     });
+  }
+
+
+  // LKG (Last Known Good) preservation: if every single person has 0 mentions
+  // and 0 headlines, the GDELT cache is empty (circuit tripped on first run or
+  // gdelt:raw:v1 key is missing). Rather than publishing 21 zero-data profiles
+  // that will overwrite valid cached profiles, return the previous snapshot.
+  const allEmpty = profiles.every(p => p.mentionCount === 0 && p.recentArticles.length === 0);
+  if (allEmpty && profiles.length > 0) {
+    const previous = await verifySeedKey(CANONICAL_KEY).catch(() => null);
+    if (previous && Array.isArray(previous.persons) && previous.persons.length > 0) {
+      const prevWithData = previous.persons.filter(p => p.mentionCount > 0 || p.recentArticles?.length > 0);
+      if (prevWithData.length > 0) {
+        console.warn(`  ⚠ All ${profiles.length} persons returned 0 data from cache — GDELT raw key is empty or stale.`);
+        console.warn(`  ↩ LKG preservation: returning previous snapshot (${previous.persons.length} profiles, ${prevWithData.length} with data).`);
+        return previous;
+      }
+    }
   }
 
   profiles.sort((a, b) => b.activityScore - a.activityScore);

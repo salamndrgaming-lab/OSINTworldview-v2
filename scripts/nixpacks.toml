@@ -1,0 +1,16 @@
+# Railway build config — scripts/ relay service.
+# rootDirectory is set to "scripts" in Railway, so this file is read from
+# scripts/nixpacks.toml. Sets NODE_OPTIONS and installs scripts/package.json.
+# curl required for OREF polling (Node.js JA3 fingerprint blocked by Akamai).
+
+[phases.setup]
+aptPkgs = ["curl"]
+
+[variables]
+NODE_OPTIONS = "--dns-result-order=ipv4first"
+
+[phases.install]
+cmds = ["npm install"]
+
+[start]
+cmd = "node ais-relay.cjs"

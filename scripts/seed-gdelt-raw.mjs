@@ -8,28 +8,29 @@
  *   single Redis key (gdelt:raw:v1). All consumer seeds read from this key
  *   instead of calling GDELT directly, cutting total API calls from ~91 → ~26.
  *
- * RATE-LIMIT STRATEGY:
- *   - Strictly sequential execution (topics → persons → GKG). GDELT's limit is
- *     per-IP; parallel phases saturate it instantly.
- *   - Exponential back-off on 429/network errors (base 20s → max 90s).
+ * RATE-LIMIT STRATEGY (informed by GdeltSeedFix.md analysis):
+ *   - Strictly sequential execution. Parallel phases saturate GDELT instantly.
+ *   - COOLDOWN_BASE_MS = 35s: GDELT DOC API is globally rate-limited (not
+ *     per-client). Shared Railway/Vercel outbound IPs compound this. 35s gives
+ *     meaningful burst-relief vs the previous 20s default.
+ *   - SLOW DECAY: on success, cooldown decreases by 5s per call (not reset to
+ *     base). Rapid reset was re-triggering 429s after quiet gaps within a burst.
+ *   - Exponential back-off on 429/error: doubles up to MAX_BACKOFF_MS (90s).
+ *   - POST_EXHAUST cooldown of 120s after any topic that exhausts retries.
  *   - Circuit breaker trips after CIRCUIT_TRIP_THRESHOLD consecutive failures.
- *   - On trip: MERGES partial results with the previous Redis snapshot so good
- *     cached data is never overwritten by an empty payload. Only writes if the
- *     merged result is meaningfully better than what's already in Redis, or if
- *     the existing key is about to expire.
- *   - FIRST-RUN GUARD: if circuit trips on the very first run (no existing
- *     snapshot in Redis), skips the write entirely and exits 0. This prevents
- *     writing an empty payload that would poison downstream consumers on the
- *     next seed cycle before any good data exists.
- *   - Writes gdelt:raw:ratelimit-at flag so consumers can show a degraded banner.
+ *   - GKG runs as Phase 3 but is fully independent — GKG 429s do NOT increment
+ *     the main circuit breaker (GKG endpoint is more aggressive than DOC API).
+ *   - Snapshot merge: on circuit trip, merges fresh partial results with the
+ *     previous Redis snapshot so good data is never overwritten by empty arrays.
+ *   - FIRST-RUN GUARD: if circuit trips with no prior snapshot and 0 populated
+ *     topics, skips the write entirely. Downstream consumers keep whatever they
+ *     have from previous individual Redis keys.
+ *   - TTL extension: if merged result still thin, extends existing key TTL
+ *     instead of overwriting with near-empty data.
  *
  * CACHE-FIRST:
- *   Checks existing key age on startup. Skips crawl if < MIN_CACHE_AGE_MIN old
- *   (unless --force is passed). This prevents redundant fetches from cron overlap.
- *
- * BACKOFF TUNING (informed by worldmonitor's seed-gdelt-intel.mjs):
- *   Their inter-topic delay is 20s on success, 120s after any exhausted topic.
- *   We use 20s base cooldown on success and adaptive back-off up to 90s.
+ *   Skips crawl if gdelt:raw:v1 is < MIN_CACHE_AGE_MIN old (default 30 min).
+ *   Override with --force.
  *
  * Usage:
  *   node scripts/seed-gdelt-raw.mjs          # cache-first (recommended)
@@ -42,20 +43,18 @@ loadEnvFile(import.meta.url);
 
 export const RAW_KEY        = 'gdelt:raw:v1';
 const RATELIMIT_FLAG_KEY     = 'gdelt:raw:ratelimit-at';
-const TTL                    = 4 * 3600;       // 4h — outlasts the full seed run
-const MIN_CACHE_AGE_MIN      = 30;             // skip re-fetch if cache < 30 min old
+const TTL                    = 4 * 3600;       // 4h
+const MIN_CACHE_AGE_MIN      = 30;
 const GDELT_DOC              = 'https://api.gdeltproject.org/api/v2/doc/doc';
 const GDELT_GKG              = 'https://api.gdeltproject.org/api/v1/gkg_geojson';
 
-// Back-off / circuit-breaker config (matches worldmonitor's 20s inter-topic delay)
-const COOLDOWN_BASE_MS       = 20_000;         // 20s between calls on success
-const COOLDOWN_POST_EXHAUST  = 120_000;        // 2 min extra after a topic exhausts retries
-const MAX_BACKOFF_MS         = 90_000;         // max single back-off sleep
-const CIRCUIT_TRIP_THRESHOLD = 5;             // consecutive failures before abort
+// Back-off config (GdeltSeedFix.md recommendations applied)
+const COOLDOWN_BASE_MS       = 35_000;   // 35s — raised from 20s; meaningful burst-relief
+const COOLDOWN_DECAY_MS      = 5_000;   // slow decay toward base on success (not instant reset)
+const COOLDOWN_POST_EXHAUST  = 120_000; // 2 min after a topic exhausts retries
+const MAX_BACKOFF_MS         = 90_000;  // max single back-off sleep
+const CIRCUIT_TRIP_THRESHOLD = 5;
 const FETCH_TIMEOUT_MS       = 22_000;
-
-// Minimum populated-topic count below which we prefer extending the existing
-// key's TTL over overwriting it with near-empty data.
 const MIN_TOPICS_TO_OVERWRITE = 4;
 
 const FORCE = process.argv.includes('--force');
@@ -68,7 +67,9 @@ let circuitOpen         = false;
 
 function recordSuccess() {
   consecutiveFailures = 0;
-  currentCooldownMs   = COOLDOWN_BASE_MS;
+  // Slow decay: reduce cooldown by COOLDOWN_DECAY_MS per success, floor at base.
+  // Instant reset back to base was too aggressive and re-triggered 429s.
+  currentCooldownMs = Math.max(COOLDOWN_BASE_MS, currentCooldownMs - COOLDOWN_DECAY_MS);
 }
 
 function recordFailure() {
@@ -113,8 +114,6 @@ const TOPICS = [
   { id: 'poi-unrest',    query: '"coup" OR "protest" OR "uprising" OR "revolution" sourcelang:eng',                       artlist: true, timelinevol: false, timespan_art: '72h', maxrecords: 100 },
 ];
 
-// Person queries — fetched as two GDELT calls each (7d count + 72h headlines)
-// Marked inactive persons are excluded from live queries but preserved in snapshots.
 const TRACKED_PERSONS = [
   { name: 'Vladimir Putin',         status: 'active' },
   { name: 'Volodymyr Zelenskyy',    status: 'active' },
@@ -163,7 +162,7 @@ function normalizeArticle(raw) {
   };
 }
 
-// ── Core fetch — single GDELT call with back-off on failure ───────────────────
+// ── Core fetch ────────────────────────────────────────────────────────────────
 
 async function gdeltFetch(params, label) {
   if (circuitOpen) {
@@ -195,6 +194,7 @@ async function gdeltFetch(params, label) {
 
   if (!resp.ok) {
     console.warn(`  ⚠ GDELT HTTP ${resp.status} [${label}]`);
+    // Non-429 HTTP errors don't count toward circuit breaker — they may be transient
     return null;
   }
 
@@ -208,8 +208,6 @@ async function gdeltFetch(params, label) {
   }
 }
 
-// Waits cooldown, fetches, retries once on failure before giving up.
-// isFirstCall skips the leading sleep.
 async function fetchWithBackoff(params, label, isFirstCall = false) {
   if (!isFirstCall) await sleep(currentCooldownMs);
   if (circuitOpen) return null;
@@ -217,6 +215,7 @@ async function fetchWithBackoff(params, label, isFirstCall = false) {
   const prevFailures = consecutiveFailures;
   const data = await gdeltFetch(params, label);
 
+  // On failure, retry once after the updated back-off period
   if (data === null && consecutiveFailures > prevFailures && !circuitOpen) {
     console.log(`  🔄 Retry [${label}] after ${(currentCooldownMs / 1000).toFixed(0)}s…`);
     await sleep(currentCooldownMs);
@@ -255,8 +254,7 @@ async function crawlTopics() {
       results[topic.id].fetchedAt = new Date().toISOString();
       console.log(`    → ${articles.length} articles`);
 
-      // After exhausting retries, give GDELT the post-exhaust cooldown before
-      // hitting it again (matches worldmonitor's POST_EXHAUST_DELAY_MS = 120s)
+      // Post-exhaust cooldown — GDELT's rate window for popular queries exceeds 50s
       if (articles.length === 0 && consecutiveFailures > failuresBefore && !circuitOpen) {
         console.log(`    Rate-limit cooldown: waiting ${COOLDOWN_POST_EXHAUST / 1000}s before next topic…`);
         await sleep(COOLDOWN_POST_EXHAUST);
@@ -293,11 +291,13 @@ async function crawlPersons() {
 
     results[person.name] = {};
 
+    // 7d window: reduce maxrecords to 100 (was 250) — heavy queries trigger
+    // GDELT's "large query" throttle more aggressively (GdeltSeedFix.md §3)
     console.log(`  [person 7d] ${person.name}`);
     const broad = await fetchWithBackoff({
       query:      `"${person.name}" sourcelang:eng`,
       mode:       'artlist',
-      maxrecords: '250',
+      maxrecords: '100',
       timespan:   '7d',
     }, `person:${person.name}/7d`);
     const articles7d = (broad?.articles ?? []).map(normalizeArticle).filter(Boolean);
@@ -319,11 +319,14 @@ async function crawlPersons() {
   return results;
 }
 
+// GKG runs independently — its 429s do NOT increment the main circuit breaker.
+// GKG v1 endpoint is more sensitive than DOC API and was previously causing
+// the circuit to trip right at the end of an otherwise successful crawl.
 async function crawlGkg() {
   if (circuitOpen) { console.warn('  ⚡ GKG skipped — circuit open'); return null; }
 
   console.log('  [gkg] unrest geojson');
-  await sleep(currentCooldownMs);
+  await sleep(currentCooldownMs); // still respect pacing
 
   let resp;
   try {
@@ -337,17 +340,18 @@ async function crawlGkg() {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (err) {
-    console.warn(`  ⚠ GKG network error: ${err.message}`);
-    recordFailure();
+    console.warn(`  ⚠ GKG network error: ${err.message} — skipping (GKG failures do not affect main circuit)`);
     return null;
   }
 
-  if (resp.status === 429) { recordFailure(); console.warn('  ⚠ GKG 429 — skipping'); return null; }
-  if (!resp.ok) { console.warn(`  ⚠ GKG HTTP ${resp.status}`); return null; }
+  if (resp.status === 429) {
+    console.warn('  ⚠ GKG 429 — skipping (GKG failures do not affect main circuit)');
+    return null;
+  }
+  if (!resp.ok) { console.warn(`  ⚠ GKG HTTP ${resp.status} — skipping`); return null; }
 
   try {
     const data = await resp.json();
-    recordSuccess();
     console.log(`    → ${data?.features?.length ?? 0} GKG features`);
     return data;
   } catch (err) {
@@ -402,9 +406,6 @@ async function checkCacheFreshness(redisUrl, redisToken) {
 }
 
 // ── Snapshot merge ────────────────────────────────────────────────────────────
-// When the circuit trips, merge fresh partial results with the previous snapshot.
-// This ensures consumers always get the best available data — fresh topics where
-// the crawl succeeded, cached topics where the circuit cut us off.
 
 function mergeWithSnapshot(newTopics, newPersons, existing) {
   if (!existing) return { topics: newTopics, persons: newPersons };
@@ -412,7 +413,6 @@ function mergeWithSnapshot(newTopics, newPersons, existing) {
   const mergedTopics  = { ...newTopics };
   const mergedPersons = { ...newPersons };
 
-  // Topics: keep cached version if new fetch returned nothing
   for (const [id, cachedTopic] of Object.entries(existing.topics ?? {})) {
     const newTopic = newTopics[id];
     if (!newTopic || (newTopic.artlist?.length === 0 && cachedTopic.artlist?.length > 0)) {
@@ -421,13 +421,11 @@ function mergeWithSnapshot(newTopics, newPersons, existing) {
     }
   }
 
-  // Persons: if Phase 2 never ran (circuit tripped in Phase 1), restore all cached persons
   const newPersonCount = Object.keys(newPersons).length;
   if (newPersonCount === 0 && Object.keys(existing.persons ?? {}).length > 0) {
     Object.assign(mergedPersons, existing.persons);
     console.log(`  ↩ Preserved all ${Object.keys(existing.persons).length} cached persons (Phase 2 skipped)`);
   } else {
-    // Person-level merge: restore cached data for any person that returned nothing
     for (const [name, cachedPerson] of Object.entries(existing.persons ?? {})) {
       const newPerson = newPersons[name];
       if (!newPerson || (newPerson.mentionCount === 0 && cachedPerson.mentionCount > 0)) {
@@ -436,7 +434,7 @@ function mergeWithSnapshot(newTopics, newPersons, existing) {
     }
   }
 
-  // Inactive persons are never queried but should be preserved from snapshots
+  // Always carry forward inactive persons from the prior snapshot
   const inactiveNames = TRACKED_PERSONS.filter(p => p.status === 'inactive').map(p => p.name);
   for (const name of inactiveNames) {
     if (!mergedPersons[name] && existing.persons?.[name]) {
@@ -454,16 +452,16 @@ async function main() {
   const activePersons = TRACKED_PERSONS.filter(p => p.status === 'active');
 
   console.log('=== seed-gdelt-raw: Master GDELT Crawl ===');
-  console.log(`  Topics:   ${TOPICS.length} × artlist/timelinevol`);
-  console.log(`  Persons:  ${activePersons.length} active × 7d + 72h (${TRACKED_PERSONS.length - activePersons.length} inactive — snapshot-preserved only)`);
-  console.log(`  Cooldown: ${COOLDOWN_BASE_MS / 1000}s base (adaptive up to ${MAX_BACKOFF_MS / 1000}s)`);
+  console.log(`  Topics:    ${TOPICS.length} × artlist/timelinevol`);
+  console.log(`  Persons:   ${activePersons.length} active × 7d + 72h (${TRACKED_PERSONS.length - activePersons.length} inactive — snapshot-preserved only)`);
+  console.log(`  Cooldown:  ${COOLDOWN_BASE_MS / 1000}s base, slow-decay on success (−${COOLDOWN_DECAY_MS / 1000}s/call), max ${MAX_BACKOFF_MS / 1000}s`);
   console.log(`  Post-exhaust pause: ${COOLDOWN_POST_EXHAUST / 1000}s`);
-  console.log(`  Circuit:  trips after ${CIRCUIT_TRIP_THRESHOLD} consecutive failures`);
-  console.log(`  Force:    ${FORCE ? 'YES — bypassing cache check' : 'NO — cache-first'}`);
+  console.log(`  Circuit:   trips after ${CIRCUIT_TRIP_THRESHOLD} consecutive failures`);
+  console.log(`  Force:     ${FORCE ? 'YES — bypassing cache check' : 'NO — cache-first'}`);
 
   const { url: redisUrl, token: redisToken } = getRedisCredentials();
 
-  // ── Cache-freshness gate ─────────────────────────────────────────────────
+  // Cache-freshness gate
   const { fresh, ageMin, existing } = await checkCacheFreshness(redisUrl, redisToken);
   if (!FORCE && fresh) {
     const tc = Object.keys(existing.topics  ?? {}).length;
@@ -480,17 +478,17 @@ async function main() {
     ? '  No existing cache — fetching from GDELT (first run)\n'
     : `  Cache is ${ageMin} min old — stale, re-fetching\n`);
 
-  // ── Sequential crawl ─────────────────────────────────────────────────────
+  // Sequential crawl
   console.log('--- Phase 1: Topics ---');
   const rawTopics = await crawlTopics();
 
   console.log('\n--- Phase 2: Persons ---');
   const rawPersons = await crawlPersons();
 
-  console.log('\n--- Phase 3: GKG ---');
+  console.log('\n--- Phase 3: GKG (independent — failures do not affect main circuit) ---');
   const gkg = await crawlGkg();
 
-  // ── Snapshot merge (only when circuit tripped and we have a prior snapshot) ─
+  // Snapshot merge on circuit trip
   let topics  = rawTopics;
   let persons = rawPersons;
 
@@ -503,12 +501,7 @@ async function main() {
   const topicCount  = Object.keys(topics).length;
   const personCount = Object.keys(persons).length;
 
-  // ── FIRST-RUN GUARD ──────────────────────────────────────────────────────
-  // If the circuit tripped on the very first run (no snapshot existed to merge
-  // from), we have nothing useful to write. Skip the write entirely and exit 0
-  // so the downstream consumers can serve whatever they have from their own
-  // individual Redis keys from a prior run. Writing 0 articles here would
-  // poison every consumer on the next cycle.
+  // First-run guard: skip write if nothing useful to write
   if (circuitOpen && isFirstRun && populatedTopicCount === 0) {
     const flagPayload = JSON.stringify({ at: new Date().toISOString(), reason: 'first_run_circuit_trip' });
     await fetch(redisUrl, {
@@ -525,14 +518,12 @@ async function main() {
     return;
   }
 
-  // ── Prefer TTL extension over thin overwrite ─────────────────────────────
+  // Prefer TTL extension over thin overwrite
   if (circuitOpen && populatedTopicCount < MIN_TOPICS_TO_OVERWRITE && existing) {
     const existingPopulated = Object.values(existing.topics ?? {}).filter(t => t.artlist?.length > 0).length;
     if (existingPopulated >= MIN_TOPICS_TO_OVERWRITE) {
       console.log(`\n  ↩ Existing key has ${existingPopulated} populated topics — extending TTL instead of overwriting with ${populatedTopicCount}`);
-      await redisPipelineRaw(redisUrl, redisToken, [
-        ['EXPIRE', RAW_KEY, TTL],
-      ]).catch(e => console.warn(`  TTL extend failed: ${e.message}`));
+      await redisPipelineRaw(redisUrl, redisToken, [['EXPIRE', RAW_KEY, TTL]]).catch(e => console.warn(`  TTL extend failed: ${e.message}`));
       console.log(`  ✅ ${RAW_KEY} TTL extended (${TTL}s)`);
       const flagPayload = JSON.stringify({ at: new Date().toISOString(), reason: 'circuit_tripped', ttlExtended: true });
       await fetch(redisUrl, {
@@ -547,7 +538,7 @@ async function main() {
     }
   }
 
-  // ── Write merged output ──────────────────────────────────────────────────
+  // Write merged output
   const output = {
     topics,
     persons,
@@ -562,7 +553,6 @@ async function main() {
   await redisSetRaw(redisUrl, redisToken, RAW_KEY, payload, TTL);
   console.log(`  ✅ ${RAW_KEY} written (${topicCount} topics, ${personCount} persons, ${populatedTopicCount} populated)`);
 
-  // Rate-limit flag management
   if (circuitOpen) {
     const flagPayload = JSON.stringify({ at: new Date().toISOString(), topics: topicCount, persons: personCount, populatedTopics: populatedTopicCount });
     await fetch(redisUrl, {
@@ -573,7 +563,6 @@ async function main() {
     }).catch(() => {});
     console.warn('\n  ⚡ Crawl ended with circuit open — snapshot merge applied. Consumers will use best available data.');
   } else {
-    // Clean run — clear any stale rate-limit flag
     await fetch(redisUrl, {
       method: 'POST',
       headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },

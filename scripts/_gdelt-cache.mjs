@@ -1,41 +1,88 @@
+#!/usr/bin/env node
 /**
- * _gdelt-cache.mjs — Read the master GDELT raw cache from Redis
+ * _gdelt-cache.mjs — Master GDELT cache reader AND live fetcher.
  *
- * All scripts that previously called gdeltproject.org directly now call
- * getGdeltRaw() or one of the convenience helpers below.
+ * DUAL ROLE:
+ *   1. Consumer helper: getGdeltRaw() + convenience wrappers used by all
+ *      downstream seeds (gdelt-intel, persons-of-interest, telegram-narratives…).
+ *      These read from gdelt:raw:v1 in Redis — zero direct GDELT calls.
  *
- * EMPTY-KEY BEHAVIOUR (changed in Patch 5):
- *   getGdeltRaw() no longer throws when gdelt:raw:v1 is missing. Instead it
- *   returns an empty-but-valid object { topics: {}, persons: {}, gkg: null,
- *   crawledAt: null, _missing: true }. All helpers return empty arrays/nulls.
+ *   2. Live fetcher: fetchArtlist(), fetchTimelineVol(), fetchPersonArticles(),
+ *      fetchGkg() — used by seed-gdelt-raw.mjs to populate the raw cache.
+ *      Each function checks Redis cache first, then calls GDELT with per-endpoint
+ *      circuit breakers, exponential backoff, and response validation.
  *
- *   WHY: seed-gdelt-raw.mjs intentionally skips the write on a first-run
- *   circuit trip (the "first-run guard"). Downstream consumers calling
- *   getGdeltRaw() were throwing, which caused runSeed's withRetry to retry
- *   the entire fetchFn 3× before failing with extendExistingTtl on a key
- *   that hadn't been written yet — producing confusing logs and no data.
+ * CIRCUIT BREAKERS: artlist / timelinevol / gkg / person — all independent.
+ *   GKG failures NEVER trip the artlist or person breakers.
  *
- *   With the new behaviour, consumers receive empty arrays, produce zero
- *   records, and the LKG fallbacks in seed-persons-of-interest and
- *   seed-poi-discovery kick in to serve the last good snapshot.
+ * MISSING KEY BEHAVIOUR (Patch 5 hotfix):
+ *   getGdeltRaw() no longer throws when gdelt:raw:v1 is missing.
+ *   Returns EMPTY_RAW = { topics:{}, persons:{}, gkg:null, crawledAt:null,
+ *   circuitTripped:false, _missing:true } so consumer seeds can detect and
+ *   apply their LKG fallback without triggering runSeed's withRetry loop.
+ *   Only genuine Redis errors (network failure, HTTP 5xx) still throw.
  *
- * STALENESS WARNINGS:
- *   If the cache is older than STALE_WARN_MIN minutes, helpers log a warning
- *   but still return the data — consumers must never block on stale cache.
+ * EXPORT NOTE:
+ *   ESM does not allow `export { importAlias as newName }` when the name is a
+ *   local import alias. breakerSummary() and resetAllBreakers() are exported as
+ *   named wrapper functions instead.
  *
- * DEGRADED MODE:
- *   If gdelt:raw:ratelimit-at is set, the last crawl hit GDELT's rate limit
- *   and data may be partial. Consumers can surface a degraded-mode banner.
+ * CACHE TTLs:
+ *   artlist     1800s (30 min)
+ *   timelinevol  900s (15 min)
+ *   gkg         3600s (1 hr)
+ *   person      3600s (1 hr)
+ *
+ * USER-AGENT: OSINTworldview/2.0
+ * TIMEOUT:    30s per request via AbortSignal.timeout
  */
 
 import { getRedisCredentials } from './_seed-utils.mjs';
+import {
+  getBreaker,
+  recordSuccess  as breakerRecordSuccess,
+  recordFailure  as breakerRecordFailure,
+  canRequest,
+  breakerSummary as circuitBreakerSummary,
+  resetAllBreakers as circuitBreakerResetAll,
+} from './shared/circuit-breaker.mjs';
+import {
+  retryWithBackoff,
+  sleep,
+} from './shared/exponential-backoff.mjs';
+import {
+  validateArtlistResponse,
+  validateTimelineResponse,
+  validateGkgResponse,
+} from './shared/zod-schemas.mjs';
+import {
+  recordError,
+  recordSuccess    as telRecordSuccess,
+  recordCacheHit,
+  recordCacheMiss,
+  recordValidationReject,
+  recordCircuitTrip,
+} from './shared/error-telemetry.mjs';
 
-export const RAW_KEY       = 'gdelt:raw:v1';
-const RATELIMIT_FLAG_KEY    = 'gdelt:raw:ratelimit-at';
-const STALE_WARN_MIN        = 90; // warn if cache > 90 min old
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-// Canonical empty payload returned when the key is missing.
-// _missing flag lets consumers distinguish "empty data" from "populated but zero results".
+export const RAW_KEY          = 'gdelt:raw:v1';
+const RATELIMIT_FLAG_KEY       = 'gdelt:raw:ratelimit-at';
+const STALE_WARN_MIN           = 90;
+
+const GDELT_DOC                = 'https://api.gdeltproject.org/api/v2/doc/doc';
+const GDELT_GKG                = 'https://api.gdeltproject.org/api/v1/gkg_geojson';
+const USER_AGENT               = 'OSINTworldview/2.0';
+const FETCH_TIMEOUT_MS         = 30_000;
+
+const CACHE_TTL = {
+  artlist:     1800,
+  timelinevol:  900,
+  gkg:         3600,
+  person:      3600,
+};
+
+// Sentinel returned when gdelt:raw:v1 is missing — never throws in this case.
 const EMPTY_RAW = Object.freeze({
   topics:        {},
   persons:       {},
@@ -45,16 +92,229 @@ const EMPTY_RAW = Object.freeze({
   _missing:      true,
 });
 
-// ── Core reader ───────────────────────────────────────────────────────────────
+// ── Exported wrappers for circuit-breaker functions ───────────────────────────
+// ESM does not allow `export { localAlias as newName }` when the alias comes
+// from an import statement. Export named wrapper functions instead.
+
+/** Returns a concise breaker-state summary string for end-of-run logging. */
+export function breakerSummary() {
+  return circuitBreakerSummary();
+}
+
+/** Force-close all circuit breakers (called when --force flag is set). */
+export function resetAllBreakers() {
+  return circuitBreakerResetAll();
+}
+
+// ── Redis helpers ─────────────────────────────────────────────────────────────
+
+let _creds = null;
+function creds() {
+  if (!_creds) _creds = getRedisCredentials();
+  return _creds;
+}
+
+async function redisGet(key) {
+  const { url, token } = creds();
+  try {
+    const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal:  AbortSignal.timeout(8_000),
+    });
+    if (!resp.ok) return null;
+    const body = await resp.json();
+    if (!body.result) return null;
+    return typeof body.result === 'string' ? JSON.parse(body.result) : body.result;
+  } catch {
+    return null;
+  }
+}
+
+async function redisSet(key, value, ttl) {
+  const { url, token } = creds();
+  const payload = typeof value === 'string' ? value : JSON.stringify(value);
+  const resp = await fetch(url, {
+    method:  'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body:    JSON.stringify(['SET', key, payload, 'EX', ttl]),
+    signal:  AbortSignal.timeout(10_000),
+  });
+  if (!resp.ok) throw new Error(`Redis SET failed: HTTP ${resp.status}`);
+}
+
+// ── Live GDELT fetcher (used by seed-gdelt-raw.mjs) ──────────────────────────
+
+async function gdeltDocFetch(endpoint, params, label) {
+  if (!canRequest(endpoint)) {
+    console.warn(`  ⚡ [${label}] blocked — ${endpoint} circuit open`);
+    return null;
+  }
+
+  const url = new URL(GDELT_DOC);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+  url.searchParams.set('format', 'json');
+
+  const fetchFn = async () => {
+    const resp = await fetch(url.toString(), {
+      headers: { 'User-Agent': USER_AGENT },
+      signal:  AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (resp.status === 429) {
+      const err = new Error(`HTTP 429 [${label}]`);
+      err.status = 429;
+      throw err;
+    }
+    if (!resp.ok) {
+      const err = new Error(`HTTP ${resp.status} [${label}]`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  };
+
+  try {
+    const json = await retryWithBackoff(fetchFn, {
+      maxRetries:  2,
+      baseMs:      3_000,
+      capMs:       60_000,
+      shouldRetry: (err) => err.status !== 429,
+      onRetry: (err, attempt, delayMs) => {
+        console.warn(`  🔄 Retry ${attempt + 1} [${label}] after ${(delayMs / 1000).toFixed(1)}s — ${err.message}`);
+        recordError({ level: 'warn', endpoint, label, message: err.message, attempt });
+      },
+    });
+    breakerRecordSuccess(endpoint);
+    telRecordSuccess();
+    return json;
+  } catch (err) {
+    console.warn(`  ⚠ GDELT fetch failed [${label}]: ${err.message}`);
+    breakerRecordFailure(endpoint);
+    recordError({ level: 'error', endpoint, label, message: err.message, status: err.status });
+    const b = getBreaker(endpoint);
+    if (b.state === 'open' && b.trips > 0 && b.failures === 0) {
+      recordCircuitTrip();
+    }
+    return null;
+  }
+}
+
+export async function fetchArtlist(query, { timespan = '24h', maxrecords = 50, force = false } = {}) {
+  const cacheKey = `gdelt:artlist:${Buffer.from(query + timespan).toString('base64').slice(0, 40)}`;
+  if (!force) {
+    const cached = await redisGet(cacheKey);
+    if (cached?.articles) { recordCacheHit(); return { articles: cached.articles, fromCache: true }; }
+  }
+  recordCacheMiss();
+  const raw = await gdeltDocFetch('artlist', {
+    query, mode: 'artlist', maxrecords: String(maxrecords), timespan, sort: 'date',
+  }, `artlist:${query.slice(0, 40)}`);
+  const { valid, data: articles, rejected, warning } = validateArtlistResponse(raw);
+  if (!valid || !articles) { if (warning) console.warn(`  ⚠ artlist validation: ${warning}`); return { articles: [], fromCache: false }; }
+  if (rejected > 0) recordValidationReject();
+  if (warning) console.warn(`  ⚠ ${warning}`);
+  await redisSet(cacheKey, { articles, cachedAt: new Date().toISOString() }, CACHE_TTL.artlist)
+    .catch(e => console.warn(`  Redis cache write failed: ${e.message}`));
+  return { articles, fromCache: false };
+}
+
+export async function fetchTimelineVol(query, { timespan = '6h', force = false } = {}) {
+  const cacheKey = `gdelt:timelinevol:${Buffer.from(query + timespan).toString('base64').slice(0, 40)}`;
+  if (!force) {
+    const cached = await redisGet(cacheKey);
+    if (cached?.timeline) { recordCacheHit(); return { timeline: cached.timeline, fromCache: true }; }
+  }
+  recordCacheMiss();
+  const raw = await gdeltDocFetch('timelinevol', {
+    query, mode: 'timelinevol', timespan, smoothing: '3',
+  }, `timelinevol:${query.slice(0, 40)}`);
+  const { valid, data: series, warning } = validateTimelineResponse(raw);
+  if (!valid || !series || series.length === 0) { if (warning) console.warn(`  ⚠ timelinevol validation: ${warning}`); return { timeline: null, fromCache: false }; }
+  await redisSet(cacheKey, { timeline: series, cachedAt: new Date().toISOString() }, CACHE_TTL.timelinevol)
+    .catch(e => console.warn(`  Redis cache write failed: ${e.message}`));
+  return { timeline: series, fromCache: false };
+}
+
+export async function fetchPersonArticles(name, { timespan = '7d', maxrecords = 100, force = false } = {}) {
+  const cacheKey = `gdelt:person:${name.toLowerCase().replace(/\s+/g, '-')}:${timespan}`;
+  if (!force) {
+    const cached = await redisGet(cacheKey);
+    if (cached?.articles) { recordCacheHit(); return { articles: cached.articles, fromCache: true }; }
+  }
+  recordCacheMiss();
+  const query = `"${name}" sourcelang:eng`;
+  const raw = await gdeltDocFetch('person', {
+    query, mode: 'artlist', maxrecords: String(maxrecords), timespan, sort: 'date',
+  }, `person:${name}/${timespan}`);
+  const { valid, data: articles, rejected, warning } = validateArtlistResponse(raw);
+  if (!valid || !articles) { if (warning) console.warn(`  ⚠ person artlist validation [${name}]: ${warning}`); return { articles: [], fromCache: false }; }
+  if (rejected > 0) recordValidationReject();
+  await redisSet(cacheKey, { articles, cachedAt: new Date().toISOString() }, CACHE_TTL.person)
+    .catch(e => console.warn(`  Redis cache write failed: ${e.message}`));
+  return { articles, fromCache: false };
+}
+
+export async function fetchGkg(query, { timespan = '24h', maxrecords = 500, force = false } = {}) {
+  const cacheKey = `gdelt:gkg:${Buffer.from(query + timespan).toString('base64').slice(0, 40)}`;
+  if (!force) {
+    const cached = await redisGet(cacheKey);
+    if (cached?.geojson) { recordCacheHit(); return { geojson: cached.geojson, fromCache: true }; }
+  }
+  recordCacheMiss();
+  if (!canRequest('gkg')) { console.warn('  ⚡ GKG skipped — gkg circuit open'); return { geojson: null, fromCache: false }; }
+
+  const gkgUrl = new URL(GDELT_GKG);
+  gkgUrl.searchParams.set('query',      query);
+  gkgUrl.searchParams.set('timespan',   timespan);
+  gkgUrl.searchParams.set('format',     'geojson');
+  gkgUrl.searchParams.set('maxrecords', String(maxrecords));
+
+  try {
+    const resp = await fetch(gkgUrl.toString(), {
+      headers: { 'User-Agent': USER_AGENT },
+      signal:  AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (resp.status === 429) {
+      breakerRecordFailure('gkg');
+      console.warn('  ⚠ GKG 429 — circuit failure recorded');
+      recordError({ level: 'warn', endpoint: 'gkg', message: 'HTTP 429' });
+      return { geojson: null, fromCache: false };
+    }
+    if (!resp.ok) {
+      breakerRecordFailure('gkg');
+      console.warn(`  ⚠ GKG HTTP ${resp.status}`);
+      recordError({ level: 'error', endpoint: 'gkg', message: `HTTP ${resp.status}`, status: resp.status });
+      return { geojson: null, fromCache: false };
+    }
+    const raw = await resp.json();
+    const { valid, data: geojson, warning } = validateGkgResponse(raw);
+    if (!valid || !geojson) {
+      console.warn(`  ⚠ GKG validation failed: ${warning}`);
+      recordValidationReject();
+      breakerRecordFailure('gkg');
+      return { geojson: null, fromCache: false };
+    }
+    breakerRecordSuccess('gkg');
+    telRecordSuccess();
+    if (warning) console.warn(`  ⚠ GKG: ${warning}`);
+    console.log(`    → ${geojson.features.length} GKG features`);
+    await redisSet(cacheKey, { geojson, cachedAt: new Date().toISOString() }, CACHE_TTL.gkg)
+      .catch(e => console.warn(`  Redis cache write failed: ${e.message}`));
+    return { geojson, fromCache: false };
+  } catch (err) {
+    breakerRecordFailure('gkg');
+    recordError({ level: 'error', endpoint: 'gkg', message: err.message });
+    console.warn(`  ⚠ GKG network error: ${err.message}`);
+    return { geojson: null, fromCache: false };
+  }
+}
+
+// ── Consumer helpers (read from gdelt:raw:v1) ─────────────────────────────────
 
 /**
  * Returns the full raw cache object: { topics, persons, gkg, crawledAt }
  *
- * Behaviour:
- *   - If the key is MISSING  → returns EMPTY_RAW (does NOT throw)
- *   - If the key is PRESENT but old → logs a warning, returns data
- *   - If circuitTripped flag is set  → logs a degraded-mode warning
- *   - If Redis itself is unreachable → throws (genuine infrastructure error)
+ * PATCH 5 HOTFIX: returns EMPTY_RAW (with _missing:true) when key is absent.
+ * Does NOT throw on missing key — only throws on genuine Redis errors.
  */
 export async function getGdeltRaw() {
   const { url, token } = getRedisCredentials();
@@ -63,12 +323,10 @@ export async function getGdeltRaw() {
   try {
     resp = await fetch(`${url}/get/${encodeURIComponent(RAW_KEY)}`, {
       headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(10_000),
+      signal:  AbortSignal.timeout(10_000),
     });
   } catch (err) {
-    // Network-level failure — Redis itself is unreachable. Throw so callers
-    // can retry via withRetry. This is distinct from a missing key.
-    throw new Error(`Redis unreachable: ${err.message}`);
+    throw new Error(`Redis network error reading gdelt:raw:v1: ${err.message}`);
   }
 
   if (!resp.ok) {
@@ -78,71 +336,57 @@ export async function getGdeltRaw() {
   const data = await resp.json();
 
   if (!data.result) {
-    // Key does not exist — seed-gdelt-raw.mjs has not run yet or intentionally
-    // skipped the write (first-run circuit trip). Return empty, don't throw.
     console.warn(
-      '  ⚠ gdelt:raw:v1 is missing — seed-gdelt-raw.mjs has not written data yet.' +
-      ' Consumers will receive empty arrays. Run: node scripts/seed-gdelt-raw.mjs --force'
+      '  ⚠ gdelt:raw:v1 is missing — GDELT raw seed has not written data yet.\n' +
+      '    Consumer will use LKG fallback if available.\n' +
+      '    To prime: node scripts/seed-gdelt-raw.mjs --force'
     );
     return EMPTY_RAW;
   }
 
   const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
 
-  // Staleness check
   if (parsed.crawledAt) {
     const ageMin = (Date.now() - new Date(parsed.crawledAt).getTime()) / 60_000;
     if (ageMin > STALE_WARN_MIN) {
-      console.warn(`  ⚠ gdelt:raw:v1 is ${ageMin.toFixed(0)} min old — data may be stale. Re-run seed-gdelt-raw.mjs.`);
+      console.warn(`  ⚠ gdelt:raw:v1 is ${ageMin.toFixed(0)} min old — data may be stale.`);
     }
   }
-
-  // Degraded-mode flag
   if (parsed.circuitTripped) {
-    console.warn('  ⚠ Last GDELT crawl hit rate-limit circuit breaker — data is partial. Some topics/persons may be empty.');
+    console.warn('  ⚠ Last GDELT crawl hit rate-limit circuit breaker — data is partial.');
   }
 
   return parsed;
 }
 
 /**
- * Returns true if gdelt:raw:v1 is missing or was written by a circuit-tripped crawl.
- * Use to surface degraded-mode banners in consumers.
+ * Returns true if the raw key is missing OR if the last crawl was rate-limited.
  */
 export async function isGdeltDegraded() {
   const { url, token } = getRedisCredentials();
   try {
-    // Check ratelimit flag first (set by seed-gdelt-raw on circuit trip)
-    const flagResp = await fetch(`${url}/get/${encodeURIComponent(RATELIMIT_FLAG_KEY)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (flagResp.ok) {
-      const flagData = await flagResp.json();
-      if (flagData.result) return true;
-    }
-    // Also degrade if the key itself is missing
     const rawResp = await fetch(`${url}/get/${encodeURIComponent(RAW_KEY)}`, {
       headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
+      signal:  AbortSignal.timeout(5_000),
     });
     if (rawResp.ok) {
-      const rawData = await rawResp.json();
-      return !rawData.result;
+      const rawBody = await rawResp.json();
+      if (!rawBody.result) return true;
     }
-    return false;
+    const flagResp = await fetch(`${url}/get/${encodeURIComponent(RATELIMIT_FLAG_KEY)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal:  AbortSignal.timeout(5_000),
+    });
+    if (!flagResp.ok) return false;
+    const flagBody = await flagResp.json();
+    return !!flagBody.result;
   } catch {
     return false;
   }
 }
 
-// ── Convenience helpers ───────────────────────────────────────────────────────
-// All helpers return empty arrays/nulls when the raw key is missing (_missing=true).
-// They never throw on a missing key — only on genuine Redis errors.
+// ── Convenience wrappers ──────────────────────────────────────────────────────
 
-/**
- * seed-gdelt-intel: returns 6 intel topics with artlist arrays.
- */
 export async function getGdeltIntelTopics() {
   const raw = await getGdeltRaw();
   const INTEL_IDS = ['military', 'cyber', 'nuclear', 'sanctions', 'intelligence', 'maritime'];
@@ -157,11 +401,6 @@ export async function getGdeltIntelTopics() {
   };
 }
 
-/**
- * seed-gdelt-intel (afterPublish hook): returns 6 intel topics with both
- * artlist AND timelinevol data attached as _vol/_tone fields.
- * publishTransform in seed-gdelt-intel strips these before the canonical write.
- */
 export async function getGdeltIntelTopicsWithTimelines() {
   const raw = await getGdeltRaw();
   const INTEL_IDS = ['military', 'cyber', 'nuclear', 'sanctions', 'intelligence', 'maritime'];
@@ -172,8 +411,8 @@ export async function getGdeltIntelTopicsWithTimelines() {
         id,
         articles:  topicRaw.artlist   ?? [],
         fetchedAt: topicRaw.fetchedAt ?? raw.crawledAt,
-        _vol:  topicRaw.timelinevol ?? [],
-        _tone: [],
+        _vol:      topicRaw.timelinevol ?? [],
+        _tone:     [],
       };
     }),
     fetchedAt: raw.crawledAt,
@@ -181,9 +420,6 @@ export async function getGdeltIntelTopicsWithTimelines() {
   };
 }
 
-/**
- * seed-telegram-narratives: artlist + timelinevol for 10 narrative themes.
- */
 export async function getGdeltNarrativeThemes() {
   const raw = await getGdeltRaw();
   const THEME_IDS = ['conflict', 'military', 'cyber', 'ukraine', 'middleeast', 'osint', 'geopolitics', 'unrest', 'nuclear', 'trade'];
@@ -195,9 +431,6 @@ export async function getGdeltNarrativeThemes() {
   }));
 }
 
-/**
- * seed-narrative-drift: timelinevol data for 10 themes.
- */
 export async function getGdeltTimelineVolumes() {
   const raw = await getGdeltRaw();
   const DRIFT_IDS = ['conflict', 'military', 'cyber', 'ukraine', 'middleeast', 'nuclear', 'sanctions', 'china', 'unrest', 'energy'];
@@ -207,9 +440,6 @@ export async function getGdeltTimelineVolumes() {
   }));
 }
 
-/**
- * seed-missile-events: artlist for missile/drone/airstrike topics.
- */
 export async function getGdeltMissileArticles() {
   const raw = await getGdeltRaw();
   return {
@@ -219,54 +449,42 @@ export async function getGdeltMissileArticles() {
   };
 }
 
-/**
- * seed-warcam: artlist for all conflict/kinetic topics.
- */
 export async function getGdeltWarcamArticles() {
   const raw = await getGdeltRaw();
   return [
-    { label: 'airstrikes',    articles: raw.topics?.airstrike?.artlist         ?? [] },
-    { label: 'ground-combat', articles: raw.topics?.['ground-combat']?.artlist ?? [] },
-    { label: 'drone-missile', articles: raw.topics?.drone?.artlist             ?? [] },
-    { label: 'casualties',    articles: raw.topics?.casualties?.artlist        ?? [] },
-    { label: 'military-ops',  articles: raw.topics?.['military-ops']?.artlist  ?? [] },
+    { label: 'airstrikes',    articles: raw.topics?.airstrike?.artlist             ?? [] },
+    { label: 'ground-combat', articles: raw.topics?.['ground-combat']?.artlist     ?? [] },
+    { label: 'drone-missile', articles: raw.topics?.drone?.artlist                 ?? [] },
+    { label: 'casualties',    articles: raw.topics?.casualties?.artlist            ?? [] },
+    { label: 'military-ops',  articles: raw.topics?.['military-ops']?.artlist      ?? [] },
   ];
 }
 
-/**
- * seed-persons-of-interest: per-person article arrays.
- * Returns zero-data structure (not a throw) when key is missing.
- */
 export async function getGdeltPersonData(personName) {
   const raw = await getGdeltRaw();
+  if (raw._missing) return { articles7d: [], headlines: [], mentionCount: 0, _missing: true };
   const data = raw.persons?.[personName];
   if (!data) return { articles7d: [], headlines: [], mentionCount: 0 };
   return data;
 }
 
 /**
- * seed-poi-discovery: flattened + deduped article pool from POI discovery topics.
- * Returns empty array (not a throw) when key is missing.
+ * Returns [] when raw key is missing — seed-poi-discovery Step 1b fallback fires naturally.
  */
 export async function getGdeltPoiDiscoveryArticles() {
   const raw = await getGdeltRaw();
+  if (raw._missing) return [];
   const POI_IDS = ['poi-leaders', 'poi-military', 'poi-diplomacy', 'poi-wmd', 'poi-unrest'];
   const seen = new Set();
   const all  = [];
   for (const id of POI_IDS) {
     for (const art of raw.topics?.[id]?.artlist ?? []) {
-      if (!seen.has(art.url)) {
-        seen.add(art.url);
-        all.push(art);
-      }
+      if (!seen.has(art.url)) { seen.add(art.url); all.push(art); }
     }
   }
   return all;
 }
 
-/**
- * seed-unrest-events: GKG GeoJSON for unrest.
- */
 export async function getGdeltUnrestGkg() {
   const raw = await getGdeltRaw();
   return raw.gkg ?? null;

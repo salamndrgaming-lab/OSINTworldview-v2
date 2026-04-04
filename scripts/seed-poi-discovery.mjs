@@ -356,6 +356,13 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error('FATAL:', err.message || err);
+  // Exit 0 so seed.yml continue-on-error doesn't block other seeds.
+  // gdelt:raw:v1 missing is expected during first-run rate-limit recovery.
+  const msg = err.message || String(err);
+  if (msg.includes('gdelt:raw:v1') || msg.includes('Redis')) {
+    console.warn(`  SKIP: GDELT cache unavailable (${msg.slice(0, 120)}) — will retry next cycle`);
+  } else {
+    console.error('FATAL:', msg);
+  }
   process.exit(0);
 });

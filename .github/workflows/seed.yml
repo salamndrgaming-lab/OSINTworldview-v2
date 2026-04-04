@@ -209,6 +209,8 @@ jobs:
         continue-on-error: true
       - run: node scripts/seed-hypothesis-generator.mjs
         continue-on-error: true
+      - run: node scripts/seed-cross-source-signals.mjs
+        continue-on-error: true
 
       # Indexing and archival — runs last
       - run: node scripts/seed-vector-index.mjs

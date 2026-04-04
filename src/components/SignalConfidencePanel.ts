@@ -49,6 +49,7 @@ const DOMAINS: DomainCell[] = [
   { id: 'hypotheses',  label: 'Hypotheses',    icon: '🔮', category: 'intel',      healthKey: 'hypotheses' },
   { id: 'narrative',   label: 'Narratives',    icon: '📡', category: 'intel',      healthKey: 'narrativeDrift' },
   { id: 'telegram',    label: 'Telegram',      icon: '💬', category: 'intel',      healthKey: 'telegramNarratives' },
+  { id: 'xsource',    label: 'X-Source',      icon: '⚡', category: 'intel',      healthKey: 'crossSourceSignals' },
   // Markets & Economy
   { id: 'commodities', label: 'Commodities',   icon: '🛢', category: 'market',     healthKey: 'commodityQuotes' },
   { id: 'markets',     label: 'Markets',       icon: '📈', category: 'market',     healthKey: 'marketQuotes' },

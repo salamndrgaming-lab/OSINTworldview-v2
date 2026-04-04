@@ -70,6 +70,7 @@ const STANDALONE_KEYS = {
   entityGraph:           'intelligence:entity-graph:v1',
   hypotheses:            'intelligence:hypotheses:v1',
   narrativeDrift:        'intelligence:narrative-drift:v1',
+  crossSourceSignals:    'intelligence:cross-source-signals:v1',
 };
 
 const SEED_META = {
@@ -127,6 +128,7 @@ const SEED_META = {
   entityGraph:         { key: 'seed-meta:intelligence:entity-graph',         maxStaleMin: 1440 },
   hypotheses:          { key: 'seed-meta:intelligence:hypotheses',           maxStaleMin: 180 },
   narrativeDrift:      { key: 'seed-meta:intelligence:narrative-drift',      maxStaleMin: 180 },
+  crossSourceSignals:  { key: 'seed-meta:intelligence:cross-source-signals', maxStaleMin: 60 },
 };
 
 // Standalone keys that are populated on-demand by RPC handlers (not seeds).

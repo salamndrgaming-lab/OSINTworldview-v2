@@ -17,10 +17,11 @@ jobs:
   # of calling GDELT themselves, dropping ~91 direct API calls to ~26.
   seed-gdelt-raw:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       UPSTASH_REDIS_REST_URL:   ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+      NODE_OPTIONS: '--dns-result-order=ipv4first'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,9 +30,6 @@ jobs:
             shared
             package.json
             package-lock.json
-      # Fix: env: block sets vars AFTER Node starts; GITHUB_ENV persists across all steps
-      - name: Force IPv4 DNS for all Node processes
-        run: echo "NODE_OPTIONS=--dns-result-order=ipv4first" >> $GITHUB_ENV
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -92,7 +90,7 @@ jobs:
   seed-downstream:
     needs: [seed-gdelt-raw]
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       UPSTASH_REDIS_REST_URL:   ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
@@ -117,6 +115,7 @@ jobs:
       NEO4J_DATABASE:           ${{ secrets.NEO4J_DATABASE }}
       TELEGRAM_BOT_TOKEN:       ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID:         ${{ secrets.TELEGRAM_CHAT_ID }}
+      NODE_OPTIONS:             '--dns-result-order=ipv4first'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -125,9 +124,6 @@ jobs:
             shared
             package.json
             package-lock.json
-      # Fix: env: block sets vars AFTER Node starts; GITHUB_ENV persists across all steps
-      - name: Force IPv4 DNS for all Node processes
-        run: echo "NODE_OPTIONS=--dns-result-order=ipv4first" >> $GITHUB_ENV
       - uses: actions/setup-node@v4
         with:
           node-version: '20'

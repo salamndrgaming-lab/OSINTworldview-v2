@@ -14,17 +14,17 @@
 
 import { Panel } from './Panel';
 
-interface SeedMeta {
-  key: string;
-  freshAt?: number;
-  recordCount?: number;
-  staleMin?: number;
+interface HealthCheck {
+  status: string;
+  records?: number;
+  seedAgeMin?: number;
   maxStaleMin?: number;
 }
 
 interface HealthData {
-  seedMeta?: Record<string, SeedMeta>;
-  keys?: Record<string, { fresh: boolean; ageMin?: number; present?: boolean }>;
+  status?: string;
+  checks?: Record<string, HealthCheck>;
+  summary?: { total: number; ok: number; warn: number; crit: number };
 }
 
 interface DomainCell {
@@ -32,36 +32,39 @@ interface DomainCell {
   label: string;
   icon: string;
   category: string;
-  metaKey?: string;    // key in seedMeta
-  healthKey?: string;  // fallback key in health keys map
+  healthKey: string;   // key name in health.checks (e.g. 'gdeltIntel', 'earthquakes')
 }
 
 const DOMAINS: DomainCell[] = [
   // Conflict & Security
-  { id: 'missiles',    label: 'Missiles',     icon: '🚀', category: 'conflict',   metaKey: 'missiles' },
-  { id: 'conflict',    label: 'UCDP Conflict', icon: '⚔️', category: 'conflict',   metaKey: 'ucdp-events' },
-  { id: 'iran',        label: 'Iran Events',   icon: '🇮🇷', category: 'conflict',   metaKey: 'iran-events' },
-  { id: 'unrest',      label: 'Unrest',        icon: '✊', category: 'conflict',   metaKey: 'unrest-events' },
+  { id: 'missiles',    label: 'Missiles',      icon: '🚀', category: 'conflict',   healthKey: 'missileEvents' },
+  { id: 'conflict',    label: 'UCDP Conflict', icon: '⚔️', category: 'conflict',   healthKey: 'ucdpEvents' },
+  { id: 'iran',        label: 'Iran Events',   icon: '🇮🇷', category: 'conflict',   healthKey: 'iranEvents' },
+  { id: 'unrest',      label: 'Unrest',        icon: '✊', category: 'conflict',   healthKey: 'unrestEvents' },
+  { id: 'forecast',    label: 'Forecasts',     icon: '📊', category: 'conflict',   healthKey: 'correlationCards' },
   // Intelligence
-  { id: 'gdelt',       label: 'GDELT Intel',   icon: '🌐', category: 'intel',      metaKey: 'gdelt-intel' },
-  { id: 'poi',         label: 'POI',           icon: '👤', category: 'intel',      metaKey: 'poi' },
-  { id: 'sitrep',      label: 'SITREP',        icon: '🤖', category: 'intel',      metaKey: 'agent-sitrep' },
-  { id: 'hypotheses',  label: 'Hypotheses',    icon: '🔮', category: 'intel',      metaKey: 'hypotheses' },
-  { id: 'narrative',   label: 'Narratives',    icon: '📡', category: 'intel',      metaKey: 'narrative-drift' },
-  { id: 'telegram',    label: 'Telegram',      icon: '💬', category: 'intel',      metaKey: 'telegram-narratives' },
+  { id: 'gdelt',       label: 'GDELT Intel',   icon: '🌐', category: 'intel',      healthKey: 'gdeltIntel' },
+  { id: 'poi',         label: 'POI',           icon: '👤', category: 'intel',      healthKey: 'poi' },
+  { id: 'insights',    label: 'AI Insights',   icon: '💡', category: 'intel',      healthKey: 'insights' },
+  { id: 'hypotheses',  label: 'Hypotheses',    icon: '🔮', category: 'intel',      healthKey: 'hypotheses' },
+  { id: 'narrative',   label: 'Narratives',    icon: '📡', category: 'intel',      healthKey: 'narrativeDrift' },
+  { id: 'telegram',    label: 'Telegram',      icon: '💬', category: 'intel',      healthKey: 'telegramNarratives' },
   // Markets & Economy
-  { id: 'commodities', label: 'Commodities',   icon: '🛢', category: 'market',     metaKey: 'commodity-quotes' },
-  { id: 'markets',     label: 'Markets',       icon: '📈', category: 'market',     metaKey: 'market-quotes' },
-  { id: 'crypto',      label: 'Crypto',        icon: '₿',  category: 'market',     metaKey: 'crypto-quotes' },
-  { id: 'chokepoints', label: 'Chokepoints',   icon: '⚓', category: 'market',     metaKey: 'chokepoint-flow' },
+  { id: 'commodities', label: 'Commodities',   icon: '🛢', category: 'market',     healthKey: 'commodityQuotes' },
+  { id: 'markets',     label: 'Markets',       icon: '📈', category: 'market',     healthKey: 'marketQuotes' },
+  { id: 'crypto',      label: 'Crypto',        icon: '₿',  category: 'market',     healthKey: 'cryptoQuotes' },
+  { id: 'chokepoints', label: 'Chokepoints',   icon: '⚓', category: 'market',     healthKey: 'chokepoints' },
+  { id: 'predictions', label: 'Predictions',   icon: '🎯', category: 'market',     healthKey: 'predictions' },
   // Environment & Infrastructure
-  { id: 'earthquakes', label: 'Earthquakes',   icon: '🌍', category: 'env',        metaKey: 'earthquakes' },
-  { id: 'weather',     label: 'Weather',       icon: '⛈', category: 'env',        metaKey: 'weather-alerts' },
-  { id: 'radiation',   label: 'Radiation',     icon: '☢️', category: 'env',        metaKey: 'radiation' },
-  { id: 'disease',     label: 'Disease',       icon: '🏥', category: 'env',        metaKey: 'disease-outbreaks' },
+  { id: 'earthquakes', label: 'Earthquakes',   icon: '🌍', category: 'env',        healthKey: 'earthquakes' },
+  { id: 'weather',     label: 'Weather',       icon: '⛈', category: 'env',        healthKey: 'weatherAlerts' },
+  { id: 'radiation',   label: 'Radiation',     icon: '☢️', category: 'env',        healthKey: 'displacement' },
+  { id: 'disease',     label: 'Disease',       icon: '🏥', category: 'env',        healthKey: 'naturalEvents' },
+  { id: 'fires',       label: 'Wildfires',     icon: '🔥', category: 'env',        healthKey: 'wildfires' },
   // Cyber & Tech
-  { id: 'cyber',       label: 'Cyber',         icon: '💻', category: 'cyber',      metaKey: 'cyber-threats' },
-  { id: 'outages',     label: 'Outages',       icon: '🔴', category: 'cyber',      metaKey: 'internet-outages' },
+  { id: 'cyber',       label: 'Cyber',         icon: '💻', category: 'cyber',      healthKey: 'cyberThreats' },
+  { id: 'outages',     label: 'Outages',       icon: '🔴', category: 'cyber',      healthKey: 'outages' },
+  { id: 'flights',     label: 'Mil Flights',   icon: '✈️', category: 'cyber',      healthKey: 'militaryFlights' },
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -73,8 +76,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 // Staleness thresholds — how old (minutes) before a domain turns amber/red
-const AMBER_MIN = 120;  // >2h = amber
-const RED_MIN   = 360;  // >6h = red
+const AMBER_MIN = 120;  // >2h = amber (fallback when maxStaleMin not available)
 
 export class SignalConfidencePanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -146,23 +148,37 @@ export class SignalConfidencePanel extends Panel {
     const summary = this.content.querySelector('#sig-summary');
     if (!body) return;
 
-    const now = Date.now();
-    const seedMeta = data.seedMeta ?? {};
+    const checks = data.checks ?? {};
 
-    // Score each domain
+    // Score each domain based on health check data
     const scored = DOMAINS.map(domain => {
-      const meta = domain.metaKey ? seedMeta[domain.metaKey] : undefined;
+      const check = checks[domain.healthKey];
       let ageMin: number | null = null;
       let present = false;
+      let records = 0;
       let confidence: 'fresh' | 'amber' | 'stale' | 'missing' = 'missing';
 
-      if (meta?.freshAt) {
-        ageMin = Math.round((now - meta.freshAt) / 60000);
-        present = true;
-        confidence = ageMin <= AMBER_MIN ? 'fresh' : ageMin <= RED_MIN ? 'amber' : 'stale';
+      if (check) {
+        const status = check.status || '';
+        records = check.records ?? 0;
+
+        if (status === 'EMPTY' || status === 'EMPTY_DATA') {
+          confidence = 'missing';
+        } else if (check.seedAgeMin != null) {
+          ageMin = check.seedAgeMin;
+          present = true;
+          const threshold = check.maxStaleMin ?? AMBER_MIN;
+          confidence = ageMin <= threshold ? 'fresh' : ageMin <= threshold * 2 ? 'amber' : 'stale';
+        } else if (status === 'STALE_SEED') {
+          present = true;
+          confidence = 'stale';
+        } else if (status === 'OK' || status === 'OK_CASCADE') {
+          present = true;
+          confidence = 'fresh';
+        }
       }
 
-      return { ...domain, ageMin, present, confidence };
+      return { ...domain, ageMin, present, confidence, records };
     });
 
     // Summary counts
@@ -216,7 +232,7 @@ export class SignalConfidencePanel extends Panel {
 
   private renderCell(d: {
     icon: string; label: string; confidence: string;
-    ageMin: number | null; present: boolean;
+    ageMin: number | null; present: boolean; records?: number;
   }): string {
     type ColorEntry = { bg: string; border: string; text: string; dot: string };
     const colors: Record<string, ColorEntry> = {
@@ -233,12 +249,14 @@ export class SignalConfidencePanel extends Panel {
 
     const ageStr = d.ageMin !== null
       ? (d.ageMin < 60 ? `${d.ageMin}m` : `${Math.round(d.ageMin / 60)}h`) + ' ago'
-      : 'No data';
+      : d.present ? 'Active' : 'No data';
+
+    const recStr = d.records ? ` · ${d.records}` : '';
 
     return `<div style="
       background:${bg};border:1px solid ${border};border-radius:6px;
       padding:6px 7px;text-align:center;cursor:default;
-    " title="${this.esc(d.label)}: ${ageStr}">
+    " title="${this.esc(d.label)}: ${ageStr}${recStr ? ' (' + d.records + ' records)' : ''}">
       <div style="font-size:16px;line-height:1;margin-bottom:3px">${d.icon}</div>
       <div style="font-size:9px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${this.esc(d.label)}</div>
       <div style="font-size:8px;color:${text};margin-top:1px">${ageStr}</div>

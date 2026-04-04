@@ -174,9 +174,9 @@ async function gdeltDocFetch(endpoint, params, label) {
 
   try {
     const json = await retryWithBackoff(fetchFn, {
-      maxRetries:  3,
-      baseMs:      60_000,
-      capMs:       300_000,
+      maxRetries:  2,
+      baseMs:      30_000,
+      capMs:       120_000,
       shouldRetry: (err) => err.status === 429 || (err.status != null && err.status >= 500), // retry on 429 (rate-limit) and 5xx; skip 4xx (except 429) and bare network errors
       onRetry: (err, attempt, delayMs) => {
         console.warn(`  🔄 Retry ${attempt + 1} [${label}] after ${(delayMs / 1000).toFixed(1)}s — ${err.message}`);

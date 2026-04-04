@@ -212,8 +212,16 @@ async function crawlTopics() {
   const results = {};
   let consecutiveSuccesses = 0;
   let isFirstCall = true;
+  const crawlStart = Date.now();
+  const MAX_CRAWL_MS = 40 * 60_000; // 40 min hard cap — leaves margin for persons + GKG + write
 
   for (const topic of TOPICS) {
+    // Time guard — stop before GitHub Actions kills us
+    if (Date.now() - crawlStart > MAX_CRAWL_MS) {
+      console.warn(`  ⏱ Topic crawl stopped at "${topic.id}" — 40 min time limit reached (${Object.keys(results).length}/${TOPICS.length} done)`);
+      break;
+    }
+
     if (!canRequest('artlist')) {
       console.warn(`  ⚡ Topic crawl stopped at "${topic.id}" — artlist circuit open`);
       break;

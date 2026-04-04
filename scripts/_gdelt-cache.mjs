@@ -15,6 +15,18 @@
  * CIRCUIT BREAKERS: artlist / timelinevol / gkg / person — all independent.
  *   GKG failures NEVER trip the artlist or person breakers.
  *
+ * MISSING KEY BEHAVIOUR (Patch 5 hotfix):
+ *   getGdeltRaw() no longer throws when gdelt:raw:v1 is missing.
+ *   Returns EMPTY_RAW = { topics:{}, persons:{}, gkg:null, crawledAt:null,
+ *   circuitTripped:false, _missing:true } so consumer seeds can detect and
+ *   apply their LKG fallback without triggering runSeed's withRetry loop.
+ *   Only genuine Redis errors (network failure, HTTP 5xx) still throw.
+ *
+ * EXPORT NOTE:
+ *   ESM does not allow `export { importAlias as newName }` when the name is a
+ *   local import alias. breakerSummary() and resetAllBreakers() are exported as
+ *   named wrapper functions instead.
+ *
  * CACHE TTLs:
  *   artlist     1800s (30 min)
  *   timelinevol  900s (15 min)
@@ -28,11 +40,11 @@
 import { getRedisCredentials } from './_seed-utils.mjs';
 import {
   getBreaker,
-  recordSuccess as breakerSuccess,
-  recordFailure as breakerFailure,
+  recordSuccess  as breakerRecordSuccess,
+  recordFailure  as breakerRecordFailure,
   canRequest,
-  breakerSummary as _breakerSummary,
-  resetAllBreakers as _resetAllBreakers,
+  breakerSummary as circuitBreakerSummary,
+  resetAllBreakers as circuitBreakerResetAll,
 } from './shared/circuit-breaker.mjs';
 import {
   retryWithBackoff,
@@ -45,7 +57,7 @@ import {
 } from './shared/zod-schemas.mjs';
 import {
   recordError,
-  recordSuccess as telSuccess,
+  recordSuccess    as telRecordSuccess,
   recordCacheHit,
   recordCacheMiss,
   recordValidationReject,
@@ -61,9 +73,8 @@ const STALE_WARN_MIN           = 90;
 const GDELT_DOC                = 'https://api.gdeltproject.org/api/v2/doc/doc';
 const GDELT_GKG                = 'https://api.gdeltproject.org/api/v1/gkg_geojson';
 const USER_AGENT               = 'OSINTworldview/2.0';
-const FETCH_TIMEOUT_MS         = 30_000;
+const FETCH_TIMEOUT_MS         = 15_000; // reduced from 30s — network failures fail faster, matches koala73
 
-// Per-type Redis cache TTLs for the live fetcher path
 const CACHE_TTL = {
   artlist:     1800,
   timelinevol:  900,
@@ -71,9 +82,29 @@ const CACHE_TTL = {
   person:      3600,
 };
 
-// Re-export for callers that import breakerSummary / resetAllBreakers from here
-export { _breakerSummary as breakerSummary };
-export { _resetAllBreakers as resetAllBreakers };
+// Sentinel returned when gdelt:raw:v1 is missing — never throws in this case.
+const EMPTY_RAW = Object.freeze({
+  topics:        {},
+  persons:       {},
+  gkg:           null,
+  crawledAt:     null,
+  circuitTripped: false,
+  _missing:      true,
+});
+
+// ── Exported wrappers for circuit-breaker functions ───────────────────────────
+// ESM does not allow `export { localAlias as newName }` when the alias comes
+// from an import statement. Export named wrapper functions instead.
+
+/** Returns a concise breaker-state summary string for end-of-run logging. */
+export function breakerSummary() {
+  return circuitBreakerSummary();
+}
+
+/** Force-close all circuit breakers (called when --force flag is set). */
+export function resetAllBreakers() {
+  return circuitBreakerResetAll();
+}
 
 // ── Redis helpers ─────────────────────────────────────────────────────────────
 
@@ -111,15 +142,8 @@ async function redisSet(key, value, ttl) {
   if (!resp.ok) throw new Error(`Redis SET failed: HTTP ${resp.status}`);
 }
 
-// ── Live GDELT fetcher (used by seed-gdelt-raw.mjs) ─────────────────────────
+// ── Live GDELT fetcher (used by seed-gdelt-raw.mjs) ──────────────────────────
 
-/**
- * Internal: make one GDELT DOC API call.
- * @param {string} endpoint — 'artlist' | 'timelinevol' | 'person'
- * @param {Record<string,string>} params
- * @param {string} label — for logging
- * @returns {Promise<object|null>}
- */
 async function gdeltDocFetch(endpoint, params, label) {
   if (!canRequest(endpoint)) {
     console.warn(`  ⚡ [${label}] blocked — ${endpoint} circuit open`);
@@ -135,7 +159,6 @@ async function gdeltDocFetch(endpoint, params, label) {
       headers: { 'User-Agent': USER_AGENT },
       signal:  AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-
     if (resp.status === 429) {
       const err = new Error(`HTTP 429 [${label}]`);
       err.status = 429;
@@ -146,31 +169,27 @@ async function gdeltDocFetch(endpoint, params, label) {
       err.status = resp.status;
       throw err;
     }
-
     return resp.json();
   };
 
   try {
     const json = await retryWithBackoff(fetchFn, {
-      maxRetries: 2,
-      baseMs:     3_000,
-      capMs:      60_000,
-      shouldRetry: (err) => err.status !== 429, // don't retry rate-limit errors
+      maxRetries:  3,
+      baseMs:      60_000,
+      capMs:       300_000,
+      shouldRetry: (err) => err.status === 429 || (err.status != null && err.status >= 500), // retry on 429 (rate-limit) and 5xx; skip 4xx (except 429) and bare network errors
       onRetry: (err, attempt, delayMs) => {
         console.warn(`  🔄 Retry ${attempt + 1} [${label}] after ${(delayMs / 1000).toFixed(1)}s — ${err.message}`);
         recordError({ level: 'warn', endpoint, label, message: err.message, attempt });
       },
     });
-
-    breakerSuccess(endpoint);
-    telSuccess();
+    breakerRecordSuccess(endpoint);
+    telRecordSuccess();
     return json;
   } catch (err) {
     console.warn(`  ⚠ GDELT fetch failed [${label}]: ${err.message}`);
-    breakerFailure(endpoint);
+    breakerRecordFailure(endpoint);
     recordError({ level: 'error', endpoint, label, message: err.message, status: err.status });
-
-    // Track circuit trips
     const b = getBreaker(endpoint);
     if (b.state === 'open' && b.trips > 0 && b.failures === 0) {
       recordCircuitTrip();
@@ -179,164 +198,69 @@ async function gdeltDocFetch(endpoint, params, label) {
   }
 }
 
-/**
- * Fetch artlist for a query. Checks Redis cache first (unless force=true).
- * @param {string} query — GDELT query string
- * @param {object} opts
- * @param {string}  [opts.timespan='24h']
- * @param {number}  [opts.maxrecords=50]
- * @param {boolean} [opts.force=false]
- * @returns {Promise<{ articles: object[], fromCache: boolean }>}
- */
 export async function fetchArtlist(query, { timespan = '24h', maxrecords = 50, force = false } = {}) {
   const cacheKey = `gdelt:artlist:${Buffer.from(query + timespan).toString('base64').slice(0, 40)}`;
-
   if (!force) {
     const cached = await redisGet(cacheKey);
-    if (cached?.articles) {
-      recordCacheHit();
-      return { articles: cached.articles, fromCache: true };
-    }
+    if (cached?.articles) { recordCacheHit(); return { articles: cached.articles, fromCache: true }; }
   }
-
   recordCacheMiss();
   const raw = await gdeltDocFetch('artlist', {
-    query,
-    mode:       'artlist',
-    maxrecords: String(maxrecords),
-    timespan,
-    sort:       'date',
+    query, mode: 'artlist', maxrecords: String(maxrecords), timespan, sort: 'date',
   }, `artlist:${query.slice(0, 40)}`);
-
   const { valid, data: articles, rejected, warning } = validateArtlistResponse(raw);
-
-  if (!valid || !articles) {
-    if (warning) console.warn(`  ⚠ artlist validation: ${warning}`);
-    return { articles: [], fromCache: false };
-  }
-
+  if (!valid || !articles) { if (warning) console.warn(`  ⚠ artlist validation: ${warning}`); return { articles: [], fromCache: false }; }
   if (rejected > 0) recordValidationReject();
   if (warning) console.warn(`  ⚠ ${warning}`);
-
-  // Cache the validated result
   await redisSet(cacheKey, { articles, cachedAt: new Date().toISOString() }, CACHE_TTL.artlist)
     .catch(e => console.warn(`  Redis cache write failed: ${e.message}`));
-
   return { articles, fromCache: false };
 }
 
-/**
- * Fetch timelinevol for a query.
- * @param {string} query
- * @param {object} opts
- * @param {string}  [opts.timespan='6h']
- * @param {boolean} [opts.force=false]
- * @returns {Promise<{ timeline: object[]|null, fromCache: boolean }>}
- */
 export async function fetchTimelineVol(query, { timespan = '6h', force = false } = {}) {
   const cacheKey = `gdelt:timelinevol:${Buffer.from(query + timespan).toString('base64').slice(0, 40)}`;
-
   if (!force) {
     const cached = await redisGet(cacheKey);
-    if (cached?.timeline) {
-      recordCacheHit();
-      return { timeline: cached.timeline, fromCache: true };
-    }
+    if (cached?.timeline) { recordCacheHit(); return { timeline: cached.timeline, fromCache: true }; }
   }
-
   recordCacheMiss();
   const raw = await gdeltDocFetch('timelinevol', {
-    query,
-    mode:      'timelinevol',
-    timespan,
-    smoothing: '3',
+    query, mode: 'timelinevol', timespan, smoothing: '3',
   }, `timelinevol:${query.slice(0, 40)}`);
-
   const { valid, data: series, warning } = validateTimelineResponse(raw);
-
-  if (!valid || !series || series.length === 0) {
-    if (warning) console.warn(`  ⚠ timelinevol validation: ${warning}`);
-    return { timeline: null, fromCache: false };
-  }
-
+  if (!valid || !series || series.length === 0) { if (warning) console.warn(`  ⚠ timelinevol validation: ${warning}`); return { timeline: null, fromCache: false }; }
   await redisSet(cacheKey, { timeline: series, cachedAt: new Date().toISOString() }, CACHE_TTL.timelinevol)
     .catch(e => console.warn(`  Redis cache write failed: ${e.message}`));
-
   return { timeline: series, fromCache: false };
 }
 
-/**
- * Fetch articles mentioning a specific person (exact-match quoted query).
- * @param {string} name — person's full name
- * @param {object} opts
- * @param {string}  [opts.timespan='7d']
- * @param {number}  [opts.maxrecords=100]
- * @param {boolean} [opts.force=false]
- * @returns {Promise<{ articles: object[], fromCache: boolean }>}
- */
 export async function fetchPersonArticles(name, { timespan = '7d', maxrecords = 100, force = false } = {}) {
   const cacheKey = `gdelt:person:${name.toLowerCase().replace(/\s+/g, '-')}:${timespan}`;
-
   if (!force) {
     const cached = await redisGet(cacheKey);
-    if (cached?.articles) {
-      recordCacheHit();
-      return { articles: cached.articles, fromCache: true };
-    }
+    if (cached?.articles) { recordCacheHit(); return { articles: cached.articles, fromCache: true }; }
   }
-
   recordCacheMiss();
-  // Exact match via quoted query
   const query = `"${name}" sourcelang:eng`;
   const raw = await gdeltDocFetch('person', {
-    query,
-    mode:       'artlist',
-    maxrecords: String(maxrecords),
-    timespan,
-    sort:       'date',
+    query, mode: 'artlist', maxrecords: String(maxrecords), timespan, sort: 'date',
   }, `person:${name}/${timespan}`);
-
   const { valid, data: articles, rejected, warning } = validateArtlistResponse(raw);
-
-  if (!valid || !articles) {
-    if (warning) console.warn(`  ⚠ person artlist validation [${name}]: ${warning}`);
-    return { articles: [], fromCache: false };
-  }
-
+  if (!valid || !articles) { if (warning) console.warn(`  ⚠ person artlist validation [${name}]: ${warning}`); return { articles: [], fromCache: false }; }
   if (rejected > 0) recordValidationReject();
-
   await redisSet(cacheKey, { articles, cachedAt: new Date().toISOString() }, CACHE_TTL.person)
     .catch(e => console.warn(`  Redis cache write failed: ${e.message}`));
-
   return { articles, fromCache: false };
 }
 
-/**
- * Fetch GKG GeoJSON. Uses an isolated 'gkg' breaker — never trips artlist/person.
- * @param {string} query
- * @param {object} opts
- * @param {string}  [opts.timespan='24h']
- * @param {number}  [opts.maxrecords=500]
- * @param {boolean} [opts.force=false]
- * @returns {Promise<{ geojson: object|null, fromCache: boolean }>}
- */
 export async function fetchGkg(query, { timespan = '24h', maxrecords = 500, force = false } = {}) {
   const cacheKey = `gdelt:gkg:${Buffer.from(query + timespan).toString('base64').slice(0, 40)}`;
-
   if (!force) {
     const cached = await redisGet(cacheKey);
-    if (cached?.geojson) {
-      recordCacheHit();
-      return { geojson: cached.geojson, fromCache: true };
-    }
+    if (cached?.geojson) { recordCacheHit(); return { geojson: cached.geojson, fromCache: true }; }
   }
-
   recordCacheMiss();
-
-  if (!canRequest('gkg')) {
-    console.warn('  ⚡ GKG skipped — gkg circuit open');
-    return { geojson: null, fromCache: false };
-  }
+  if (!canRequest('gkg')) { console.warn('  ⚡ GKG skipped — gkg circuit open'); return { geojson: null, fromCache: false }; }
 
   const gkgUrl = new URL(GDELT_GKG);
   gkgUrl.searchParams.set('query',      query);
@@ -349,41 +273,35 @@ export async function fetchGkg(query, { timespan = '24h', maxrecords = 500, forc
       headers: { 'User-Agent': USER_AGENT },
       signal:  AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-
     if (resp.status === 429) {
-      breakerFailure('gkg');
+      breakerRecordFailure('gkg');
       console.warn('  ⚠ GKG 429 — circuit failure recorded');
       recordError({ level: 'warn', endpoint: 'gkg', message: 'HTTP 429' });
       return { geojson: null, fromCache: false };
     }
     if (!resp.ok) {
-      breakerFailure('gkg');
+      breakerRecordFailure('gkg');
       console.warn(`  ⚠ GKG HTTP ${resp.status}`);
       recordError({ level: 'error', endpoint: 'gkg', message: `HTTP ${resp.status}`, status: resp.status });
       return { geojson: null, fromCache: false };
     }
-
     const raw = await resp.json();
     const { valid, data: geojson, warning } = validateGkgResponse(raw);
-
     if (!valid || !geojson) {
       console.warn(`  ⚠ GKG validation failed: ${warning}`);
       recordValidationReject();
-      breakerFailure('gkg');
+      breakerRecordFailure('gkg');
       return { geojson: null, fromCache: false };
     }
-
-    breakerSuccess('gkg');
-    telSuccess();
+    breakerRecordSuccess('gkg');
+    telRecordSuccess();
     if (warning) console.warn(`  ⚠ GKG: ${warning}`);
     console.log(`    → ${geojson.features.length} GKG features`);
-
     await redisSet(cacheKey, { geojson, cachedAt: new Date().toISOString() }, CACHE_TTL.gkg)
       .catch(e => console.warn(`  Redis cache write failed: ${e.message}`));
-
     return { geojson, fromCache: false };
   } catch (err) {
-    breakerFailure('gkg');
+    breakerRecordFailure('gkg');
     recordError({ level: 'error', endpoint: 'gkg', message: err.message });
     console.warn(`  ⚠ GKG network error: ${err.message}`);
     return { geojson: null, fromCache: false };
@@ -394,24 +312,36 @@ export async function fetchGkg(query, { timespan = '24h', maxrecords = 500, forc
 
 /**
  * Returns the full raw cache object: { topics, persons, gkg, crawledAt }
+ *
+ * PATCH 5 HOTFIX: returns EMPTY_RAW (with _missing:true) when key is absent.
+ * Does NOT throw on missing key — only throws on genuine Redis errors.
  */
 export async function getGdeltRaw() {
   const { url, token } = getRedisCredentials();
 
-  const resp = await fetch(`${url}/get/${encodeURIComponent(RAW_KEY)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(10_000),
-  });
+  let resp;
+  try {
+    resp = await fetch(`${url}/get/${encodeURIComponent(RAW_KEY)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal:  AbortSignal.timeout(10_000),
+    });
+  } catch (err) {
+    throw new Error(`Redis network error reading gdelt:raw:v1: ${err.message}`);
+  }
 
-  if (!resp.ok) throw new Error(`Redis GET failed: HTTP ${resp.status}`);
+  if (!resp.ok) {
+    throw new Error(`Redis GET failed: HTTP ${resp.status}`);
+  }
 
   const data = await resp.json();
+
   if (!data.result) {
-    throw new Error(
-      'gdelt:raw:v1 is empty — seed-gdelt-raw.mjs has not run yet this cycle. ' +
-      'Ensure it runs before all consumer seeds in seed.yml. ' +
-      'Run: node scripts/seed-gdelt-raw.mjs --force'
+    console.warn(
+      '  ⚠ gdelt:raw:v1 is missing — GDELT raw seed has not written data yet.\n' +
+      '    Consumer will use LKG fallback if available.\n' +
+      '    To prime: node scripts/seed-gdelt-raw.mjs --force'
     );
+    return EMPTY_RAW;
   }
 
   const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
@@ -422,7 +352,6 @@ export async function getGdeltRaw() {
       console.warn(`  ⚠ gdelt:raw:v1 is ${ageMin.toFixed(0)} min old — data may be stale.`);
     }
   }
-
   if (parsed.circuitTripped) {
     console.warn('  ⚠ Last GDELT crawl hit rate-limit circuit breaker — data is partial.');
   }
@@ -430,22 +359,33 @@ export async function getGdeltRaw() {
   return parsed;
 }
 
+/**
+ * Returns true if the raw key is missing OR if the last crawl was rate-limited.
+ */
 export async function isGdeltDegraded() {
   const { url, token } = getRedisCredentials();
   try {
-    const resp = await fetch(`${url}/get/${encodeURIComponent(RATELIMIT_FLAG_KEY)}`, {
+    const rawResp = await fetch(`${url}/get/${encodeURIComponent(RAW_KEY)}`, {
       headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
+      signal:  AbortSignal.timeout(5_000),
     });
-    if (!resp.ok) return false;
-    const data = await resp.json();
-    return !!data.result;
+    if (rawResp.ok) {
+      const rawBody = await rawResp.json();
+      if (!rawBody.result) return true;
+    }
+    const flagResp = await fetch(`${url}/get/${encodeURIComponent(RATELIMIT_FLAG_KEY)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal:  AbortSignal.timeout(5_000),
+    });
+    if (!flagResp.ok) return false;
+    const flagBody = await flagResp.json();
+    return !!flagBody.result;
   } catch {
     return false;
   }
 }
 
-// ── Convenience wrappers (consumer seeds) ─────────────────────────────────────
+// ── Convenience wrappers ──────────────────────────────────────────────────────
 
 export async function getGdeltIntelTopics() {
   const raw = await getGdeltRaw();
@@ -457,6 +397,7 @@ export async function getGdeltIntelTopics() {
       fetchedAt: raw.topics?.[id]?.fetchedAt ?? raw.crawledAt,
     })),
     fetchedAt: raw.crawledAt,
+    _missing:  raw._missing ?? false,
   };
 }
 
@@ -470,11 +411,12 @@ export async function getGdeltIntelTopicsWithTimelines() {
         id,
         articles:  topicRaw.artlist   ?? [],
         fetchedAt: topicRaw.fetchedAt ?? raw.crawledAt,
-        _vol:  topicRaw.timelinevol ?? [],
-        _tone: [],
+        _vol:      topicRaw.timelinevol ?? [],
+        _tone:     [],
       };
     }),
     fetchedAt: raw.crawledAt,
+    _missing:  raw._missing ?? false,
   };
 }
 
@@ -520,22 +462,24 @@ export async function getGdeltWarcamArticles() {
 
 export async function getGdeltPersonData(personName) {
   const raw = await getGdeltRaw();
+  if (raw._missing) return { articles7d: [], headlines: [], mentionCount: 0, _missing: true };
   const data = raw.persons?.[personName];
   if (!data) return { articles7d: [], headlines: [], mentionCount: 0 };
   return data;
 }
 
+/**
+ * Returns [] when raw key is missing — seed-poi-discovery Step 1b fallback fires naturally.
+ */
 export async function getGdeltPoiDiscoveryArticles() {
   const raw = await getGdeltRaw();
+  if (raw._missing) return [];
   const POI_IDS = ['poi-leaders', 'poi-military', 'poi-diplomacy', 'poi-wmd', 'poi-unrest'];
   const seen = new Set();
   const all  = [];
   for (const id of POI_IDS) {
     for (const art of raw.topics?.[id]?.artlist ?? []) {
-      if (!seen.has(art.url)) {
-        seen.add(art.url);
-        all.push(art);
-      }
+      if (!seen.has(art.url)) { seen.add(art.url); all.push(art); }
     }
   }
   return all;

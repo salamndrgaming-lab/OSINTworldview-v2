@@ -113,7 +113,7 @@ async function redisGet(url, token, key) {
   return data.result ? JSON.parse(data.result) : null;
 }
 
-async function redisSet(url, token, key, value, ttlSeconds) {
+export async function redisSet(url, token, key, value, ttlSeconds) {
   const payload = JSON.stringify(value);
   const cmd = ttlSeconds
     ? ['SET', key, payload, 'EX', ttlSeconds]

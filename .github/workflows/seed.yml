@@ -19,7 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      NODE_OPTIONS: '--dns-result-order=ipv4first'
       UPSTASH_REDIS_REST_URL:   ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
     steps:
@@ -30,6 +29,9 @@ jobs:
             shared
             package.json
             package-lock.json
+      # Fix: env: block sets vars AFTER Node starts; GITHUB_ENV persists across all steps
+      - name: Force IPv4 DNS for all Node processes
+        run: echo "NODE_OPTIONS=--dns-result-order=ipv4first" >> $GITHUB_ENV
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -92,7 +94,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      NODE_OPTIONS: '--dns-result-order=ipv4first'
       UPSTASH_REDIS_REST_URL:   ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
       FINNHUB_API_KEY:          ${{ secrets.FINNHUB_API_KEY }}
@@ -124,6 +125,9 @@ jobs:
             shared
             package.json
             package-lock.json
+      # Fix: env: block sets vars AFTER Node starts; GITHUB_ENV persists across all steps
+      - name: Force IPv4 DNS for all Node processes
+        run: echo "NODE_OPTIONS=--dns-result-order=ipv4first" >> $GITHUB_ENV
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -176,6 +180,14 @@ jobs:
       - run: node scripts/seed-telegram-narratives.mjs
         continue-on-error: true
       - run: node scripts/seed-narrative-drift.mjs
+        continue-on-error: true
+
+      # Panel data aggregators (read from upstream seed keys)
+      - run: node scripts/seed-chokepoint-flow.mjs
+        continue-on-error: true
+      - run: node scripts/seed-telegram-osint.mjs
+        continue-on-error: true
+      - run: node scripts/seed-orbital.mjs
         continue-on-error: true
 
       # AI-powered (Groq) — read GDELT data from cache, not from GDELT directly

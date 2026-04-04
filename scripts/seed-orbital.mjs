@@ -1,19 +1,38 @@
 #!/usr/bin/env node
-// scripts/seed-orbital.mjs
-import { loadEnvFile, getRedisCredentials, redisSet, withRetry } from './_seed-utils.mjs';
+/**
+ * seed-orbital.mjs — Fetch active satellite TLE data from CelesTrak
+ *
+ * Writes: orbital:tle (consumed by satellite layer)
+ * TTL: 7200s (2h)
+ */
+import { loadEnvFile, CHROME_UA, writeExtraKey, withRetry } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
-async function seedOrbital() {
-  const { url, token } = getRedisCredentials();
+const CANONICAL_KEY = 'orbital:tle';
+const TTL           = 7200; // 2h
 
+async function seedOrbital() {
   const tles = await withRetry(async () => {
-    const res = await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json');
+    const res = await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json', {
+      headers: { 'User-Agent': CHROME_UA },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) throw new Error(`CelesTrak HTTP ${res.status}`);
     return res.json();
   });
 
-  await withRetry(() => redisSet(url, token, 'orbital:tle', tles, 7200));
-  console.log('✅ Orbital seeded');
+  if (!Array.isArray(tles) || tles.length === 0) {
+    console.warn('  No TLE data returned from CelesTrak — skipping');
+    return;
+  }
+
+  console.log(`  Fetched ${tles.length} active satellite TLEs`);
+  await withRetry(() => writeExtraKey(CANONICAL_KEY, tles, TTL));
+  console.log(`✅ Orbital TLE seeded (${tles.length} satellites)`);
 }
 
-seedOrbital().catch(console.error);
+seedOrbital().catch(err => {
+  console.error('FATAL:', err.message || err);
+  process.exit(0);
+});

@@ -214,7 +214,7 @@ async function crawlTopics() {
   let isFirstCall = true;
 
   for (const topic of TOPICS) {
-    if (anyBreakerOpen()) {
+    if (!canRequest('artlist')) {
       console.warn(`  ⚡ Topic crawl stopped at "${topic.id}" — artlist circuit open`);
       break;
     }
@@ -248,7 +248,7 @@ async function crawlTopics() {
       if (articles.length === 0 && !fromCache) {
         topicFailed = true;
         consecutiveSuccesses = 0;
-        if (!anyBreakerOpen()) {
+        if (canRequest('artlist')) {
           console.log(`    Rate-limit cooldown: waiting ${COOLDOWN_POST_EXHAUST_MS / 1000}s…`);
           await sleep(COOLDOWN_POST_EXHAUST_MS, `post-exhaust ${topic.id}`);
         }
@@ -257,7 +257,7 @@ async function crawlTopics() {
       }
     }
 
-    if (anyBreakerOpen()) break;
+    if (!canRequest('artlist')) break;
 
     if (topic.timelinevol && !topicFailed) {
       console.log(`  [timelinevol] ${topic.id} (${topic.timespan_vol ?? '6h'})`);

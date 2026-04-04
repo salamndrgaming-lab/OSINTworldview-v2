@@ -194,12 +194,16 @@ jobs:
       - run: node scripts/seed-poi-discovery.mjs
         continue-on-error: true
 
-      # Conflict forecast, disease, radiation — non-GDELT
+      # Conflict forecast, disease, radiation, thermal, advisories — non-GDELT
       - run: node scripts/seed-conflict-forecast.mjs
         continue-on-error: true
       - run: node scripts/seed-disease-outbreaks.mjs
         continue-on-error: true
       - run: node scripts/seed-radiation.mjs
+        continue-on-error: true
+      - run: node scripts/seed-thermal-escalation.mjs
+        continue-on-error: true
+      - run: node scripts/seed-security-advisories.mjs
         continue-on-error: true
 
       # Derivative seeds — read everything written above

@@ -61,6 +61,7 @@ export const DEFAULT_PANELS: Record<string, PanelConfig> = {
   'auto-brief': { name: 'Auto-Briefs', enabled: true, priority: 2 },
   insights: { name: 'AI Insights', enabled: true, priority: 2 },
   poi: { name: 'Persons of Interest', enabled: true, priority: 2 },
+  'cross-source-signals': { name: 'Cross-Source Signals', enabled: true, priority: 1 },
 };
 
 // Map layers for geopolitical view

@@ -945,7 +945,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
     labelKey: 'header.panelCatIntelligence',
     panelKeys: ['cii', 'strategic-risk', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel',
       'poi', 'insights', 'telegram-osint', 'counterfactual-sim', 'osint-report',
-      'hypothesis-generator', 'narrative-drift', 'auto-brief'],
+      'hypothesis-generator', 'narrative-drift', 'auto-brief', 'cross-source-signals'],
     variants: ['full'],
   },
   correlation: {

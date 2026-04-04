@@ -1113,6 +1113,10 @@ export class PanelLayoutManager implements AppModule {
       import('@/components/AutoBriefPanel').then(m => new m.AutoBriefPanel()),
     );
 
+    this.lazyPanel('cross-source-signals', () =>
+      import('@/components/CrossSourceSignalsPanel').then(m => new m.CrossSourceSignalsPanel()),
+    );
+
     const defaultOrder = Object.keys(DEFAULT_PANELS).filter(k => k !== 'map');
     const activePanelKeys = Object.keys(this.ctx.panelSettings).filter(k => k !== 'map');
     const bottomSet = this.getSavedBottomSet();

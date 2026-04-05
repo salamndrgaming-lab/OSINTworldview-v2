@@ -72,6 +72,14 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'chokepoint-flow': { name: 'Global Chokepoint Flow', enabled: true, priority: 2 },
   'telegram-osint': { name: 'OSINT Telegram Channels', enabled: true, priority: 2 },
   'supply-chain-prices': { name: 'Consumer Economy Snapshot', enabled: true, priority: 2 },
+  'cross-source-signals': { name: 'Cross-Source Signals', enabled: true, priority: 1 },
+  'signal-confidence': { name: 'Signal Confidence', enabled: true, priority: 2 },
+  'time-travel': { name: 'Time Machine', enabled: true, priority: 2 },
+  'auto-brief': { name: 'Auto-Briefs', enabled: true, priority: 2 },
+  'hypothesis-generator': { name: 'Hypothesis Generator', enabled: true, priority: 2 },
+  'narrative-drift': { name: 'Narrative Drift', enabled: true, priority: 2 },
+  'counterfactual-sim': { name: 'Counterfactual Engine', enabled: true, priority: 2 },
+  'osint-report': { name: 'OSINT Report', enabled: true, priority: 2 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {

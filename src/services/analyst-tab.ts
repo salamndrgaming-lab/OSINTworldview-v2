@@ -220,36 +220,34 @@ interface ToolDef {
 }
 
 const TOOLS: ToolDef[] = [
-  // Lookup — run inside the tab
+  // ── Lookup ──────────────────────────────────────
   { name: 'WHOIS Lookup', url: '', desc: 'Domain registration & ownership data', cat: 'lookup', icon: '🔍', embed: false, builtin: 'whois' },
   { name: 'DNS Lookup', url: '', desc: 'DNS record query (A, MX, NS, TXT)', cat: 'lookup', icon: '🌐', embed: false, builtin: 'dns' },
   { name: 'IP Geolocation', url: '', desc: 'Geolocate any IP address with ISP/ASN', cat: 'lookup', icon: '📍', embed: false, builtin: 'ipgeo' },
   { name: 'Subnet Calculator', url: '', desc: 'CIDR range calculator & IP breakdown', cat: 'lookup', icon: '🧮', embed: false, builtin: 'subnet' },
   { name: 'HTTP Headers', url: '', desc: 'Inspect HTTP response headers for any URL', cat: 'lookup', icon: '📋', embed: false, builtin: 'httpheaders' },
-  // Maritime — activates AIS map layer + shows vessel panel data
-  { name: 'Vessel Tracker', url: '', desc: 'Live AIS vessel tracking on the map', cat: 'maritime', icon: '🚢', embed: false, builtin: 'layer-ais' },
-  { name: 'Chokepoint Monitor', url: '', desc: 'Strait & canal transit flow monitor', cat: 'maritime', icon: '⚓', embed: false, builtin: 'panel-chokepoint-flow' },
-  { name: 'Submarine Cables', url: '', desc: 'Global undersea cable infrastructure map', cat: 'maritime', icon: '🔌', embed: false, builtin: 'layer-cables' },
-  // Aviation — activates flight map layer + shows military flights
-  { name: 'Military Flights', url: '', desc: 'Live military aircraft tracking on the map', cat: 'aviation', icon: '✈️', embed: false, builtin: 'layer-flights' },
-  { name: 'Flight Anomalies', url: '', desc: 'Military flight surge detection', cat: 'aviation', icon: '📡', embed: false, builtin: 'panel-missile-tracker' },
-  // Geospatial — activates map layers
-  { name: 'Conflict Zones', url: '', desc: 'Active conflict hotspots on the map', cat: 'geo', icon: '⚔️', embed: false, builtin: 'layer-conflicts' },
-  { name: 'GPS Jamming', url: '', desc: 'GPS interference detection heatmap', cat: 'geo', icon: '📡', embed: false, builtin: 'layer-gpsJamming' },
-  { name: 'Nuclear Facilities', url: '', desc: 'Nuclear installations worldwide', cat: 'geo', icon: '☢️', embed: false, builtin: 'layer-nuclear' },
-  { name: 'Military Bases', url: '', desc: 'Known military installations', cat: 'geo', icon: '🏛', embed: false, builtin: 'layer-bases' },
-  { name: 'Fire Detections', url: '', desc: 'NASA FIRMS satellite fire data', cat: 'geo', icon: '🔥', embed: false, builtin: 'layer-fires' },
-  { name: 'Webcams', url: '', desc: 'Live webcam feeds near hotspots', cat: 'geo', icon: '📹', embed: false, builtin: 'layer-webcams' },
-  // Intelligence panels — opens the panel in the dashboard
-  { name: 'GDELT Intel', url: '', desc: 'Live GDELT intelligence feed', cat: 'intel', icon: '🌐', embed: false, builtin: 'panel-gdelt-intel' },
-  { name: 'Cross-Source Signals', url: '', desc: 'Multi-domain signal correlation', cat: 'intel', icon: '🔺', embed: false, builtin: 'panel-cross-source-signals' },
-  { name: 'POI Tracker', url: '', desc: 'Persons of Interest profiles', cat: 'intel', icon: '👤', embed: false, builtin: 'panel-poi' },
-  { name: 'Narrative Drift', url: '', desc: 'Topic narrative velocity tracker', cat: 'intel', icon: '📰', embed: false, builtin: 'panel-narrative-drift' },
-  // Threat intel — external (no in-tab equivalent available)
-  { name: 'Shodan', url: 'https://www.shodan.io', desc: 'Internet-connected device search engine', cat: 'threat', icon: '🛡', embed: false },
-  { name: 'VirusTotal', url: 'https://www.virustotal.com', desc: 'File & URL threat analysis', cat: 'threat', icon: '🦠', embed: false },
-  { name: 'GreyNoise', url: 'https://viz.greynoise.io', desc: 'Internet scanner identification', cat: 'threat', icon: '📡', embed: false },
-  { name: 'URLhaus', url: 'https://urlhaus.abuse.ch/browse/', desc: 'Malware URL database', cat: 'threat', icon: '🕷', embed: false },
+  // ── Maritime (map layer + in-tab search) ────────
+  { name: 'Vessel Tracker', url: '', desc: 'Live AIS vessel positions — search by name or MMSI', cat: 'maritime', icon: '🚢', embed: false, builtin: 'vessels' },
+  { name: 'Chokepoint Monitor', url: '', desc: 'Strait & canal transit flow data', cat: 'maritime', icon: '⚓', embed: false, builtin: 'chokepoints' },
+  { name: 'Submarine Cables', url: '', desc: 'Global undersea cable infrastructure', cat: 'maritime', icon: '🔌', embed: false, builtin: 'cables' },
+  // ── Aviation (map layer + in-tab search) ────────
+  { name: 'Flight Tracker', url: '', desc: 'Live ADS-B aircraft — search by callsign or hex', cat: 'aviation', icon: '✈️', embed: false, builtin: 'flights' },
+  { name: 'Military Flights', url: '', desc: 'Military & government aircraft tracker', cat: 'aviation', icon: '🛩️', embed: false, builtin: 'milflights' },
+  // ── Geospatial (map layer + summary) ────────────
+  { name: 'Conflict Zones', url: '', desc: 'Active conflict hotspots on the map', cat: 'geo', icon: '⚔️', embed: false, builtin: 'conflicts' },
+  { name: 'GPS Jamming', url: '', desc: 'GPS interference detection heatmap', cat: 'geo', icon: '📡', embed: false, builtin: 'gpsjam' },
+  { name: 'Nuclear Facilities', url: '', desc: 'Nuclear installations worldwide', cat: 'geo', icon: '☢️', embed: false, builtin: 'nuclear' },
+  { name: 'Military Bases', url: '', desc: 'Known military installations', cat: 'geo', icon: '🏛', embed: false, builtin: 'bases' },
+  { name: 'Fire Detections', url: '', desc: 'NASA FIRMS satellite fire data', cat: 'geo', icon: '🔥', embed: false, builtin: 'fires' },
+  { name: 'Earthquake Monitor', url: '', desc: 'Recent seismic events worldwide', cat: 'geo', icon: '🌍', embed: false, builtin: 'earthquakes' },
+  { name: 'Satellite Tracker', url: '', desc: 'Active satellite positions (TLE data)', cat: 'geo', icon: '🛰', embed: false, builtin: 'satellites' },
+  // ── Intelligence (in-tab search/browse) ─────────
+  { name: 'Intel Search', url: '', desc: 'Semantic search across all intelligence data', cat: 'intel', icon: '🔎', embed: false, builtin: 'intelsearch' },
+  { name: 'POI Lookup', url: '', desc: 'Search persons of interest profiles', cat: 'intel', icon: '👤', embed: false, builtin: 'poilookup' },
+  { name: 'Cross-Source Signals', url: '', desc: 'Multi-domain signal correlation feed', cat: 'intel', icon: '🔺', embed: false, builtin: 'signals' },
+  // ── Cyber (in-tab) ──────────────────────────────
+  { name: 'Threat Feed', url: '', desc: 'Active cyber threat intelligence feed', cat: 'cyber', icon: '🛡', embed: false, builtin: 'threatfeed' },
+  { name: 'Breach Checker', url: '', desc: 'Check if an email appeared in known breaches', cat: 'cyber', icon: '🔓', embed: false, builtin: 'breach' },
 ];
 
 function renderToolkitCards(): string {
@@ -261,7 +259,7 @@ function renderToolkitCards(): string {
         <div class="analyst-tool-desc">${t.desc}</div>
       </div>
       <span class="analyst-tool-cat">${t.cat}</span>
-      <span style="font-size:9px;padding:2px 6px;border-radius:3px;${t.builtin ? (t.builtin.startsWith('layer-') ? 'background:rgba(34,197,94,0.12);color:#22c55e' : t.builtin.startsWith('panel-') ? 'background:rgba(139,92,246,0.12);color:#8b5cf6' : 'background:var(--intel-accent-subtle);color:var(--intel-accent)') : 'background:var(--vi-bg);color:var(--text-muted)'}">${t.builtin ? (t.builtin.startsWith('layer-') ? '🗺 Map' : t.builtin.startsWith('panel-') ? '📊 Panel' : '⚡ Run') : '↗ Launch'}</span>
+      <span style="font-size:9px;padding:2px 6px;border-radius:3px;background:var(--intel-accent-subtle);color:var(--intel-accent)">⚡ Run</span>
     </div>`
   ).join('');
 }
@@ -779,23 +777,7 @@ function initToolkit(): void {
     const tool = TOOLS[idx];
     if (!tool) return;
     if (tool.builtin) {
-      if (tool.builtin.startsWith('layer-')) {
-        // Toggle a map layer — dispatch event that DeckGLMap/App listens for
-        const layerName = tool.builtin.replace('layer-', '');
-        window.dispatchEvent(new CustomEvent('wm:toggle-layer', { detail: { layer: layerName, enabled: true } }));
-        card.style.outline = '2px solid var(--intel-accent,#d4a843)';
-        setTimeout(() => { card.style.outline = ''; }, 2000);
-      } else if (tool.builtin.startsWith('panel-')) {
-        // Open/scroll to a dashboard panel
-        const panelId = tool.builtin.replace('panel-', '');
-        window.dispatchEvent(new CustomEvent('wm:open-panel', { detail: { panelId } }));
-        card.style.outline = '2px solid #22c55e';
-        setTimeout(() => { card.style.outline = ''; }, 2000);
-      } else {
-        openBuiltinTool(tool);
-      }
-    } else if (tool.url) {
-      window.open(tool.url, '_blank', 'noopener');
+      openBuiltinTool(tool);
     }
   });
 
@@ -842,171 +824,167 @@ function closeBuiltinTool(): void {
 function renderBuiltinTool(id: string): string {
   const inputStyle = 'font-family:var(--vi-font-body,sans-serif);font-size:13px;padding:8px 12px;background:var(--vi-bg,#0c0c10);border:1px solid var(--vi-border,#252535);border-radius:6px;color:var(--text);width:100%;max-width:400px;outline:none';
   const resultStyle = 'margin-top:10px;padding:10px;background:var(--vi-bg,#0c0c10);border:1px solid var(--vi-border,#252535);border-radius:6px;font-family:var(--vi-font-data,monospace);font-size:11px;color:var(--text);white-space:pre-wrap;max-height:300px;overflow-y:auto';
+  const searchInput = (inputId: string, placeholder: string, btnId: string, btnText: string) =>
+    '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
+    '<input type="text" id="' + inputId + '" placeholder="' + placeholder + '" style="' + inputStyle + '" />' +
+    '<button class="analyst-btn" id="' + btnId + '">' + btnText + '</button>' +
+    '</div><div id="' + inputId + 'Result" style="' + resultStyle + ';display:none"></div>';
+  const layerToggle = (layerName: string, label: string) =>
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+    '<button class="analyst-btn" id="layerToggle_' + layerName + '">Toggle ' + label + ' Layer on Map</button>' +
+    '<span id="layerStatus_' + layerName + '" style="font-size:10px;color:var(--text-muted)"></span>' +
+    '</div>';
+  const autoFeed = (feedId: string) =>
+    '<div id="' + feedId + '" style="' + resultStyle + '">Loading...</div>';
 
   switch (id) {
-    case 'whois':
-      return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="whoisInput" placeholder="Enter domain (e.g. example.com)" style="${inputStyle}" />
-        <button class="analyst-btn" id="whoisBtn">Lookup</button>
-      </div><div id="whoisResult" style="${resultStyle};display:none"></div>`;
-    case 'dns':
-      return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="dnsInput" placeholder="Enter domain" style="${inputStyle}" />
-        <button class="analyst-btn" id="dnsBtn">Query</button>
-      </div><div id="dnsResult" style="${resultStyle};display:none"></div>`;
-    case 'ipgeo':
-      return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="ipgeoInput" placeholder="Enter IP address (or leave blank for yours)" style="${inputStyle}" />
-        <button class="analyst-btn" id="ipgeoBtn">Geolocate</button>
-      </div><div id="ipgeoResult" style="${resultStyle};display:none"></div>`;
-    case 'subnet':
-      return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="subnetInput" placeholder="Enter CIDR (e.g. 192.168.1.0/24)" style="${inputStyle}" />
-        <button class="analyst-btn" id="subnetBtn">Calculate</button>
-      </div><div id="subnetResult" style="${resultStyle};display:none"></div>`;
-    case 'httpheaders':
-      return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="httpInput" placeholder="Enter URL (e.g. https://example.com)" style="${inputStyle}" />
-        <button class="analyst-btn" id="httpBtn">Inspect</button>
-      </div><div id="httpResult" style="${resultStyle};display:none"></div>`;
-    default:
-      return '<div style="padding:12px;color:var(--text-dim)">Tool not implemented</div>';
+    case 'whois': return searchInput('whoisInput', 'Enter domain (e.g. example.com)', 'whoisBtn', 'Lookup');
+    case 'dns': return searchInput('dnsInput', 'Enter domain', 'dnsBtn', 'Query');
+    case 'ipgeo': return searchInput('ipgeoInput', 'Enter IP address (or leave blank for yours)', 'ipgeoBtn', 'Geolocate');
+    case 'subnet': return searchInput('subnetInput', 'Enter CIDR (e.g. 192.168.1.0/24)', 'subnetBtn', 'Calculate');
+    case 'httpheaders': return searchInput('httpInput', 'Enter URL (e.g. https://example.com)', 'httpBtn', 'Inspect');
+    // Maritime
+    case 'vessels': return layerToggle('ais', 'AIS Vessel') + searchInput('vesselInput', 'Search vessel name, MMSI, or flag...', 'vesselBtn', 'Search');
+    case 'chokepoints': return autoFeed('chokepointFeed');
+    case 'cables': return layerToggle('cables', 'Submarine Cable') + autoFeed('cableFeed');
+    // Aviation
+    case 'flights': return layerToggle('flights', 'Aircraft') + searchInput('flightInput', 'Search callsign, hex ID, or type...', 'flightBtn', 'Search');
+    case 'milflights': return layerToggle('flights', 'Military Flights') + autoFeed('milflightFeed');
+    // Geo
+    case 'conflicts': return layerToggle('conflicts', 'Conflict') + autoFeed('conflictFeed');
+    case 'gpsjam': return layerToggle('gpsJamming', 'GPS Jamming') + autoFeed('gpsjamFeed');
+    case 'nuclear': return layerToggle('nuclear', 'Nuclear') + autoFeed('nuclearFeed');
+    case 'bases': return layerToggle('bases', 'Military Base') + autoFeed('basesFeed');
+    case 'fires': return layerToggle('fires', 'Fire Detection') + autoFeed('firesFeed');
+    case 'earthquakes': return autoFeed('earthquakeFeed');
+    case 'satellites': return layerToggle('satellites', 'Satellite') + autoFeed('satelliteFeed');
+    // Intel
+    case 'intelsearch': return searchInput('intelInput', 'Natural language search (e.g. "missile strikes Ukraine")', 'intelBtn', 'Search');
+    case 'poilookup': return searchInput('poiInput', 'Search person name, role, or country...', 'poiBtn', 'Search');
+    case 'signals': return autoFeed('signalsFeed');
+    // Cyber
+    case 'threatfeed': return autoFeed('threatFeed');
+    case 'breach': return searchInput('breachInput', 'Enter email address', 'breachBtn', 'Check');
+    default: return '<div style="padding:12px;color:var(--text-dim)">Tool not implemented</div>';
+  }
+}
+
+// Helper: toggle a map layer via custom event and update status label
+function toggleMapLayer(layerName: string): void {
+  window.dispatchEvent(new CustomEvent('wm:toggle-layer', { detail: { layer: layerName, enabled: true } }));
+  const status = document.getElementById('layerStatus_' + layerName);
+  if (status) { status.textContent = '✅ Layer activated'; setTimeout(() => { if (status) status.textContent = ''; }, 3000); }
+}
+
+// Helper: fetch JSON and render into a feed div
+async function loadFeed(feedId: string, url: string, renderFn: (data: Record<string, unknown>) => string): Promise<void> {
+  const el = document.getElementById(feedId);
+  if (!el) return;
+  el.textContent = 'Loading...';
+  try {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    el.innerHTML = renderFn(data as Record<string, unknown>);
+  } catch (err) {
+    el.textContent = 'Failed to load: ' + ((err as Error).message || 'unknown');
   }
 }
 
 function initBuiltinTool(id: string): void {
+  // Wire map layer toggle buttons
+  const layerBtn = document.querySelector('[id^="layerToggle_"]') as HTMLButtonElement;
+  if (layerBtn) {
+    const ln = layerBtn.id.replace('layerToggle_', '');
+    layerBtn.addEventListener('click', () => toggleMapLayer(ln));
+  }
+
   switch (id) {
     case 'whois':
       document.getElementById('whoisBtn')?.addEventListener('click', async () => {
         const input = (document.getElementById('whoisInput') as HTMLInputElement)?.value.trim();
-        const result = document.getElementById('whoisResult');
+        const result = document.getElementById('whoisInputResult');
         if (!input || !result) return;
         result.style.display = 'block';
         result.textContent = 'Looking up...';
         try {
-          const resp = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(input)}&type=SOA`);
+          const resp = await fetch('https://dns.google/resolve?name=' + encodeURIComponent(input) + '&type=SOA');
           const data = await resp.json();
-          const lines = [`Domain: ${input}\n`];
-          if (data.Answer) {
-            for (const a of data.Answer as Array<{ data: string; TTL: number }>) {
-              lines.push(`SOA: ${a.data}`);
-              lines.push(`TTL: ${a.TTL}s`);
-            }
-          }
-          const nsResp = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(input)}&type=NS`);
+          const lines = ['Domain: ' + input + '\n'];
+          if (data.Answer) { for (const a of data.Answer as Array<{ data: string; TTL: number }>) { lines.push('SOA: ' + a.data); lines.push('TTL: ' + a.TTL + 's'); } }
+          const nsResp = await fetch('https://dns.google/resolve?name=' + encodeURIComponent(input) + '&type=NS');
           const nsData = await nsResp.json();
-          if (nsData.Answer) {
-            lines.push('\nNameservers:');
-            for (const a of nsData.Answer as Array<{ data: string }>) lines.push(`  NS: ${a.data}`);
-          }
-          lines.push(`\nFull WHOIS: https://who.is/whois/${input}`);
+          if (nsData.Answer) { lines.push('\nNameservers:'); for (const a of nsData.Answer as Array<{ data: string }>) lines.push('  NS: ' + a.data); }
+          lines.push('\nFull WHOIS: https://who.is/whois/' + input);
           result.textContent = lines.join('\n');
-        } catch {
-          result.textContent = `Lookup failed for: ${input}\n\nTry: https://who.is/whois/${input}`;
-        }
+        } catch { result.textContent = 'Lookup failed for: ' + input; }
       });
       break;
     case 'dns':
       document.getElementById('dnsBtn')?.addEventListener('click', async () => {
         const input = (document.getElementById('dnsInput') as HTMLInputElement)?.value.trim();
-        const result = document.getElementById('dnsResult');
+        const result = document.getElementById('dnsInputResult');
         if (!input || !result) return;
         result.style.display = 'block';
         result.textContent = 'Querying DNS...';
         try {
           const typeMap: Record<number, string> = { 1: 'A', 5: 'CNAME', 15: 'MX', 28: 'AAAA', 16: 'TXT', 2: 'NS' };
-          const lines = [`DNS Records for: ${input}\n`];
+          const lines = ['DNS Records for: ' + input + '\n'];
           for (const qtype of ['A', 'AAAA', 'MX', 'NS', 'TXT']) {
-            const resp = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(input)}&type=${qtype}`);
+            const resp = await fetch('https://dns.google/resolve?name=' + encodeURIComponent(input) + '&type=' + qtype);
             const data = await resp.json();
             if (data.Answer && (data.Answer as Array<{ type: number; data: string; TTL: number }>).length > 0) {
-              lines.push(`${qtype} Records:`);
-              for (const a of data.Answer as Array<{ type: number; data: string; TTL: number }>) {
-                const label = typeMap[a.type] || `TYPE${a.type}`;
-                lines.push(`  ${label}: ${a.data} (TTL: ${a.TTL})`);
-              }
+              lines.push(qtype + ' Records:');
+              for (const a of data.Answer as Array<{ type: number; data: string; TTL: number }>) { lines.push('  ' + (typeMap[a.type] || 'TYPE' + a.type) + ': ' + a.data + ' (TTL: ' + a.TTL + ')'); }
               lines.push('');
             }
           }
           if (lines.length <= 1) lines.push('No records found');
           result.textContent = lines.join('\n');
-        } catch {
-          result.textContent = `DNS query failed for: ${input}`;
-        }
+        } catch { result.textContent = 'DNS query failed for: ' + input; }
       });
       break;
     case 'ipgeo':
       document.getElementById('ipgeoBtn')?.addEventListener('click', async () => {
         const input = (document.getElementById('ipgeoInput') as HTMLInputElement)?.value.trim();
-        const result = document.getElementById('ipgeoResult');
+        const result = document.getElementById('ipgeoInputResult');
         if (!result) return;
         result.style.display = 'block';
         result.textContent = 'Geolocating...';
         try {
-          const target = input || '';
-          const resp = await fetch(`http://ip-api.com/json/${encodeURIComponent(target)}?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query`);
+          const resp = await fetch('http://ip-api.com/json/' + encodeURIComponent(input || '') + '?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query');
           const data = await resp.json() as Record<string, unknown>;
-          if (data.status === 'fail') {
-            result.textContent = `Geolocation failed: ${String(data.message || 'Unknown error')}`;
-            return;
-          }
-          result.textContent = [
-            `IP: ${data.query}`,
-            `City: ${data.city}`,
-            `Region: ${data.regionName} (${data.region})`,
-            `Country: ${data.country} (${data.countryCode})`,
-            `Coordinates: ${data.lat}, ${data.lon}`,
-            `Timezone: ${data.timezone}`,
-            `ISP: ${data.isp}`,
-            `Organization: ${data.org}`,
-            `ASN: ${data.as}`,
-          ].join('\n');
-        } catch {
-          result.textContent = `Geolocation failed for: ${input || 'your IP'}`;
-        }
+          if (data.status === 'fail') { result.textContent = 'Geolocation failed: ' + String(data.message || 'Unknown'); return; }
+          result.textContent = ['IP: ' + data.query, 'City: ' + data.city, 'Region: ' + data.regionName + ' (' + data.region + ')', 'Country: ' + data.country + ' (' + data.countryCode + ')', 'Coordinates: ' + data.lat + ', ' + data.lon, 'Timezone: ' + data.timezone, 'ISP: ' + data.isp, 'Org: ' + data.org, 'ASN: ' + data.as].join('\n');
+        } catch { result.textContent = 'Geolocation failed for: ' + (input || 'your IP'); }
       });
       break;
     case 'subnet':
       document.getElementById('subnetBtn')?.addEventListener('click', () => {
         const input = (document.getElementById('subnetInput') as HTMLInputElement)?.value.trim();
-        const result = document.getElementById('subnetResult');
+        const result = document.getElementById('subnetInputResult');
         if (!input || !result) return;
         result.style.display = 'block';
         try {
           const [ipStr, prefixStr] = input.split('/');
-          if (!ipStr || !prefixStr) throw new Error('Invalid CIDR');
+          if (!ipStr || !prefixStr) throw new Error('bad');
           const prefix = parseInt(prefixStr, 10);
-          if (isNaN(prefix) || prefix < 0 || prefix > 32) throw new Error('Invalid prefix');
+          if (isNaN(prefix) || prefix < 0 || prefix > 32) throw new Error('bad');
           const octets = ipStr.split('.').map(Number);
-          if (octets.length !== 4 || octets.some(o => isNaN(o) || o < 0 || o > 255)) throw new Error('Invalid IP');
-
+          if (octets.length !== 4 || octets.some(o => isNaN(o) || o < 0 || o > 255)) throw new Error('bad');
           const ipNum = ((octets[0] ?? 0) << 24) | ((octets[1] ?? 0) << 16) | ((octets[2] ?? 0) << 8) | (octets[3] ?? 0);
           const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0;
           const network = (ipNum & mask) >>> 0;
           const broadcast = (network | ~mask) >>> 0;
-          const hostCount = Math.max(0, Math.pow(2, 32 - prefix) - 2);
-
-          const toIP = (n: number) => `${(n >>> 24) & 255}.${(n >>> 16) & 255}.${(n >>> 8) & 255}.${n & 255}`;
-
-          result.textContent = [
-            `CIDR: ${input}`,
-            `Network: ${toIP(network)}`,
-            `Broadcast: ${toIP(broadcast)}`,
-            `Subnet Mask: ${toIP(mask)}`,
-            `Host Range: ${toIP(network + 1)} — ${toIP(broadcast - 1)}`,
-            `Total Hosts: ${hostCount.toLocaleString()}`,
-            `Prefix Length: /${prefix}`,
-            `Wildcard: ${toIP(~mask >>> 0)}`,
-          ].join('\n');
-        } catch {
-          result.textContent = 'Invalid CIDR notation. Use format: 192.168.1.0/24';
-        }
+          const toIP = (n: number) => ((n >>> 24) & 255) + '.' + ((n >>> 16) & 255) + '.' + ((n >>> 8) & 255) + '.' + (n & 255);
+          result.textContent = ['CIDR: ' + input, 'Network: ' + toIP(network), 'Broadcast: ' + toIP(broadcast), 'Mask: ' + toIP(mask), 'Range: ' + toIP(network + 1) + ' — ' + toIP(broadcast - 1), 'Hosts: ' + Math.max(0, Math.pow(2, 32 - prefix) - 2).toLocaleString()].join('\n');
+        } catch { result.textContent = 'Invalid CIDR notation. Use: 192.168.1.0/24'; }
       });
       break;
     case 'httpheaders':
       document.getElementById('httpBtn')?.addEventListener('click', async () => {
         const input = (document.getElementById('httpInput') as HTMLInputElement)?.value.trim();
-        const result = document.getElementById('httpResult');
+        const result = document.getElementById('httpInputResult');
         if (!input || !result) return;
         result.style.display = 'block';
         result.textContent = 'Fetching headers...';
@@ -1014,17 +992,231 @@ function initBuiltinTool(id: string): void {
           let url = input;
           if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
           const resp = await fetch(url, { method: 'HEAD', mode: 'no-cors', signal: AbortSignal.timeout(8000) });
-          const lines = ['URL: ' + url, 'Status: ' + resp.status + ' ' + resp.statusText, '', 'Response Headers:'];
-          resp.headers.forEach((val, key) => {
-            lines.push('  ' + key + ': ' + val);
-          });
-          if (lines.length <= 4) {
-            lines.push('  (no headers visible — CORS may be blocking)', '', 'Note: most cross-origin sites block HEAD requests.', 'For full headers, use browser DevTools → Network tab.');
-          }
+          const lines = ['URL: ' + url, 'Status: ' + resp.status + ' ' + resp.statusText, '', 'Headers:'];
+          resp.headers.forEach((v, k) => lines.push('  ' + k + ': ' + v));
+          if (lines.length <= 4) lines.push('  (CORS blocking — use DevTools Network tab)');
           result.textContent = lines.join('\n');
-        } catch (err) {
-          result.textContent = 'Request failed: ' + ((err as Error).message || 'unknown error') + '\n\nNote: CORS policies may prevent header inspection from the browser.';
-        }
+        } catch (err) { result.textContent = 'Failed: ' + ((err as Error).message || 'unknown') + '\n\nCORS may block this.'; }
+      });
+      break;
+
+    // ── Maritime ────────────────────────────────────────────────
+    case 'vessels':
+      document.getElementById('vesselBtn')?.addEventListener('click', async () => {
+        const q = (document.getElementById('vesselInput') as HTMLInputElement)?.value.trim().toLowerCase();
+        const result = document.getElementById('vesselInputResult');
+        if (!q || !result) return;
+        result.style.display = 'block';
+        result.innerHTML = 'Searching AIS data...';
+        try {
+          const resp = await fetch('/api/ais-snapshot', { signal: AbortSignal.timeout(10000) });
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const data = await resp.json();
+          const vessels = (data.vessels || []) as Array<Record<string, unknown>>;
+          const matches = vessels.filter((v: Record<string, unknown>) => {
+            const name = String(v.name || v.shipName || '').toLowerCase();
+            const mmsi = String(v.mmsi || '');
+            const flag = String(v.flag || v.country || '').toLowerCase();
+            return name.includes(q) || mmsi.includes(q) || flag.includes(q);
+          }).slice(0, 15);
+          if (matches.length === 0) { result.innerHTML = 'No vessels matching "' + esc(q) + '" in current AIS snapshot (' + vessels.length + ' total tracked)'; return; }
+          result.innerHTML = matches.map((v: Record<string, unknown>) => '<div style="border-bottom:1px solid var(--vi-border-subtle,#1a1a28);padding:6px 0"><b>' + esc(String(v.name || v.shipName || 'Unknown')) + '</b> · MMSI: ' + esc(String(v.mmsi || '—')) + ' · Flag: ' + esc(String(v.flag || v.country || '—')) + '<br><span style="color:var(--text-muted)">Lat: ' + Number(v.lat || 0).toFixed(3) + ' Lon: ' + Number(v.lon || 0).toFixed(3) + ' · Speed: ' + String(v.speed || v.sog || '—') + 'kn · Course: ' + String(v.course || v.cog || '—') + '</span></div>').join('');
+        } catch (err) { result.innerHTML = 'AIS search failed: ' + ((err as Error).message || 'unknown'); }
+      });
+      break;
+    case 'chokepoints':
+      void loadFeed('chokepointFeed', '/api/supply-chain/chokepoints', (d) => {
+        const cps = (d.chokepoints || []) as Array<Record<string, unknown>>;
+        if (cps.length === 0) return 'No chokepoint data available';
+        return cps.map((c: Record<string, unknown>) => '<div style="border-bottom:1px solid var(--vi-border-subtle,#1a1a28);padding:6px 0"><b>' + esc(String(c.name || c.id || '')) + '</b> · Vessels/24h: ' + (c.vessels24h ?? '—') + ' · Tanker %: ' + (typeof c.tankerRatio === 'number' ? (c.tankerRatio * 100).toFixed(0) + '%' : '—') + '</div>').join('');
+      });
+      break;
+    case 'cables':
+      void loadFeed('cableFeed', '/api/health', (d) => {
+        const check = (d.checks as Record<string, Record<string, unknown>> | undefined)?.cableHealth;
+        if (!check) return 'Cable health data: check /api/health for status';
+        return 'Cable infrastructure status: ' + (check.status || 'unknown') + '\nRecords: ' + (check.records || 0);
+      });
+      break;
+
+    // ── Aviation ────────────────────────────────────────────────
+    case 'flights':
+      document.getElementById('flightBtn')?.addEventListener('click', async () => {
+        const q = (document.getElementById('flightInput') as HTMLInputElement)?.value.trim().toLowerCase();
+        const result = document.getElementById('flightInputResult');
+        if (!q || !result) return;
+        result.style.display = 'block';
+        result.innerHTML = 'Searching ADS-B data...';
+        try {
+          const resp = await fetch('/api/adsb', { signal: AbortSignal.timeout(15000) });
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const data = await resp.json();
+          const aircraft = (data.aircraft || data.ac || []) as Array<Record<string, unknown>>;
+          const matches = aircraft.filter((a: Record<string, unknown>) => {
+            const call = String(a.flight || a.callsign || '').trim().toLowerCase();
+            const hex = String(a.hex || '').toLowerCase();
+            const type = String(a.t || a.type || '').toLowerCase();
+            return call.includes(q) || hex.includes(q) || type.includes(q);
+          }).slice(0, 20);
+          if (matches.length === 0) { result.innerHTML = 'No aircraft matching "' + esc(q) + '" in current ADS-B snapshot (' + aircraft.length + ' tracked)'; return; }
+          result.innerHTML = matches.map((a: Record<string, unknown>) => '<div style="border-bottom:1px solid var(--vi-border-subtle,#1a1a28);padding:6px 0"><b>' + esc(String(a.flight || a.callsign || 'Unknown').trim()) + '</b> · Hex: ' + esc(String(a.hex || '—')) + ' · Type: ' + esc(String(a.t || a.type || '—')) + '<br><span style="color:var(--text-muted)">Alt: ' + (a.alt_baro || a.altitude || '—') + 'ft · Speed: ' + (a.gs || a.speed || '—') + 'kn · Lat: ' + Number(a.lat || 0).toFixed(2) + ' Lon: ' + Number(a.lon || 0).toFixed(2) + '</span></div>').join('');
+        } catch (err) { result.innerHTML = 'ADS-B search failed: ' + ((err as Error).message || 'unknown'); }
+      });
+      break;
+    case 'milflights':
+      void loadFeed('milflightFeed', '/api/military-flights', (d) => {
+        const flights = (d.flights || []) as Array<Record<string, unknown>>;
+        if (flights.length === 0) return 'No military flights currently tracked';
+        return '<div style="margin-bottom:6px;font-weight:600">' + flights.length + ' military aircraft tracked</div>' +
+          flights.slice(0, 15).map((f: Record<string, unknown>) => '<div style="border-bottom:1px solid var(--vi-border-subtle,#1a1a28);padding:4px 0">' + esc(String(f.callsign || f.flight || 'Unknown').trim()) + ' · ' + esc(String(f.type || f.t || '—')) + ' · Alt: ' + (f.altitude || f.alt_baro || '—') + 'ft</div>').join('');
+      });
+      break;
+
+    // ── Geospatial ─────────────────────────────────────────────
+    case 'conflicts':
+      void loadFeed('conflictFeed', '/api/data/gdelt-intel', (d) => {
+        const topics = (d.topics || []) as Array<Record<string, unknown>>;
+        const mil = topics.find((t: Record<string, unknown>) => t.id === 'military');
+        const articles = (mil?.articles || []) as Array<Record<string, unknown>>;
+        if (articles.length === 0) return 'No active conflict data';
+        return '<div style="margin-bottom:6px;font-weight:600">' + articles.length + ' conflict-related articles</div>' +
+          articles.slice(0, 10).map((a: Record<string, unknown>) => '<div style="border-bottom:1px solid var(--vi-border-subtle,#1a1a28);padding:4px 0">' + esc(String(a.title || '').slice(0, 100)) + '<br><span style="color:var(--text-muted);font-size:10px">' + esc(String(a.source || a.domain || '')) + '</span></div>').join('');
+      });
+      break;
+    case 'gpsjam':
+      void loadFeed('gpsjamFeed', '/api/gpsjam', (d) => {
+        const hexes = (d.hexes || []) as Array<Record<string, unknown>>;
+        const high = hexes.filter((h: Record<string, unknown>) => h.level === 'high');
+        return hexes.length + ' GPS monitoring cells · ' + high.length + ' high-interference zones';
+      });
+      break;
+    case 'nuclear': case 'bases':
+      void loadFeed(id === 'nuclear' ? 'nuclearFeed' : 'basesFeed', '/api/health', (d) => {
+        const checks = d.checks as Record<string, Record<string, unknown>> | undefined;
+        const key = id === 'nuclear' ? 'irradiators' : 'militaryBases';
+        const check = checks?.[key];
+        return (id === 'nuclear' ? 'Nuclear facility' : 'Military base') + ' data: ' + (check ? check.status + ' (' + (check.records || 0) + ' records)' : 'not available');
+      });
+      break;
+    case 'fires':
+      void loadFeed('firesFeed', '/api/health', (d) => {
+        const check = (d.checks as Record<string, Record<string, unknown>> | undefined)?.wildfires;
+        return 'Fire detection data: ' + (check ? check.status + ' · ' + (check.records || 0) + ' detections' + (check.seedAgeMin != null ? ' · Updated ' + check.seedAgeMin + 'm ago' : '') : 'not available');
+      });
+      break;
+    case 'earthquakes':
+      void loadFeed('earthquakeFeed', '/api/bootstrap', (d) => {
+        const quakes = ((d.earthquakes as Record<string, unknown>)?.earthquakes || []) as Array<Record<string, unknown>>;
+        if (quakes.length === 0) return 'No recent earthquake data';
+        return '<div style="margin-bottom:6px;font-weight:600">' + quakes.length + ' recent earthquakes</div>' +
+          quakes.slice(0, 10).map((q: Record<string, unknown>) => {
+            const mag = Number(q.magnitude || q.mag || 0).toFixed(1);
+            const c = Number(mag) >= 6 ? '#ef4444' : Number(mag) >= 4.5 ? '#f97316' : '#22c55e';
+            return '<div style="border-bottom:1px solid var(--vi-border-subtle,#1a1a28);padding:4px 0"><span style="color:' + c + ';font-weight:700">M' + mag + '</span> ' + esc(String(q.place || q.title || '').slice(0, 80)) + '</div>';
+          }).join('');
+      });
+      break;
+    case 'satellites':
+      void loadFeed('satelliteFeed', '/api/satellites', (d) => {
+        const sats = Array.isArray(d) ? d : (d.satellites || []);
+        return (sats as unknown[]).length + ' active satellites in TLE database';
+      });
+      break;
+
+    // ── Intelligence ───────────────────────────────────────────
+    case 'intelsearch':
+      document.getElementById('intelBtn')?.addEventListener('click', async () => {
+        const q = (document.getElementById('intelInput') as HTMLInputElement)?.value.trim();
+        const result = document.getElementById('intelInputResult');
+        if (!q || !result) return;
+        result.style.display = 'block';
+        result.innerHTML = 'Searching intelligence index...';
+        try {
+          const resp = await fetch('/api/search?q=' + encodeURIComponent(q) + '&k=15', { signal: AbortSignal.timeout(10000) });
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const data = await resp.json();
+          const results = (data.results || []) as Array<Record<string, unknown>>;
+          if (results.length === 0) { result.innerHTML = 'No results for "' + esc(q) + '"'; return; }
+          result.innerHTML = results.map((r: Record<string, unknown>) => {
+            const score = Number(r.score || 0).toFixed(2);
+            const meta = r.metadata as Record<string, unknown> | undefined;
+            const title = String(meta?.title || meta?.name || r.id || '');
+            const type = String(meta?.type || '');
+            return '<div style="border-bottom:1px solid var(--vi-border-subtle,#1a1a28);padding:6px 0"><b>' + esc(title.slice(0, 100)) + '</b><br><span style="color:var(--text-muted);font-size:10px">Score: ' + score + ' · Type: ' + esc(type) + '</span></div>';
+          }).join('');
+        } catch (err) { result.innerHTML = 'Search failed: ' + ((err as Error).message || 'unknown'); }
+      });
+      break;
+    case 'poilookup':
+      document.getElementById('poiBtn')?.addEventListener('click', async () => {
+        const q = (document.getElementById('poiInput') as HTMLInputElement)?.value.trim().toLowerCase();
+        const result = document.getElementById('poiInputResult');
+        if (!q || !result) return;
+        result.style.display = 'block';
+        result.innerHTML = 'Searching POI database...';
+        try {
+          const resp = await fetch('/api/poi', { signal: AbortSignal.timeout(8000) });
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const data = await resp.json();
+          const persons = (data.persons || []) as Array<Record<string, unknown>>;
+          const matches = persons.filter((p: Record<string, unknown>) => {
+            return String(p.name || '').toLowerCase().includes(q) || String(p.role || '').toLowerCase().includes(q) || String(p.country || p.region || '').toLowerCase().includes(q);
+          }).slice(0, 10);
+          if (matches.length === 0) { result.innerHTML = 'No POI matching "' + esc(q) + '" (' + persons.length + ' total tracked)'; return; }
+          result.innerHTML = matches.map((p: Record<string, unknown>) => {
+            const risk = String(p.riskLevel || p.threatLevel || 'low');
+            const c: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#d4a843', low: '#22c55e' };
+            return '<div style="border-bottom:1px solid var(--vi-border-subtle,#1a1a28);padding:6px 0"><b>' + esc(String(p.name || '')) + '</b> · <span style="color:' + (c[risk] || '#666') + '">' + risk.toUpperCase() + '</span><br><span style="color:var(--text-muted);font-size:10px">' + esc(String(p.role || '')) + (p.country ? ' · ' + esc(String(p.country)) : '') + ' · ' + (p.mentionCount || p.mentions || 0) + ' mentions</span></div>';
+          }).join('');
+        } catch (err) { result.innerHTML = 'POI search failed: ' + ((err as Error).message || 'unknown'); }
+      });
+      break;
+    case 'signals':
+      void loadFeed('signalsFeed', '/api/bootstrap', (d) => {
+        const payload = d.crossSourceSignals as Record<string, unknown> | undefined;
+        const signals = ((payload?.signals || []) as Array<Record<string, unknown>>);
+        if (signals.length === 0) return 'No active cross-source signals';
+        const sevColors: Record<string, string> = { CROSS_SOURCE_SIGNAL_SEVERITY_CRITICAL: '#ef4444', CROSS_SOURCE_SIGNAL_SEVERITY_HIGH: '#f97316', CROSS_SOURCE_SIGNAL_SEVERITY_MEDIUM: '#d4a843', CROSS_SOURCE_SIGNAL_SEVERITY_LOW: '#22c55e' };
+        return '<div style="margin-bottom:6px;font-weight:600">' + signals.length + ' active signals</div>' +
+          signals.slice(0, 15).map((s: Record<string, unknown>) => {
+            const c = sevColors[String(s.severity || '')] || '#666';
+            return '<div style="border-bottom:1px solid var(--vi-border-subtle,#1a1a28);padding:5px 0;border-left:3px solid ' + c + ';padding-left:8px"><span style="font-size:11px">' + esc(String(s.summary || '').slice(0, 120)) + '</span><br><span style="color:var(--text-muted);font-size:9px">' + esc(String(s.theater || '')) + ' · Score: ' + Number(s.severityScore || 0).toFixed(1) + '</span></div>';
+          }).join('');
+      });
+      break;
+
+    // ── Cyber ──────────────────────────────────────────────────
+    case 'threatfeed':
+      void loadFeed('threatFeed', '/api/bootstrap', (d) => {
+        const threats = ((d.cyberThreats as Record<string, unknown>)?.threats || []) as Array<Record<string, unknown>>;
+        if (threats.length === 0) return 'No active cyber threats in feed';
+        return '<div style="margin-bottom:6px;font-weight:600">' + threats.length + ' cyber threats tracked</div>' +
+          threats.slice(0, 12).map((t: Record<string, unknown>) => {
+            const sev = String(t.severity || 'medium');
+            const c: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#d4a843', low: '#22c55e' };
+            return '<div style="border-bottom:1px solid var(--vi-border-subtle,#1a1a28);padding:5px 0"><span style="color:' + (c[sev] || '#666') + ';font-weight:600;font-size:9px">' + sev.toUpperCase() + '</span> ' + esc(String(t.title || t.name || '').slice(0, 100)) + '<br><span style="color:var(--text-muted);font-size:9px">' + esc(String(t.source || t.feed || '')) + '</span></div>';
+          }).join('');
+      });
+      break;
+    case 'breach':
+      document.getElementById('breachBtn')?.addEventListener('click', async () => {
+        const input = (document.getElementById('breachInput') as HTMLInputElement)?.value.trim();
+        const result = document.getElementById('breachInputResult');
+        if (!input || !result) return;
+        result.style.display = 'block';
+        result.innerHTML = 'Checking breach databases...';
+        try {
+          const resp = await fetch('https://haveibeenpwned.com/api/v3/breachedaccount/' + encodeURIComponent(input) + '?truncateResponse=true', {
+            headers: { 'hibp-api-key': '', 'User-Agent': 'WorldMonitor-OSINT' },
+            signal: AbortSignal.timeout(8000),
+          });
+          if (resp.status === 404) { result.innerHTML = '<span style="color:#22c55e;font-weight:600">✅ No breaches found</span> for ' + esc(input); return; }
+          if (resp.status === 401) { result.innerHTML = 'HIBP API requires an API key for account searches.\n\nThe email "' + esc(input) + '" cannot be checked without a HIBP API key.\nYou can check manually at: haveibeenpwned.com'; return; }
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const breaches = await resp.json() as Array<{ Name: string }>;
+          result.innerHTML = '<span style="color:#ef4444;font-weight:600">⚠ ' + breaches.length + ' breach(es) found</span> for ' + esc(input) + '<br><br>' +
+            breaches.map((b: { Name: string }) => '• ' + esc(b.Name)).join('<br>');
+        } catch { result.innerHTML = 'Breach check requires HIBP API key.\n\nCheck manually: haveibeenpwned.com/account/' + esc(input); }
       });
       break;
   }

@@ -10,7 +10,7 @@ import predictionTags from './data/prediction-tags.json' with { type: 'json' };
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'prediction:markets-bootstrap:v1';
-const CACHE_TTL = 900; // 15 min — matches client poll interval
+const CACHE_TTL = 10800; // 3h — survives 1 missed cron cycle (was 900s) // 15 min — matches client poll interval
 
 const GAMMA_BASE = 'https://gamma-api.polymarket.com';
 const KALSHI_BASE = 'https://trading-api.kalshi.com/trade-api/v2';

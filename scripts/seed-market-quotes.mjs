@@ -7,7 +7,7 @@ const stocksConfig = loadSharedConfig('stocks.json');
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'market:stocks-bootstrap:v1';
-const CACHE_TTL = 1800;
+const CACHE_TTL = 10800; // 3h — survives 1 missed cron cycle (was 1800s)
 const YAHOO_DELAY_MS = 200;
 
 const MARKET_SYMBOLS = stocksConfig.symbols.map(s => s.symbol);

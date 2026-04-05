@@ -7,7 +7,7 @@ const gulfConfig = loadSharedConfig('gulf.json');
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'market:gulf-quotes:v1';
-const CACHE_TTL = 3600;
+const CACHE_TTL = 10800; // 3h — survives 1 missed cron cycle (was 3600s)
 const YAHOO_DELAY_MS = 200;
 
 const GULF_SYMBOLS = gulfConfig.symbols;

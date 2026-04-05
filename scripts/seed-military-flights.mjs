@@ -9,13 +9,13 @@ loadEnvFile(import.meta.url);
 
 const LIVE_KEY = 'military:flights:v1';
 const STALE_KEY = 'military:flights:stale:v1';
-const LIVE_TTL = 600;
+const LIVE_TTL = 10800; // 3h — survives 1 missed cron (was 600s)
 const STALE_TTL = 86400;
 
 const THEATER_POSTURE_LIVE_KEY = 'theater-posture:sebuf:v1';
 const THEATER_POSTURE_STALE_KEY = 'theater-posture:sebuf:stale:v1';
 const THEATER_POSTURE_BACKUP_KEY = 'theater-posture:sebuf:backup:v1';
-const THEATER_POSTURE_LIVE_TTL = 900;
+const THEATER_POSTURE_LIVE_TTL = 10800; // 3h (was 900s)
 const THEATER_POSTURE_STALE_TTL = 86400;
 const THEATER_POSTURE_BACKUP_TTL = 604800;
 

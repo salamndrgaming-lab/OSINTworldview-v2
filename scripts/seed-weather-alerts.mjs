@@ -6,7 +6,7 @@ loadEnvFile(import.meta.url);
 
 const NWS_API = 'https://api.weather.gov/alerts/active';
 const CANONICAL_KEY = 'weather:alerts:v1';
-const CACHE_TTL = 900; // 15 min
+const CACHE_TTL = 10800; // 3h — survives 1 missed cron cycle (was 900s) // 15 min
 
 function extractCoordinates(geometry) {
   if (!geometry) return [];

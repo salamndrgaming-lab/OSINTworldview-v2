@@ -460,6 +460,127 @@ async function main() {
 
   console.log(`  Executed: ${executed}/${allStatements.length} (${errors} errors)`);
 
+  // ── Write Redis snapshot for the API + Link Graph panel ────────────────────
+  // The API reads intelligence:entity-graph:v1 from Redis, not from Neo4j directly.
+  // Build a simplified graph from the same source data and persist it.
+  const REDIS_GRAPH_KEY = 'intelligence:entity-graph:v1';
+  const REDIS_GRAPH_TTL = 21600; // 6h — survives 2 missed cron cycles
+
+  try {
+    const nodes = [];
+    const links = [];
+    const nodeIds = new Set();
+
+    // POI persons → Person nodes
+    const persons = poi?.persons || [];
+    for (const p of persons) {
+      const id = 'person-' + (p.name || '').toLowerCase().replace(/\s+/g, '-');
+      if (!id || nodeIds.has(id)) continue;
+      nodeIds.add(id);
+      nodes.push({
+        id,
+        label: p.name || 'Unknown',
+        type: 'Person',
+        source: 'seed',
+        confidence: 0.9,
+        country: p.country || p.region || '',
+        role: p.role || '',
+        riskLevel: p.riskLevel || p.threatLevel || 'low',
+        mentions: p.mentionCount || p.mentions || 0,
+        lastSeen: Date.now(),
+      });
+
+      // Link person to country
+      if (p.country || p.region) {
+        const countryId = 'country-' + (p.country || p.region || '').toLowerCase().replace(/\s+/g, '-');
+        if (!nodeIds.has(countryId)) {
+          nodeIds.add(countryId);
+          nodes.push({
+            id: countryId,
+            label: p.country || p.region || '',
+            type: 'Country',
+            source: 'seed',
+            confidence: 1.0,
+            lastSeen: Date.now(),
+          });
+        }
+        links.push({ source: id, target: countryId, type: 'LOCATED_IN', weight: 1 });
+      }
+    }
+
+    // Conflict forecasts → Country-Country links
+    const fcs = forecasts?.forecasts || [];
+    for (const fc of fcs.slice(0, 30)) {
+      const countryId = 'country-' + (fc.countryName || fc.country || '').toLowerCase().replace(/\s+/g, '-');
+      if (!countryId || countryId === 'country-') continue;
+      if (!nodeIds.has(countryId)) {
+        nodeIds.add(countryId);
+        nodes.push({
+          id: countryId,
+          label: fc.countryName || fc.country || '',
+          type: 'Country',
+          source: 'seed',
+          confidence: 1.0,
+          riskLevel: fc.riskLevel || 'medium',
+          lastSeen: Date.now(),
+        });
+      }
+    }
+
+    // Missile events → Event nodes linked to regions
+    const missileEvents = missiles?.events || [];
+    for (const ev of missileEvents.slice(0, 20)) {
+      const evId = 'event-' + (ev.id || ev.title || '').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 40);
+      if (!evId || evId === 'event-' || nodeIds.has(evId)) continue;
+      nodeIds.add(evId);
+      nodes.push({
+        id: evId,
+        label: (ev.title || 'Missile Event').slice(0, 60),
+        type: 'Event',
+        source: 'seed',
+        confidence: 0.8,
+        country: ev.country || ev.region || '',
+        lastSeen: ev.timestamp || Date.now(),
+      });
+
+      if (ev.country || ev.region) {
+        const tgtId = 'country-' + (ev.country || ev.region || '').toLowerCase().replace(/\s+/g, '-');
+        if (!nodeIds.has(tgtId)) {
+          nodeIds.add(tgtId);
+          nodes.push({ id: tgtId, label: ev.country || ev.region, type: 'Country', source: 'seed', confidence: 1.0, lastSeen: Date.now() });
+        }
+        links.push({ source: evId, target: tgtId, type: 'TARGETS', weight: 1 });
+      }
+    }
+
+    const graphPayload = {
+      nodes,
+      links,
+      nodeCount: nodes.length,
+      linkCount: links.length,
+      builtAt: new Date().toISOString(),
+      source: 'seed-entity-graph',
+    };
+
+    const payload = JSON.stringify(graphPayload);
+    const mb = (Buffer.byteLength(payload, 'utf8') / 1048576).toFixed(2);
+
+    const writeResp = await fetch(redis.url, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + redis.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(['SET', REDIS_GRAPH_KEY, payload, 'EX', REDIS_GRAPH_TTL]),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (writeResp.ok) {
+      console.log('  Redis snapshot: ' + nodes.length + ' nodes, ' + links.length + ' links (' + mb + ' MB) → ' + REDIS_GRAPH_KEY);
+    } else {
+      console.warn('  Redis snapshot write failed: HTTP ' + writeResp.status);
+    }
+  } catch (err) {
+    console.warn('  Redis snapshot error (non-fatal): ' + (err.message || err));
+  }
+
   // Get node/relationship counts
   try {
     const nodeResult = await runCypherSingle(neo4j.queryUrl, neo4j.authToken,

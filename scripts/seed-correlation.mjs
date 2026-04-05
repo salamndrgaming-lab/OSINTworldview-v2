@@ -5,7 +5,7 @@ import { loadEnvFile, runSeed, getRedisCredentials } from './_seed-utils.mjs';
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'correlation:cards-bootstrap:v1';
-const CACHE_TTL = 600;
+const CACHE_TTL = 10800; // 3h — survives 1 missed cron cycle (was 600s)
 
 const INPUT_KEYS = [
   'military:flights:v1',

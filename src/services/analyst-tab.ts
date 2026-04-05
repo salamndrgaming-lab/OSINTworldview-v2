@@ -220,25 +220,36 @@ interface ToolDef {
 }
 
 const TOOLS: ToolDef[] = [
+  // Lookup — run inside the tab
   { name: 'WHOIS Lookup', url: '', desc: 'Domain registration & ownership data', cat: 'lookup', icon: '🔍', embed: false, builtin: 'whois' },
   { name: 'DNS Lookup', url: '', desc: 'DNS record query (A, MX, NS, TXT)', cat: 'lookup', icon: '🌐', embed: false, builtin: 'dns' },
   { name: 'IP Geolocation', url: '', desc: 'Geolocate any IP address with ISP/ASN', cat: 'lookup', icon: '📍', embed: false, builtin: 'ipgeo' },
   { name: 'Subnet Calculator', url: '', desc: 'CIDR range calculator & IP breakdown', cat: 'lookup', icon: '🧮', embed: false, builtin: 'subnet' },
+  { name: 'HTTP Headers', url: '', desc: 'Inspect HTTP response headers for any URL', cat: 'lookup', icon: '📋', embed: false, builtin: 'httpheaders' },
+  // Maritime — activates AIS map layer + shows vessel panel data
+  { name: 'Vessel Tracker', url: '', desc: 'Live AIS vessel tracking on the map', cat: 'maritime', icon: '🚢', embed: false, builtin: 'layer-ais' },
+  { name: 'Chokepoint Monitor', url: '', desc: 'Strait & canal transit flow monitor', cat: 'maritime', icon: '⚓', embed: false, builtin: 'panel-chokepoint-flow' },
+  { name: 'Submarine Cables', url: '', desc: 'Global undersea cable infrastructure map', cat: 'maritime', icon: '🔌', embed: false, builtin: 'layer-cables' },
+  // Aviation — activates flight map layer + shows military flights
+  { name: 'Military Flights', url: '', desc: 'Live military aircraft tracking on the map', cat: 'aviation', icon: '✈️', embed: false, builtin: 'layer-flights' },
+  { name: 'Flight Anomalies', url: '', desc: 'Military flight surge detection', cat: 'aviation', icon: '📡', embed: false, builtin: 'panel-missile-tracker' },
+  // Geospatial — activates map layers
+  { name: 'Conflict Zones', url: '', desc: 'Active conflict hotspots on the map', cat: 'geo', icon: '⚔️', embed: false, builtin: 'layer-conflicts' },
+  { name: 'GPS Jamming', url: '', desc: 'GPS interference detection heatmap', cat: 'geo', icon: '📡', embed: false, builtin: 'layer-gpsJamming' },
+  { name: 'Nuclear Facilities', url: '', desc: 'Nuclear installations worldwide', cat: 'geo', icon: '☢️', embed: false, builtin: 'layer-nuclear' },
+  { name: 'Military Bases', url: '', desc: 'Known military installations', cat: 'geo', icon: '🏛', embed: false, builtin: 'layer-bases' },
+  { name: 'Fire Detections', url: '', desc: 'NASA FIRMS satellite fire data', cat: 'geo', icon: '🔥', embed: false, builtin: 'layer-fires' },
+  { name: 'Webcams', url: '', desc: 'Live webcam feeds near hotspots', cat: 'geo', icon: '📹', embed: false, builtin: 'layer-webcams' },
+  // Intelligence panels — opens the panel in the dashboard
+  { name: 'GDELT Intel', url: '', desc: 'Live GDELT intelligence feed', cat: 'intel', icon: '🌐', embed: false, builtin: 'panel-gdelt-intel' },
+  { name: 'Cross-Source Signals', url: '', desc: 'Multi-domain signal correlation', cat: 'intel', icon: '🔺', embed: false, builtin: 'panel-cross-source-signals' },
+  { name: 'POI Tracker', url: '', desc: 'Persons of Interest profiles', cat: 'intel', icon: '👤', embed: false, builtin: 'panel-poi' },
+  { name: 'Narrative Drift', url: '', desc: 'Topic narrative velocity tracker', cat: 'intel', icon: '📰', embed: false, builtin: 'panel-narrative-drift' },
+  // Threat intel — external (no in-tab equivalent available)
   { name: 'Shodan', url: 'https://www.shodan.io', desc: 'Internet-connected device search engine', cat: 'threat', icon: '🛡', embed: false },
-  { name: 'Censys Search', url: 'https://search.censys.io', desc: 'Internet asset discovery platform', cat: 'threat', icon: '🔎', embed: false },
   { name: 'VirusTotal', url: 'https://www.virustotal.com', desc: 'File & URL threat analysis', cat: 'threat', icon: '🦠', embed: false },
   { name: 'GreyNoise', url: 'https://viz.greynoise.io', desc: 'Internet scanner identification', cat: 'threat', icon: '📡', embed: false },
-  { name: 'Have I Been Pwned', url: 'https://haveibeenpwned.com', desc: 'Breach exposure checker', cat: 'threat', icon: '🔓', embed: false },
   { name: 'URLhaus', url: 'https://urlhaus.abuse.ch/browse/', desc: 'Malware URL database', cat: 'threat', icon: '🕷', embed: false },
-  { name: 'Google Earth', url: 'https://earth.google.com/web/', desc: '3D satellite & aerial imagery', cat: 'geo', icon: '🌍', embed: false },
-  { name: 'Sentinel Hub', url: 'https://apps.sentinel-hub.com/eo-browser/', desc: 'Multi-spectral satellite imagery', cat: 'geo', icon: '🛰', embed: false },
-  { name: 'Overpass Turbo', url: 'https://overpass-turbo.eu', desc: 'OpenStreetMap query engine', cat: 'geo', icon: '🗺', embed: false },
-  { name: 'TGStat', url: 'https://tgstat.com', desc: 'Telegram channel analytics & stats', cat: 'social', icon: '📱', embed: false },
-  { name: 'Social Searcher', url: 'https://www.social-searcher.com', desc: 'Cross-platform social media search', cat: 'social', icon: '🔎', embed: false },
-  { name: 'MarineTraffic', url: 'https://www.marinetraffic.com', desc: 'Real-time vessel tracking & port data', cat: 'maritime', icon: '🚢', embed: false },
-  { name: 'VesselFinder', url: 'https://www.vesselfinder.com', desc: 'Free AIS vessel tracking', cat: 'maritime', icon: '⚓', embed: false },
-  { name: 'FlightRadar24', url: 'https://www.flightradar24.com', desc: 'Live global flight tracking', cat: 'aviation', icon: '✈', embed: false },
-  { name: 'ADS-B Exchange', url: 'https://globe.adsbexchange.com', desc: 'Unfiltered military & civil ADS-B', cat: 'aviation', icon: '📡', embed: false },
 ];
 
 function renderToolkitCards(): string {
@@ -250,7 +261,7 @@ function renderToolkitCards(): string {
         <div class="analyst-tool-desc">${t.desc}</div>
       </div>
       <span class="analyst-tool-cat">${t.cat}</span>
-      <span style="font-size:9px;padding:2px 6px;border-radius:3px;${t.builtin ? 'background:var(--intel-accent-subtle);color:var(--intel-accent)' : 'background:var(--vi-bg);color:var(--text-muted)'}">${t.builtin ? '⚡ Run' : '↗ Launch'}</span>
+      <span style="font-size:9px;padding:2px 6px;border-radius:3px;${t.builtin ? (t.builtin.startsWith('layer-') ? 'background:rgba(34,197,94,0.12);color:#22c55e' : t.builtin.startsWith('panel-') ? 'background:rgba(139,92,246,0.12);color:#8b5cf6' : 'background:var(--intel-accent-subtle);color:var(--intel-accent)') : 'background:var(--vi-bg);color:var(--text-muted)'}">${t.builtin ? (t.builtin.startsWith('layer-') ? '🗺 Map' : t.builtin.startsWith('panel-') ? '📊 Panel' : '⚡ Run') : '↗ Launch'}</span>
     </div>`
   ).join('');
 }
@@ -768,7 +779,21 @@ function initToolkit(): void {
     const tool = TOOLS[idx];
     if (!tool) return;
     if (tool.builtin) {
-      openBuiltinTool(tool);
+      if (tool.builtin.startsWith('layer-')) {
+        // Toggle a map layer — dispatch event that DeckGLMap/App listens for
+        const layerName = tool.builtin.replace('layer-', '');
+        window.dispatchEvent(new CustomEvent('wm:toggle-layer', { detail: { layer: layerName, enabled: true } }));
+        card.style.outline = '2px solid var(--intel-accent,#d4a843)';
+        setTimeout(() => { card.style.outline = ''; }, 2000);
+      } else if (tool.builtin.startsWith('panel-')) {
+        // Open/scroll to a dashboard panel
+        const panelId = tool.builtin.replace('panel-', '');
+        window.dispatchEvent(new CustomEvent('wm:open-panel', { detail: { panelId } }));
+        card.style.outline = '2px solid #22c55e';
+        setTimeout(() => { card.style.outline = ''; }, 2000);
+      } else {
+        openBuiltinTool(tool);
+      }
     } else if (tool.url) {
       window.open(tool.url, '_blank', 'noopener');
     }
@@ -839,6 +864,11 @@ function renderBuiltinTool(id: string): string {
         <input type="text" id="subnetInput" placeholder="Enter CIDR (e.g. 192.168.1.0/24)" style="${inputStyle}" />
         <button class="analyst-btn" id="subnetBtn">Calculate</button>
       </div><div id="subnetResult" style="${resultStyle};display:none"></div>`;
+    case 'httpheaders':
+      return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="httpInput" placeholder="Enter URL (e.g. https://example.com)" style="${inputStyle}" />
+        <button class="analyst-btn" id="httpBtn">Inspect</button>
+      </div><div id="httpResult" style="${resultStyle};display:none"></div>`;
     default:
       return '<div style="padding:12px;color:var(--text-dim)">Tool not implemented</div>';
   }
@@ -970,6 +1000,30 @@ function initBuiltinTool(id: string): void {
           ].join('\n');
         } catch {
           result.textContent = 'Invalid CIDR notation. Use format: 192.168.1.0/24';
+        }
+      });
+      break;
+    case 'httpheaders':
+      document.getElementById('httpBtn')?.addEventListener('click', async () => {
+        const input = (document.getElementById('httpInput') as HTMLInputElement)?.value.trim();
+        const result = document.getElementById('httpResult');
+        if (!input || !result) return;
+        result.style.display = 'block';
+        result.textContent = 'Fetching headers...';
+        try {
+          let url = input;
+          if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
+          const resp = await fetch(url, { method: 'HEAD', mode: 'no-cors', signal: AbortSignal.timeout(8000) });
+          const lines = ['URL: ' + url, 'Status: ' + resp.status + ' ' + resp.statusText, '', 'Response Headers:'];
+          resp.headers.forEach((val, key) => {
+            lines.push('  ' + key + ': ' + val);
+          });
+          if (lines.length <= 4) {
+            lines.push('  (no headers visible — CORS may be blocking)', '', 'Note: most cross-origin sites block HEAD requests.', 'For full headers, use browser DevTools → Network tab.');
+          }
+          result.textContent = lines.join('\n');
+        } catch (err) {
+          result.textContent = 'Request failed: ' + ((err as Error).message || 'unknown error') + '\n\nNote: CORS policies may prevent header inspection from the browser.';
         }
       });
       break;

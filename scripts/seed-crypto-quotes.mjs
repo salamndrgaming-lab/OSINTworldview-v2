@@ -7,7 +7,7 @@ const cryptoConfig = loadSharedConfig('crypto.json');
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'market:crypto:v1';
-const CACHE_TTL = 3600; // 1 hour
+const CACHE_TTL = 10800; // 3h — survives 1 missed cron cycle (was 3600s) // 1 hour
 
 const CRYPTO_IDS = cryptoConfig.ids;
 const CRYPTO_META = cryptoConfig.meta;

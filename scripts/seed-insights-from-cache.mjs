@@ -16,7 +16,7 @@ import { loadEnvFile, CHROME_UA, getRedisCredentials, runSeed, maskToken } from 
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'news:insights:v1';
-const CACHE_TTL = 1800;
+const CACHE_TTL = 10800; // 3h — survives 1 missed cron cycle (was 1800s)
 const GROQ_MODEL = 'llama-3.1-8b-instant';
 
 // Keys to read from Redis for building context

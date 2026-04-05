@@ -6,7 +6,7 @@ loadEnvFile(import.meta.url);
 
 const USGS_FEED_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson';
 const CANONICAL_KEY = 'seismology:earthquakes:v1';
-const CACHE_TTL = 3600; // 1 hour
+const CACHE_TTL = 10800; // 3h — survives 1 missed cron cycle (was 3600s) // 1 hour
 
 async function fetchEarthquakes() {
   const resp = await fetch(USGS_FEED_URL, {

@@ -66,6 +66,7 @@ const DOMAINS: DomainCell[] = [
   { id: 'cyber',       label: 'Cyber',         icon: '💻', category: 'cyber',      healthKey: 'cyberThreats' },
   { id: 'outages',     label: 'Outages',       icon: '🔴', category: 'cyber',      healthKey: 'outages' },
   { id: 'flights',     label: 'Mil Flights',   icon: '✈️', category: 'cyber',      healthKey: 'militaryFlights' },
+  { id: 'ais',        label: 'AIS Vessels',   icon: '🚢', category: 'maritime',   healthKey: 'aisVesselSnapshot' },
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -73,7 +74,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   intel:    'Intelligence',
   market:   'Markets',
   env:      'Environment',
-  cyber:    'Cyber',
+  cyber:    'Cyber & Aviation',
+  maritime: 'Maritime',
 };
 
 // Staleness thresholds — how old (minutes) before a domain turns amber/red

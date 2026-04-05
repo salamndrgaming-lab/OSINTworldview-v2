@@ -71,6 +71,7 @@ const STANDALONE_KEYS = {
   hypotheses:            'intelligence:hypotheses:v1',
   narrativeDrift:        'intelligence:narrative-drift:v1',
   crossSourceSignals:    'intelligence:cross-source-signals:v1',
+  aisVesselSnapshot:     'ais:snapshot:latest',
 };
 
 const SEED_META = {
@@ -129,6 +130,7 @@ const SEED_META = {
   hypotheses:          { key: 'seed-meta:intelligence:hypotheses',           maxStaleMin: 180 },
   narrativeDrift:      { key: 'seed-meta:intelligence:narrative-drift',      maxStaleMin: 180 },
   crossSourceSignals:  { key: 'seed-meta:intelligence:cross-source-signals', maxStaleMin: 60 },
+  aisVesselSnapshot:   { key: 'seed-meta:ais:vessel-snapshot', maxStaleMin: 240 },
 };
 
 // Standalone keys that are populated on-demand by RPC handlers (not seeds).

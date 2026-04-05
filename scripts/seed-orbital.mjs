@@ -9,7 +9,7 @@ import { loadEnvFile, CHROME_UA, writeExtraKey, withRetry } from './_seed-utils.
 
 loadEnvFile(import.meta.url);
 
-const CANONICAL_KEY = 'orbital:tle';
+const CANONICAL_KEY = 'intelligence:satellites:tle:v1';
 const TTL           = 7200; // 2h
 
 async function seedOrbital() {

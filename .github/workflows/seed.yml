@@ -115,6 +115,7 @@ jobs:
       NEO4J_DATABASE:           ${{ secrets.NEO4J_DATABASE }}
       TELEGRAM_BOT_TOKEN:       ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID:         ${{ secrets.TELEGRAM_CHAT_ID }}
+      AISSTREAM_API_KEY:        ${{ secrets.AISSTREAM_API_KEY }}
       NODE_OPTIONS:             '--dns-result-order=ipv4first'
     steps:
       - uses: actions/checkout@v4
@@ -165,6 +166,12 @@ jobs:
         continue-on-error: true
       - run: node scripts/fetch-gpsjam.mjs
         continue-on-error: true
+
+      # AIS vessel positions (connects to aisstream.io for ~90s)
+      - name: Seed AIS vessel positions
+        run: node scripts/seed-ais-vessels.mjs
+        continue-on-error: true
+        timeout-minutes: 4
 
       # GDELT consumers — read from gdelt:raw:v1, zero direct GDELT calls
       - run: node scripts/seed-gdelt-intel.mjs

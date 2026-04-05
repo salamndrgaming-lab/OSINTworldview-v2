@@ -561,6 +561,37 @@ export class App {
     initAccentColor();
     applyStoredBranding();
 
+    // ── OSINT Toolkit event wiring ──────────────────────────────────────────
+    // analyst-tab.ts dispatches these when a tool card with builtin: 'layer-*'
+    // or 'panel-*' is clicked. Wire them to the actual map and panel systems.
+    window.addEventListener('wm:toggle-layer', ((e: CustomEvent) => {
+      const layer = e.detail?.layer;
+      if (!layer || !this.state.map) return;
+      const mapLayers = this.state.mapLayers;
+      if (layer in mapLayers) {
+        const key = layer as keyof typeof mapLayers;
+        if (!mapLayers[key]) {
+          this.state.map.toggleLayer(key);
+        }
+        // Scroll to map
+        const mapEl = document.querySelector('[data-panel="map"]');
+        if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }) as EventListener);
+
+    window.addEventListener('wm:open-panel', ((e: CustomEvent) => {
+      const panelId = e.detail?.panelId;
+      if (!panelId) return;
+      // Find the panel DOM element and scroll to it
+      const panelEl = document.querySelector('[data-panel="' + panelId + '"]') as HTMLElement;
+      if (panelEl) {
+        panelEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Flash highlight
+        panelEl.style.outline = '2px solid var(--intel-accent, #d4a843)';
+        setTimeout(() => { panelEl.style.outline = ''; }, 2500);
+      }
+    }) as EventListener);
+
     const mobileGeoCoords = await geoCoordsPromise;
     if (mobileGeoCoords && this.state.map) {
       this.state.map.setCenter(mobileGeoCoords.lat, mobileGeoCoords.lon, 6);

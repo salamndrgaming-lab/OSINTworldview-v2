@@ -64,7 +64,6 @@ function typeLabel(type: string): string {
 
 export class CrossSourceSignalsPanel extends Panel {
   private signals: Signal[] = [];
-  private compositeCount = 0;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
@@ -120,7 +119,6 @@ export class CrossSourceSignalsPanel extends Panel {
       }
 
       this.signals = payload.signals;
-      this.compositeCount = payload.compositeCount ?? 0;
       this.setCount(this.signals.length);
 
       if (statusEl) {

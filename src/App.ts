@@ -571,7 +571,8 @@ export class App {
       if (layer in mapLayers) {
         const key = layer as keyof typeof mapLayers;
         if (!mapLayers[key]) {
-          this.state.map.toggleLayer(key);
+          mapLayers[key] = true;
+          this.state.map.enableLayer(key);
         }
         // Scroll to map
         const mapEl = document.querySelector('[data-panel="map"]');

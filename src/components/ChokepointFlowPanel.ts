@@ -112,7 +112,7 @@ export class ChokepointFlowPanel extends Panel {
     body.innerHTML = chokepoints.map(cp => {
       const impact = CHOKEPOINT_IMPACTS[cp.name] || { dailyTradeUsd: 'N/A', oilPctGlobal: 'N/A' };
       const color = riskColors[cp.riskLevel?.toLowerCase()] || riskColors.low;
-      const blockageProb = this.simulateBlockage(cp.riskScore, cp.aisDisruptions || 0);
+      const blockageProb = this.computeBlockageRisk(cp.riskScore, cp.aisDisruptions || 0);
 
       return `<div style="background:var(--vi-surface,#12121a);border:1px solid var(--vi-border,#252535);border-radius:6px;padding:10px;margin-bottom:6px;border-left:3px solid ${color}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -132,11 +132,12 @@ export class ChokepointFlowPanel extends Panel {
     }).join('');
   }
 
-  private simulateBlockage(riskScore: number, disruptions: number): string {
-    // Simple Monte-Carlo-inspired probability based on risk score + disruption count
-    const base = Math.min(95, Math.max(1, (riskScore || 0) * 0.8 + disruptions * 5));
-    const noise = (Math.random() - 0.5) * 4;
-    return Math.max(0, Math.min(99, base + noise)).toFixed(1);
+  private computeBlockageRisk(riskScore: number, disruptions: number): string {
+    // Deterministic risk calculation based on actual risk score + disruption count
+    // No random noise — enterprise users expect consistent values
+    if (!riskScore && !disruptions) return 'N/A';
+    const base = Math.min(95, Math.max(0.1, (riskScore || 0) * 0.8 + disruptions * 5));
+    return base.toFixed(1);
   }
 
   private esc(s: string): string {

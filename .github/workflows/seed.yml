@@ -17,7 +17,7 @@ jobs:
   # of calling GDELT themselves, dropping ~91 direct API calls to ~26.
   seed-gdelt-raw:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 50
     env:
       UPSTASH_REDIS_REST_URL:   ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
@@ -37,6 +37,7 @@ jobs:
 
       # Single master GDELT crawl — topics + persons + GKG
       - name: Run GDELT crawl
+        timeout-minutes: 40
         run: |
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
             node scripts/seed-gdelt-raw.mjs --force
@@ -86,11 +87,15 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
 
-  # JOB 2: Downstream consumer seeds (reads gdelt:raw:v1 + other sources)
+  # JOB 2: All downstream seeds — parallel waves via shell script
+  # Each seed gets a per-process timeout (2-4 min). Seeds in the same wave
+  # run in parallel. Waves run sequentially for dependency ordering.
+  # Total runtime: ~8-12 min (vs 25-30 min sequential).
   seed-downstream:
     needs: [seed-gdelt-raw]
+    if: always() && needs.seed-gdelt-raw.result != 'cancelled'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
     env:
       UPSTASH_REDIS_REST_URL:   ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
@@ -130,122 +135,8 @@ jobs:
           node-version: '20'
       - run: npm install --ignore-scripts
 
-      # Free data sources (no GDELT dependency)
-      - run: node scripts/seed-earthquakes.mjs
-      - run: node scripts/seed-natural-events.mjs
-      - run: node scripts/seed-weather-alerts.mjs
-      - run: node scripts/seed-commodity-quotes.mjs
-      - run: node scripts/seed-unrest-events.mjs
-      - run: node scripts/seed-prediction-markets.mjs
-      - run: node scripts/seed-service-statuses.mjs
-      - run: node scripts/seed-climate-anomalies.mjs
-      - run: node scripts/seed-gulf-quotes.mjs
-      - run: node scripts/seed-etf-flows.mjs
-      - run: node scripts/seed-correlation.mjs
-      - run: node scripts/seed-bis-data.mjs
-        continue-on-error: true
-      - run: node scripts/seed-displacement-summary.mjs
-        continue-on-error: true
-      - run: node scripts/seed-iran-events.mjs
-        continue-on-error: true
-      - run: node scripts/seed-submarine-cables.mjs
-        continue-on-error: true
-      - run: node scripts/seed-usa-spending.mjs
-        continue-on-error: true
-      - run: node scripts/seed-wb-indicators.mjs
-        continue-on-error: true
-
-      # API key dependent (skips gracefully if key missing)
-      - run: node scripts/seed-market-quotes.mjs
-        continue-on-error: true
-      - run: node scripts/seed-cyber-threats.mjs
-        continue-on-error: true
-      - run: node scripts/seed-crypto-quotes.mjs
-        continue-on-error: true
-      - run: node scripts/seed-fire-detections.mjs
-        continue-on-error: true
-      - run: node scripts/seed-ucdp-events.mjs
-        continue-on-error: true
-      - run: node scripts/seed-internet-outages.mjs
-        continue-on-error: true
-      - run: node scripts/seed-military-flights.mjs
-        continue-on-error: true
-      - run: node scripts/seed-airport-delays.mjs
-        continue-on-error: true
-      - run: node scripts/seed-stablecoin-markets.mjs
-        continue-on-error: true
-
-      # Webcams
-      - run: node scripts/seed-webcams.mjs
-        continue-on-error: true
-      - run: node scripts/seed-webcams-fallback.mjs
-        continue-on-error: true
-      - run: node scripts/fetch-gpsjam.mjs
-        continue-on-error: true
-
-      # AIS vessel positions (connects to aisstream.io for ~90s)
-      - name: Seed AIS vessel positions
-        run: node scripts/seed-ais-vessels.mjs
-        continue-on-error: true
-        timeout-minutes: 4
-
-      # GDELT consumers — read from gdelt:raw:v1, zero direct GDELT calls
-      - run: node scripts/seed-gdelt-intel.mjs
-        continue-on-error: true
-      - run: node scripts/seed-missile-events.mjs
-        continue-on-error: true
-      - run: node scripts/seed-warcam.mjs
-        continue-on-error: true
-      - run: node scripts/seed-telegram-narratives.mjs
-        continue-on-error: true
-      - run: node scripts/seed-narrative-drift.mjs
-        continue-on-error: true
-
-      # Panel data aggregators (read from upstream seed keys)
-      - run: node scripts/seed-chokepoint-flow.mjs
-        continue-on-error: true
-      - run: node scripts/seed-telegram-osint.mjs
-        continue-on-error: true
-      - run: node scripts/seed-orbital.mjs
-        continue-on-error: true
-
-      # AI-powered (Groq) — read GDELT data from cache, not from GDELT directly
-      - run: node scripts/seed-insights-from-cache.mjs
-        continue-on-error: true
-      - run: node scripts/seed-persons-of-interest.mjs
-        continue-on-error: true
-      - run: node scripts/seed-poi-discovery.mjs
-        continue-on-error: true
-
-      # Conflict forecast, disease, radiation, thermal, advisories — non-GDELT
-      - run: node scripts/seed-conflict-forecast.mjs
-        continue-on-error: true
-      - run: node scripts/seed-disease-outbreaks.mjs
-        continue-on-error: true
-      - run: node scripts/seed-radiation.mjs
-        continue-on-error: true
-      - run: node scripts/seed-thermal-escalation.mjs
-        continue-on-error: true
-      - run: node scripts/seed-security-advisories.mjs
-        continue-on-error: true
-
-      # Derivative seeds — read everything written above
-      - run: node scripts/seed-alerts.mjs
-        continue-on-error: true
-      - run: node scripts/agent-sitrep.mjs
-        continue-on-error: true
-      - run: node scripts/seed-hypothesis-generator.mjs
-        continue-on-error: true
-      - run: node scripts/seed-cross-source-signals.mjs
-        continue-on-error: true
-
-      # Indexing and archival — runs last
-      - run: node scripts/seed-vector-index.mjs
-        continue-on-error: true
-      - run: node scripts/seed-snapshot.mjs
-        continue-on-error: true
-      - run: node scripts/seed-entity-graph.mjs
-        continue-on-error: true
+      - name: Run seed waves
+        run: bash scripts/run-seeds.sh
 
       # Telegram completion notification
       - name: Notify Telegram on completion

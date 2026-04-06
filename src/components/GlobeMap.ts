@@ -2640,7 +2640,7 @@ export class GlobeMap {
     }));
     this.flushMarkers();
   }
-  public setAisData(disruptions: AisDisruptionEvent[], _density: AisDensityZone[]): void {
+  public setAisData(disruptions: AisDisruptionEvent[], _density: AisDensityZone[], _vessels?: unknown[]): void {
     // AisDensityZone requires a heatmap layer — render disruption events only
     this.aisMarkers = (disruptions ?? [])
       .filter(d => d.lat != null && d.lon != null)

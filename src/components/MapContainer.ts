@@ -28,6 +28,7 @@ import type {
   CyberThreat,
   CableHealthRecord,
 } from '@/types';
+import type { AisPositionData } from '@/services/maritime';
 import type { AirportDelayAlert, PositionSample } from '@/services/aviation';
 import type { DisplacementFlow } from '@/services/displacement';
 import type { Earthquake } from '@/services/earthquakes';
@@ -103,6 +104,7 @@ export class MapContainer {
   private cachedOutages: InternetOutage[] | null = null;
   private cachedAisDisruptions: AisDisruptionEvent[] | null = null;
   private cachedAisDensity: AisDensityZone[] | null = null;
+  private cachedAisVessels: AisPositionData[] | null = null;
   private cachedCableAdvisories: CableAdvisory[] | null = null;
   private cachedRepairShips: RepairShip[] | null = null;
   private cachedCableHealth: Record<string, CableHealthRecord> | null = null;
@@ -275,7 +277,7 @@ export class MapContainer {
     if (this.cachedEarthquakes) this.setEarthquakes(this.cachedEarthquakes);
     if (this.cachedWeatherAlerts) this.setWeatherAlerts(this.cachedWeatherAlerts);
     if (this.cachedOutages) this.setOutages(this.cachedOutages);
-    if (this.cachedAisDisruptions != null && this.cachedAisDensity != null) this.setAisData(this.cachedAisDisruptions, this.cachedAisDensity);
+    if (this.cachedAisDisruptions != null && this.cachedAisDensity != null) this.setAisData(this.cachedAisDisruptions, this.cachedAisDensity, this.cachedAisVessels ?? []);
     if (this.cachedCableAdvisories != null && this.cachedRepairShips != null) this.setCableActivity(this.cachedCableAdvisories, this.cachedRepairShips);
     if (this.cachedCableHealth) this.setCableHealth(this.cachedCableHealth);
     if (this.cachedProtests) this.setProtests(this.cachedProtests);
@@ -481,12 +483,13 @@ export class MapContainer {
     if (this.useDeckGL) { this.deckGLMap?.setOutages(outages); } else { this.svgMap?.setOutages(outages); }
   }
 
-  public setAisData(disruptions: AisDisruptionEvent[], density: AisDensityZone[]): void {
+  public setAisData(disruptions: AisDisruptionEvent[], density: AisDensityZone[], vessels: AisPositionData[] = []): void {
     this.cachedAisDisruptions = disruptions;
     this.cachedAisDensity = density;
-    if (this.useGlobe) { this.globeMap?.setAisData(disruptions, density); return; }
+    this.cachedAisVessels = vessels;
+    if (this.useGlobe) { this.globeMap?.setAisData(disruptions, density, vessels); return; }
     if (this.useDeckGL) {
-      this.deckGLMap?.setAisData(disruptions, density);
+      this.deckGLMap?.setAisData(disruptions, density, vessels);
     } else {
       this.svgMap?.setAisData(disruptions, density);
     }
@@ -989,6 +992,7 @@ export class MapContainer {
     this.cachedOutages = null;
     this.cachedAisDisruptions = null;
     this.cachedAisDensity = null;
+    this.cachedAisVessels = null;
     this.cachedCableAdvisories = null;
     this.cachedRepairShips = null;
     this.cachedCableHealth = null;

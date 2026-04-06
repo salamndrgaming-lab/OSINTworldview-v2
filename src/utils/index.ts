@@ -158,9 +158,11 @@ export function generateId(): string {
 /** Breakpoint (px): below this width the app uses the simplified mobile layout. Must match CSS @media (max-width: …). */
 export const MOBILE_BREAKPOINT_PX = 768;
 
-/** True when viewport is below mobile breakpoint. Touch-capable notebooks keep desktop layout. */
+/** True when viewport is below mobile breakpoint OR device is touch-only (no hover) in landscape. */
 export function isMobileDevice(): boolean {
-  return window.innerWidth <= MOBILE_BREAKPOINT_PX;
+  if (window.innerWidth <= MOBILE_BREAKPOINT_PX) return true;
+  // Detect touch-only devices (phones/tablets) that may have larger viewports in landscape
+  return window.matchMedia('(hover: none) and (pointer: coarse)').matches && window.innerWidth <= 1024;
 }
 
 export function chunkArray<T>(items: T[], size: number): T[][] {

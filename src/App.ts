@@ -17,6 +17,7 @@ import { startLearning } from '@/services/country-instability';
 import { loadFromStorage, parseMapUrlState, saveToStorage, isMobileDevice } from '@/utils';
 import type { ParsedMapUrlState } from '@/utils';
 import { SignalModal, IntelligenceGapBadge, BreakingNewsBanner } from '@/components';
+import { MobileNav, initMobileViewport } from '@/components/MobileNav';
 import { initBreakingNewsAlerts, destroyBreakingNewsAlerts } from '@/services/breaking-news-alerts';
 import type { ServiceStatusPanel } from '@/components/ServiceStatusPanel';
 import type { StablecoinPanel } from '@/components/StablecoinPanel';
@@ -627,6 +628,13 @@ export class App {
       this.state.breakingBanner = new BreakingNewsBanner();
     }
 
+    // Mobile: initialize viewport + bottom nav + layer toggle sheet
+    if (this.state.isMobile) {
+      initMobileViewport();
+      this.initMobileNav();
+      this.initMobileLayerToggle();
+    }
+
     // Phase 3: UI setup methods
     this.eventHandlers.startHeaderClock();
     this.eventHandlers.setupPlaybackControl();
@@ -931,5 +939,70 @@ export class App {
       },
       5 * 60 * 1000,
     );
+  }
+
+  // ── Mobile Enhancements ─────────────────────────────────────────────────────
+
+  private mobileNav: MobileNav | null = null;
+
+  private initMobileNav(): void {
+    this.mobileNav = new MobileNav({
+      tabs: [
+        { id: 'map', label: 'Map', icon: '\u{1F5FA}\uFE0F' },
+        { id: 'intel', label: 'Intel', icon: '\u{1F9E0}' },
+        { id: 'alerts', label: 'Alerts', icon: '\u26A0\uFE0F' },
+        { id: 'markets', label: 'Markets', icon: '\u{1F4C8}' },
+        { id: 'analyst', label: 'Analyst', icon: '\u{1F50D}' },
+      ],
+      onTabChange: (tabId) => {
+        // Scroll to the relevant section or activate the tab
+        if (tabId === 'map') {
+          const mapEl = document.querySelector('[data-panel="map"]') as HTMLElement;
+          mapEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else if (tabId === 'analyst') {
+          // Activate analyst workspace tab
+          const analystTab = document.querySelector('[data-workspace="analyst"]') as HTMLElement;
+          analystTab?.click();
+        } else {
+          // Try to find a matching primary nav tab or panel category
+          const navBtn = document.querySelector(`.primary-nav button[data-tab="${tabId}"]`) as HTMLElement;
+          if (navBtn) { navBtn.click(); return; }
+          // Scroll to first panel in the category
+          const panelEl = document.querySelector(`[data-panel="${tabId}"]`) as HTMLElement;
+          panelEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      },
+    });
+    this.mobileNav.mount();
+  }
+
+  private initMobileLayerToggle(): void {
+    const mapControls = document.querySelector('.map-controls');
+    if (!mapControls) return;
+
+    const layerBtn = document.createElement('button');
+    layerBtn.className = 'map-control-btn map-layers-btn';
+    layerBtn.setAttribute('aria-label', 'Toggle map layers');
+    layerBtn.textContent = '\u{1F5C2}\uFE0F';
+    layerBtn.title = 'Map Layers';
+
+    layerBtn.addEventListener('click', () => {
+      const toggles = document.querySelector('.layer-toggles');
+      if (!toggles) return;
+      const isOpen = toggles.classList.contains('mobile-open');
+      toggles.classList.toggle('mobile-open', !isOpen);
+    });
+
+    mapControls.prepend(layerBtn);
+
+    // Close layer sheet when tapping outside
+    document.addEventListener('click', (e) => {
+      const toggles = document.querySelector('.layer-toggles');
+      if (!toggles?.classList.contains('mobile-open')) return;
+      const target = e.target as HTMLElement;
+      if (!toggles.contains(target) && !layerBtn.contains(target)) {
+        toggles.classList.remove('mobile-open');
+      }
+    });
   }
 }

@@ -953,7 +953,8 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
     labelKey: 'header.panelCatIntelligence',
     panelKeys: ['cii', 'strategic-risk', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel',
       'poi', 'insights', 'telegram-osint', 'counterfactual-sim', 'osint-report',
-      'hypothesis-generator', 'narrative-drift', 'auto-brief', 'cross-source-signals'],
+      'hypothesis-generator', 'narrative-drift', 'auto-brief', 'cross-source-signals',
+      'intel-graph', 'missile-tracker', 'osint-toolkit'],
     variants: ['full'],
   },
   correlation: {
@@ -968,7 +969,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   marketsFinance: {
     labelKey: 'header.panelCatMarketsFinance',
-    panelKeys: ['commodities', 'markets', 'economic', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'gulf-economies', 'etf-flows', 'stablecoins', 'crypto', 'heatmap'],
+    panelKeys: ['commodities', 'markets', 'economic', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'gulf-economies', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'chokepoint-flow'],
     variants: ['full'],
   },
   topical: {

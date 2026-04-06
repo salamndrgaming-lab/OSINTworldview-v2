@@ -19,7 +19,7 @@ loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'supply_chain:chokepoints:v4';
 const FLOW_KEY      = 'chokepoint:flow:v1';
-const TTL           = 3600; // 1h
+const TTL           = 10800; // 3h — survives 1 missed cron cycle
 
 const DEFAULT_CHOKEPOINTS = [
   { id: 'malacca',   name: 'Strait of Malacca',  lat: 2.5,   lng: 101.0, avgDailyTransits: 84,  tankerPct: 0.38 },

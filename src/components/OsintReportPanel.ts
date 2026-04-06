@@ -223,8 +223,13 @@ export class OsintReportPanel extends Panel {
     return header + body;
   }
 
-  private generateHash(_seed: number): string {
-    return 'sha256:' + Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  private generateHash(seed: number): string {
+    let h = seed ^ 0x5f3759df;
+    return 'sha256:' + Array.from({ length: 16 }, () => {
+      h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+      h = (h ^ (h >>> 13)) >>> 0;
+      return (h & 0xf).toString(16);
+    }).join('');
   }
 
   private copyReport(): void {

@@ -142,6 +142,18 @@ jobs:
       - run: node scripts/seed-gulf-quotes.mjs
       - run: node scripts/seed-etf-flows.mjs
       - run: node scripts/seed-correlation.mjs
+      - run: node scripts/seed-bis-data.mjs
+        continue-on-error: true
+      - run: node scripts/seed-displacement-summary.mjs
+        continue-on-error: true
+      - run: node scripts/seed-iran-events.mjs
+        continue-on-error: true
+      - run: node scripts/seed-submarine-cables.mjs
+        continue-on-error: true
+      - run: node scripts/seed-usa-spending.mjs
+        continue-on-error: true
+      - run: node scripts/seed-wb-indicators.mjs
+        continue-on-error: true
 
       # API key dependent (skips gracefully if key missing)
       - run: node scripts/seed-market-quotes.mjs
@@ -157,6 +169,10 @@ jobs:
       - run: node scripts/seed-internet-outages.mjs
         continue-on-error: true
       - run: node scripts/seed-military-flights.mjs
+        continue-on-error: true
+      - run: node scripts/seed-airport-delays.mjs
+        continue-on-error: true
+      - run: node scripts/seed-stablecoin-markets.mjs
         continue-on-error: true
 
       # Webcams

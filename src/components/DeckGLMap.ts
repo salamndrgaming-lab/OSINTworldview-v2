@@ -47,6 +47,7 @@ import type {
   CableHealthRecord,
   MilitaryBaseEnriched,
 } from '@/types';
+import type { AisPositionData } from '@/services/maritime';
 import { fetchMilitaryBases, type MilitaryBaseCluster as ServerBaseCluster } from '@/services/military-bases';
 import type { AirportDelayAlert, PositionSample } from '@/services/aviation';
 import { fetchAircraftPositions } from '@/services/aviation';
@@ -319,6 +320,7 @@ export class DeckGLMap {
   private iranEvents: IranEvent[] = [];
   private aisDisruptions: AisDisruptionEvent[] = [];
   private aisDensity: AisDensityZone[] = [];
+  private aisVessels: AisPositionData[] = [];
   private cableAdvisories: CableAdvisory[] = [];
   private repairShips: RepairShip[] = [];
   private healthByCableId: Record<string, CableHealthRecord> = {};
@@ -1364,6 +1366,11 @@ export class DeckGLMap {
       layers.push(this.createAisDensityLayer());
     }
 
+    // AIS individual vessel positions
+    if (mapLayers.ais && this.aisVessels.length > 0) {
+      layers.push(this.createAisVesselLayer());
+    }
+
     // AIS disruptions layer (spoofing/jamming)
     if (mapLayers.ais && this.aisDisruptions.length > 0) {
       layers.push(this.createAisDisruptionsLayer());
@@ -2371,6 +2378,30 @@ export class DeckGLMap {
       stroked: true,
       getLineColor: [255, 255, 255, 150] as [number, number, number, number],
       lineWidthMinPixels: 1,
+    });
+  }
+
+  private createAisVesselLayer(): ScatterplotLayer {
+    return new ScatterplotLayer({
+      id: 'ais-vessels-layer',
+      data: this.aisVessels,
+      getPosition: (d: AisPositionData) => [d.lon, d.lat],
+      getRadius: 800,
+      getFillColor: (d: AisPositionData) => {
+        // Tankers (shipType 80-89) = orange, cargo (70-79) = cyan, other = white
+        const t = d.shipType ?? 0;
+        if (t >= 80 && t < 90) return [255, 160, 40, 220] as [number, number, number, number];
+        if (t >= 70 && t < 80) return [40, 200, 255, 200] as [number, number, number, number];
+        if (t >= 60 && t < 70) return [160, 120, 255, 200] as [number, number, number, number]; // passenger
+        return [200, 220, 240, 180] as [number, number, number, number];
+      },
+      radiusMinPixels: 3,
+      radiusMaxPixels: 8,
+      pickable: true,
+      stroked: false,
+      // @ts-expect-error deck.gl auto-highlight mixin
+      autoHighlight: true,
+      highlightColor: [255, 255, 255, 120],
     });
   }
 
@@ -4994,9 +5025,10 @@ export class DeckGLMap {
     this.render();
   }
 
-  public setAisData(disruptions: AisDisruptionEvent[], density: AisDensityZone[]): void {
+  public setAisData(disruptions: AisDisruptionEvent[], density: AisDensityZone[], vessels: AisPositionData[] = []): void {
     this.aisDisruptions = disruptions;
     this.aisDensity = density;
+    this.aisVessels = vessels;
     this.render();
   }
 

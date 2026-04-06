@@ -1932,10 +1932,10 @@ export class DataLoaderManager implements AppModule {
 
   async loadAisSignals(): Promise<void> {
     try {
-      const { disruptions, density } = await fetchAisSignals();
+      const { disruptions, density, vessels } = await fetchAisSignals();
       const aisStatus = getAisStatus();
-      console.log('[Ships] Events:', { disruptions: disruptions.length, density: density.length, vessels: aisStatus.vessels });
-      this.ctx.map?.setAisData(disruptions, density);
+      console.log('[Ships] Events:', { disruptions: disruptions.length, density: density.length, vessels: vessels.length });
+      this.ctx.map?.setAisData(disruptions, density, vessels);
       signalAggregator.ingestAisDisruptions(disruptions);
       ingestAisDisruptionsForCII(disruptions);
       this.refreshCiiAndBrief();
@@ -1949,10 +1949,10 @@ export class DataLoaderManager implements AppModule {
         }
       }).catch(() => { });
 
-      const hasData = disruptions.length > 0 || density.length > 0;
+      const hasData = disruptions.length > 0 || density.length > 0 || vessels.length > 0;
       this.ctx.map?.setLayerReady('ais', hasData);
 
-      const shippingCount = disruptions.length + density.length;
+      const shippingCount = disruptions.length + density.length + vessels.length;
       const shippingStatus = shippingCount > 0 ? 'ok' : (aisStatus.connected ? 'warning' : 'error');
       this.ctx.statusPanel?.updateFeed('Shipping', {
         status: shippingStatus,

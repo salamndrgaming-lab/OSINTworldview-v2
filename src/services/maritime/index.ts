@@ -103,6 +103,19 @@ interface AisSnapshotResponse {
   disruptions?: AisDisruptionEvent[];
   density?: AisDensityZone[];
   candidateReports?: SnapshotCandidateReport[];
+  // Seed-populated format (seed-ais-vessels.mjs writes vessel positions directly)
+  vessels?: Array<{
+    mmsi: string;
+    name?: string;
+    lat: number;
+    lon: number;
+    shipType?: number;
+    heading?: number;
+    speed?: number;
+    course?: number;
+  }>;
+  configured?: boolean;
+  source?: string;
 }
 
 // ---- Callback System ----
@@ -121,6 +134,7 @@ let lastSequence = 0;
 
 let latestDisruptions: AisDisruptionEvent[] = [];
 let latestDensity: AisDensityZone[] = [];
+let latestVessels: AisPositionData[] = [];
 let latestStatus: SnapshotStatus = {
   connected: false,
   vessels: 0,
@@ -155,25 +169,97 @@ function parseSnapshot(data: unknown): {
   status: SnapshotStatus;
   disruptions: AisDisruptionEvent[];
   density: AisDensityZone[];
+  vessels: AisPositionData[];
   candidateReports: SnapshotCandidateReport[];
 } | null {
   if (!data || typeof data !== 'object') return null;
   const raw = data as AisSnapshotResponse;
 
-  if (!Array.isArray(raw.disruptions) || !Array.isArray(raw.density)) return null;
+  // Relay format: has disruptions + density arrays
+  if (Array.isArray(raw.disruptions) && Array.isArray(raw.density)) {
+    const status = raw.status || {};
+    return {
+      sequence: Number.isFinite(raw.sequence as number) ? Number(raw.sequence) : 0,
+      status: {
+        connected: Boolean(status.connected),
+        vessels: Number.isFinite(status.vessels as number) ? Number(status.vessels) : 0,
+        messages: Number.isFinite(status.messages as number) ? Number(status.messages) : 0,
+      },
+      disruptions: raw.disruptions,
+      density: raw.density,
+      vessels: [],
+      candidateReports: Array.isArray(raw.candidateReports) ? raw.candidateReports : [],
+    };
+  }
 
-  const status = raw.status || {};
-  return {
-    sequence: Number.isFinite(raw.sequence as number) ? Number(raw.sequence) : 0,
-    status: {
-      connected: Boolean(status.connected),
-      vessels: Number.isFinite(status.vessels as number) ? Number(status.vessels) : 0,
-      messages: Number.isFinite(status.messages as number) ? Number(status.messages) : 0,
-    },
-    disruptions: raw.disruptions,
-    density: raw.density,
-    candidateReports: Array.isArray(raw.candidateReports) ? raw.candidateReports : [],
-  };
+  // Seed format: has vessels array (from seed-ais-vessels.mjs via Redis)
+  if (Array.isArray(raw.vessels) && raw.vessels.length > 0) {
+    const vessels: AisPositionData[] = raw.vessels
+      .filter(v => v && Number.isFinite(v.lat) && Number.isFinite(v.lon) && v.mmsi)
+      .map(v => ({
+        mmsi: String(v.mmsi),
+        name: v.name || '',
+        lat: v.lat,
+        lon: v.lon,
+        shipType: v.shipType,
+        heading: v.heading,
+        speed: v.speed,
+        course: v.course,
+      }));
+
+    // Compute density zones by clustering vessels into grid cells
+    const density = computeDensityFromVessels(vessels);
+
+    return {
+      sequence: 0,
+      status: { connected: true, vessels: vessels.length, messages: 0 },
+      disruptions: [],
+      density,
+      vessels,
+      candidateReports: [],
+    };
+  }
+
+  return null;
+}
+
+/** Cluster vessel positions into density zones using a grid. */
+function computeDensityFromVessels(vessels: AisPositionData[]): AisDensityZone[] {
+  const GRID_SIZE = 2; // degrees
+  const cells = new Map<string, { lats: number[]; lons: number[]; count: number }>();
+
+  for (const v of vessels) {
+    const gx = Math.floor(v.lon / GRID_SIZE);
+    const gy = Math.floor(v.lat / GRID_SIZE);
+    const key = gx + ',' + gy;
+    const cell = cells.get(key);
+    if (cell) {
+      cell.lats.push(v.lat);
+      cell.lons.push(v.lon);
+      cell.count++;
+    } else {
+      cells.set(key, { lats: [v.lat], lons: [v.lon], count: 1 });
+    }
+  }
+
+  const zones: AisDensityZone[] = [];
+  let idx = 0;
+  for (const [key, cell] of cells) {
+    if (cell.count < 3) continue; // skip sparse cells
+    const avgLat = cell.lats.reduce((a, b) => a + b, 0) / cell.count;
+    const avgLon = cell.lons.reduce((a, b) => a + b, 0) / cell.count;
+    const intensity = Math.min(cell.count / 20, 1);
+    zones.push({
+      id: 'density-' + key + '-' + idx++,
+      name: 'Vessel cluster (' + cell.count + ' ships)',
+      lat: avgLat,
+      lon: avgLon,
+      intensity,
+      deltaPct: 0,
+      shipsPerDay: cell.count,
+    });
+  }
+  return zones;
 }
 
 // ---- Hybrid Fetch Strategy ----
@@ -310,6 +396,7 @@ async function pollSnapshot(force = false, signal?: AbortSignal): Promise<void> 
 
     latestDisruptions = snapshot.disruptions;
     latestDensity = snapshot.density;
+    latestVessels = snapshot.vessels;
     latestStatus = snapshot.status;
     lastPollAt = Date.now();
 
@@ -385,9 +472,9 @@ export function getAisStatus(): { connected: boolean; vessels: number; messages:
   };
 }
 
-export async function fetchAisSignals(): Promise<{ disruptions: AisDisruptionEvent[]; density: AisDensityZone[] }> {
+export async function fetchAisSignals(): Promise<{ disruptions: AisDisruptionEvent[]; density: AisDensityZone[]; vessels: AisPositionData[] }> {
   if (!aisConfigured) {
-    return { disruptions: [], density: [] };
+    return { disruptions: [], density: [], vessels: [] };
   }
 
   startPolling();
@@ -399,5 +486,6 @@ export async function fetchAisSignals(): Promise<{ disruptions: AisDisruptionEve
   return {
     disruptions: latestDisruptions,
     density: latestDensity,
+    vessels: latestVessels,
   };
 }

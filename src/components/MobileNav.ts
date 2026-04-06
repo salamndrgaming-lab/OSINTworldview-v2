@@ -270,7 +270,7 @@ export class MobileNav {
 export function initMobileViewport(): void {
   let meta = document.querySelector('meta[name="viewport"]');
   if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'viewport'); document.head.appendChild(meta); }
-  meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+  meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover');
   if (document.getElementById('mobile-viewport-styles')) return;
   const style = document.createElement('style');
   style.id = 'mobile-viewport-styles';

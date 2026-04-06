@@ -2399,7 +2399,6 @@ export class DeckGLMap {
       radiusMaxPixels: 8,
       pickable: true,
       stroked: false,
-      // @ts-expect-error deck.gl auto-highlight mixin
       autoHighlight: true,
       highlightColor: [255, 255, 255, 120],
     });

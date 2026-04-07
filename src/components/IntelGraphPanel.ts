@@ -689,12 +689,27 @@ export class IntelGraphPanel extends Panel {
         this.showAnalysis('No entity graph data available. Seed pipeline may not have run yet.', true);
         return;
       }
-      this.ingestGraphData(data.nodes, data.links || []);
-      this.showAnalysis(
-        `<div class="igp-analysis-section"><strong>Live graph loaded:</strong> ${data.nodes.length} entities, ${(data.links || []).length} connections</div>` +
-        (data.builtAt ? `<div class="igp-analysis-section">Last updated: ${new Date(data.builtAt).toLocaleString()}</div>` : ''),
-        false
-      );
+
+      // Also persist to perpetual intelligence DB
+      try {
+        const { ingestBatch } = await import('../services/intel-graph-db');
+        const result = await ingestBatch('neo4j', data.nodes, data.links || []);
+        const dbInfo = `(+${result.newNodes} new, ${result.updatedNodes} updated in perpetual DB)`;
+        this.ingestGraphData(data.nodes, data.links || []);
+        this.showAnalysis(
+          `<div class="igp-analysis-section"><strong>Live graph loaded:</strong> ${data.nodes.length} entities, ${(data.links || []).length} connections ${dbInfo}</div>` +
+          (data.builtAt ? `<div class="igp-analysis-section">Last updated: ${new Date(data.builtAt).toLocaleString()}</div>` : ''),
+          false
+        );
+      } catch {
+        // Perpetual DB failed — still show the graph
+        this.ingestGraphData(data.nodes, data.links || []);
+        this.showAnalysis(
+          `<div class="igp-analysis-section"><strong>Live graph loaded:</strong> ${data.nodes.length} entities, ${(data.links || []).length} connections</div>` +
+          (data.builtAt ? `<div class="igp-analysis-section">Last updated: ${new Date(data.builtAt).toLocaleString()}</div>` : ''),
+          false
+        );
+      }
     } catch (err) {
       this.showAnalysis('Failed to load live graph: ' + (err instanceof Error ? err.message : 'Unknown error'), true);
     }

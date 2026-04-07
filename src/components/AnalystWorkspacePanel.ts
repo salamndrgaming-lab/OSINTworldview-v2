@@ -83,20 +83,31 @@ export class AnalystWorkspacePanel extends Panel {
 
   private async initLinkGraph() {
     try {
-      this.graphInstance = new D3LinkGraph('link-graph-container');
-      
-      const res = await fetch('/api/intelligence/entity-graph');
-      if (!res.ok) throw new Error('Failed to load graph data');
-      
-      const data = await res.json();
-      
-      if (!data.nodes || data.nodes.length === 0) {
+      const { getFullGraph, ingestBatch } = await import('../services/intel-graph-db');
+
+      // First try to load from perpetual DB
+      let graph = await getFullGraph();
+
+      // If empty, pull from API and ingest
+      if (graph.nodes.length === 0) {
+        const res = await fetch('/api/intelligence/entity-graph', { signal: AbortSignal.timeout(8000) }).catch(() => null);
+        if (res?.ok) {
+          const data = await res.json();
+          if (data.nodes?.length) {
+            await ingestBatch('neo4j', data.nodes, data.links || []);
+            graph = await getFullGraph();
+          }
+        }
+      }
+
+      if (graph.nodes.length === 0) {
         const container = document.getElementById('link-graph-container');
-        if (container) container.innerHTML = '<div style="padding: 16px; color: #888;">No entity graph data available in Neo4j/Redis.</div>';
+        if (container) container.innerHTML = '<div style="padding: 16px; color: #888;">No entity graph data yet. Use the Analyst tab Link Graph to ingest data from Neo4j, POI, or News.</div>';
         return;
       }
 
-      this.graphInstance.render(data.nodes, data.links);
+      this.graphInstance = new D3LinkGraph('link-graph-container');
+      this.graphInstance.render(graph.nodes, graph.links);
     } catch (err) {
       console.error('[AnalystWorkspace] Graph error:', err);
     }

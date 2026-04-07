@@ -13,7 +13,6 @@
 import {
   D3LinkGraph,
   addNodeToGraph,
-  addLinkToGraph,
   clearStoredGraph,
   getStoredGraph,
   startAutoDiscovery,
@@ -21,6 +20,19 @@ import {
   type GraphNode,
   type GraphData,
 } from '../utils/D3LinkGraph';
+import {
+  upsertNode,
+  getFullGraph,
+  getStats,
+  ingestBatch,
+  ingestPOI,
+  ingestHeadlines,
+  clearDatabase,
+  migrateLegacyGraph,
+  canonicalNodeId,
+  exportDatabase,
+  type GraphStats,
+} from './intel-graph-db';
 
 const ANALYST_CONTAINER_ID = 'analystWorkspace';
 const ACTIVE_SUBTAB_KEY = 'worldmonitor-analyst-subtab';
@@ -118,18 +130,22 @@ function renderGraph(): string {
         <input type="text" class="analyst-graph-input" id="analystGraphInput" placeholder="Entity name..." spellcheck="false"
           style="flex:1;min-width:120px;max-width:220px;font-size:11px;padding:4px 8px;background:var(--vi-bg,#0c0c10);border:1px solid var(--vi-border,#252535);border-radius:4px;color:var(--text,#e5e7eb);outline:none" />
         <button class="analyst-btn" id="analystGraphAddBtn" style="white-space:nowrap">+ Add</button>
-        <button class="analyst-btn analyst-btn-ghost" id="analystGraphLoadApiBtn" style="font-size:10px;white-space:nowrap" title="Load full entity graph from Neo4j/Redis">⬇ Load Neo4j</button>
+        <button class="analyst-btn analyst-btn-ghost" id="analystGraphLoadApiBtn" style="font-size:10px;white-space:nowrap" title="Load full entity graph from Neo4j/Redis">📡 Ingest Neo4j</button>
+        <button class="analyst-btn analyst-btn-ghost" id="analystGraphIngestPOIBtn" style="font-size:10px;white-space:nowrap" title="Ingest POI data into graph">👤 Ingest POI</button>
+        <button class="analyst-btn analyst-btn-ghost" id="analystGraphIngestNewsBtn" style="font-size:10px;white-space:nowrap" title="Extract entities from news headlines">📰 Ingest News</button>
+        <button class="analyst-btn analyst-btn-ghost" id="analystGraphExportBtn" style="font-size:10px" title="Export perpetual database">💾 Export</button>
         <button class="analyst-btn analyst-btn-ghost" id="analystGraphClearBtn" style="font-size:10px">Clear</button>
-        <span id="analystGraphStatus" style="font-size:9px;color:var(--text-muted,#666);font-family:'JetBrains Mono',monospace;margin-left:4px"></span>
       </div>
-      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center">
         <span style="font-size:9px;color:#f59e0b">● Person</span>
         <span style="font-size:9px;color:#3b82f6">● Org</span>
         <span style="font-size:9px;color:#8b5cf6">● Country</span>
         <span style="font-size:9px;color:#ef4444">● Event</span>
         <span style="font-size:9px;color:#10b981">● Location</span>
-        <span style="font-size:9px;color:var(--text-muted,#666);margin-left:8px">— manual &nbsp; - - inferred &nbsp; auto-links in green</span>
+        <span style="font-size:9px;color:var(--text-muted,#666);margin-left:8px">— manual &nbsp; - - auto &nbsp; solid = API</span>
+        <span id="analystGraphStatus" style="font-size:9px;color:var(--text-muted,#666);font-family:'JetBrains Mono',monospace;margin-left:auto"></span>
       </div>
+      <div id="analystGraphDbStats" style="display:flex;gap:12px;margin-top:4px;padding:4px 8px;background:rgba(255,255,255,0.02);border-radius:4px;font-size:9px;color:var(--text-muted,#555);font-family:'JetBrains Mono',monospace"></div>
     </div>
     <div id="analystGraphCanvasWrap" style="flex:1;position:relative;overflow:hidden;background:#060608;border-radius:0 0 6px 6px">
       <div id="analystGraphCanvas" style="width:100%;height:100%"></div>
@@ -326,9 +342,14 @@ function updateEmptyState(nodeCount: number): void {
   if (empty) empty.style.display = nodeCount === 0 ? 'flex' : 'none';
 }
 
-function addManualNode(label: string, type: string): void {
+async function addManualNode(label: string, type: string): Promise<void> {
   if (!label.trim()) return;
-  const id = `${type.toLowerCase()}-${label.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
+
+  // Upsert into perpetual DB
+  await upsertNode(type, label, 'manual', { confidence: 1.0 });
+
+  // Also keep localStorage in sync for backward compat
+  const id = canonicalNodeId(type, label);
   const node: GraphNode = {
     id,
     label: label.trim(),
@@ -350,6 +371,7 @@ function addManualNode(label: string, type: string): void {
   }
 
   setGraphStatus(`Added: ${label}`, '#22c55e');
+  void refreshDbStats();
   setTimeout(() => setGraphStatus(`${stored.nodes.length} nodes · auto-discovering...`), 2000);
 }
 
@@ -378,10 +400,91 @@ function mountGraph(data: GraphData): void {
   }
 }
 
+let enrichmentTimer: ReturnType<typeof setInterval> | null = null;
+
+async function refreshDbStats(): Promise<void> {
+  const el = document.getElementById('analystGraphDbStats');
+  if (!el) return;
+  try {
+    const stats: GraphStats = await getStats();
+    const srcBadges = stats.sources.map(s =>
+      `<span style="padding:1px 4px;background:rgba(255,255,255,0.05);border-radius:2px">${s}</span>`
+    ).join(' ');
+    el.innerHTML = `
+      <span>🗄 Perpetual DB: <strong style="color:#e5e7eb">${stats.totalNodes}</strong> nodes · <strong style="color:#e5e7eb">${stats.totalLinks}</strong> links</span>
+      <span>Avg confidence: <strong style="color:${stats.avgConfidence > 0.7 ? '#22c55e' : '#f59e0b'}">${Math.round(stats.avgConfidence * 100)}%</strong></span>
+      ${stats.sources.length ? `<span>Sources: ${srcBadges}</span>` : ''}
+      ${stats.oldestNode ? `<span>Since: ${new Date(stats.oldestNode).toLocaleDateString()}</span>` : ''}
+    `;
+  } catch { /* ignore */ }
+}
+
+async function runMultiSourceEnrichment(): Promise<void> {
+  let changed = false;
+
+  try {
+    // 1. Entity graph from Neo4j/Redis
+    const egResp = await fetch('/api/intelligence/entity-graph', { signal: AbortSignal.timeout(6000) }).catch(() => null);
+    if (egResp?.ok) {
+      const data = await egResp.json();
+      if (data.nodes?.length) {
+        const result = await ingestBatch('neo4j', data.nodes, data.links || []);
+        if (result.newNodes > 0 || result.newLinks > 0) changed = true;
+      }
+    }
+  } catch { /* non-critical */ }
+
+  try {
+    // 2. POI data
+    const poiResp = await fetch('/api/poi', { signal: AbortSignal.timeout(5000) }).catch(() => null);
+    if (poiResp?.ok) {
+      const data = await poiResp.json();
+      if (data.persons?.length) {
+        const result = await ingestPOI(data.persons);
+        if (result.newNodes > 0) changed = true;
+      }
+    }
+  } catch { /* non-critical */ }
+
+  try {
+    // 3. News headlines — extract entities
+    const newsResp = await fetch('/api/news/headlines?limit=50', { signal: AbortSignal.timeout(5000) }).catch(() => null);
+    if (newsResp?.ok) {
+      const data = await newsResp.json();
+      const items = data?.items || data?.headlines || data || [];
+      if (Array.isArray(items) && items.length) {
+        const result = await ingestHeadlines(items);
+        if (result.newNodes > 0) changed = true;
+      }
+    }
+  } catch { /* non-critical */ }
+
+  if (changed) {
+    // Reload graph from perpetual DB
+    const graph = await getFullGraph();
+    mountGraph(graph);
+    void refreshDbStats();
+    setGraphStatus(`${graph.nodes.length} nodes · enrichment complete`, '#22c55e');
+    setTimeout(() => setGraphStatus(`${graph.nodes.length} nodes · auto-enriching...`), 3000);
+  }
+}
+
 function initLinkGraph(): void {
-  // Load persisted graph from localStorage and render it
-  const stored = getStoredGraph();
-  mountGraph(stored);
+  // Migrate legacy localStorage graph into perpetual IndexedDB
+  void migrateLegacyGraph().then(async (count) => {
+    if (count > 0) setGraphStatus(`Migrated ${count} legacy nodes`, '#22c55e');
+
+    // Load from perpetual DB (fallback to localStorage if empty)
+    const graph = await getFullGraph();
+    if (graph.nodes.length > 0) {
+      mountGraph(graph);
+    } else {
+      const stored = getStoredGraph();
+      mountGraph(stored);
+    }
+
+    void refreshDbStats();
+  });
 
   // ── Add button ────────────────────────────────────────────
   const addBtn = document.getElementById('analystGraphAddBtn');
@@ -395,7 +498,7 @@ function initLinkGraph(): void {
       input?.focus();
       return;
     }
-    addManualNode(label, type);
+    void addManualNode(label, type);
     if (input) input.value = '';
     input?.focus();
   }
@@ -407,76 +510,141 @@ function initLinkGraph(): void {
   });
 
   // ── Clear button ──────────────────────────────────────────
-  document.getElementById('analystGraphClearBtn')?.addEventListener('click', () => {
-    if (!confirm('Clear all nodes and links from the graph?')) return;
+  document.getElementById('analystGraphClearBtn')?.addEventListener('click', async () => {
+    if (!confirm('Clear all nodes and links from both localStorage AND the perpetual database?')) return;
     clearStoredGraph();
+    await clearDatabase();
     stopAutoDiscovery();
+    if (enrichmentTimer) { clearInterval(enrichmentTimer); enrichmentTimer = null; }
     if (graphInstance) {
       graphInstance.destroy();
       graphInstance = null;
     }
     updateEmptyState(0);
-    setGraphStatus('');
+    void refreshDbStats();
+    setGraphStatus('Database cleared');
   });
 
-  // ── Load from Neo4j/Redis ─────────────────────────────────
+  // ── Ingest from Neo4j/Redis → perpetual DB ────────────────
   document.getElementById('analystGraphLoadApiBtn')?.addEventListener('click', async () => {
-    setGraphStatus('Loading from Neo4j...', '#f59e0b');
+    setGraphStatus('Ingesting from Neo4j...', '#f59e0b');
     try {
       const res = await fetch('/api/intelligence/entity-graph', { signal: AbortSignal.timeout(8000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as GraphData;
+      const data = await res.json();
 
       if (!data.nodes || data.nodes.length === 0) {
         setGraphStatus('Neo4j graph is empty — run the entity seed first', '#ef4444');
         return;
       }
 
-      // Tag all API nodes with source
-      const taggedNodes: GraphNode[] = (data.nodes || []).map(n => ({ ...n, source: 'api' as const, confidence: n.confidence ?? 0.9 }));
-      const taggedLinks = (data.links || []).map(l => ({ ...l, source_type: 'api' as const }));
+      // Ingest into perpetual DB (merge-on-write)
+      const result = await ingestBatch('neo4j', data.nodes, data.links || []);
 
-      // Merge into local store (don't overwrite manual nodes)
-      const current = getStoredGraph();
-      const existingIds = new Set(current.nodes.map(n => n.id));
+      // Also sync to localStorage for backward compat
+      const taggedNodes: GraphNode[] = (data.nodes || []).map((n: Record<string, unknown>) => ({
+        id: canonicalNodeId(String(n.type || 'topic'), String(n.label || n.id || '')),
+        label: String(n.label || n.id || ''),
+        type: String(n.type || 'topic'),
+        source: 'api' as const,
+        confidence: Number(n.confidence ?? 0.9),
+      }));
+      for (const n of taggedNodes) addNodeToGraph(n);
 
-      for (const n of taggedNodes) {
-        if (!existingIds.has(n.id)) {
-          addNodeToGraph(n);
-          existingIds.add(n.id);
-        }
-      }
-      for (const l of taggedLinks) {
-        addLinkToGraph(l);
-      }
-
-      const fresh = getStoredGraph();
-      mountGraph(fresh);
-      setGraphStatus(`Loaded ${taggedNodes.length} nodes from Neo4j`, '#22c55e');
-      setTimeout(() => setGraphStatus(`${fresh.nodes.length} nodes · auto-discovering...`), 3000);
-
-      // Start auto-discovery now that we have nodes
-      startAutoDiscovery((updated) => {
-        if (graphInstance) graphInstance.addToGraph(updated.nodes, updated.links);
-        setGraphStatus(`${updated.nodes.length} nodes · ${updated.links.length} links (live)`);
-      });
+      // Reload from perpetual DB and display
+      const graph = await getFullGraph();
+      mountGraph(graph);
+      void refreshDbStats();
+      setGraphStatus(`+${result.newNodes} new, ${result.updatedNodes} updated from Neo4j`, '#22c55e');
+      setTimeout(() => setGraphStatus(`${graph.nodes.length} nodes · auto-enriching...`), 3000);
     } catch (err) {
       console.error('[LinkGraph] API load error:', err);
       setGraphStatus('Failed to load from Neo4j — is the entity seed running?', '#ef4444');
     }
   });
 
-  // ── Map-click → add node ──────────────────────────────────
-  // Listen for the custom event dispatched by POIMapLayer and other map layers
-  // when a user clicks a feature. Format: { name, type, country }
+  // ── Ingest POI → perpetual DB ─────────────────────────────
+  document.getElementById('analystGraphIngestPOIBtn')?.addEventListener('click', async () => {
+    setGraphStatus('Ingesting POI data...', '#f59e0b');
+    try {
+      const res = await fetch('/api/poi', { signal: AbortSignal.timeout(6000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const persons = data?.persons || [];
+      if (!persons.length) {
+        setGraphStatus('No POI data available', '#ef4444');
+        return;
+      }
+
+      const result = await ingestPOI(persons);
+      const graph = await getFullGraph();
+      mountGraph(graph);
+      void refreshDbStats();
+      setGraphStatus(`+${result.newNodes} new, ${result.updatedNodes} updated from POI`, '#22c55e');
+    } catch (err) {
+      console.error('[LinkGraph] POI ingest error:', err);
+      setGraphStatus('Failed to ingest POI data', '#ef4444');
+    }
+  });
+
+  // ── Ingest News → perpetual DB ────────────────────────────
+  document.getElementById('analystGraphIngestNewsBtn')?.addEventListener('click', async () => {
+    setGraphStatus('Extracting entities from news...', '#f59e0b');
+    try {
+      const res = await fetch('/api/news/headlines?limit=100', { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const items = data?.items || data?.headlines || data || [];
+      if (!Array.isArray(items) || !items.length) {
+        setGraphStatus('No news headlines available', '#ef4444');
+        return;
+      }
+
+      const result = await ingestHeadlines(items);
+      const graph = await getFullGraph();
+      mountGraph(graph);
+      void refreshDbStats();
+      setGraphStatus(`+${result.newNodes} entities extracted from ${items.length} headlines`, '#22c55e');
+    } catch (err) {
+      console.error('[LinkGraph] News ingest error:', err);
+      setGraphStatus('Failed to ingest news data', '#ef4444');
+    }
+  });
+
+  // ── Export perpetual DB ───────────────────────────────────
+  document.getElementById('analystGraphExportBtn')?.addEventListener('click', async () => {
+    try {
+      const data = await exportDatabase();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `intel-graph-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setGraphStatus('Database exported', '#22c55e');
+    } catch {
+      setGraphStatus('Export failed', '#ef4444');
+    }
+  });
+
+  // ── Map-click → add node (writes to perpetual DB) ─────────
   function handleMapFeatureClick(e: Event): void {
     const detail = (e as CustomEvent).detail as { name?: string; type?: string; country?: string; role?: string } | undefined;
     if (!detail?.name) return;
 
     const label = detail.name;
     const type = (detail.type as GraphNode['type']) || 'Person';
-    const id = `${type.toLowerCase()}-${label.toLowerCase().replace(/\s+/g, '-')}`;
+    const id = canonicalNodeId(type, label);
 
+    // Upsert into perpetual DB
+    void upsertNode(type, label, 'map-click', {
+      confidence: 0.9,
+      country: detail.country,
+      role: detail.role,
+    });
+
+    // Also keep localStorage in sync
     const stored = getStoredGraph();
     if (stored.nodes.find(n => n.id === id)) {
       setGraphStatus(`Already in graph: ${label}`, '#f59e0b');
@@ -503,8 +671,9 @@ function initLinkGraph(): void {
       mountGraph(updated);
     }
 
+    void refreshDbStats();
     setGraphStatus(`Added from map: ${label}`, '#22c55e');
-    setTimeout(() => setGraphStatus(`${updated.nodes.length} nodes · auto-discovering...`), 2000);
+    setTimeout(() => setGraphStatus(`${updated.nodes.length} nodes · auto-enriching...`), 2000);
   }
 
   window.addEventListener('wm:map-feature-click', handleMapFeatureClick);
@@ -516,22 +685,28 @@ function initLinkGraph(): void {
       if (!document.body.contains(pane)) {
         window.removeEventListener('wm:map-feature-click', handleMapFeatureClick);
         stopAutoDiscovery();
+        if (enrichmentTimer) { clearInterval(enrichmentTimer); enrichmentTimer = null; }
         obs.disconnect();
       }
     });
     obs.observe(document.body, { childList: true, subtree: true });
   }
 
-  // ── Start auto-discovery if we already have nodes ─────────
+  // ── Start auto-enrichment: pull from all sources every 2 min ──
+  if (enrichmentTimer) clearInterval(enrichmentTimer);
+  enrichmentTimer = setInterval(() => void runMultiSourceEnrichment(), 120_000);
+
+  // Also start legacy auto-discovery for backward compat
+  const stored = getStoredGraph();
   if (stored.nodes.length >= 1) {
     startAutoDiscovery((updated) => {
       if (graphInstance) graphInstance.addToGraph(updated.nodes, updated.links);
       const n = getStoredGraph();
       setGraphStatus(`${n.nodes.length} nodes · ${n.links.length} links (live)`);
     });
-    setGraphStatus(`${stored.nodes.length} nodes · auto-discovering...`);
+    setGraphStatus(`${stored.nodes.length} nodes · auto-enriching...`);
   } else {
-    setGraphStatus('Empty — add an entity to begin');
+    setGraphStatus('Empty — add an entity or ingest data to begin');
   }
 }
 
@@ -617,14 +792,18 @@ async function searchEntities(query: string): Promise<void> {
       </div>`;
     }).join('');
 
-    // Click entity card → add to link graph
+    // Click entity card → add to link graph + perpetual DB
     results.querySelectorAll('.analyst-entity-card').forEach(card => {
       card.addEventListener('click', () => {
         const el = card as HTMLElement;
         const name = el.dataset.name || '';
         const country = el.dataset.country;
         if (!name) return;
-        const id = `person-${name.toLowerCase().replace(/\s+/g, '-')}`;
+        const id = canonicalNodeId('Person', name);
+
+        // Persist to perpetual DB
+        void upsertNode('Person', name, 'entity-search', { confidence: 1.0, country });
+
         const node: GraphNode = {
           id,
           label: name,

@@ -105,7 +105,7 @@ const FULL_MAP_LAYERS: MapLayers = {
   cables: false,
   pipelines: false,
   hotspots: true,
-  ais: false,
+  ais: true,
   nuclear: true,
   irradiators: false,
   sanctions: true,

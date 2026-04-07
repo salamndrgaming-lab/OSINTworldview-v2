@@ -1132,11 +1132,8 @@ export class PanelLayoutManager implements AppModule {
         }
         replayPendingCalls(subId, subPanel);
       });
-      // Eagerly load ALL sub-panels so data pipeline finds them immediately.
-      // Only the active tab is visible; the rest mount hidden.
-      for (const subId of hub.getSubPanelIds()) {
-        void hub.ensureSubPanel(subId);
-      }
+      // Load all sub-panels now that callback is registered
+      void hub.init();
     };
 
     this.lazyPanel('intel-hub', () =>

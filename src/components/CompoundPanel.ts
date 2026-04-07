@@ -12,15 +12,10 @@ const STORAGE_PREFIX = 'wm-compound-tab-';
  * CompoundPanel — A single registered panel that internally renders
  * tabbed sub-panels. Reduces settings clutter from ~70 to ~25 toggles.
  *
- * Usage:
- *   class IntelHubPanel extends CompoundPanel {
- *     constructor() {
- *       super({ id: 'intel-hub', title: 'Intelligence Command' }, [
- *         { id: 'gdelt-feed', label: 'GDELT Feed', loader: () => import('./GdeltIntelPanel').then(m => new m.GdeltIntelPanel()) },
- *         ...
- *       ]);
- *     }
- *   }
+ * IMPORTANT: Sub-panels are NOT loaded in the constructor. The parent
+ * (panel-layout.ts wireHub) must call `init()` after registering the
+ * `onSubPanelLoaded` callback so sub-panels get wired into ctx.panels
+ * for the data pipeline.
  */
 export class CompoundPanel extends Panel {
   private tabs: CompoundTab[];
@@ -28,8 +23,8 @@ export class CompoundPanel extends Panel {
   private subPanels = new Map<string, Panel>();
   private tabStrip: HTMLElement | null = null;
   private contentArea: HTMLElement | null = null;
-  private loading = false;
   private subPanelCallback: ((id: string, panel: Panel) => void) | null = null;
+  private initialized = false;
 
   constructor(
     options: { id: string; title: string; defaultRowSpan?: number },
@@ -40,6 +35,7 @@ export class CompoundPanel extends Panel {
     this.activeTabId = localStorage.getItem(STORAGE_PREFIX + options.id) || tabs[0]?.id || '';
     this.content.innerHTML = '';
     this.buildCompoundUI();
+    // Do NOT load sub-panels here — wait for wireHub to call init()
   }
 
   private buildCompoundUI(): void {
@@ -62,9 +58,6 @@ export class CompoundPanel extends Panel {
 
     // Inject scoped styles once
     CompoundPanel.injectStyles();
-
-    // Load initial tab
-    void this.switchTab(this.activeTabId);
   }
 
   private renderTabStrip(): void {
@@ -76,64 +69,59 @@ export class CompoundPanel extends Panel {
     this.tabStrip.querySelectorAll('.compound-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         const tabId = (btn as HTMLElement).dataset.tab;
-        if (tabId && tabId !== this.activeTabId && !this.loading) {
-          void this.switchTab(tabId);
+        if (tabId && tabId !== this.activeTabId) {
+          this.showTab(tabId);
         }
       });
     });
   }
 
-  private async switchTab(tabId: string): Promise<void> {
+  /** Switch visible tab. Sub-panel must already be loaded via ensureSubPanel. */
+  private showTab(tabId: string): void {
     this.activeTabId = tabId;
     localStorage.setItem(STORAGE_PREFIX + this.panelId, tabId);
     this.renderTabStrip();
 
     if (!this.contentArea) return;
 
-    // Hide all mounted sub-panels
     for (const [id, panel] of this.subPanels) {
-      const el = panel.getElement();
-      el.style.display = id === tabId ? '' : 'none';
-    }
-
-    // If already loaded, just show it
-    if (this.subPanels.has(tabId)) return;
-
-    // Lazy-load the sub-panel
-    const tabDef = this.tabs.find(t => t.id === tabId);
-    if (!tabDef) return;
-
-    this.loading = true;
-    this.contentArea.insertAdjacentHTML('beforeend',
-      '<div class="compound-loading" id="compound-load-' + tabId + '">Loading...</div>');
-
-    try {
-      const subPanel = await tabDef.loader();
-      this.subPanels.set(tabId, subPanel);
-
-      // Remove loading indicator
-      this.contentArea.querySelector('#compound-load-' + tabId)?.remove();
-
-      // Mount sub-panel: take its full element but hide its header
-      const el = subPanel.getElement();
-      el.style.display = '';
-      this.styleSubPanel(el);
-      this.contentArea.appendChild(el);
-
-      // Notify so panel-layout can register in ctx.panels and replay data
-      this.subPanelCallback?.(tabId, subPanel);
-    } catch (err) {
-      console.error('[CompoundPanel] Failed to load tab "' + tabId + '":', err);
-      const loadingEl = this.contentArea.querySelector('#compound-load-' + tabId);
-      if (loadingEl) loadingEl.textContent = 'Failed to load tab';
-    } finally {
-      this.loading = false;
+      panel.getElement().style.display = id === tabId ? '' : 'none';
     }
   }
 
   /** Register a callback invoked whenever a sub-panel finishes loading. */
   public onSubPanelLoaded(cb: (id: string, panel: Panel) => void): void {
     this.subPanelCallback = cb;
+  }
+
+  /**
+   * Initialize: eagerly load ALL sub-panels and register them via callback.
+   * Must be called AFTER onSubPanelLoaded is set.
+   */
+  public async init(): Promise<void> {
+    if (this.initialized) return;
+    this.initialized = true;
+
+    // Load all sub-panels in parallel
+    const loadPromises = this.tabs.map(async (tab) => {
+      try {
+        const subPanel = await tab.loader();
+        this.subPanels.set(tab.id, subPanel);
+
+        const el = subPanel.getElement();
+        // Only show the active tab
+        el.style.display = tab.id === this.activeTabId ? '' : 'none';
+        this.styleSubPanel(el);
+        this.contentArea?.appendChild(el);
+
+        // Notify panel-layout to register in ctx.panels and replay data
+        this.subPanelCallback?.(tab.id, subPanel);
+      } catch (err) {
+        console.error('[CompoundPanel] Failed to load tab "' + tab.id + '":', err);
+      }
+    });
+
+    await Promise.all(loadPromises);
   }
 
   /** Get all loaded sub-panels for data replay registration. */
@@ -154,9 +142,8 @@ export class CompoundPanel extends Panel {
     try {
       const subPanel = await tabDef.loader();
       this.subPanels.set(tabId, subPanel);
-      // Mount hidden
       const el = subPanel.getElement();
-      el.style.display = 'none';
+      el.style.display = tabId === this.activeTabId ? '' : 'none';
       this.styleSubPanel(el);
       this.contentArea?.appendChild(el);
       this.subPanelCallback?.(tabId, subPanel);
@@ -176,7 +163,6 @@ export class CompoundPanel extends Panel {
     el.style.margin = '0';
     el.style.maxHeight = 'none';
     el.style.minHeight = '0';
-    // Let panel-content inside scroll naturally
     const panelContent = el.querySelector('.panel-content') as HTMLElement | null;
     if (panelContent) {
       panelContent.style.maxHeight = 'none';

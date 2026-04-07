@@ -35,90 +35,93 @@ const CATEGORIES = [
   { id: 'factcheck', label: 'Fact Check', icon: '✅' },
 ];
 
+// NOTE: Almost all major sites set X-Frame-Options: DENY or CSP frame-ancestors 'none',
+// which prevents iframe embedding. Only mark externalOnly: false for sites that are
+// known to allow embedding. When in doubt, mark externalOnly: true.
 const TOOLS: OsintTool[] = [
   // Search Engines
   { name: 'Google Advanced Search', url: 'https://www.google.com/advanced_search', description: 'Targeted search with filters for domain, filetype, date range', category: 'search', tags: ['google', 'dork', 'filter'], free: true, externalOnly: true },
-  { name: 'DuckDuckGo', url: 'https://duckduckgo.com', description: 'Privacy-focused search engine with bang shortcuts', category: 'search', tags: ['privacy', 'search'], free: true },
-  { name: 'Brave Search', url: 'https://search.brave.com', description: 'Independent search index with AI summaries', category: 'search', tags: ['privacy', 'ai'], free: true },
-  { name: 'Intelligence X', url: 'https://intelx.io', description: 'Search engine for the darknet, leaks, and public records', category: 'search', tags: ['darkweb', 'leaks', 'paste'], free: false },
-  { name: 'Wayback Machine', url: 'https://web.archive.org', description: 'Internet Archive — cached versions of any website over time', category: 'search', tags: ['archive', 'historical', 'cache'], free: true },
+  { name: 'DuckDuckGo', url: 'https://duckduckgo.com', description: 'Privacy-focused search engine with bang shortcuts', category: 'search', tags: ['privacy', 'search'], free: true, externalOnly: true },
+  { name: 'Brave Search', url: 'https://search.brave.com', description: 'Independent search index with AI summaries', category: 'search', tags: ['privacy', 'ai'], free: true, externalOnly: true },
+  { name: 'Intelligence X', url: 'https://intelx.io', description: 'Search engine for the darknet, leaks, and public records', category: 'search', tags: ['darkweb', 'leaks', 'paste'], free: false, externalOnly: true },
+  { name: 'Wayback Machine', url: 'https://web.archive.org', description: 'Internet Archive — cached versions of any website over time', category: 'search', tags: ['archive', 'historical', 'cache'], free: true, externalOnly: true },
   { name: 'OSINT Framework', url: 'https://osintframework.com', description: 'Interactive tree of OSINT tools organized by data type', category: 'search', tags: ['framework', 'directory'], free: true },
 
   // Social Media
-  { name: 'Social Searcher', url: 'https://www.social-searcher.com', description: 'Real-time social media search across multiple platforms', category: 'social', tags: ['twitter', 'facebook', 'real-time'], free: true },
+  { name: 'Social Searcher', url: 'https://www.social-searcher.com', description: 'Real-time social media search across multiple platforms', category: 'social', tags: ['twitter', 'facebook', 'real-time'], free: true, externalOnly: true },
   { name: 'TweetDeck', url: 'https://tweetdeck.twitter.com', description: 'Multi-column Twitter monitoring dashboard', category: 'social', tags: ['twitter', 'monitoring'], free: true, externalOnly: true },
-  { name: 'Nitter', url: 'https://nitter.net', description: 'Privacy-friendly Twitter frontend for browsing without an account', category: 'social', tags: ['twitter', 'privacy'], free: true },
+  { name: 'Nitter', url: 'https://nitter.net', description: 'Privacy-friendly Twitter frontend for browsing without an account', category: 'social', tags: ['twitter', 'privacy'], free: true, externalOnly: true },
   { name: 'Reddit User Analyzer', url: 'https://reddit-user-analyser.netlify.app', description: 'Analyze a Reddit account activity, subreddits, and posting patterns', category: 'social', tags: ['reddit', 'analysis'], free: true },
-  { name: 'Telegram Analytics', url: 'https://tgstat.com', description: 'Analytics for Telegram channels, groups, and bots', category: 'social', tags: ['telegram', 'analytics'], free: true },
+  { name: 'Telegram Analytics', url: 'https://tgstat.com', description: 'Analytics for Telegram channels, groups, and bots', category: 'social', tags: ['telegram', 'analytics'], free: true, externalOnly: true },
   { name: 'Social Analyzer', url: 'https://github.com/qeeqbox/social-analyzer', description: 'Find a person\'s profile across 1000+ social media sites', category: 'social', tags: ['multi-platform', 'profiling'], free: true, externalOnly: true },
 
   // Threat Intelligence
-  { name: 'Shodan', url: 'https://www.shodan.io', description: 'Search engine for internet-connected devices — find exposed servers, cameras, ICS', category: 'threat', tags: ['iot', 'infrastructure', 'exposure'], free: false },
-  { name: 'GreyNoise', url: 'https://www.greynoise.io', description: 'Identify internet scanners, bots, and malicious IP behavior', category: 'threat', tags: ['ip', 'scanner', 'noise'], free: true },
-  { name: 'AbuseIPDB', url: 'https://www.abuseipdb.com', description: 'IP address reputation database for abuse detection', category: 'threat', tags: ['ip', 'abuse', 'reputation'], free: true },
+  { name: 'Shodan', url: 'https://www.shodan.io', description: 'Search engine for internet-connected devices — find exposed servers, cameras, ICS', category: 'threat', tags: ['iot', 'infrastructure', 'exposure'], free: false, externalOnly: true },
+  { name: 'GreyNoise', url: 'https://www.greynoise.io', description: 'Identify internet scanners, bots, and malicious IP behavior', category: 'threat', tags: ['ip', 'scanner', 'noise'], free: true, externalOnly: true },
+  { name: 'AbuseIPDB', url: 'https://www.abuseipdb.com', description: 'IP address reputation database for abuse detection', category: 'threat', tags: ['ip', 'abuse', 'reputation'], free: true, externalOnly: true },
   { name: 'VirusTotal', url: 'https://www.virustotal.com', description: 'Analyze files, URLs, domains for malware and suspicious activity', category: 'threat', tags: ['malware', 'analysis', 'scanning'], free: true, externalOnly: true },
-  { name: 'ONYPHE', url: 'https://www.onyphe.io', description: 'Cyber defense search engine indexing exposed assets', category: 'threat', tags: ['attack-surface', 'exposure'], free: false },
-  { name: 'AlienVault OTX', url: 'https://otx.alienvault.com', description: 'Open threat exchange with community-sourced IoCs', category: 'threat', tags: ['ioc', 'community', 'threat-feed'], free: true },
+  { name: 'ONYPHE', url: 'https://www.onyphe.io', description: 'Cyber defense search engine indexing exposed assets', category: 'threat', tags: ['attack-surface', 'exposure'], free: false, externalOnly: true },
+  { name: 'AlienVault OTX', url: 'https://otx.alienvault.com', description: 'Open threat exchange with community-sourced IoCs', category: 'threat', tags: ['ioc', 'community', 'threat-feed'], free: true, externalOnly: true },
   { name: 'MalwareBazaar', url: 'https://bazaar.abuse.ch', description: 'Search and download confirmed malware samples by hash', category: 'threat', tags: ['malware', 'samples', 'hash'], free: true },
-  { name: 'Censys', url: 'https://search.censys.io', description: 'Internet-wide scanning for hosts, certificates, and services', category: 'threat', tags: ['certificates', 'scanning', 'tls'], free: true },
+  { name: 'Censys', url: 'https://search.censys.io', description: 'Internet-wide scanning for hosts, certificates, and services', category: 'threat', tags: ['certificates', 'scanning', 'tls'], free: true, externalOnly: true },
 
   // Geospatial
   { name: 'Google Earth', url: 'https://earth.google.com', description: 'Satellite imagery with historical timeline', category: 'geo', tags: ['satellite', 'historical', 'imagery'], free: true, externalOnly: true },
-  { name: 'Sentinel Hub', url: 'https://apps.sentinel-hub.com/eo-browser/', description: 'ESA Copernicus satellite imagery browser — free multispectral', category: 'geo', tags: ['satellite', 'esa', 'copernicus'], free: true },
-  { name: 'NASA FIRMS', url: 'https://firms.modaps.eosdis.nasa.gov/map/', description: 'Real-time global fire detection from satellite thermal data', category: 'geo', tags: ['fires', 'satellite', 'thermal'], free: true },
+  { name: 'Sentinel Hub', url: 'https://apps.sentinel-hub.com/eo-browser/', description: 'ESA Copernicus satellite imagery browser — free multispectral', category: 'geo', tags: ['satellite', 'esa', 'copernicus'], free: true, externalOnly: true },
+  { name: 'NASA FIRMS', url: 'https://firms.modaps.eosdis.nasa.gov/map/', description: 'Real-time global fire detection from satellite thermal data', category: 'geo', tags: ['fires', 'satellite', 'thermal'], free: true, externalOnly: true },
   { name: 'OpenStreetMap', url: 'https://www.openstreetmap.org', description: 'Community-maintained global map with detailed infrastructure', category: 'geo', tags: ['map', 'infrastructure', 'open-data'], free: true },
   { name: 'Overpass Turbo', url: 'https://overpass-turbo.eu', description: 'Query OSM data — find military bases, bridges, power plants', category: 'geo', tags: ['osm', 'query', 'infrastructure'], free: true },
   { name: 'SunCalc', url: 'https://www.suncalc.org', description: 'Sun position calculator for photo/video geolocation verification', category: 'geo', tags: ['geolocation', 'verification', 'sun'], free: true },
 
   // Domain / IP
-  { name: 'Whois Lookup', url: 'https://whois.domaintools.com', description: 'Domain registration and ownership information', category: 'domain', tags: ['whois', 'registration', 'ownership'], free: true },
-  { name: 'SecurityTrails', url: 'https://securitytrails.com', description: 'Historical DNS records, subdomains, and WHOIS data', category: 'domain', tags: ['dns', 'historical', 'subdomains'], free: true },
+  { name: 'Whois Lookup', url: 'https://whois.domaintools.com', description: 'Domain registration and ownership information', category: 'domain', tags: ['whois', 'registration', 'ownership'], free: true, externalOnly: true },
+  { name: 'SecurityTrails', url: 'https://securitytrails.com', description: 'Historical DNS records, subdomains, and WHOIS data', category: 'domain', tags: ['dns', 'historical', 'subdomains'], free: true, externalOnly: true },
   { name: 'crt.sh', url: 'https://crt.sh', description: 'Certificate transparency log search — find all certs for a domain', category: 'domain', tags: ['certificates', 'tls', 'subdomain-discovery'], free: true },
-  { name: 'DNSDumpster', url: 'https://dnsdumpster.com', description: 'DNS recon and research tool with domain mapping', category: 'domain', tags: ['dns', 'reconnaissance', 'mapping'], free: true },
-  { name: 'BuiltWith', url: 'https://builtwith.com', description: 'Identify technologies used by any website', category: 'domain', tags: ['technology', 'stack', 'profiling'], free: true },
-  { name: 'ViewDNS.info', url: 'https://viewdns.info', description: 'Reverse IP, DNS propagation, port scanner, and more', category: 'domain', tags: ['reverse-ip', 'dns', 'tools'], free: true },
+  { name: 'DNSDumpster', url: 'https://dnsdumpster.com', description: 'DNS recon and research tool with domain mapping', category: 'domain', tags: ['dns', 'reconnaissance', 'mapping'], free: true, externalOnly: true },
+  { name: 'BuiltWith', url: 'https://builtwith.com', description: 'Identify technologies used by any website', category: 'domain', tags: ['technology', 'stack', 'profiling'], free: true, externalOnly: true },
+  { name: 'ViewDNS.info', url: 'https://viewdns.info', description: 'Reverse IP, DNS propagation, port scanner, and more', category: 'domain', tags: ['reverse-ip', 'dns', 'tools'], free: true, externalOnly: true },
 
   // Maritime
-  { name: 'MarineTraffic', url: 'https://www.marinetraffic.com', description: 'Global vessel tracking with AIS data', category: 'maritime', tags: ['ais', 'vessels', 'tracking'], free: true },
-  { name: 'VesselFinder', url: 'https://www.vesselfinder.com', description: 'Real-time vessel positions and port arrivals', category: 'maritime', tags: ['ais', 'vessels', 'ports'], free: true },
-  { name: 'Global Fishing Watch', url: 'https://globalfishingwatch.org/map/', description: 'Track fishing activity and vessel behavior worldwide', category: 'maritime', tags: ['fishing', 'ais', 'behavior'], free: true },
+  { name: 'MarineTraffic', url: 'https://www.marinetraffic.com', description: 'Global vessel tracking with AIS data', category: 'maritime', tags: ['ais', 'vessels', 'tracking'], free: true, externalOnly: true },
+  { name: 'VesselFinder', url: 'https://www.vesselfinder.com', description: 'Real-time vessel positions and port arrivals', category: 'maritime', tags: ['ais', 'vessels', 'ports'], free: true, externalOnly: true },
+  { name: 'Global Fishing Watch', url: 'https://globalfishingwatch.org/map/', description: 'Track fishing activity and vessel behavior worldwide', category: 'maritime', tags: ['fishing', 'ais', 'behavior'], free: true, externalOnly: true },
 
   // Aviation
   { name: 'ADS-B Exchange', url: 'https://globe.adsbexchange.com', description: 'Unfiltered real-time aircraft tracking — no military filtering', category: 'aviation', tags: ['adsb', 'military', 'tracking'], free: true },
-  { name: 'Flightradar24', url: 'https://www.flightradar24.com', description: 'Live flight tracking with aircraft details and history', category: 'aviation', tags: ['flights', 'tracking', 'commercial'], free: true },
-  { name: 'FlightAware', url: 'https://flightaware.com', description: 'Flight tracking with delay data and route history', category: 'aviation', tags: ['flights', 'delays', 'routes'], free: true },
+  { name: 'Flightradar24', url: 'https://www.flightradar24.com', description: 'Live flight tracking with aircraft details and history', category: 'aviation', tags: ['flights', 'tracking', 'commercial'], free: true, externalOnly: true },
+  { name: 'FlightAware', url: 'https://flightaware.com', description: 'Flight tracking with delay data and route history', category: 'aviation', tags: ['flights', 'delays', 'routes'], free: true, externalOnly: true },
   { name: 'Airplanes.live', url: 'https://airplanes.live', description: 'Open-source ADS-B aggregator for military and civil tracking', category: 'aviation', tags: ['adsb', 'military', 'open-source'], free: true },
 
   // Imagery & Verification
   { name: 'Google Reverse Image', url: 'https://images.google.com', description: 'Reverse image search to find original sources', category: 'imagery', tags: ['reverse-image', 'verification'], free: true, externalOnly: true },
-  { name: 'TinEye', url: 'https://tineye.com', description: 'Reverse image search engine with modification detection', category: 'imagery', tags: ['reverse-image', 'forensics'], free: true },
-  { name: 'FotoForensics', url: 'https://fotoforensics.com', description: 'Image forensics — ELA, metadata, and manipulation detection', category: 'imagery', tags: ['forensics', 'manipulation', 'exif'], free: true },
+  { name: 'TinEye', url: 'https://tineye.com', description: 'Reverse image search engine with modification detection', category: 'imagery', tags: ['reverse-image', 'forensics'], free: true, externalOnly: true },
+  { name: 'FotoForensics', url: 'https://fotoforensics.com', description: 'Image forensics — ELA, metadata, and manipulation detection', category: 'imagery', tags: ['forensics', 'manipulation', 'exif'], free: true, externalOnly: true },
   { name: 'InVID/WeVerify', url: 'https://www.invid-project.eu/tools-and-services/invid-verification-plugin/', description: 'Video verification toolkit — keyframe extraction, reverse search', category: 'imagery', tags: ['video', 'verification', 'deepfake'], free: true, externalOnly: true },
   { name: 'ExifTool', url: 'https://exiftool.org', description: 'Read and write metadata in image, audio, and video files', category: 'imagery', tags: ['metadata', 'exif', 'forensics'], free: true, externalOnly: true },
 
   // People Search
   { name: 'Pipl', url: 'https://pipl.com', description: 'People search engine with identity resolution', category: 'people', tags: ['identity', 'search', 'records'], free: false, externalOnly: true },
-  { name: 'That\'s Them', url: 'https://thatsthem.com', description: 'Free people search — address, phone, email lookups', category: 'people', tags: ['address', 'phone', 'lookup'], free: true },
-  { name: 'Hunter.io', url: 'https://hunter.io', description: 'Find professional email addresses by company domain', category: 'people', tags: ['email', 'company', 'b2b'], free: true },
-  { name: 'Epieos', url: 'https://epieos.com', description: 'Find accounts linked to an email address or phone number', category: 'people', tags: ['email', 'phone', 'accounts'], free: true },
+  { name: 'That\'s Them', url: 'https://thatsthem.com', description: 'Free people search — address, phone, email lookups', category: 'people', tags: ['address', 'phone', 'lookup'], free: true, externalOnly: true },
+  { name: 'Hunter.io', url: 'https://hunter.io', description: 'Find professional email addresses by company domain', category: 'people', tags: ['email', 'company', 'b2b'], free: true, externalOnly: true },
+  { name: 'Epieos', url: 'https://epieos.com', description: 'Find accounts linked to an email address or phone number', category: 'people', tags: ['email', 'phone', 'accounts'], free: true, externalOnly: true },
 
   // Username OSINT
   { name: 'Sherlock', url: 'https://github.com/sherlock-project/sherlock', description: 'Search for a username across 400+ social networks', category: 'username', tags: ['multi-platform', 'github', 'cli'], free: true, externalOnly: true },
   { name: 'WhatsMyName', url: 'https://whatsmyname.app', description: 'Username enumeration across 500+ websites', category: 'username', tags: ['enumeration', 'web'], free: true },
   { name: 'Maigret', url: 'https://github.com/soxoj/maigret', description: 'Sherlock-like username search with profile parsing', category: 'username', tags: ['username', 'profiling', 'cli'], free: true, externalOnly: true },
-  { name: 'UserSearch.org', url: 'https://usersearch.org', description: 'Find people by username across social, dating, and forum sites', category: 'username', tags: ['username', 'web-based'], free: true },
+  { name: 'UserSearch.org', url: 'https://usersearch.org', description: 'Find people by username across social, dating, and forum sites', category: 'username', tags: ['username', 'web-based'], free: true, externalOnly: true },
 
   // Documents & Leaks
-  { name: 'DocumentCloud', url: 'https://www.documentcloud.org', description: 'Search and analyze uploaded documents and primary sources', category: 'documents', tags: ['documents', 'primary-sources'], free: true },
-  { name: 'OCCRP Aleph', url: 'https://aleph.occrp.org', description: 'Search 1B+ records from corporate registries and leaks', category: 'documents', tags: ['leaks', 'corporate', 'investigation'], free: true },
+  { name: 'DocumentCloud', url: 'https://www.documentcloud.org', description: 'Search and analyze uploaded documents and primary sources', category: 'documents', tags: ['documents', 'primary-sources'], free: true, externalOnly: true },
+  { name: 'OCCRP Aleph', url: 'https://aleph.occrp.org', description: 'Search 1B+ records from corporate registries and leaks', category: 'documents', tags: ['leaks', 'corporate', 'investigation'], free: true, externalOnly: true },
   { name: 'Offshore Leaks DB', url: 'https://offshoreleaks.icij.org', description: 'ICIJ database of offshore companies from Panama/Pandora Papers', category: 'documents', tags: ['offshore', 'panama-papers', 'corporate'], free: true },
-  { name: 'Court Listener', url: 'https://www.courtlistener.com', description: 'US court opinions, oral arguments, and PACER documents', category: 'documents', tags: ['legal', 'court', 'us'], free: true },
+  { name: 'Court Listener', url: 'https://www.courtlistener.com', description: 'US court opinions, oral arguments, and PACER documents', category: 'documents', tags: ['legal', 'court', 'us'], free: true, externalOnly: true },
 
   // Fact Checking
-  { name: 'Bellingcat', url: 'https://www.bellingcat.com/resources/', description: 'OSINT investigation guides and methodology from Bellingcat', category: 'factcheck', tags: ['methodology', 'guides', 'investigation'], free: true },
-  { name: 'Snopes', url: 'https://www.snopes.com', description: 'Fact-checking and debunking misinformation', category: 'factcheck', tags: ['factcheck', 'debunk'], free: true },
+  { name: 'Bellingcat', url: 'https://www.bellingcat.com/resources/', description: 'OSINT investigation guides and methodology from Bellingcat', category: 'factcheck', tags: ['methodology', 'guides', 'investigation'], free: true, externalOnly: true },
+  { name: 'Snopes', url: 'https://www.snopes.com', description: 'Fact-checking and debunking misinformation', category: 'factcheck', tags: ['factcheck', 'debunk'], free: true, externalOnly: true },
   { name: 'Google Fact Check Explorer', url: 'https://toolbox.google.com/factcheck/explorer', description: 'Search fact checks from around the world', category: 'factcheck', tags: ['factcheck', 'google', 'claims'], free: true, externalOnly: true },
-  { name: 'ACLED', url: 'https://acleddata.com', description: 'Armed conflict location and event data for 200+ countries', category: 'factcheck', tags: ['conflict', 'data', 'events'], free: true },
+  { name: 'ACLED', url: 'https://acleddata.com', description: 'Armed conflict location and event data for 200+ countries', category: 'factcheck', tags: ['conflict', 'data', 'events'], free: true, externalOnly: true },
 ];
 
 export class OsintToolkitPanel extends Panel {
@@ -240,18 +243,31 @@ export class OsintToolkitPanel extends Panel {
     iframe.setAttribute('referrerpolicy', 'no-referrer');
     this.iframeWrap.appendChild(iframe);
 
-    // If iframe fails to load (X-Frame-Options), show fallback after timeout
-    const fallbackTimer = setTimeout(() => {
-      if (iframe.contentDocument?.body?.innerHTML === '') {
-        this.showIframeFallback(url, name);
+    // Detect X-Frame-Options / CSP blocking.
+    // Cross-origin frames don't fire 'error' reliably, so we check on load
+    // whether the iframe body is accessible or empty.
+    let loaded = false;
+    iframe.addEventListener('load', () => {
+      loaded = true;
+      // Cross-origin frames will throw on contentDocument access — that's expected
+      // and means the site loaded (even if we can't inspect it). Only show fallback
+      // if the frame appears truly blank.
+      try {
+        const doc = iframe.contentDocument;
+        if (doc && doc.body && doc.body.innerHTML === '' && doc.title === '') {
+          this.showIframeFallback(url, name);
+        }
+      } catch {
+        // Cross-origin — site loaded successfully, iframe is working
       }
-    }, 5000);
-
-    iframe.addEventListener('load', () => clearTimeout(fallbackTimer));
+    });
     iframe.addEventListener('error', () => {
-      clearTimeout(fallbackTimer);
       this.showIframeFallback(url, name);
     });
+    // Safety net: if nothing loads after 8s, show fallback
+    setTimeout(() => {
+      if (!loaded) this.showIframeFallback(url, name);
+    }, 8000);
   }
 
   private showIframeFallback(url: string, name: string): void {

@@ -448,11 +448,11 @@ async function runMultiSourceEnrichment(): Promise<void> {
 
   try {
     // 3. News headlines — extract entities
-    const newsResp = await fetch('/api/news/headlines?limit=50', { signal: AbortSignal.timeout(5000) }).catch(() => null);
+    const newsResp = await fetch('/api/news/v1/list-feed-digest?variant=full&lang=en', { signal: AbortSignal.timeout(8000) }).catch(() => null);
     if (newsResp?.ok) {
       const data = await newsResp.json();
-      const items = data?.items || data?.headlines || data || [];
-      if (Array.isArray(items) && items.length) {
+      const items = flattenNewsDigest(data);
+      if (items.length) {
         const result = await ingestHeadlines(items);
         if (result.newNodes > 0) changed = true;
       }
@@ -591,11 +591,11 @@ function initLinkGraph(): void {
   document.getElementById('analystGraphIngestNewsBtn')?.addEventListener('click', async () => {
     setGraphStatus('Extracting entities from news...', '#f59e0b');
     try {
-      const res = await fetch('/api/news/headlines?limit=100', { signal: AbortSignal.timeout(8000) });
+      const res = await fetch('/api/news/v1/list-feed-digest?variant=full&lang=en', { signal: AbortSignal.timeout(10000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const items = data?.items || data?.headlines || data || [];
-      if (!Array.isArray(items) || !items.length) {
+      const items = flattenNewsDigest(data);
+      if (!items.length) {
         setGraphStatus('No news headlines available', '#ef4444');
         return;
       }
@@ -857,7 +857,7 @@ async function loadTimeline(_range: string): Promise<void> {
 
   try {
     const [newsResp, insightsResp] = await Promise.all([
-      fetch('/api/news/headlines?limit=30', { signal: AbortSignal.timeout(6000) }).catch(() => null),
+      fetch('/api/news/v1/list-feed-digest?variant=full&lang=en', { signal: AbortSignal.timeout(8000) }).catch(() => null),
       fetch('/api/insights', { signal: AbortSignal.timeout(6000) }).catch(() => null),
     ]);
 
@@ -865,13 +865,13 @@ async function loadTimeline(_range: string): Promise<void> {
 
     if (newsResp?.ok) {
       const news = await newsResp.json();
-      const items = news?.items || news?.headlines || news || [];
-      for (const item of (items as Record<string, unknown>[]).slice(0, 20)) {
+      const items = flattenNewsDigest(news);
+      for (const item of items.slice(0, 30)) {
         events.push({
-          time: Number(item.timestamp || item.pubDate || Date.now()),
+          time: Number(item.publishedAt || item.timestamp || Date.now()),
           source: String(item.source || 'News'),
           title: String(item.title || ''),
-          severity: String(item.severity || item.threatLevel || 'low'),
+          severity: String(item.severity || item.threatLevel || item.level || 'low'),
         });
       }
     }
@@ -1424,6 +1424,31 @@ export function showMonitorView(): void {
 }
 
 // ── Utilities ───────────────────────────────────────────────
+
+/**
+ * Flatten the ListFeedDigest response `{ categories: { politics: { items: [...] }, ... } }`
+ * into a flat array of headline objects with { title, source, publishedAt }.
+ */
+function flattenNewsDigest(data: Record<string, unknown>): Array<Record<string, unknown>> {
+  const result: Array<Record<string, unknown>> = [];
+  const categories = data?.categories as Record<string, { items?: Array<Record<string, unknown>> }> | undefined;
+  if (categories && typeof categories === 'object') {
+    for (const bucket of Object.values(categories)) {
+      if (bucket?.items && Array.isArray(bucket.items)) {
+        for (const item of bucket.items) {
+          result.push(item);
+        }
+      }
+    }
+  }
+  // Fallback: if the response is already a flat array or has items/headlines
+  if (result.length === 0) {
+    const items = (data?.items || data?.headlines) as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(items)) return items;
+    if (Array.isArray(data)) return data as Array<Record<string, unknown>>;
+  }
+  return result;
+}
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

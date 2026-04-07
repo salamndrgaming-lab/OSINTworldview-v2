@@ -80,6 +80,16 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'narrative-drift': { name: 'Narrative Drift', enabled: true, priority: 2 },
   'counterfactual-sim': { name: 'Counterfactual Engine', enabled: true, priority: 2 },
   'osint-report': { name: 'OSINT Report', enabled: true, priority: 2 },
+
+  // Compound Hub Panels
+  'intel-hub': { name: 'Intelligence Command', enabled: true, priority: 1 },
+  'signals-hub': { name: 'Signals & Correlation', enabled: true, priority: 1 },
+  'conflict-hub': { name: 'Conflict Theater', enabled: true, priority: 1 },
+  'supply-hub': { name: 'Supply & Trade', enabled: true, priority: 1 },
+  'market-hub': { name: 'Markets & Finance', enabled: true, priority: 1 },
+  'news-hub': { name: 'Regional News', enabled: true, priority: 1 },
+  'economic-hub': { name: 'Economic Intelligence', enabled: true, priority: 1 },
+  'osint-hub': { name: 'OSINT Workspace', enabled: true, priority: 1 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {
@@ -946,6 +956,13 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   core: {
     labelKey: 'header.panelCatCore',
     panelKeys: ['map', 'live-news', 'live-webcams', 'windy-webcams', 'insights', 'strategic-posture'],
+  },
+
+  // Compound Hub Panels (full variant)
+  hubs: {
+    labelKey: 'header.panelCatHubs',
+    panelKeys: ['intel-hub', 'signals-hub', 'conflict-hub', 'supply-hub', 'market-hub', 'news-hub', 'economic-hub', 'osint-hub'],
+    variants: ['full'],
   },
 
   // Full (geopolitical) variant

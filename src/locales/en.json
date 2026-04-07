@@ -190,6 +190,7 @@
     "resetLayoutTooltip": "Restore default panel arrangement",
     "unsavedChanges": "You have unsaved panel changes. Discard them?",
     "panelCatCore": "Core",
+    "panelCatHubs": "Command Hubs",
     "panelCatIntelligence": "Intelligence",
     "panelCatCorrelation": "Correlation",
     "panelCatRegionalNews": "Regional News",

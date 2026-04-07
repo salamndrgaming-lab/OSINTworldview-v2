@@ -70,3 +70,13 @@ export { CrossSourceSignalsPanel } from './CrossSourceSignalsPanel';
 export { TimeTravelPanel } from './TimeTravelPanel';
 export { SignalConfidencePanel } from './SignalConfidencePanel';
 export { AutoBriefPanel } from './AutoBriefPanel';
+
+// Compound Hub Panels
+export { IntelHubPanel } from './IntelHubPanel';
+export { SignalsHubPanel } from './SignalsHubPanel';
+export { ConflictHubPanel } from './ConflictHubPanel';
+export { SupplyHubPanel } from './SupplyHubPanel';
+export { MarketHubPanel } from './MarketHubPanel';
+export { NewsHubPanel } from './NewsHubPanel';
+export { EconomicHubPanel } from './EconomicHubPanel';
+export { OsintHubPanel } from './OsintHubPanel';

@@ -276,6 +276,8 @@ const MARKER_ICONS = {
   star: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><polygon points="16,2 20,12 30,12 22,19 25,30 16,23 7,30 10,19 2,12 12,12" fill="white"/></svg>`),
   // Airplane silhouette - top-down with wings and tail (pointing north, rotated by trackDeg)
   plane: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M16 2 L17.5 10 L17 12 L27 17 L27 19 L17 16 L17 24 L20 26.5 L20 28 L16 27 L12 28 L12 26.5 L15 24 L15 16 L5 19 L5 17 L15 12 L14.5 10 Z" fill="white"/></svg>`),
+  // Ship silhouette - top-down vessel pointing north
+  ship: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M16 2 L20 8 L20 22 L22 24 L22 26 L10 26 L10 24 L12 22 L12 8 Z" fill="white"/></svg>`),
 };
 
 const BASES_ICON_MAPPING = { triangleUp: { x: 0, y: 0, width: 32, height: 32, mask: true } };
@@ -283,6 +285,7 @@ const NUCLEAR_ICON_MAPPING = { hexagon: { x: 0, y: 0, width: 32, height: 32, mas
 const DATACENTER_ICON_MAPPING = { square: { x: 0, y: 0, width: 32, height: 32, mask: true } };
 
 const AIRCRAFT_ICON_MAPPING = { plane: { x: 0, y: 0, width: 32, height: 32, mask: true, anchorY: 16 } };
+const SHIP_ICON_MAPPING = { ship: { x: 0, y: 0, width: 32, height: 32, mask: true, anchorY: 16 } };
 
 const CONFLICT_COUNTRY_ISO: Record<string, string[]> = {
   iran: ['IR'],
@@ -2381,27 +2384,37 @@ export class DeckGLMap {
     });
   }
 
-  private createAisVesselLayer(): ScatterplotLayer {
-    return new ScatterplotLayer({
+  private createAisVesselLayer(): IconLayer {
+    return new IconLayer({
       id: 'ais-vessels-layer',
       data: this.aisVessels,
       getPosition: (d: AisPositionData) => [d.lon, d.lat],
-      getRadius: 800,
-      getFillColor: (d: AisPositionData) => {
-        // Tankers (shipType 80-89) = orange, cargo (70-79) = cyan, other = white
+      iconAtlas: MARKER_ICONS.ship,
+      iconMapping: SHIP_ICON_MAPPING,
+      getIcon: () => 'ship',
+      getSize: (d: AisPositionData) => {
         const t = d.shipType ?? 0;
-        if (t >= 80 && t < 90) return [255, 160, 40, 220] as [number, number, number, number];
-        if (t >= 70 && t < 80) return [40, 200, 255, 200] as [number, number, number, number];
-        if (t >= 60 && t < 70) return [160, 120, 255, 200] as [number, number, number, number]; // passenger
-        return [200, 220, 240, 180] as [number, number, number, number];
+        if (t >= 80 && t < 90) return 24; // tankers larger
+        if (t >= 70 && t < 80) return 22; // cargo
+        if (t >= 60 && t < 70) return 20; // passenger
+        return 16;
       },
-      radiusMinPixels: 3,
-      radiusMaxPixels: 8,
+      getColor: (d: AisPositionData) => {
+        const t = d.shipType ?? 0;
+        if (t >= 80 && t < 90) return [255, 160, 40, 230] as [number, number, number, number]; // tanker = orange
+        if (t >= 70 && t < 80) return [40, 200, 255, 210] as [number, number, number, number]; // cargo = cyan
+        if (t >= 60 && t < 70) return [160, 120, 255, 210] as [number, number, number, number]; // passenger = purple
+        return [200, 220, 240, 190] as [number, number, number, number]; // other = light
+      },
+      getAngle: (d: AisPositionData) => -(d.heading ?? d.course ?? 0),
+      sizeMinPixels: 6,
+      sizeMaxPixels: 28,
+      sizeScale: 1,
+      billboard: false,
       pickable: true,
       stroked: false,
-      // @ts-expect-error deck.gl auto-highlight mixin
       autoHighlight: true,
-      highlightColor: [255, 255, 255, 120],
+      highlightColor: [255, 255, 255, 100],
     });
   }
 
@@ -3728,6 +3741,14 @@ export class DeckGLMap {
         const volumeStr = obj.annualVolumeMt ? `<br/><span style="opacity:.75">${text(String(obj.annualVolumeMt))}Mt/yr</span>` : '';
         return { html: `<div class="deckgl-tooltip"><strong>⚓ ${text(obj.name)}</strong><br/>${text(obj.country)}<br/>${text(commoditiesStr)}${volumeStr}</div>` };
       }
+      case 'ais-vessels-layer': {
+        const shipTypeNames: Record<string, string> = { '6': 'Passenger', '7': 'Cargo', '8': 'Tanker', '9': 'Other' };
+        const shipCat = shipTypeNames[String(Math.floor((obj.shipType ?? 0) / 10))] || 'Vessel';
+        const speedKn = obj.speed != null ? `${Number(obj.speed).toFixed(1)} kn` : '';
+        const hdg = obj.heading != null ? `${obj.heading}°` : '';
+        const detail = [speedKn, hdg].filter(Boolean).join(' · ');
+        return { html: `<div class="deckgl-tooltip"><strong>🚢 ${text(obj.name || obj.mmsi || 'Unknown')}</strong><br/>${text(shipCat)}${obj.mmsi ? ` · MMSI ${text(obj.mmsi)}` : ''}${detail ? `<br/>${text(detail)}` : ''}</div>` };
+      }
       case 'ais-disruptions-layer':
         return { html: `<div class="deckgl-tooltip"><strong>AIS ${text(obj.type || t('components.deckgl.tooltip.disruption'))}</strong><br/>${text(obj.severity)} ${t('popups.severity')}<br/>${text(obj.description)}</div>` };
       case 'gps-jamming-layer':
@@ -4099,6 +4120,7 @@ export class DeckGLMap {
       'tech-events-layer': 'techEvent',
       'apt-groups-layer': 'apt',
       'minerals-layer': 'mineral',
+      'ais-vessels-layer': 'ais',
       'ais-disruptions-layer': 'ais',
       'gps-jamming-layer': 'gpsJamming',
       'cable-advisories-layer': 'cable-advisory',

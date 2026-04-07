@@ -203,6 +203,7 @@ export class IntelGraphPanel extends Panel {
         <button class="igp-action-btn" id="igpAnalyzeBtn" title="AI Analysis">🧠 Analyze</button>
         <button class="igp-action-btn" id="igpClearBtn" title="Clear graph">Clear</button>
         <button class="igp-action-btn" id="igpTemplateBtn" title="Load example graph">Template</button>
+        <button class="igp-action-btn" id="igpLiveBtn" title="Load live intelligence graph">📡 Live</button>
       </div>
     `;
     content.appendChild(toolbar);
@@ -273,6 +274,8 @@ export class IntelGraphPanel extends Panel {
     analyzeBtn.addEventListener('click', () => this.runAnalysis());
     clearBtn.addEventListener('click', () => { if (confirm('Clear entire graph?')) this.clearGraph(); });
     templateBtn.addEventListener('click', () => this.loadTemplate());
+    const liveBtn = toolbar.querySelector('#igpLiveBtn')!;
+    liveBtn.addEventListener('click', () => this.loadLiveData());
   }
 
   private bindCanvasEvents(wrap: HTMLElement): void {
@@ -670,6 +673,81 @@ export class IntelGraphPanel extends Panel {
     for (const [label, cat] of entities) {
       this.addNode(label, cat);
     }
+  }
+
+  // ── Live Data Loading ────────────────────────────────────────
+
+  private async loadLiveData(): Promise<void> {
+    this.showAnalysis('<div class="igp-analyzing">Loading live intelligence graph...</div>', false);
+    try {
+      const resp = await fetch('/api/intelligence/entity-graph', {
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      if (!data.nodes?.length) {
+        this.showAnalysis('No entity graph data available. Seed pipeline may not have run yet.', true);
+        return;
+      }
+      this.ingestGraphData(data.nodes, data.links || []);
+      this.showAnalysis(
+        `<div class="igp-analysis-section"><strong>Live graph loaded:</strong> ${data.nodes.length} entities, ${(data.links || []).length} connections</div>` +
+        (data.builtAt ? `<div class="igp-analysis-section">Last updated: ${new Date(data.builtAt).toLocaleString()}</div>` : ''),
+        false
+      );
+    } catch (err) {
+      this.showAnalysis('Failed to load live graph: ' + (err instanceof Error ? err.message : 'Unknown error'), true);
+    }
+  }
+
+  public setData(data: { nodes: Array<Record<string, unknown>>; links: Array<Record<string, unknown>> }): void {
+    if (!data.nodes?.length) return;
+    this.ingestGraphData(data.nodes, data.links || []);
+  }
+
+  private ingestGraphData(nodes: Array<Record<string, unknown>>, links: Array<Record<string, unknown>>): void {
+    this.clearGraph();
+    const typeMap: Record<string, NodeCategory> = {
+      'Person': 'person',
+      'Country': 'country',
+      'Event': 'event',
+      'Region': 'organization',
+    };
+
+    for (const n of nodes) {
+      const category = typeMap[n.type as string] || 'topic';
+      const parts: string[] = [];
+      if (n.role) parts.push(String(n.role));
+      if (n.riskLevel) parts.push('Risk: ' + String(n.riskLevel));
+      if (n.source) parts.push('Source: ' + String(n.source));
+      const notes = parts.length ? parts.join(' · ') : undefined;
+      this.addNode(String(n.label || n.id), category, notes);
+    }
+
+    for (const link of links) {
+      const sourceLabel = String(link.source);
+      const targetLabel = String(link.target);
+      // Find node IDs by matching labels/ids
+      const sourceNode = this.graphNodes.find(n =>
+        n.id === sourceLabel || n.label.toLowerCase() === sourceLabel.toLowerCase()
+      );
+      const targetNode = this.graphNodes.find(n =>
+        n.id === targetLabel || n.label.toLowerCase() === targetLabel.toLowerCase()
+      );
+      if (sourceNode && targetNode) {
+        this.addEdge(
+          sourceNode.id,
+          targetNode.id,
+          Math.min(10, Math.max(1, Number(link.weight) || 3)),
+          String(link.type || 'related'),
+          true
+        );
+      }
+    }
+
+    this.recalcWeights();
+    this.restartSimulation();
+    this.saveState();
   }
 
   // ── AI Analysis ──────────────────────────────────────────────

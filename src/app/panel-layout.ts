@@ -1117,6 +1117,32 @@ export class PanelLayoutManager implements AppModule {
       import('@/components/CrossSourceSignalsPanel').then(m => new m.CrossSourceSignalsPanel()),
     );
 
+    // ── Compound Hub Panels ──────────────────────────────────
+    this.lazyPanel('intel-hub', () =>
+      import('@/components/IntelHubPanel').then(m => new m.IntelHubPanel()),
+    );
+    this.lazyPanel('signals-hub', () =>
+      import('@/components/SignalsHubPanel').then(m => new m.SignalsHubPanel()),
+    );
+    this.lazyPanel('conflict-hub', () =>
+      import('@/components/ConflictHubPanel').then(m => new m.ConflictHubPanel()),
+    );
+    this.lazyPanel('supply-hub', () =>
+      import('@/components/SupplyHubPanel').then(m => new m.SupplyHubPanel()),
+    );
+    this.lazyPanel('market-hub', () =>
+      import('@/components/MarketHubPanel').then(m => new m.MarketHubPanel()),
+    );
+    this.lazyPanel('news-hub', () =>
+      import('@/components/NewsHubPanel').then(m => new m.NewsHubPanel()),
+    );
+    this.lazyPanel('economic-hub', () =>
+      import('@/components/EconomicHubPanel').then(m => new m.EconomicHubPanel()),
+    );
+    this.lazyPanel('osint-hub', () =>
+      import('@/components/OsintHubPanel').then(m => new m.OsintHubPanel()),
+    );
+
     const defaultOrder = Object.keys(DEFAULT_PANELS).filter(k => k !== 'map');
     const activePanelKeys = Object.keys(this.ctx.panelSettings).filter(k => k !== 'map');
     const bottomSet = this.getSavedBottomSet();

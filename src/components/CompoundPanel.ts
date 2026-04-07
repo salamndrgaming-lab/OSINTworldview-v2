@@ -116,14 +116,7 @@ export class CompoundPanel extends Panel {
       // Mount sub-panel: take its full element but hide its header
       const el = subPanel.getElement();
       el.style.display = '';
-      const subHeader = el.querySelector('.panel-header') as HTMLElement | null;
-      if (subHeader) subHeader.style.display = 'none';
-      // Remove outer panel chrome (border, bg) since hub provides it
-      el.style.border = 'none';
-      el.style.background = 'transparent';
-      el.style.borderRadius = '0';
-      el.style.height = '100%';
-      el.style.minHeight = '0';
+      this.styleSubPanel(el);
       this.contentArea.appendChild(el);
     } catch (err) {
       console.error('[CompoundPanel] Failed to load tab "' + tabId + '":', err);
@@ -155,17 +148,28 @@ export class CompoundPanel extends Panel {
       // Mount hidden
       const el = subPanel.getElement();
       el.style.display = 'none';
-      const subHeader = el.querySelector('.panel-header') as HTMLElement | null;
-      if (subHeader) subHeader.style.display = 'none';
-      el.style.border = 'none';
-      el.style.background = 'transparent';
-      el.style.borderRadius = '0';
-      el.style.height = '100%';
-      el.style.minHeight = '0';
+      this.styleSubPanel(el);
       this.contentArea?.appendChild(el);
       return subPanel;
     } catch {
       return null;
+    }
+  }
+
+  private styleSubPanel(el: HTMLElement): void {
+    const subHeader = el.querySelector('.panel-header') as HTMLElement | null;
+    if (subHeader) subHeader.style.display = 'none';
+    el.style.border = 'none';
+    el.style.background = 'transparent';
+    el.style.borderRadius = '0';
+    el.style.boxShadow = 'none';
+    el.style.margin = '0';
+    el.style.maxHeight = 'none';
+    el.style.minHeight = '0';
+    // Let panel-content inside scroll naturally
+    const panelContent = el.querySelector('.panel-content') as HTMLElement | null;
+    if (panelContent) {
+      panelContent.style.maxHeight = 'none';
     }
   }
 
@@ -211,9 +215,19 @@ export class CompoundPanel extends Panel {
       }
       .compound-content-area {
         flex: 1;
-        overflow: hidden;
+        overflow-y: auto;
+        overflow-x: hidden;
         position: relative;
         min-height: 0;
+      }
+      .compound-content-area > .panel {
+        box-shadow: none;
+        margin: 0;
+        max-height: none;
+      }
+      .compound-content-area > .panel > .panel-content {
+        max-height: none;
+        overflow-y: auto;
       }
       .compound-loading {
         padding: 24px;

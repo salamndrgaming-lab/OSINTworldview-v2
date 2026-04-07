@@ -22,10 +22,16 @@ TIMEOUT_GDELT=180     # 3 min for GDELT consumers
 LOG_DIR="/tmp/seed-logs"
 mkdir -p "$LOG_DIR"
 
-# Counters
-TOTAL=0; PASSED=0; FAILED=0; SKIPPED=0
-FAILED_SEEDS=""
+# Counters — use files because run_seed executes in background subshells
+COUNT_DIR=$(mktemp -d)
+echo 0 > "$COUNT_DIR/total"
+echo 0 > "$COUNT_DIR/passed"
+echo 0 > "$COUNT_DIR/failed"
+echo 0 > "$COUNT_DIR/skipped"
+: > "$COUNT_DIR/failed_seeds"
 START_TIME=$(date +%s)
+
+inc() { flock "$COUNT_DIR/$1" bash -c "echo \$(( \$(cat \"$COUNT_DIR/$1\") + 1 )) > \"$COUNT_DIR/$1\""; }
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,11 +42,11 @@ run_seed() {
   name=$(basename "$script" .mjs)
   local logfile="$LOG_DIR/$name.log"
 
-  TOTAL=$((TOTAL + 1))
+  inc total
 
   if [ ! -f "$SEED_DIR/$script" ]; then
     echo "  SKIP  $name (file not found)"
-    SKIPPED=$((SKIPPED + 1))
+    inc skipped
     return 0
   fi
 
@@ -50,15 +56,15 @@ run_seed() {
 
   if [ "$exit_code" -eq 0 ]; then
     echo "  OK    $name"
-    PASSED=$((PASSED + 1))
+    inc passed
   elif [ "$exit_code" -eq 137 ]; then
     echo "  KILL  $name (timeout ${timeout}s)"
-    FAILED=$((FAILED + 1))
-    FAILED_SEEDS="$FAILED_SEEDS $name(timeout)"
+    inc failed
+    flock "$COUNT_DIR/failed_seeds" bash -c "echo -n ' ${name}(timeout)' >> \"$COUNT_DIR/failed_seeds\""
   else
     echo "  FAIL  $name (exit $exit_code)"
-    FAILED=$((FAILED + 1))
-    FAILED_SEEDS="$FAILED_SEEDS $name($exit_code)"
+    inc failed
+    flock "$COUNT_DIR/failed_seeds" bash -c "echo -n ' ${name}(${exit_code})' >> \"$COUNT_DIR/failed_seeds\""
     # Print last 5 lines of log for diagnosis
     tail -5 "$logfile" 2>/dev/null | sed 's/^/        /'
   fi
@@ -210,6 +216,12 @@ fi
 END_TIME=$(date +%s)
 ELAPSED=$(( END_TIME - START_TIME ))
 
+TOTAL=$(cat "$COUNT_DIR/total")
+PASSED=$(cat "$COUNT_DIR/passed")
+FAILED=$(cat "$COUNT_DIR/failed")
+SKIPPED=$(cat "$COUNT_DIR/skipped")
+FAILED_SEEDS=$(cat "$COUNT_DIR/failed_seeds")
+
 echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo "  SEED RUN COMPLETE in ${ELAPSED}s"
@@ -218,6 +230,9 @@ if [ -n "$FAILED_SEEDS" ]; then
   echo "  Failed:$FAILED_SEEDS"
 fi
 echo "═══════════════════════════════════════════════════════════"
+
+# Cleanup temp files
+rm -rf "$COUNT_DIR"
 
 # Exit 0 even if some seeds failed — we don't want to cancel the whole run.
 # The Telegram notification handles alerting on failures.

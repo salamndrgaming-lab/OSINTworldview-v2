@@ -1118,29 +1118,58 @@ export class PanelLayoutManager implements AppModule {
     );
 
     // ── Compound Hub Panels ──────────────────────────────────
+    // Each hub registers a callback so that when a sub-panel tab loads,
+    // it gets wired into ctx.panels for the data pipeline + replay.
+    const wireHub = (hub: import('@/components/CompoundPanel').CompoundPanel) => {
+      hub.onSubPanelLoaded((subId, subPanel) => {
+        this.ctx.panels[subId] = subPanel;
+        // News sub-panels also need to be in newsPanels for the data pipeline
+        if (subPanel instanceof NewsPanel) {
+          this.ctx.newsPanels[subId] = subPanel;
+          // If news data was already fetched, re-render it
+          const cached = this.ctx.newsByCategory?.[subId];
+          if (cached) subPanel.renderNews(cached);
+        }
+        replayPendingCalls(subId, subPanel);
+      });
+      // Eagerly load ALL sub-panels so data pipeline finds them immediately.
+      // Only the active tab is visible; the rest mount hidden.
+      for (const subId of hub.getSubPanelIds()) {
+        void hub.ensureSubPanel(subId);
+      }
+    };
+
     this.lazyPanel('intel-hub', () =>
       import('@/components/IntelHubPanel').then(m => new m.IntelHubPanel()),
+      wireHub,
     );
     this.lazyPanel('signals-hub', () =>
       import('@/components/SignalsHubPanel').then(m => new m.SignalsHubPanel()),
+      wireHub,
     );
     this.lazyPanel('conflict-hub', () =>
       import('@/components/ConflictHubPanel').then(m => new m.ConflictHubPanel()),
+      wireHub,
     );
     this.lazyPanel('supply-hub', () =>
       import('@/components/SupplyHubPanel').then(m => new m.SupplyHubPanel()),
+      wireHub,
     );
     this.lazyPanel('market-hub', () =>
       import('@/components/MarketHubPanel').then(m => new m.MarketHubPanel()),
+      wireHub,
     );
     this.lazyPanel('news-hub', () =>
       import('@/components/NewsHubPanel').then(m => new m.NewsHubPanel()),
+      wireHub,
     );
     this.lazyPanel('economic-hub', () =>
       import('@/components/EconomicHubPanel').then(m => new m.EconomicHubPanel()),
+      wireHub,
     );
     this.lazyPanel('osint-hub', () =>
       import('@/components/OsintHubPanel').then(m => new m.OsintHubPanel()),
+      wireHub,
     );
 
     const defaultOrder = Object.keys(DEFAULT_PANELS).filter(k => k !== 'map');

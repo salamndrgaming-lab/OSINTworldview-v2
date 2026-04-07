@@ -15,6 +15,17 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'live-news': { name: 'Live News', enabled: true, priority: 1 },
   'live-webcams': { name: 'Live Webcams', enabled: true, priority: 1 },
   'windy-webcams': { name: 'Windy Live Webcam', enabled: false, priority: 2 },
+
+  // Compound Hub Panels — top of grid under news/webcams
+  'intel-hub': { name: 'Intelligence Command', enabled: true, priority: 1 },
+  'signals-hub': { name: 'Signals & Correlation', enabled: true, priority: 1 },
+  'conflict-hub': { name: 'Conflict Theater', enabled: true, priority: 1 },
+  'supply-hub': { name: 'Supply & Trade', enabled: true, priority: 1 },
+  'market-hub': { name: 'Markets & Finance', enabled: true, priority: 1 },
+  'news-hub': { name: 'Regional News', enabled: true, priority: 1 },
+  'economic-hub': { name: 'Economic Intelligence', enabled: true, priority: 1 },
+  'osint-hub': { name: 'OSINT Workspace', enabled: true, priority: 1 },
+
   // Panels below are now inside compound hubs — disabled as standalone
   insights: { name: 'AI Insights', enabled: false, priority: 1 },
   'strategic-posture': { name: 'AI Strategic Posture', enabled: false, priority: 1 },
@@ -81,16 +92,6 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'narrative-drift': { name: 'Narrative Drift', enabled: false, priority: 2 },
   'counterfactual-sim': { name: 'Counterfactual Engine', enabled: false, priority: 2 },
   'osint-report': { name: 'OSINT Report', enabled: false, priority: 2 },
-
-  // Compound Hub Panels
-  'intel-hub': { name: 'Intelligence Command', enabled: true, priority: 1 },
-  'signals-hub': { name: 'Signals & Correlation', enabled: true, priority: 1 },
-  'conflict-hub': { name: 'Conflict Theater', enabled: true, priority: 1 },
-  'supply-hub': { name: 'Supply & Trade', enabled: true, priority: 1 },
-  'market-hub': { name: 'Markets & Finance', enabled: true, priority: 1 },
-  'news-hub': { name: 'Regional News', enabled: true, priority: 1 },
-  'economic-hub': { name: 'Economic Intelligence', enabled: true, priority: 1 },
-  'osint-hub': { name: 'OSINT Workspace', enabled: true, priority: 1 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {

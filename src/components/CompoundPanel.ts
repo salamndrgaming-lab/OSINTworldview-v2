@@ -29,6 +29,7 @@ export class CompoundPanel extends Panel {
   private tabStrip: HTMLElement | null = null;
   private contentArea: HTMLElement | null = null;
   private loading = false;
+  private subPanelCallback: ((id: string, panel: Panel) => void) | null = null;
 
   constructor(
     options: { id: string; title: string; defaultRowSpan?: number },
@@ -118,6 +119,9 @@ export class CompoundPanel extends Panel {
       el.style.display = '';
       this.styleSubPanel(el);
       this.contentArea.appendChild(el);
+
+      // Notify so panel-layout can register in ctx.panels and replay data
+      this.subPanelCallback?.(tabId, subPanel);
     } catch (err) {
       console.error('[CompoundPanel] Failed to load tab "' + tabId + '":', err);
       const loadingEl = this.contentArea.querySelector('#compound-load-' + tabId);
@@ -125,6 +129,11 @@ export class CompoundPanel extends Panel {
     } finally {
       this.loading = false;
     }
+  }
+
+  /** Register a callback invoked whenever a sub-panel finishes loading. */
+  public onSubPanelLoaded(cb: (id: string, panel: Panel) => void): void {
+    this.subPanelCallback = cb;
   }
 
   /** Get all loaded sub-panels for data replay registration. */
@@ -150,6 +159,7 @@ export class CompoundPanel extends Panel {
       el.style.display = 'none';
       this.styleSubPanel(el);
       this.contentArea?.appendChild(el);
+      this.subPanelCallback?.(tabId, subPanel);
       return subPanel;
     } catch {
       return null;

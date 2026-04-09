@@ -565,7 +565,7 @@ export function installRuntimeFetchPatch(): void {
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const target = getApiTargetFromRequestInput(input);
-    const debug = localStorage.getItem('wm-debug-log') === '1';
+    const debug = localStorage.getItem('ov-debug-log') === '1';
 
     if (!target?.startsWith('/api/')) {
       if (debug) {

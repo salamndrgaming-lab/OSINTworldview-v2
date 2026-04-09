@@ -6,7 +6,7 @@ export interface CompoundTab {
   loader: () => Promise<Panel>;
 }
 
-const STORAGE_PREFIX = 'wm-compound-tab-';
+const STORAGE_PREFIX = 'ov-compound-tab-';
 
 /**
  * CompoundPanel — A single registered panel that internally renders

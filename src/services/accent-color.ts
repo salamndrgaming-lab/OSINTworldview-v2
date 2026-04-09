@@ -8,7 +8,7 @@
  * Location in repo: src/services/accent-color.ts
  */
 
-const ACCENT_KEY = 'wm-accent-color';
+const ACCENT_KEY = 'ov-accent-color';
 
 export interface AccentPreset {
   name: string;

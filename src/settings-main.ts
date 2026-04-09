@@ -218,28 +218,28 @@ function renderOverview(area: HTMLElement): void {
     </div>
 
     <div class="settings-ov-license">
-      <section class="wm-section">
-        <h2 class="wm-section-title">${t('modals.settingsWindow.osintview.apiKey.title')}</h2>
-        <p class="wm-section-desc">${t('modals.settingsWindow.osintview.apiKey.description')}</p>
-        <div class="wm-key-row">
-          <div class="wm-input-wrap">
-            <input type="password" class="wm-input" data-wm-key-input
+      <section class="ov-section">
+        <h2 class="ov-section-title">${t('modals.settingsWindow.osintview.apiKey.title')}</h2>
+        <p class="ov-section-desc">${t('modals.settingsWindow.osintview.apiKey.description')}</p>
+        <div class="ov-key-row">
+          <div class="ov-input-wrap">
+            <input type="password" class="ov-input" data-wm-key-input
               placeholder="${t('modals.settingsWindow.osintview.apiKey.placeholder')}"
               autocomplete="off" spellcheck="false"
               ${wmState.present ? `value="${MASKED_SENTINEL}"` : ''} />
-            <button type="button" class="wm-toggle-vis" data-wm-toggle title="Show/hide">&#x1f441;</button>
+            <button type="button" class="ov-toggle-vis" data-wm-toggle title="Show/hide">&#x1f441;</button>
           </div>
-          <span class="wm-badge ${wmStatusClass}">${wmStatusText}</span>
+          <span class="ov-badge ${wmStatusClass}">${wmStatusText}</span>
         </div>
       </section>
 
-      <div class="wm-divider"><span>${t('modals.settingsWindow.osintview.dividerOr')}</span></div>
+      <div class="ov-divider"><span>${t('modals.settingsWindow.osintview.dividerOr')}</span></div>
 
-      <section class="wm-section">
-        <h2 class="wm-section-title">${t('modals.settingsWindow.osintview.register.title')}</h2>
-        <p class="wm-section-desc">${t('modals.settingsWindow.osintview.register.description')}</p>
-        <div class="wm-register-row">
-          <button type="button" class="wm-submit-btn" data-wm-open-pro>
+      <section class="ov-section">
+        <h2 class="ov-section-title">${t('modals.settingsWindow.osintview.register.title')}</h2>
+        <p class="ov-section-desc">${t('modals.settingsWindow.osintview.register.description')}</p>
+        <div class="ov-register-row">
+          <button type="button" class="ov-submit-btn" data-wm-open-pro>
             ${t('modals.settingsWindow.osintview.register.submitBtn')}
           </button>
         </div>
@@ -671,9 +671,9 @@ function initDiagnostics(): void {
   const trafficCount = document.getElementById('trafficCount');
 
   if (fetchDebugToggle) {
-    fetchDebugToggle.checked = localStorage.getItem('wm-debug-log') === '1';
+    fetchDebugToggle.checked = localStorage.getItem('ov-debug-log') === '1';
     fetchDebugToggle.addEventListener('change', () => {
-      localStorage.setItem('wm-debug-log', fetchDebugToggle.checked ? '1' : '0');
+      localStorage.setItem('ov-debug-log', fetchDebugToggle.checked ? '1' : '0');
     });
   }
 
@@ -931,7 +931,7 @@ async function initSettingsWindow(): Promise<void> {
   });
 }
 
-localStorage.setItem('wm-settings-open', '1');
-window.addEventListener('beforeunload', () => localStorage.removeItem('wm-settings-open'));
+localStorage.setItem('ov-settings-open', '1');
+window.addEventListener('beforeunload', () => localStorage.removeItem('ov-settings-open'));
 
 void initSettingsWindow();

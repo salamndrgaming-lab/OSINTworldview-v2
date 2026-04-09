@@ -116,7 +116,7 @@ async function setupRemoteServer() {
 }
 
 async function setupApiDir(files) {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'wm-sidecar-test-'));
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'ov-sidecar-test-'));
   const apiDir = path.join(tempRoot, 'api');
   await mkdir(apiDir, { recursive: true });
 
@@ -137,7 +137,7 @@ async function setupApiDir(files) {
 }
 
 async function setupResourceDirWithUpApi(files) {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'wm-sidecar-resource-test-'));
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'ov-sidecar-resource-test-'));
   const apiDir = path.join(tempRoot, '_up_', 'api');
   await mkdir(apiDir, { recursive: true });
 

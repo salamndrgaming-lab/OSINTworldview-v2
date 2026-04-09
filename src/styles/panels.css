@@ -565,7 +565,7 @@
 /* ----------------------------------------------------------
    Download Banner
    ---------------------------------------------------------- */
-.wm-dl-panel {
+.ov-dl-panel {
   position: fixed;
   bottom: 0;
   right: 0;
@@ -581,18 +581,18 @@
   font-family: inherit;
 }
 
-.wm-dl-panel.wm-dl-show {
+.ov-dl-panel.ov-dl-show {
   transform: translateX(0);
 }
 
-.wm-dl-head {
+.ov-dl-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
 }
 
-.wm-dl-title {
+.ov-dl-title {
   font-size: 11px;
   font-weight: 700;
   color: var(--green);
@@ -603,7 +603,7 @@
   gap: 5px;
 }
 
-.wm-dl-close {
+.ov-dl-close {
   background: none;
   border: none;
   color: var(--text-dim);
@@ -613,24 +613,24 @@
   line-height: 1;
 }
 
-.wm-dl-close:hover {
+.ov-dl-close:hover {
   color: var(--text);
 }
 
-.wm-dl-body {
+.ov-dl-body {
   font-size: 11px;
   color: var(--text-dim);
   line-height: 1.5;
   margin-bottom: 12px;
 }
 
-.wm-dl-btns {
+.ov-dl-btns {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
 
-.wm-dl-btn {
+.ov-dl-btn {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -643,37 +643,37 @@
   transition: background 0.15s;
 }
 
-.wm-dl-btn.mac {
+.ov-dl-btn.mac {
   background: color-mix(in srgb, var(--green) 10%, transparent);
   border: 1px solid color-mix(in srgb, var(--green) 20%, transparent);
   color: var(--green);
 }
 
-.wm-dl-btn.mac:hover {
+.ov-dl-btn.mac:hover {
   background: color-mix(in srgb, var(--green) 18%, transparent);
 }
 
-.wm-dl-btn.win {
+.ov-dl-btn.win {
   background: color-mix(in srgb, var(--semantic-info) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--semantic-info) 18%, transparent);
   color: var(--semantic-info);
 }
 
-.wm-dl-btn.win:hover {
+.ov-dl-btn.win:hover {
   background: color-mix(in srgb, var(--semantic-info) 15%, transparent);
 }
 
-.wm-dl-btn.linux {
+.ov-dl-btn.linux {
   background: color-mix(in srgb, var(--semantic-elevated) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--semantic-elevated) 18%, transparent);
   color: var(--semantic-elevated);
 }
 
-.wm-dl-btn.linux:hover {
+.ov-dl-btn.linux:hover {
   background: color-mix(in srgb, var(--semantic-elevated) 15%, transparent);
 }
 
-.wm-dl-toggle {
+.ov-dl-toggle {
   background: none;
   border: none;
   color: var(--text-dim, #888);
@@ -684,7 +684,7 @@
   width: 100%;
 }
 
-.wm-dl-toggle:hover {
+.ov-dl-toggle:hover {
   color: var(--text, #e8e8e8);
 }
 

@@ -6,18 +6,18 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --font-display: "Space Grotesk", "Inter", sans-serif;
 
-  --color-wm-bg: #050505;
-  --color-wm-card: #111111;
-  --color-wm-border: #222222;
-  --color-wm-green: #4ade80;
-  --color-wm-blue: #60a5fa;
-  --color-wm-text: #f3f4f6;
-  --color-wm-muted: #9ca3af;
+  --color-ov-bg: #050505;
+  --color-ov-card: #111111;
+  --color-ov-border: #222222;
+  --color-ov-green: #4ade80;
+  --color-ov-blue: #60a5fa;
+  --color-ov-text: #f3f4f6;
+  --color-ov-muted: #9ca3af;
 }
 
 body {
-  background-color: var(--color-wm-bg);
-  color: var(--color-wm-text);
+  background-color: var(--color-ov-bg);
+  color: var(--color-ov-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
@@ -25,19 +25,19 @@ body {
 .glass-panel {
   background: rgba(17, 17, 17, 0.7);
   backdrop-filter: blur(12px);
-  border: 1px solid var(--color-wm-border);
+  border: 1px solid var(--color-ov-border);
 }
 
 .data-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1px;
-  background: var(--color-wm-border);
-  border: 1px solid var(--color-wm-border);
+  background: var(--color-ov-border);
+  border: 1px solid var(--color-ov-border);
 }
 
 .data-cell {
-  background: var(--color-wm-bg);
+  background: var(--color-ov-bg);
   padding: 1.5rem;
 }
 

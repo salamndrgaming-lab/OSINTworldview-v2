@@ -876,12 +876,12 @@ tr.diag-warn td { color: var(--settings-yellow); }
 tr.diag-err td { color: var(--settings-red); }
 
 /* ── OSINTview / Overview styles ── */
-.wm-tab {
+.ov-tab {
   max-width: 600px;
   margin: 0 auto;
 }
 
-.wm-hero {
+.ov-hero {
   text-align: center;
   padding: 18px 20px;
   margin-bottom: 16px;
@@ -890,7 +890,7 @@ tr.diag-err td { color: var(--settings-red); }
   background: linear-gradient(180deg, rgba(52, 211, 153, 0.04) 0%, transparent 100%);
 }
 
-.wm-hero-title {
+.ov-hero-title {
   margin: 0 0 8px;
   font-size: 22px;
   font-weight: 700;
@@ -898,7 +898,7 @@ tr.diag-err td { color: var(--settings-red); }
   letter-spacing: -0.01em;
 }
 
-.wm-hero-desc {
+.ov-hero-desc {
   margin: 0 auto;
   font-size: 13px;
   color: var(--settings-text-secondary);
@@ -906,7 +906,7 @@ tr.diag-err td { color: var(--settings-red); }
   max-width: 480px;
 }
 
-.wm-divider {
+.ov-divider {
   display: flex;
   align-items: center;
   gap: 16px;
@@ -916,15 +916,15 @@ tr.diag-err td { color: var(--settings-red); }
   font-weight: 500;
 }
 
-.wm-divider::before,
-.wm-divider::after {
+.ov-divider::before,
+.ov-divider::after {
   content: '';
   flex: 1;
   height: 1px;
   background: var(--settings-border);
 }
 
-.wm-byok {
+.ov-byok {
   margin-top: 14px;
   padding: 12px 16px;
   background: var(--settings-surface);
@@ -932,50 +932,50 @@ tr.diag-err td { color: var(--settings-red); }
   border: 1px solid var(--settings-border);
 }
 
-.wm-byok-title {
+.ov-byok-title {
   margin: 0 0 2px;
   font-size: 13px;
   font-weight: 600;
   color: var(--settings-text);
 }
 
-.wm-byok-desc {
+.ov-byok-desc {
   margin: 0;
   font-size: 12px;
   color: var(--settings-text-secondary);
   line-height: 1.4;
 }
 
-.wm-section {
+.ov-section {
   margin-bottom: 12px;
 }
 
-.wm-section-title {
+.ov-section-title {
   margin: 0 0 2px;
   font-size: 14px;
   font-weight: 600;
   color: var(--settings-text);
 }
 
-.wm-section-desc {
+.ov-section-desc {
   margin: 0 0 8px;
   font-size: 12px;
   color: var(--settings-text-secondary);
   line-height: 1.4;
 }
 
-.wm-key-row {
+.ov-key-row {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.wm-input-wrap {
+.ov-input-wrap {
   position: relative;
   flex: 1;
 }
 
-.wm-input {
+.ov-input {
   width: 100%;
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--settings-border-strong);
@@ -988,17 +988,17 @@ tr.diag-err td { color: var(--settings-red); }
   box-sizing: border-box;
 }
 
-.wm-input:focus {
+.ov-input:focus {
   outline: none;
   border-color: var(--settings-accent);
   box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
 }
 
-.wm-input::placeholder {
+.ov-input::placeholder {
   color: rgba(255, 255, 255, 0.2);
 }
 
-.wm-toggle-vis {
+.ov-toggle-vis {
   position: absolute;
   right: 6px;
   top: 50%;
@@ -1013,9 +1013,9 @@ tr.diag-err td { color: var(--settings-red); }
   transition: opacity 0.15s;
 }
 
-.wm-toggle-vis:hover { opacity: 1; }
+.ov-toggle-vis:hover { opacity: 1; }
 
-.wm-badge {
+.ov-badge {
   font-size: 10px;
   font-weight: 600;
   padding: 3px 10px;
@@ -1025,24 +1025,24 @@ tr.diag-err td { color: var(--settings-red); }
   white-space: nowrap;
 }
 
-.wm-badge.ok {
+.ov-badge.ok {
   color: var(--settings-green);
   background: rgba(52, 211, 153, 0.12);
 }
 
-.wm-badge.warn {
+.ov-badge.warn {
   color: var(--settings-yellow);
   background: rgba(251, 191, 36, 0.12);
 }
 
-.wm-register-row {
+.ov-register-row {
   display: flex;
   gap: 10px;
 }
 
-.wm-email { flex: 1; }
+.ov-email { flex: 1; }
 
-.wm-submit-btn {
+.ov-submit-btn {
   background: var(--settings-accent);
   border: 1px solid var(--settings-accent);
   color: #fff;
@@ -1056,23 +1056,23 @@ tr.diag-err td { color: var(--settings-red); }
   transition: background 0.15s;
 }
 
-.wm-submit-btn:hover {
+.ov-submit-btn:hover {
   background: color-mix(in srgb, var(--settings-accent) 85%, white);
 }
 
-.wm-submit-btn:disabled {
+.ov-submit-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.wm-reg-status {
+.ov-reg-status {
   margin: 8px 0 0;
   font-size: 13px;
   min-height: 20px;
 }
 
-.wm-reg-status.ok { color: var(--settings-green); }
-.wm-reg-status.error { color: var(--settings-red); }
+.ov-reg-status.ok { color: var(--settings-green); }
+.ov-reg-status.error { color: var(--settings-red); }
 
 /* ── Content area fade transition ── */
 .settings-content.fade-out { opacity: 0; transition: opacity 0.1s ease; }

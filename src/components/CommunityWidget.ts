@@ -1,7 +1,7 @@
 import { t } from '@/services/i18n';
 import { getDismissed, setDismissed } from '@/utils/cross-domain-storage';
 
-const DISMISSED_KEY = 'wm-community-dismissed';
+const DISMISSED_KEY = 'ov-community-dismissed';
 const DISCUSSION_URL = 'https://github.com/salamndrgaming-lab/OSINTworldview-v2/discussions';
 
 export function mountCommunityWidget(): void {

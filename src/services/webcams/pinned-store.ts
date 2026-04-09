@@ -1,5 +1,5 @@
-const STORAGE_KEY = 'wm-pinned-webcams';
-const CHANGE_EVENT = 'wm-pinned-webcams-changed';
+const STORAGE_KEY = 'ov-pinned-webcams';
+const CHANGE_EVENT = 'ov-pinned-webcams-changed';
 const MAX_ACTIVE = 4;
 
 export interface PinnedWebcam {
@@ -33,7 +33,7 @@ function load(): PinnedWebcam[] {
 
 function showToast(msg: string): void {
   const el = document.createElement('div');
-  el.className = 'wm-toast';
+  el.className = 'ov-toast';
   el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 3000);

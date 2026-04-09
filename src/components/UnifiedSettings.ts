@@ -158,7 +158,7 @@ export class UnifiedSettings {
     this.resetPanelDraft();
     this.render();
     this.overlay.classList.add('active');
-    localStorage.setItem('wm-settings-open', '1');
+    localStorage.setItem('ov-settings-open', '1');
     document.addEventListener('keydown', this.escapeHandler);
   }
 
@@ -166,7 +166,7 @@ export class UnifiedSettings {
     if (this.hasPendingPanelChanges() && !confirm(t('header.unsavedChanges'))) return;
     this.overlay.classList.remove('active');
     this.resetPanelDraft();
-    localStorage.removeItem('wm-settings-open');
+    localStorage.removeItem('ov-settings-open');
     document.removeEventListener('keydown', this.escapeHandler);
   }
 

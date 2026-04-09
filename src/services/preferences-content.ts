@@ -147,9 +147,9 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
   let html = '';
 
   // ── Display group ──
-  html += '<details class="wm-pref-group" open>';
+  html += '<details class="ov-pref-group" open>';
   html += `<summary>${t('preferences.display')}</summary>`;
-  html += '<div class="wm-pref-group-content">';
+  html += '<div class="ov-pref-group-content">';
 
   // Appearance — now includes tactical
   const currentThemePref = getThemePreference();
@@ -251,9 +251,9 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
   html += '</div></details>';
 
   // ── Intelligence group ──
-  html += '<details class="wm-pref-group">';
+  html += '<details class="ov-pref-group">';
   html += `<summary>${t('preferences.intelligence')}</summary>`;
-  html += '<div class="wm-pref-group-content">';
+  html += '<div class="ov-pref-group-content">';
 
   if (!host.isDesktopApp) {
     html += toggleRowHtml('us-cloud', t('components.insights.aiFlowCloudLabel'), t('components.insights.aiFlowCloudDesc'), settings.cloudLlm);
@@ -273,9 +273,9 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
   html += '</div></details>';
 
   // ── Media group ──
-  html += '<details class="wm-pref-group">';
+  html += '<details class="ov-pref-group">';
   html += `<summary>${t('preferences.media')}</summary>`;
-  html += '<div class="wm-pref-group-content">';
+  html += '<div class="ov-pref-group-content">';
 
   const currentQuality = getStreamQuality();
   html += `<div class="ai-flow-toggle-row">
@@ -301,16 +301,16 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
   html += '</div></details>';
 
   // ── Panels group ──
-  html += '<details class="wm-pref-group">';
+  html += '<details class="ov-pref-group">';
   html += `<summary>${t('preferences.panels')}</summary>`;
-  html += '<div class="wm-pref-group-content">';
+  html += '<div class="ov-pref-group-content">';
   html += toggleRowHtml('us-badge-anim', t('components.insights.badgeAnimLabel'), t('components.insights.badgeAnimDesc'), settings.badgeAnimation);
   html += '</div></details>';
 
   // ── Data & Community group ──
-  html += '<details class="wm-pref-group">';
+  html += '<details class="ov-pref-group">';
   html += `<summary>${t('preferences.dataAndCommunity')}</summary>`;
-  html += '<div class="wm-pref-group-content">';
+  html += '<div class="ov-pref-group-content">';
   html += `
     <div class="us-data-mgmt">
       <button type="button" class="settings-btn settings-btn-secondary" id="usExportBtn">${t('components.settings.exportSettings')}</button>
@@ -323,16 +323,16 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
   html += '</div></details>';
 
   // ── Accent Color group ──
-  html += '<details class="wm-pref-group">';
+  html += '<details class="ov-pref-group">';
   html += '<summary>Accent Color</summary>';
-  html += '<div class="wm-pref-group-content">';
+  html += '<div class="ov-pref-group-content">';
   html += '<div id="accent-color-picker-mount"></div>';
   html += '</div></details>';
 
   // ── Color Scheme Builder group (NEW) ──
-  html += '<details class="wm-pref-group">';
+  html += '<details class="ov-pref-group">';
   html += '<summary>Color Scheme</summary>';
-  html += '<div class="wm-pref-group-content">';
+  html += '<div class="ov-pref-group-content">';
   html += '<div class="ai-flow-toggle-desc" style="margin-bottom:10px">';
   html += 'Choose a preset color scheme or build your own. Custom colors overlay the current base theme (dark, light, or tactical). Changes apply in real-time.';
   html += '</div>';
@@ -340,9 +340,9 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
   html += '</div></details>';
 
   // ── Branding group (NEW) ──
-  html += '<details class="wm-pref-group">';
+  html += '<details class="ov-pref-group">';
   html += '<summary>Branding</summary>';
-  html += '<div class="wm-pref-group-content">';
+  html += '<div class="ov-pref-group-content">';
   html += '<div class="ai-flow-toggle-desc" style="margin-bottom:10px">';
   html += 'Customize the platform header, logo, and favicon. Changes persist across sessions.';
   html += '</div>';
@@ -360,9 +360,9 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
   html += '</div></details>';
 
   // ── Watchlist group (NEW) ──
-  html += '<details class="wm-pref-group">';
+  html += '<details class="ov-pref-group">';
   html += '<summary>Watchlist</summary>';
-  html += '<div class="wm-pref-group-content">';
+  html += '<div class="ov-pref-group-content">';
   html += '<div class="ai-flow-toggle-desc" style="margin-bottom:10px">';
   html += 'Track specific countries, people, stocks, or keywords. Watched items are highlighted across the platform.';
   html += '</div>';
@@ -385,9 +385,9 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
   html += '</div></details>';
 
   // ── Telegram Reports group ──
-  html += '<details class="wm-pref-group">';
+  html += '<details class="ov-pref-group">';
   html += '<summary>Telegram Reports</summary>';
-  html += '<div class="wm-pref-group-content">';
+  html += '<div class="ov-pref-group-content">';
   const tgCfg = getTelegramConfig();
   html += `
     <div class="ai-flow-toggle-desc" style="margin-bottom:10px">

@@ -12,7 +12,7 @@ const SORT_TIME_TOLERANCE_MS = 60000;
 const REFRESH_INTERVAL_MS = 180000;
 const ALERT_HOURS = 6;
 const STORAGE_KEY = 'osintview-intel-findings';
-const POPUP_STORAGE_KEY = 'wm-alert-popup-enabled';
+const POPUP_STORAGE_KEY = 'ov-alert-popup-enabled';
 
 type FindingSource = 'signal' | 'alert';
 

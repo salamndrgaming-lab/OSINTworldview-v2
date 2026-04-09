@@ -3110,7 +3110,7 @@ body.live-news-fullscreen-active .panels-grid > *:not(.live-news-fullscreen) {
 }
 
 /* Toast notification (localStorage full, etc.) */
-.wm-toast {
+.ov-toast {
   position: fixed;
   bottom: 16px;
   left: 50%;
@@ -3123,10 +3123,10 @@ body.live-news-fullscreen-active .panels-grid > *:not(.live-news-fullscreen) {
   font-size: 0.8rem;
   z-index: 10000;
   pointer-events: none;
-  animation: wm-toast-fade 3s ease-in-out;
+  animation: ov-toast-fade 3s ease-in-out;
 }
 
-@keyframes wm-toast-fade {
+@keyframes ov-toast-fade {
   0%, 80% { opacity: 1; }
   100% { opacity: 0; }
 }
@@ -15550,14 +15550,14 @@ a.prediction-link:hover {
 
 /* ============ Preferences Collapsible Groups ============ */
 
-.wm-pref-group {
+.ov-pref-group {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   margin-bottom: 8px;
   overflow: hidden;
 }
 
-.wm-pref-group > summary {
+.ov-pref-group > summary {
   cursor: pointer;
   padding: 10px 14px;
   font-size: 12px;
@@ -15572,26 +15572,26 @@ a.prediction-link:hover {
   user-select: none;
 }
 
-.wm-pref-group > summary::-webkit-details-marker {
+.ov-pref-group > summary::-webkit-details-marker {
   display: none;
 }
 
-.wm-pref-group > summary::before {
+.ov-pref-group > summary::before {
   content: '\25B8';
   font-size: 10px;
   transition: transform 0.15s ease;
   color: var(--text-faint);
 }
 
-.wm-pref-group[open] > summary::before {
+.ov-pref-group[open] > summary::before {
   transform: rotate(90deg);
 }
 
-.wm-pref-group > summary:hover {
+.ov-pref-group > summary:hover {
   background: rgba(255, 255, 255, 0.06);
 }
 
-.wm-pref-group-content {
+.ov-pref-group-content {
   padding: 4px 14px 10px;
 }
 

@@ -254,7 +254,7 @@
     <script>
     (function(){
       if(!('serviceWorker' in navigator))return;
-      var key='wm-sw-nuke';
+      var key='ov-sw-nuke';
       if(sessionStorage.getItem(key))return;
       window.addEventListener('error',function(e){
         var u=e.target&&(e.target.src||e.target.href)||'';

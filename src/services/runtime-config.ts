@@ -388,7 +388,7 @@ seedSecretsFromEnvironment();
 // When one window saves secrets or toggles features, the `storage` event fires in other same-origin windows.
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
-    if (e.key === 'wm-secrets-updated') {
+    if (e.key === 'ov-secrets-updated') {
       void loadDesktopSecrets();
     } else if (e.key === TOGGLES_STORAGE_KEY && e.newValue) {
       try {
@@ -473,7 +473,7 @@ export async function setSecretValue(key: RuntimeSecretKey, value: string): Prom
   // Signal other windows (main ↔ settings) to reload secrets from keychain.
   // The `storage` event fires in all same-origin windows except the one that wrote.
   try {
-    localStorage.setItem('wm-secrets-updated', String(Date.now()));
+    localStorage.setItem('ov-secrets-updated', String(Date.now()));
   } catch { /* localStorage may be unavailable */ }
 
   notifyConfigChanged();

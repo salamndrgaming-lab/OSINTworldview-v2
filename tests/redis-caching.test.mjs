@@ -52,7 +52,7 @@ async function importPatchedTsModule(relPath, replacements) {
     source = source.replaceAll(`'${specifier}'`, `'${pathToFileURL(targetPath).href}'`);
   }
 
-  const tempDir = mkdtempSync(join(tmpdir(), 'wm-ts-module-'));
+  const tempDir = mkdtempSync(join(tmpdir(), 'ov-ts-module-'));
   const tempPath = join(tempDir, basename(sourcePath));
   writeFileSync(tempPath, source);
 

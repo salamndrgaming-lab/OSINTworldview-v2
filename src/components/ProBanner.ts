@@ -1,7 +1,7 @@
 let bannerEl: HTMLElement | null = null;
 
 /* TODO: re-enable dismiss after pro launch promotion period
-const DISMISS_KEY = 'wm-pro-banner-dismissed';
+const DISMISS_KEY = 'ov-pro-banner-dismissed';
 const DISMISS_MS = 7 * 24 * 60 * 60 * 1000;
 
 function isDismissed(): boolean {

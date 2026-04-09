@@ -282,7 +282,7 @@ export class DataLoaderManager implements AppModule {
         }
       });
     };
-    window.addEventListener('wm-market-watchlist-changed', this.boundMarketWatchlistHandler as EventListener);
+    window.addEventListener('ov-market-watchlist-changed', this.boundMarketWatchlistHandler as EventListener);
   }
 
   destroy(): void {
@@ -291,7 +291,7 @@ export class DataLoaderManager implements AppModule {
     this.applyTimeRangeFilterToNewsPanelsDebounced.cancel();
     stopOrefPolling();
     if (this.boundMarketWatchlistHandler) {
-      window.removeEventListener('wm-market-watchlist-changed', this.boundMarketWatchlistHandler as EventListener);
+      window.removeEventListener('ov-market-watchlist-changed', this.boundMarketWatchlistHandler as EventListener);
       this.boundMarketWatchlistHandler = null;
     }
   }

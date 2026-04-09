@@ -24,7 +24,7 @@ interface BootstrapPayload {
 
 // --- Storage ---
 
-const CONFIG_KEY = 'wm-telegram-config';
+const CONFIG_KEY = 'ov-telegram-config';
 
 export function getTelegramConfig(): TelegramConfig | null {
   try {

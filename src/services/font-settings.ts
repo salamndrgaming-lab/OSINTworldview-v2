@@ -1,7 +1,7 @@
 export type FontFamily = 'mono' | 'system';
 
-const STORAGE_KEY = 'wm-font-family';
-const EVENT_NAME = 'wm-font-changed';
+const STORAGE_KEY = 'ov-font-family';
+const EVENT_NAME = 'ov-font-changed';
 
 const ALLOWED: FontFamily[] = ['mono', 'system'];
 

@@ -337,7 +337,7 @@ requestAnimationFrame(() => {
 });
 
 // Clear stale settings-open flag (survives ungraceful shutdown)
-localStorage.removeItem('wm-settings-open');
+localStorage.removeItem('ov-settings-open');
 
 // Standalone windows: ?settings=1 = panel display settings, ?live-channels=1 = channel management
 // Both need i18n initialized so t() does not return undefined.
@@ -425,7 +425,7 @@ if (!('__TAURI_INTERNALS__' in window) && !('__TAURI__' in window) && 'serviceWo
 // It runs once per user (guarded by a localStorage key), nukes all SWs and caches, then reloads.
 // IMPORTANT: This causes a visible double-load for every new/unkeyed user. Remove once rollout is complete.
 //
-// const nukeKey = 'wm-sw-nuked-v3';
+// const nukeKey = 'ov-sw-nuked-v3';
 // let alreadyNuked = false;
 // try { alreadyNuked = !!localStorage.getItem(nukeKey); } catch {}
 // if (!alreadyNuked) {

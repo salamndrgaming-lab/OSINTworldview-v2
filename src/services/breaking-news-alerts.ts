@@ -19,8 +19,8 @@ export interface AlertSettings {
   sensitivity: 'critical-only' | 'critical-and-high';
 }
 
-const SETTINGS_KEY = 'wm-breaking-alerts-v1';
-const DEDUPE_KEY = 'wm-breaking-alerts-dedupe';
+const SETTINGS_KEY = 'ov-breaking-alerts-v1';
+const DEDUPE_KEY = 'ov-breaking-alerts-dedupe';
 const RECENCY_GATE_MS = 15 * 60 * 1000;
 const PER_EVENT_COOLDOWN_MS = 30 * 60 * 1000;
 const GLOBAL_COOLDOWN_MS = 60 * 1000;

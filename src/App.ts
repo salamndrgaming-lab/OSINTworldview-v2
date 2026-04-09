@@ -613,12 +613,12 @@ export class App {
       this.state.findingsBadge = new IntelligenceGapBadge();
       this.state.findingsBadge.setOnSignalClick((signal) => {
         if (this.state.countryBriefPage?.isVisible()) return;
-        if (localStorage.getItem('wm-settings-open') === '1') return;
+        if (localStorage.getItem('ov-settings-open') === '1') return;
         this.state.signalModal?.showSignal(signal);
       });
       this.state.findingsBadge.setOnAlertClick((alert) => {
         if (this.state.countryBriefPage?.isVisible()) return;
-        if (localStorage.getItem('wm-settings-open') === '1') return;
+        if (localStorage.getItem('ov-settings-open') === '1') return;
         this.state.signalModal?.showAlert(alert);
       });
     }

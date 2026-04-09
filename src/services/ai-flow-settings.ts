@@ -6,12 +6,12 @@
  *       settings hub once the UI is extended with additional sections.
  */
 
-const STORAGE_KEY_BROWSER_MODEL = 'wm-ai-flow-browser-model';
-const STORAGE_KEY_CLOUD_LLM = 'wm-ai-flow-cloud-llm';
-const STORAGE_KEY_MAP_NEWS_FLASH = 'wm-map-news-flash';
-const STORAGE_KEY_HEADLINE_MEMORY = 'wm-headline-memory';
-const STORAGE_KEY_BADGE_ANIMATION = 'wm-badge-animation';
-const STORAGE_KEY_STREAM_QUALITY = 'wm-stream-quality';
+const STORAGE_KEY_BROWSER_MODEL = 'ov-ai-flow-browser-model';
+const STORAGE_KEY_CLOUD_LLM = 'ov-ai-flow-cloud-llm';
+const STORAGE_KEY_MAP_NEWS_FLASH = 'ov-map-news-flash';
+const STORAGE_KEY_HEADLINE_MEMORY = 'ov-headline-memory';
+const STORAGE_KEY_BADGE_ANIMATION = 'ov-badge-animation';
+const STORAGE_KEY_STREAM_QUALITY = 'ov-stream-quality';
 const EVENT_NAME = 'ai-flow-changed';
 const STREAM_QUALITY_EVENT = 'stream-quality-changed';
 

@@ -1,7 +1,7 @@
 import { t } from '@/services/i18n';
 import { getDismissed, setDismissed } from '@/utils/cross-domain-storage';
 
-const DISMISS_KEY = 'wm-layer-warning-dismissed';
+const DISMISS_KEY = 'ov-layer-warning-dismissed';
 let activeDialog: HTMLElement | null = null;
 
 export function showLayerWarning(threshold: number): void {

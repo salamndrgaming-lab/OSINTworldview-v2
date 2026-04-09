@@ -767,7 +767,7 @@ fn build_app_menu(handle: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let about_metadata = AboutMetadata {
         name: Some("OSINTview".into()),
         version: Some(env!("CARGO_PKG_VERSION").into()),
-        copyright: Some("\u{00a9} 2025 Elie Habib".into()),
+        copyright: Some("\u{00a9} 2025 OSINTview Contributors".into()),
         website: Some("https://osintview.app".into()),
         website_label: Some("osintview.app".into()),
         ..Default::default()

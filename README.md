@@ -113,13 +113,13 @@ npm run build:full       # Production build
 
 See [LICENSE](LICENSE) for full terms. For commercial licensing, contact the maintainer.
 
-Copyright (C) 2024-2026 Elie Habib. All rights reserved.
+Copyright (C) 2024-2026 OSINTview Contributors. All rights reserved.
 
 ---
 
-## Author
+## Maintainer
 
-**Elie Habib** — [GitHub](https://github.com/salamndrgaming-lab)
+**salamndrgaming-lab** — [GitHub](https://github.com/salamndrgaming-lab)
 
 ## Contributors
 

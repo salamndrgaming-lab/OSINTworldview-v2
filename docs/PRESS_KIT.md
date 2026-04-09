@@ -257,7 +257,7 @@ A: No. There are no tracking cookies, no user profiling, and no data sales. The 
 A: Yes. OSINTview is licensed under AGPL-3.0, meaning anyone can inspect, audit, modify, and redistribute the code. If you run a modified version as a service, you must share your modifications under the same license.
 
 **Q: Who built this?**
-A: OSINTview was created by Elie Habib. It is an independent project, not affiliated with any government, intelligence agency, or defense contractor.
+A: OSINTview is maintained by salamndrgaming-lab. It is an independent project, not affiliated with any government, intelligence agency, or defense contractor.
 
 **Q: Can I embed OSINTview or use its data in my reporting?**
 A: The web interface can be referenced and linked in reporting. For data integration, an API tier is planned. Please attribute "OSINTview (osintview.app)" when referencing the platform in published work.

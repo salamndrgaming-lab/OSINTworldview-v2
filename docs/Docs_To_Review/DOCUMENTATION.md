@@ -4023,7 +4023,7 @@ MIT
 
 ## Author
 
-**Elie Habib**
+**OSINTview Contributors**
 
 ---
 

@@ -57,6 +57,10 @@ export interface PersistedLink {
   createdAt: number;
   lastSeen: number;
   observationCount: number;
+  /** Temporal assertion: relationship is valid from this timestamp (ms) */
+  validFrom?: number;
+  /** Temporal assertion: relationship is valid until this timestamp (ms), undefined = still active */
+  validTo?: number;
 }
 
 export interface GraphStats {
@@ -253,6 +257,7 @@ export async function upsertLink(
   relationship: string,
   source: string,
   weight?: number,
+  temporal?: { validFrom?: number; validTo?: number },
 ): Promise<PersistedLink> {
   const id = canonicalLinkId(sourceId, targetId);
   const now = Date.now();
@@ -276,6 +281,13 @@ export async function upsertLink(
       relationship: relationship || existing.relationship,
       lastSeen: now,
       observationCount: existing.observationCount + 1,
+      // Temporal: widen the validity window on re-observation
+      validFrom: temporal?.validFrom != null
+        ? Math.min(existing.validFrom ?? Infinity, temporal.validFrom)
+        : existing.validFrom,
+      validTo: temporal?.validTo != null
+        ? Math.max(existing.validTo ?? 0, temporal.validTo)
+        : existing.validTo,
     };
   } else {
     link = {
@@ -288,6 +300,8 @@ export async function upsertLink(
       createdAt: now,
       lastSeen: now,
       observationCount: 1,
+      validFrom: temporal?.validFrom,
+      validTo: temporal?.validTo,
     };
   }
 
@@ -335,6 +349,8 @@ export async function getFullGraph(): Promise<GraphData> {
       relationship: l.relationship,
       weight: l.weight,
       source_type: l.sources[l.sources.length - 1] as GraphLink['source_type'],
+      validFrom: l.validFrom,
+      validTo: l.validTo,
     }));
 
   return { nodes: graphNodes, links: graphLinks };
@@ -563,6 +579,222 @@ export async function migrateLegacyGraph(): Promise<number> {
     return count;
   } catch {
     return 0;
+  }
+}
+
+// ── Entity Disambiguation ─────────────────────────────────────
+// Fuzzy matching to detect aliases and near-duplicate entities.
+// Uses Levenshtein distance + bigram similarity for robust matching.
+
+export interface DisambiguationCandidate {
+  canonicalId: string;
+  label: string;
+  aliasId: string;
+  aliasLabel: string;
+  similarity: number;
+  /** 'exact' | 'alias' | 'fuzzy' */
+  matchType: 'exact' | 'alias' | 'fuzzy';
+}
+
+/** Known aliases for common entity names */
+const KNOWN_ALIASES: Record<string, string[]> = {
+  'usa': ['united states', 'us', 'america', 'united states of america'],
+  'uk': ['united kingdom', 'britain', 'great britain', 'england'],
+  'russia': ['russian federation', 'rf'],
+  'china': ['prc', "people's republic of china", 'peoples republic of china'],
+  'north korea': ['dprk', "democratic people's republic of korea"],
+  'south korea': ['rok', 'republic of korea'],
+  'iran': ['islamic republic of iran'],
+  'putin': ['vladimir putin', 'v. putin', 'putin v.v.'],
+  'xi jinping': ['xi', 'jinping xi', 'president xi'],
+  'zelensky': ['zelenskyy', 'volodymyr zelensky', 'zelenskiy', 'volodymyr zelenskyy'],
+  'netanyahu': ['benjamin netanyahu', 'bibi netanyahu', 'bibi'],
+  'hamas': ['hamas movement', 'harakat al-muqawama al-islamiyya'],
+  'hezbollah': ['hizballah', 'hizbullah', 'party of god'],
+  'nato': ['north atlantic treaty organization'],
+  'isis': ['isil', 'islamic state', 'daesh', 'is'],
+  'eu': ['european union'],
+  'un': ['united nations'],
+  'uae': ['united arab emirates'],
+  'idf': ['israel defense forces', 'israeli army'],
+  'wagner': ['wagner group', 'pmc wagner', 'wagner pmc'],
+};
+
+/** Levenshtein edit distance */
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i]![0] = i;
+  for (let j = 0; j <= n; j++) dp[0]![j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i]![j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1]![j - 1]!
+        : 1 + Math.min(dp[i - 1]![j]!, dp[i]![j - 1]!, dp[i - 1]![j - 1]!);
+    }
+  }
+  return dp[m]![n]!;
+}
+
+/** Bigram similarity (Dice coefficient) */
+function bigramSimilarity(a: string, b: string): number {
+  if (a.length < 2 || b.length < 2) return a === b ? 1 : 0;
+
+  const bigrams = (s: string): Set<string> => {
+    const set = new Set<string>();
+    for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2));
+    return set;
+  };
+
+  const aBigrams = bigrams(a);
+  const bBigrams = bigrams(b);
+  let intersection = 0;
+  for (const bg of aBigrams) {
+    if (bBigrams.has(bg)) intersection++;
+  }
+
+  return (2 * intersection) / (aBigrams.size + bBigrams.size);
+}
+
+/** Composite string similarity score (0–1) */
+function stringSimilarity(a: string, b: string): number {
+  const la = a.toLowerCase().trim();
+  const lb = b.toLowerCase().trim();
+  if (la === lb) return 1;
+
+  const maxLen = Math.max(la.length, lb.length);
+  if (maxLen === 0) return 1;
+
+  const levDist = levenshtein(la, lb);
+  const levSim = 1 - levDist / maxLen;
+  const biSim = bigramSimilarity(la, lb);
+
+  // Weighted: 40% Levenshtein, 60% bigram (bigram more robust to transpositions)
+  return levSim * 0.4 + biSim * 0.6;
+}
+
+/**
+ * Find potential duplicate entities in the database.
+ * Returns candidates sorted by similarity (highest first).
+ */
+export async function findDuplicates(threshold = 0.75): Promise<DisambiguationCandidate[]> {
+  const nodes = await getAllNodes();
+  const candidates: DisambiguationCandidate[] = [];
+
+  // Check known aliases first
+  for (const node of nodes) {
+    const label = node.label.toLowerCase().trim();
+    for (const [canonical, aliases] of Object.entries(KNOWN_ALIASES)) {
+      if (label === canonical) continue;
+      if (aliases.includes(label)) {
+        // Find the canonical node
+        const canonNode = nodes.find(n =>
+          n.label.toLowerCase().trim() === canonical ||
+          n.id === canonicalNodeId(node.type, canonical)
+        );
+        if (canonNode && canonNode.id !== node.id) {
+          candidates.push({
+            canonicalId: canonNode.id,
+            label: canonNode.label,
+            aliasId: node.id,
+            aliasLabel: node.label,
+            similarity: 1,
+            matchType: 'alias',
+          });
+        }
+      }
+    }
+  }
+
+  // Fuzzy match within same type
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i]!;
+      const b = nodes[j]!;
+      if (a.type !== b.type) continue;
+
+      const sim = stringSimilarity(a.label, b.label);
+      if (sim >= threshold && sim < 1) {
+        // Prefer the node with more observations as canonical
+        const [canonical, alias] = a.observationCount >= b.observationCount ? [a, b] : [b, a];
+        candidates.push({
+          canonicalId: canonical.id,
+          label: canonical.label,
+          aliasId: alias.id,
+          aliasLabel: alias.label,
+          similarity: sim,
+          matchType: 'fuzzy',
+        });
+      }
+    }
+  }
+
+  return candidates.sort((a, b) => b.similarity - a.similarity);
+}
+
+/**
+ * Merge two entities: transfers all links from alias to canonical,
+ * merges metadata, and removes the alias node.
+ */
+export async function mergeEntities(canonicalId: string, aliasId: string): Promise<void> {
+  const db = await getDb();
+
+  const canonical = await tx<PersistedNode | undefined>(NODE_STORE, 'readonly', s => s.get(canonicalId));
+  const alias = await tx<PersistedNode | undefined>(NODE_STORE, 'readonly', s => s.get(aliasId));
+  if (!canonical || !alias) return;
+
+  // Merge metadata into canonical
+  const merged: PersistedNode = {
+    ...canonical,
+    sources: [...new Set([...canonical.sources, ...alias.sources])],
+    confidence: Math.max(canonical.confidence, alias.confidence),
+    lastSeen: Math.max(canonical.lastSeen, alias.lastSeen),
+    observationCount: canonical.observationCount + alias.observationCount,
+    mentions: Math.max(canonical.mentions, alias.mentions),
+    country: canonical.country || alias.country,
+    role: canonical.role || alias.role,
+    riskLevel: canonical.riskLevel || alias.riskLevel,
+    notes: mergeNotes(canonical.notes, alias.notes),
+  };
+
+  // Re-point all links from alias → canonical
+  const allLinks = await getAllLinks();
+  const txn = db.transaction([NODE_STORE, LINK_STORE], 'readwrite');
+  const nodeStore = txn.objectStore(NODE_STORE);
+  const linkStore = txn.objectStore(LINK_STORE);
+
+  // Update canonical node
+  nodeStore.put(merged);
+  // Remove alias node
+  nodeStore.delete(aliasId);
+
+  for (const link of allLinks) {
+    const touchesAlias = link.sourceId === aliasId || link.targetId === aliasId;
+    if (!touchesAlias) continue;
+
+    // Delete old link
+    linkStore.delete(link.id);
+
+    // Re-point to canonical
+    const newSrc = link.sourceId === aliasId ? canonicalId : link.sourceId;
+    const newTgt = link.targetId === aliasId ? canonicalId : link.targetId;
+
+    // Skip self-loops
+    if (newSrc === newTgt) continue;
+
+    const newId = canonicalLinkId(newSrc, newTgt);
+    const newLink: PersistedLink = {
+      ...link,
+      id: newId,
+      sourceId: newSrc < newTgt ? newSrc : newTgt,
+      targetId: newSrc < newTgt ? newTgt : newSrc,
+    };
+    linkStore.put(newLink);
   }
 }
 

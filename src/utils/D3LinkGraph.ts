@@ -1,4 +1,7 @@
 import * as d3 from 'd3';
+import type {
+  AnalyticsGraph, FullAnalysis, ShortestPath,
+} from './graph-analytics';
 
 export interface GraphNode extends d3.SimulationNodeDatum {
   id: string;
@@ -11,6 +14,11 @@ export interface GraphNode extends d3.SimulationNodeDatum {
   lastSeen?: number;        // timestamp
   mentions?: number;
   country?: string;
+  // Analytics overlays (populated by runAnalytics)
+  _communityId?: number;
+  _pageRank?: number;
+  _influenceScore?: number;
+  _betweenness?: number;
 }
 
 export interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
@@ -19,6 +27,10 @@ export interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
   relationship: string;
   weight?: number;          // link strength 0–1
   source_type?: 'manual' | 'api' | 'inferred';
+  /** Temporal assertion: edge is valid from this timestamp (ms) */
+  validFrom?: number;
+  /** Temporal assertion: edge is valid until this timestamp (ms), undefined = still active */
+  validTo?: number;
 }
 
 export interface GraphData {
@@ -198,37 +210,65 @@ const TYPE_ICONS: Record<string, string> = {
   country: '🌍',
 };
 
-// ── D3 Graph Renderer ────────────────────────────────────────
+// ── Community palette (10 distinct hues for Louvain clusters) ──
+
+const COMMUNITY_PALETTE = [
+  '#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6',
+  '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#a855f7',
+];
+
+// ── D3 Canvas Graph Renderer (Palantir-grade) ────────────────
+// High-performance Canvas renderer supporting 1000+ nodes.
+// Replaces prior SVG implementation for enterprise-scale graphs.
+
+export type ColorMode = 'type' | 'community' | 'influence';
 
 export class D3LinkGraph {
   private container: HTMLElement;
-  private width: number;
-  private height: number;
-  private simulation: d3.Simulation<GraphNode, GraphLink> | null = null;
-  private svg: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null;
-  private mainGroup: d3.Selection<SVGGElement, unknown, null, undefined> | null = null;
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private width = 800;
+  private height = 600;
 
-  // Live selections updated on re-render
-  private linkSel: d3.Selection<SVGLineElement, GraphLink, SVGGElement, unknown> | null = null;
-  private nodeSel: d3.Selection<SVGGElement, GraphNode, SVGGElement, unknown> | null = null;
-  private labelSel: d3.Selection<SVGTextElement, GraphNode, SVGGElement, unknown> | null = null;
-  private linkLabelSel: d3.Selection<SVGTextElement, GraphLink, SVGGElement, unknown> | null = null;
+  private simulation: d3.Simulation<GraphNode, GraphLink> | null = null;
+  private nodes: GraphNode[] = [];
+  private links: GraphLink[] = [];
+
+  // Interaction state
+  private hoveredNode: GraphNode | null = null;
+  private dragNode: GraphNode | null = null;
+  private dragOffsetX = 0;
+  private dragOffsetY = 0;
+  private animFrameId = 0;
+  private resizeObserver: ResizeObserver | null = null;
+
+  // Camera transform (pan + zoom)
+  private transform = { x: 0, y: 0, k: 1 };
 
   // Tooltip element
-  private tooltip: HTMLDivElement | null = null;
+  private tooltip: HTMLDivElement;
+
+  // Analytics overlays
+  private colorMode: ColorMode = 'type';
+  private highlightedPath: Set<string> | null = null;
+  private highlightedPathEdges: Set<string> | null = null;
+  private lastAnalysis: FullAnalysis | null = null;
+
+  // Callback for analytics completion
+  public onAnalysis: ((analysis: FullAnalysis) => void) | null = null;
 
   constructor(containerId: string) {
     const el = document.getElementById(containerId);
     if (!el) throw new Error(`[D3LinkGraph] Container #${containerId} not found`);
     this.container = el;
-
-    const rect = this.container.getBoundingClientRect();
-    this.width = rect.width || 800;
-    this.height = rect.height || 600;
-  }
-
-  public render(nodes: GraphNode[], links: GraphLink[]): void {
+    this.container.style.position = 'relative';
     this.container.innerHTML = '';
+
+    // Create canvas
+    this.canvas = document.createElement('canvas');
+    this.canvas.style.cssText = 'width:100%;height:100%;display:block;cursor:grab;';
+    this.container.appendChild(this.canvas);
+    this.ctx = this.canvas.getContext('2d')!;
 
     // Create tooltip
     this.tooltip = document.createElement('div');
@@ -244,352 +284,560 @@ export class D3LinkGraph {
       fontSize: '11px',
       fontFamily: '"JetBrains Mono", monospace',
       color: '#e5e7eb',
-      maxWidth: '250px',
+      maxWidth: '280px',
       boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
       backdropFilter: 'blur(8px)',
     });
-    this.container.style.position = 'relative';
     this.container.appendChild(this.tooltip);
 
-    this.svg = d3.select(this.container)
-      .append('svg')
-      .attr('width', '100%')
-      .attr('height', '100%')
-      .attr('viewBox', [0, 0, this.width, this.height].join(' '))
-      .style('background-color', 'transparent');
+    this.bindEvents();
 
-    // Defs for gradients and markers
-    const defs = this.svg.append('defs');
+    this.resizeObserver = new ResizeObserver(() => this.resizeCanvas());
+    this.resizeObserver.observe(this.container);
+    this.resizeCanvas();
+  }
 
-    // Arrowhead marker
-    defs.append('marker')
-      .attr('id', 'arrowhead')
-      .attr('viewBox', '0 -3 8 6')
-      .attr('refX', 18)
-      .attr('refY', 0)
-      .attr('markerWidth', 6)
-      .attr('markerHeight', 6)
-      .attr('orient', 'auto')
-      .append('path')
-      .attr('d', 'M0,-3L8,0L0,3')
-      .attr('fill', '#555');
+  // ── Public API ──────────────────────────────────────────────
 
-    // Glow filter for hovered/high-confidence nodes
-    const glow = defs.append('filter').attr('id', 'glow');
-    glow.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'blur');
-    glow.append('feMerge').selectAll('feMergeNode')
-      .data(['blur', 'SourceGraphic']).join('feMergeNode')
-      .attr('in', d => d);
+  public render(nodes: GraphNode[], links: GraphLink[]): void {
+    this.nodes = nodes;
+    this.links = links;
 
-    // Subtle grid pattern
-    const pattern = defs.append('pattern')
-      .attr('id', 'grid')
-      .attr('width', 40).attr('height', 40)
-      .attr('patternUnits', 'userSpaceOnUse');
-    pattern.append('rect')
-      .attr('width', 40).attr('height', 40)
-      .attr('fill', 'none')
-      .attr('stroke', 'rgba(128,128,160,0.05)')
-      .attr('stroke-width', 0.5);
+    if (this.simulation) this.simulation.stop();
+    cancelAnimationFrame(this.animFrameId);
 
-    // Grid background
-    this.svg.append('rect')
-      .attr('width', this.width).attr('height', this.height)
-      .attr('fill', 'url(#grid)');
-
-    this.mainGroup = this.svg.append('g');
-
-    // Zoom
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.05, 5])
-      .on('zoom', (event) => {
-        this.mainGroup?.attr('transform', event.transform);
-      });
-    this.svg.call(zoom);
-
-    // Link group (rendered below nodes)
-    const linkG = this.mainGroup.append('g').attr('class', 'links');
-    const linkLabelG = this.mainGroup.append('g').attr('class', 'link-labels');
-    const nodeG = this.mainGroup.append('g').attr('class', 'nodes');
-    const labelG = this.mainGroup.append('g').attr('class', 'node-labels');
-
-    this.simulation = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink<GraphNode, GraphLink>(links)
-        .id((d) => d.id)
+    this.simulation = d3.forceSimulation(this.nodes)
+      .force('link', d3.forceLink<GraphNode, GraphLink>(this.links)
+        .id(d => d.id)
         .distance(d => 100 + (1 - (d.weight ?? 0.5)) * 80)
         .strength(d => d.weight ?? 0.5)
       )
-      .force('charge', d3.forceManyBody().strength(-350))
+      .force('charge', d3.forceManyBody()
+        .strength(d => -250 - ((d as GraphNode)._influenceScore ?? 0) * 200)
+        .distanceMax(500)
+      )
       .force('center', d3.forceCenter(this.width / 2, this.height / 2))
-      .force('collide', d3.forceCollide().radius(32))
+      .force('collide', d3.forceCollide<GraphNode>().radius(d => this.getRadiusForNode(d) + 6))
       .force('x', d3.forceX(this.width / 2).strength(0.02))
       .force('y', d3.forceY(this.height / 2).strength(0.02))
-      .alphaDecay(0.02);
+      .alphaDecay(0.02)
+      .velocityDecay(0.35)
+      .on('tick', () => {});
 
-    this.updateSelections(linkG, linkLabelG, nodeG, labelG, nodes, links);
-
-    this.simulation.on('tick', () => this.tick());
+    this.startRenderLoop();
+    this.runAnalytics();
   }
 
-  // Add nodes/links to a live simulation (without full re-render)
   public addToGraph(newNodes: GraphNode[], newLinks: GraphLink[]): void {
-    if (!this.simulation || !this.mainGroup) return;
+    if (!this.simulation) return;
 
-    const existingNodes = this.simulation.nodes();
-    const existingLinks = (this.simulation.force('link') as d3.ForceLink<GraphNode, GraphLink>).links();
+    const existingIds = new Set(this.nodes.map(n => n.id));
+    const toAdd = newNodes.filter(n => !existingIds.has(n.id));
 
-    // Deduplicate
-    const existingIds = new Set(existingNodes.map(n => n.id));
-    const toAddNodes = newNodes.filter(n => !existingIds.has(n.id));
-
-    // Seed new nodes near the center of the graph
     const cx = this.width / 2;
     const cy = this.height / 2;
-    toAddNodes.forEach(n => {
+    for (const n of toAdd) {
       n.x = cx + (Math.random() - 0.5) * 100;
       n.y = cy + (Math.random() - 0.5) * 100;
-    });
+      this.nodes.push(n);
+    }
 
-    const allNodes = [...existingNodes, ...toAddNodes];
-    const allIds = new Set(allNodes.map(n => n.id));
-
-    const existingLinkKeys = new Set(existingLinks.map(l => {
+    const allIds = new Set(this.nodes.map(n => n.id));
+    const existingLinkKeys = new Set(this.links.map(l => {
       const s = typeof l.source === 'string' ? l.source : l.source.id;
       const t = typeof l.target === 'string' ? l.target : l.target.id;
       return `${s}:${t}`;
     }));
-    const toAddLinks = newLinks.filter(l => {
+
+    for (const l of newLinks) {
       const s = typeof l.source === 'string' ? l.source : (l.source as GraphNode).id;
       const t = typeof l.target === 'string' ? l.target : (l.target as GraphNode).id;
-      return allIds.has(s) && allIds.has(t) && !existingLinkKeys.has(`${s}:${t}`) && !existingLinkKeys.has(`${t}:${s}`);
-    });
+      if (allIds.has(s) && allIds.has(t) && !existingLinkKeys.has(`${s}:${t}`) && !existingLinkKeys.has(`${t}:${s}`)) {
+        this.links.push(l);
+      }
+    }
 
-    const allLinks = [...existingLinks, ...toAddLinks];
-
-    // Update simulation
-    this.simulation.nodes(allNodes);
-    (this.simulation.force('link') as d3.ForceLink<GraphNode, GraphLink>).links(allLinks);
+    this.simulation.nodes(this.nodes);
+    (this.simulation.force('link') as d3.ForceLink<GraphNode, GraphLink>).links(this.links);
     this.simulation.alpha(0.4).restart();
-
-    // Update DOM selections
-    const linkG = this.mainGroup.select<SVGGElement>('.links');
-    const linkLabelG = this.mainGroup.select<SVGGElement>('.link-labels');
-    const nodeG = this.mainGroup.select<SVGGElement>('.nodes');
-    const labelG = this.mainGroup.select<SVGGElement>('.node-labels');
-    this.updateSelections(linkG, linkLabelG, nodeG, labelG, allNodes, allLinks);
+    this.runAnalytics();
   }
 
-  private updateSelections(
-    linkG: d3.Selection<SVGGElement, unknown, null, unknown>,
-    linkLabelG: d3.Selection<SVGGElement, unknown, null, unknown>,
-    nodeG: d3.Selection<SVGGElement, unknown, null, unknown>,
-    labelG: d3.Selection<SVGGElement, unknown, null, unknown>,
-    nodes: GraphNode[],
-    links: GraphLink[],
-  ): void {
-    if (!this.simulation) return;
-
-    // Links
-    this.linkSel = linkG.selectAll<SVGLineElement, GraphLink>('line')
-      .data(links, d => {
-        const s = typeof d.source === 'string' ? d.source : (d.source as GraphNode).id;
-        const t = typeof d.target === 'string' ? d.target : (d.target as GraphNode).id;
-        return `${s}:${t}`;
-      })
-      .join('line')
-      .attr('stroke', d => d.source_type === 'inferred' ? '#2a3a4a' : d.source_type === 'api' ? '#2a6a4a' : '#444')
-      .attr('stroke-opacity', d => 0.3 + (d.weight ?? 0.5) * 0.5)
-      .attr('stroke-width', d => 1 + (d.weight ?? 0.5) * 3)
-      .attr('stroke-dasharray', d => d.source_type === 'inferred' ? '4,3' : 'none')
-      .attr('marker-end', 'url(#arrowhead)');
-
-    // Link labels
-    this.linkLabelSel = linkLabelG.selectAll<SVGTextElement, GraphLink>('text')
-      .data(links, d => {
-        const s = typeof d.source === 'string' ? d.source : (d.source as GraphNode).id;
-        const t = typeof d.target === 'string' ? d.target : (d.target as GraphNode).id;
-        return `${s}:${t}`;
-      })
-      .join('text')
-      .text(d => d.relationship)
-      .attr('font-size', '9px')
-      .attr('fill', '#666')
-      .attr('font-family', '"JetBrains Mono", monospace')
-      .attr('text-anchor', 'middle')
-      .attr('dy', -3);
-
-    // Nodes — use <g> groups for richer rendering
-    this.nodeSel = nodeG.selectAll<SVGGElement, GraphNode>('g.node-group')
-      .data(nodes, d => d.id)
-      .join(
-        enter => {
-          const groups = enter.append('g')
-            .attr('class', 'node-group')
-            .style('cursor', 'grab')
-            .call(this.drag(this.simulation!) as any);
-
-          // Outer glow ring for high-confidence nodes
-          groups.append('circle')
-            .attr('class', 'node-glow')
-            .attr('r', 0)
-            .attr('fill', 'none')
-            .attr('stroke', d => this.getColorForType(d.type))
-            .attr('stroke-opacity', d => (d.confidence ?? 0.5) > 0.8 ? 0.25 : 0)
-            .attr('stroke-width', 2)
-            .transition().duration(500)
-            .attr('r', d => this.getRadiusForNode(d) + 6);
-
-          // Main node circle
-          groups.append('circle')
-            .attr('class', 'node-main')
-            .attr('r', 0)
-            .attr('fill', d => this.getColorForType(d.type))
-            .attr('fill-opacity', d => 0.15 + (d.confidence ?? 0.8) * 0.35)
-            .attr('stroke', d => this.getColorForType(d.type))
-            .attr('stroke-width', d => {
-              if (d.source === 'auto-discovered') return 1;
-              if (d.source === 'api') return 1.5;
-              return 2;
-            })
-            .attr('stroke-dasharray', d => d.source === 'auto-discovered' ? '3,2' : 'none')
-            .transition().duration(400)
-            .attr('r', d => this.getRadiusForNode(d));
-
-          // Inner icon text
-          groups.append('text')
-            .attr('class', 'node-icon')
-            .attr('text-anchor', 'middle')
-            .attr('dy', '0.35em')
-            .attr('font-size', d => `${Math.max(9, this.getRadiusForNode(d) - 2)}px`)
-            .attr('pointer-events', 'none')
-            .text(d => TYPE_ICONS[(d.type ?? '').toLowerCase()] || '●');
-
-          // Source badge (small dot)
-          groups.append('circle')
-            .attr('class', 'source-badge')
-            .attr('r', 3)
-            .attr('cx', d => this.getRadiusForNode(d) - 2)
-            .attr('cy', d => -(this.getRadiusForNode(d) - 2))
-            .attr('fill', d => {
-              if (d.source === 'api') return '#22c55e';
-              if (d.source === 'auto-discovered') return '#f59e0b';
-              if (d.source === 'map-click') return '#3b82f6';
-              return '#888';
-            })
-            .attr('stroke', '#0a0a0f')
-            .attr('stroke-width', 1);
-
-          // Tooltip on hover
-          groups.on('mouseenter', (event, d) => this.showTooltip(event, d))
-            .on('mouseleave', () => this.hideTooltip());
-
-          return groups;
-        },
-        update => {
-          update.select('.node-main')
-            .attr('fill', d => this.getColorForType(d.type))
-            .attr('fill-opacity', d => 0.15 + (d.confidence ?? 0.8) * 0.35)
-            .attr('stroke', d => this.getColorForType(d.type));
-          return update;
-        },
-        exit => exit.transition().duration(300)
-          .style('opacity', 0)
-          .remove()
-      );
-
-    // Node labels
-    this.labelSel = labelG.selectAll<SVGTextElement, GraphNode>('text')
-      .data(nodes, d => d.id)
-      .join('text')
-      .text(d => d.label)
-      .attr('font-size', '11px')
-      .attr('dx', d => this.getRadiusForNode(d) + 4)
-      .attr('dy', 4)
-      .attr('fill', d => {
-        if (d.source === 'auto-discovered') return '#888';
-        const c = this.getColorForType(d.type);
-        return c + 'cc';
-      })
-      .attr('font-family', '"Geist", sans-serif')
-      .attr('font-weight', d => (d.confidence ?? 0.5) > 0.8 ? '600' : '400')
-      .style('pointer-events', 'none')
-      .style('text-shadow', '0 1px 3px rgba(0,0,0,0.8)');
+  public destroy(): void {
+    stopAutoDiscovery();
+    cancelAnimationFrame(this.animFrameId);
+    this.simulation?.stop();
+    this.simulation = null;
+    this.resizeObserver?.disconnect();
+    this.container.innerHTML = '';
   }
 
-  private showTooltip(event: MouseEvent, d: GraphNode): void {
-    if (!this.tooltip) return;
-    const icon = TYPE_ICONS[(d.type ?? '').toLowerCase()] || '●';
-    const color = this.getColorForType(d.type);
-    const age = d.lastSeen ? this.formatAge(d.lastSeen) : 'unknown';
-    const conf = Math.round((d.confidence ?? 0.8) * 100);
+  public reheat(): void {
+    this.simulation?.alpha(0.4).restart();
+  }
 
-    this.tooltip.innerHTML = `
-      <div style="font-weight:600;color:${color};margin-bottom:4px">${icon} ${this.esc(d.label)}</div>
-      <div style="font-size:10px;color:#888;margin-bottom:3px">${d.type}${d.country ? ' · ' + d.country : ''}</div>
-      <div style="font-size:10px;display:flex;gap:8px;color:#aaa">
-        <span>Conf: <span style="color:${conf > 70 ? '#22c55e' : '#f59e0b'}">${conf}%</span></span>
-        <span>Source: ${d.source || 'manual'}</span>
-      </div>
-      ${d.mentions ? `<div style="font-size:10px;color:#aaa;margin-top:2px">Mentions: ${d.mentions}</div>` : ''}
-      <div style="font-size:9px;color:#666;margin-top:3px">Last seen: ${age}</div>
-    `;
-    this.tooltip.style.display = 'block';
+  /** Switch node coloring: 'type' (default), 'community' (Louvain), 'influence' (composite score) */
+  public setColorMode(mode: ColorMode): void {
+    this.colorMode = mode;
+  }
 
+  /** Highlight a specific path between two nodes */
+  public highlightPath(path: ShortestPath | null): void {
+    if (!path) {
+      this.highlightedPath = null;
+      this.highlightedPathEdges = null;
+      return;
+    }
+    this.highlightedPath = new Set(path.path);
+    this.highlightedPathEdges = new Set<string>();
+    for (let i = 0; i < path.path.length - 1; i++) {
+      const a = path.path[i]!;
+      const b = path.path[i + 1]!;
+      this.highlightedPathEdges.add(`${a}:${b}`);
+      this.highlightedPathEdges.add(`${b}:${a}`);
+    }
+  }
+
+  /** Get the latest analytics results */
+  public getAnalysis(): FullAnalysis | null {
+    return this.lastAnalysis;
+  }
+
+  /** Convert current graph to AnalyticsGraph format */
+  public toAnalyticsGraph(): AnalyticsGraph {
+    return {
+      nodes: this.nodes.map(n => ({ id: n.id, type: n.type, label: n.label })),
+      edges: this.links.map(l => ({
+        source: typeof l.source === 'string' ? l.source : l.source.id,
+        target: typeof l.target === 'string' ? l.target : l.target.id,
+        weight: l.weight ?? 0.5,
+      })),
+    };
+  }
+
+  // ── Analytics ───────────────────────────────────────────────
+
+  private async runAnalytics(): Promise<void> {
+    if (this.nodes.length < 2) return;
+
+    // Dynamic import to avoid blocking initial render
+    const { analyzeGraph } = await import('./graph-analytics');
+    const ag = this.toAnalyticsGraph();
+    const analysis = analyzeGraph(ag);
+    this.lastAnalysis = analysis;
+
+    // Apply community assignments to nodes
+    const communityMap = new Map(analysis.communities.assignments.map(a => [a.nodeId, a.communityId]));
+    const prMap = new Map(analysis.pageRank.map(r => [r.nodeId, r.rank]));
+    const inflMap = new Map(analysis.influence.map(r => [r.nodeId, r.score]));
+    const bcMap = new Map(analysis.betweenness.map(r => [r.nodeId, r.normalized]));
+
+    for (const node of this.nodes) {
+      node._communityId = communityMap.get(node.id);
+      node._pageRank = prMap.get(node.id);
+      node._influenceScore = inflMap.get(node.id);
+      node._betweenness = bcMap.get(node.id);
+    }
+
+    this.onAnalysis?.(analysis);
+  }
+
+  // ── Canvas sizing ───────────────────────────────────────────
+
+  private resizeCanvas(): void {
     const rect = this.container.getBoundingClientRect();
-    this.tooltip.style.left = `${event.clientX - rect.left + 12}px`;
-    this.tooltip.style.top = `${event.clientY - rect.top - 10}px`;
+    const dpr = window.devicePixelRatio || 1;
+    this.width = rect.width || 800;
+    this.height = rect.height || 600;
+    this.canvas.width = this.width * dpr;
+    this.canvas.height = this.height * dpr;
+    this.canvas.style.width = `${this.width}px`;
+    this.canvas.style.height = `${this.height}px`;
+    this.ctx = this.canvas.getContext('2d')!;
+    this.ctx.scale(dpr, dpr);
+
+    if (this.simulation) {
+      this.simulation
+        .force('center', d3.forceCenter(this.width / 2, this.height / 2))
+        .force('x', d3.forceX(this.width / 2).strength(0.02))
+        .force('y', d3.forceY(this.height / 2).strength(0.02));
+      this.simulation.alpha(0.1).restart();
+    }
   }
 
-  private hideTooltip(): void {
-    if (this.tooltip) this.tooltip.style.display = 'none';
+  // ── Render loop ─────────────────────────────────────────────
+
+  private startRenderLoop(): void {
+    const loop = () => {
+      this.draw();
+      this.animFrameId = requestAnimationFrame(loop);
+    };
+    this.animFrameId = requestAnimationFrame(loop);
   }
 
-  private tick(): void {
-    this.linkSel
-      ?.attr('x1', (d: any) => d.source.x)
-      .attr('y1', (d: any) => d.source.y)
-      .attr('x2', (d: any) => d.target.x)
-      .attr('y2', (d: any) => d.target.y);
+  private draw(): void {
+    const { ctx, width: w, height: h } = this;
+    const { x: tx, y: ty, k } = this.transform;
 
-    this.linkLabelSel
-      ?.attr('x', (d: any) => (d.source.x + d.target.x) / 2)
-      .attr('y', (d: any) => (d.source.y + d.target.y) / 2);
+    ctx.clearRect(0, 0, w, h);
 
-    this.nodeSel
-      ?.attr('transform', (d: any) => `translate(${d.x},${d.y})`);
+    // Grid
+    ctx.save();
+    ctx.strokeStyle = 'rgba(128, 128, 160, 0.04)';
+    ctx.lineWidth = 0.5;
+    const gridSize = 40 * k;
+    const offsetX = tx % gridSize;
+    const offsetY = ty % gridSize;
+    for (let x = offsetX; x < w; x += gridSize) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let y = offsetY; y < h; y += gridSize) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    ctx.restore();
 
-    this.labelSel
-      ?.attr('x', (d: any) => d.x)
-      .attr('y', (d: any) => d.y);
+    ctx.save();
+    ctx.translate(tx, ty);
+    ctx.scale(k, k);
+
+    const now = Date.now();
+
+    // ── Draw edges ──
+    for (const link of this.links) {
+      const src = link.source as GraphNode;
+      const tgt = link.target as GraphNode;
+      if (src.x == null || src.y == null || tgt.x == null || tgt.y == null) continue;
+
+      const srcId = src.id;
+      const tgtId = tgt.id;
+      const isPathEdge = this.highlightedPathEdges?.has(`${srcId}:${tgtId}`);
+      const isHovered = this.hoveredNode && (srcId === this.hoveredNode.id || tgtId === this.hoveredNode.id);
+      const dimmed = (this.hoveredNode && !isHovered) || (this.highlightedPath && !isPathEdge);
+
+      // Temporal edge styling: expired edges are dashed and faded
+      const isExpired = link.validTo != null && link.validTo < now;
+      const isFuture = link.validFrom != null && link.validFrom > now;
+
+      const w = 1 + (link.weight ?? 0.5) * 3;
+
+      ctx.beginPath();
+      ctx.moveTo(src.x, src.y);
+      ctx.lineTo(tgt.x, tgt.y);
+
+      if (isPathEdge) {
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = w + 2;
+        ctx.setLineDash([]);
+      } else if (isHovered) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = w + 1;
+        ctx.setLineDash([]);
+      } else if (isExpired) {
+        ctx.strokeStyle = 'rgba(100, 60, 60, 0.25)';
+        ctx.lineWidth = w * 0.7;
+        ctx.setLineDash([4, 4]);
+      } else if (isFuture) {
+        ctx.strokeStyle = 'rgba(60, 100, 140, 0.25)';
+        ctx.lineWidth = w * 0.7;
+        ctx.setLineDash([2, 6]);
+      } else {
+        const baseAlpha = dimmed ? 0.08 : 0.15 + (link.weight ?? 0.5) * 0.35;
+        const color = link.source_type === 'inferred' ? '80, 100, 140'
+          : link.source_type === 'api' ? '80, 180, 120'
+          : '120, 120, 140';
+        ctx.strokeStyle = `rgba(${color}, ${baseAlpha})`;
+        ctx.lineWidth = w;
+        ctx.setLineDash(link.source_type === 'inferred' ? [4, 3] : []);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Arrowhead
+      if (!dimmed) {
+        const angle = Math.atan2(tgt.y - src.y, tgt.x - src.x);
+        const r = this.getRadiusForNode(tgt);
+        const ax = tgt.x - Math.cos(angle) * (r + 4);
+        const ay = tgt.y - Math.sin(angle) * (r + 4);
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - 6 * Math.cos(angle - 0.4), ay - 6 * Math.sin(angle - 0.4));
+        ctx.lineTo(ax - 6 * Math.cos(angle + 0.4), ay - 6 * Math.sin(angle + 0.4));
+        ctx.closePath();
+        ctx.fillStyle = isPathEdge ? '#22c55e' : 'rgba(120, 120, 140, 0.4)';
+        ctx.fill();
+      }
+
+      // Edge label on hover
+      if (isHovered && link.relationship) {
+        const mx = (src.x + tgt.x) / 2;
+        const my = (src.y + tgt.y) / 2;
+        ctx.font = '9px "JetBrains Mono", monospace';
+        const metrics = ctx.measureText(link.relationship);
+        const pad = 3;
+        ctx.fillStyle = 'rgba(10, 10, 20, 0.9)';
+        ctx.fillRect(mx - metrics.width / 2 - pad, my - 7, metrics.width + pad * 2, 14);
+        ctx.fillStyle = 'rgba(200, 200, 210, 0.9)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(link.relationship, mx, my);
+      }
+    }
+
+    // ── Draw nodes ──
+    for (const node of this.nodes) {
+      if (node.x == null || node.y == null) continue;
+
+      const r = this.getRadiusForNode(node);
+      const color = this.getNodeColor(node);
+      const isHovered = this.hoveredNode?.id === node.id;
+      const isOnPath = this.highlightedPath?.has(node.id);
+      const isConnectedToHovered = this.hoveredNode && this.links.some(l => {
+        const s = (l.source as GraphNode).id;
+        const t = (l.target as GraphNode).id;
+        return (s === this.hoveredNode!.id && t === node.id) || (t === this.hoveredNode!.id && s === node.id);
+      });
+      const dimmed = (this.hoveredNode && !isHovered && !isConnectedToHovered) ||
+                     (this.highlightedPath && !isOnPath);
+
+      // Outer glow for high-confidence or hovered nodes
+      if (isHovered || isOnPath || (node.confidence ?? 0.5) > 0.85) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r + 6, 0, Math.PI * 2);
+        ctx.fillStyle = isOnPath ? 'rgba(34, 197, 94, 0.15)' : `${color}22`;
+        ctx.fill();
+      }
+
+      // Node circle
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = dimmed ? `${color}33` : `${color}cc`;
+      ctx.fill();
+      ctx.strokeStyle = dimmed ? `${color}44` : color;
+      ctx.lineWidth = isHovered ? 2.5 : node.source === 'auto-discovered' ? 1 : 2;
+      if (node.source === 'auto-discovered') ctx.setLineDash([3, 2]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Source badge
+      const badgeX = node.x + r * 0.7;
+      const badgeY = node.y - r * 0.7;
+      ctx.beginPath();
+      ctx.arc(badgeX, badgeY, 3, 0, Math.PI * 2);
+      ctx.fillStyle = node.source === 'api' ? '#22c55e'
+        : node.source === 'auto-discovered' ? '#f59e0b'
+        : node.source === 'map-click' ? '#3b82f6'
+        : '#888';
+      ctx.fill();
+      ctx.strokeStyle = '#0a0a0f';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Label
+      ctx.font = `${(node.confidence ?? 0.5) > 0.8 ? '600' : '400'} 11px "Geist", system-ui, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = dimmed ? 'rgba(160, 160, 170, 0.3)' : `${color}cc`;
+      ctx.fillText(node.label, node.x + r + 5, node.y, 140);
+    }
+
+    // Empty state
+    if (this.nodes.length === 0) {
+      ctx.font = '500 14px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(140, 140, 155, 0.5)';
+      ctx.fillText('Add entities to build your intelligence graph', w / (2 * k), h / (2 * k) - 14);
+    }
+
+    ctx.restore();
   }
 
-  private getColorForType(type: string): string {
-    return TYPE_COLORS[(type ?? '').toLowerCase()] || '#9ca3af';
+  // ── Node coloring ───────────────────────────────────────────
+
+  private getNodeColor(node: GraphNode): string {
+    if (this.colorMode === 'community' && node._communityId != null) {
+      return COMMUNITY_PALETTE[node._communityId % COMMUNITY_PALETTE.length]!;
+    }
+    if (this.colorMode === 'influence' && node._influenceScore != null) {
+      // Red (high influence) → blue (low)
+      const t = Math.min(1, node._influenceScore * 2);
+      const r = Math.round(59 + t * 196);
+      const g = Math.round(130 - t * 80);
+      const b = Math.round(246 - t * 200);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+    return TYPE_COLORS[(node.type ?? '').toLowerCase()] || '#9ca3af';
   }
 
   private getRadiusForNode(node: GraphNode): number {
     const base = 10;
     const mentionBoost = Math.min(8, Math.log10((node.mentions ?? 0) + 1) * 3);
     const confBoost = (node.confidence ?? 0.5) * 4;
-    return base + mentionBoost + confBoost;
+    const influenceBoost = (node._influenceScore ?? 0) * 6;
+    return base + mentionBoost + confBoost + influenceBoost;
   }
 
-  private drag(simulation: d3.Simulation<GraphNode, GraphLink>) {
-    return d3.drag<SVGGElement, GraphNode>()
-      .on('start', (event, d) => {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-      })
-      .on('drag', (event, d) => {
-        d.fx = event.x;
-        d.fy = event.y;
-      })
-      .on('end', (event, d) => {
-        if (!event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
-      });
+  // ── Hit testing ─────────────────────────────────────────────
+
+  private screenToWorld(sx: number, sy: number): [number, number] {
+    return [(sx - this.transform.x) / this.transform.k, (sy - this.transform.y) / this.transform.k];
+  }
+
+  private hitTest(sx: number, sy: number): GraphNode | null {
+    const [wx, wy] = this.screenToWorld(sx, sy);
+    for (let i = this.nodes.length - 1; i >= 0; i--) {
+      const n = this.nodes[i]!;
+      if (n.x == null || n.y == null) continue;
+      const r = this.getRadiusForNode(n) + 4;
+      const dx = wx - n.x;
+      const dy = wy - n.y;
+      if (dx * dx + dy * dy <= r * r) return n;
+    }
+    return null;
+  }
+
+  // ── Event binding ───────────────────────────────────────────
+
+  private bindEvents(): void {
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+
+    this.canvas.addEventListener('mousedown', (e) => {
+      const node = this.hitTest(e.offsetX, e.offsetY);
+      if (node) {
+        this.dragNode = node;
+        const [wx, wy] = this.screenToWorld(e.offsetX, e.offsetY);
+        this.dragOffsetX = wx - (node.x ?? 0);
+        this.dragOffsetY = wy - (node.y ?? 0);
+        node.fx = node.x;
+        node.fy = node.y;
+        this.simulation?.alphaTarget(0.3).restart();
+        this.canvas.style.cursor = 'grabbing';
+      } else {
+        isPanning = true;
+        panStartX = e.clientX;
+        panStartY = e.clientY;
+        this.canvas.style.cursor = 'grabbing';
+      }
+    });
+
+    this.canvas.addEventListener('mousemove', (e) => {
+      if (this.dragNode) {
+        const [wx, wy] = this.screenToWorld(e.offsetX, e.offsetY);
+        this.dragNode.fx = wx - this.dragOffsetX;
+        this.dragNode.fy = wy - this.dragOffsetY;
+        return;
+      }
+
+      if (isPanning) {
+        this.transform.x += e.clientX - panStartX;
+        this.transform.y += e.clientY - panStartY;
+        panStartX = e.clientX;
+        panStartY = e.clientY;
+        return;
+      }
+
+      const node = this.hitTest(e.offsetX, e.offsetY);
+      this.hoveredNode = node;
+      this.canvas.style.cursor = node ? 'pointer' : 'grab';
+
+      if (node) {
+        this.showTooltip(e, node);
+      } else {
+        this.tooltip.style.display = 'none';
+      }
+    });
+
+    this.canvas.addEventListener('mouseup', () => {
+      if (this.dragNode) {
+        this.simulation?.alphaTarget(0);
+        this.dragNode = null;
+      }
+      isPanning = false;
+      this.canvas.style.cursor = this.hoveredNode ? 'pointer' : 'grab';
+    });
+
+    this.canvas.addEventListener('mouseleave', () => {
+      this.hoveredNode = null;
+      this.tooltip.style.display = 'none';
+      if (isPanning) {
+        isPanning = false;
+        this.canvas.style.cursor = 'grab';
+      }
+    });
+
+    // Double-click to unpin
+    this.canvas.addEventListener('dblclick', (e) => {
+      const node = this.hitTest(e.offsetX, e.offsetY);
+      if (node) {
+        node.fx = null;
+        node.fy = null;
+        this.simulation?.alpha(0.3).restart();
+      }
+    });
+
+    // Zoom
+    this.canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 0.92 : 1.08;
+      const newK = Math.max(0.05, Math.min(5, this.transform.k * factor));
+      const ratio = newK / this.transform.k;
+      this.transform.x = e.offsetX - (e.offsetX - this.transform.x) * ratio;
+      this.transform.y = e.offsetY - (e.offsetY - this.transform.y) * ratio;
+      this.transform.k = newK;
+    }, { passive: false });
+
+    // Right-click shows contextual info
+    this.canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+    });
+  }
+
+  // ── Tooltip ─────────────────────────────────────────────────
+
+  private showTooltip(event: MouseEvent, d: GraphNode): void {
+    const icon = TYPE_ICONS[(d.type ?? '').toLowerCase()] || '&#9679;';
+    const color = this.getNodeColor(d);
+    const age = d.lastSeen ? this.formatAge(d.lastSeen) : 'unknown';
+    const conf = Math.round((d.confidence ?? 0.8) * 100);
+
+    let analyticsHtml = '';
+    if (d._influenceScore != null) {
+      const infl = Math.round(d._influenceScore * 100);
+      const btwn = Math.round((d._betweenness ?? 0) * 1000) / 10;
+      const pr = d._pageRank != null ? (d._pageRank * 100).toFixed(1) : '—';
+      const comId = d._communityId ?? '—';
+      analyticsHtml = `
+        <div style="font-size:10px;color:#aaa;margin-top:4px;padding-top:4px;border-top:1px solid rgba(100,100,140,0.2)">
+          <div style="display:flex;gap:8px">
+            <span>Influence: <span style="color:${infl > 60 ? '#ef4444' : '#3b82f6'}">${infl}%</span></span>
+            <span>PageRank: ${pr}%</span>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:2px">
+            <span>Betweenness: ${btwn}%</span>
+            <span>Community: ${comId}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    this.tooltip.innerHTML = `
+      <div style="font-weight:600;color:${color};margin-bottom:4px">${icon} ${this.esc(d.label)}</div>
+      <div style="font-size:10px;color:#888;margin-bottom:3px">${d.type}${d.country ? ' &middot; ' + d.country : ''}</div>
+      <div style="font-size:10px;display:flex;gap:8px;color:#aaa">
+        <span>Conf: <span style="color:${conf > 70 ? '#22c55e' : '#f59e0b'}">${conf}%</span></span>
+        <span>Source: ${d.source || 'manual'}</span>
+      </div>
+      ${d.mentions ? `<div style="font-size:10px;color:#aaa;margin-top:2px">Mentions: ${d.mentions}</div>` : ''}
+      <div style="font-size:9px;color:#666;margin-top:3px">Last seen: ${age}</div>
+      ${analyticsHtml}
+    `;
+    this.tooltip.style.display = 'block';
+
+    const rect = this.container.getBoundingClientRect();
+    this.tooltip.style.left = `${Math.min(event.clientX - rect.left + 12, this.width - 290)}px`;
+    this.tooltip.style.top = `${Math.max(event.clientY - rect.top - 10, 0)}px`;
   }
 
   private formatAge(ts: number): string {
@@ -602,19 +850,5 @@ export class D3LinkGraph {
 
   private esc(s: string): string {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  public destroy(): void {
-    stopAutoDiscovery();
-    if (this.simulation) {
-      this.simulation.stop();
-      this.simulation = null;
-    }
-    this.container.innerHTML = '';
-  }
-
-  // Kick the simulation (call when new nodes added)
-  public reheat(): void {
-    this.simulation?.alpha(0.4).restart();
   }
 }

@@ -15,6 +15,7 @@
 
 import { Panel } from './Panel';
 import * as d3 from 'd3';
+import type { FullAnalysis } from '../utils/graph-analytics';
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -31,6 +32,11 @@ interface GraphNode extends d3.SimulationNodeDatum {
   /** Pinned position (user dragged and released) */
   fx?: number | null;
   fy?: number | null;
+  // Analytics overlays
+  _communityId?: number;
+  _influenceScore?: number;
+  _pageRank?: number;
+  _betweenness?: number;
 }
 
 interface GraphEdge extends d3.SimulationLinkDatum<GraphNode> {
@@ -70,6 +76,12 @@ const CATEGORY_ICONS: Record<NodeCategory, string> = {
 const NODE_BASE_RADIUS = 18;
 const EDGE_MIN_WIDTH = 0.8;
 const EDGE_MAX_WIDTH = 6;
+
+// Community detection palette (10 distinct hues)
+const COMMUNITY_COLORS = [
+  '#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6',
+  '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#a855f7',
+];
 
 // ── Known Connections Database ─────────────────────────────────
 // This is a curated set of entity relationships used to auto-discover
@@ -163,6 +175,10 @@ export class IntelGraphPanel extends Panel {
   private isAnalyzing = false;
   private resizeObserver: ResizeObserver | null = null;
 
+  // Analytics state
+  private colorMode: 'category' | 'community' | 'influence' = 'category';
+  private lastAnalysis: FullAnalysis | null = null;
+
   constructor() {
     super({
       id: 'intel-graph',
@@ -200,7 +216,13 @@ export class IntelGraphPanel extends Panel {
         <button class="igp-add-btn" id="igpAddBtn" title="Add entity">+</button>
       </div>
       <div class="igp-action-group">
+        <select class="igp-color-select" id="igpColorMode" title="Node coloring mode">
+          <option value="category">By Type</option>
+          <option value="community">By Community</option>
+          <option value="influence">By Influence</option>
+        </select>
         <button class="igp-action-btn" id="igpAnalyzeBtn" title="AI Analysis">🧠 Analyze</button>
+        <button class="igp-action-btn" id="igpMetricsBtn" title="Graph Analytics">📊 Metrics</button>
         <button class="igp-action-btn" id="igpClearBtn" title="Clear graph">Clear</button>
         <button class="igp-action-btn" id="igpTemplateBtn" title="Load example graph">Template</button>
         <button class="igp-action-btn" id="igpLiveBtn" title="Load live intelligence graph">📡 Live</button>
@@ -276,6 +298,13 @@ export class IntelGraphPanel extends Panel {
     templateBtn.addEventListener('click', () => this.loadTemplate());
     const liveBtn = toolbar.querySelector('#igpLiveBtn')!;
     liveBtn.addEventListener('click', () => this.loadLiveData());
+    const colorSelect = toolbar.querySelector('#igpColorMode') as HTMLSelectElement;
+    colorSelect.addEventListener('change', () => {
+      this.colorMode = colorSelect.value as 'category' | 'community' | 'influence';
+      if (this.colorMode !== 'category' && !this.lastAnalysis) this.runGraphAnalytics();
+    });
+    const metricsBtn = toolbar.querySelector('#igpMetricsBtn')!;
+    metricsBtn.addEventListener('click', () => this.runGraphAnalytics());
   }
 
   private bindCanvasEvents(wrap: HTMLElement): void {
@@ -312,11 +341,25 @@ export class IntelGraphPanel extends Panel {
           const t = typeof edge.target === 'object' ? edge.target.id : edge.target;
           return s === node.id || t === node.id;
         });
+        let analyticsHtml = '';
+        if (node._influenceScore != null) {
+          const infl = Math.round(node._influenceScore * 100);
+          const pr = node._pageRank != null ? (node._pageRank * 100).toFixed(1) : '—';
+          const bc = Math.round((node._betweenness ?? 0) * 1000) / 10;
+          const comId = node._communityId ?? '—';
+          analyticsHtml = `
+            <div class="igp-tooltip-analytics">
+              <span>Influence: ${infl}%</span> <span>PR: ${pr}%</span>
+              <span>Betweenness: ${bc}%</span> <span>Community: ${comId}</span>
+            </div>
+          `;
+        }
         tooltip.innerHTML = `
           <div class="igp-tooltip-header">${CATEGORY_ICONS[node.category]} ${this.escHtml(node.label)}</div>
           <div class="igp-tooltip-cat">${node.category}</div>
           <div class="igp-tooltip-conn">${connections.length} connection${connections.length !== 1 ? 's' : ''}</div>
           ${node.notes ? `<div class="igp-tooltip-notes">${this.escHtml(node.notes)}</div>` : ''}
+          ${analyticsHtml}
         `;
         tooltip.style.display = 'block';
         tooltip.style.left = `${Math.min(e.offsetX + 14, this.width - 200)}px`;
@@ -491,7 +534,7 @@ export class IntelGraphPanel extends Panel {
     for (const node of this.graphNodes) {
       if (node.x == null || node.y == null) continue;
       const r = this.nodeRadius(node);
-      const color = CATEGORY_COLORS[node.category];
+      const color = this.getNodeColor(node);
       const isHovered = this.hoveredNode?.id === node.id;
       const isConnectedToHovered = this.hoveredNode && this.graphEdges.some(e => {
         const s = (e.source as GraphNode).id;
@@ -548,7 +591,23 @@ export class IntelGraphPanel extends Panel {
   }
 
   private nodeRadius(node: GraphNode): number {
-    return NODE_BASE_RADIUS + Math.min(node.weight * 2, 14);
+    const base = NODE_BASE_RADIUS + Math.min(node.weight * 2, 14);
+    const influenceBoost = (node._influenceScore ?? 0) * 8;
+    return base + influenceBoost;
+  }
+
+  private getNodeColor(node: GraphNode): string {
+    if (this.colorMode === 'community' && node._communityId != null) {
+      return COMMUNITY_COLORS[node._communityId % COMMUNITY_COLORS.length]!;
+    }
+    if (this.colorMode === 'influence' && node._influenceScore != null) {
+      const t = Math.min(1, node._influenceScore * 2);
+      const r = Math.round(59 + t * 196);
+      const g = Math.round(130 - t * 80);
+      const b = Math.round(246 - t * 200);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+    return CATEGORY_COLORS[node.category];
   }
 
   private hitTest(x: number, y: number): GraphNode | null {
@@ -853,7 +912,7 @@ export class IntelGraphPanel extends Panel {
       html += `<div class="igp-analysis-section"><strong>Isolated entities:</strong> ${isolated.map(n => n.label).join(', ')} — no discovered connections. Consider adding related entities to reveal hidden links.</div>`;
     }
 
-    html += `<div class="igp-analysis-note">Connect Groq API key for AI-powered analysis with pattern detection, risk assessment, and predictive insights.</div>`;
+    html += `<div class="igp-analysis-note">Connect Groq API key for AI-powered analysis. Click 📊 Metrics for graph analytics (centrality, communities, bridges).</div>`;
     return html;
   }
 
@@ -929,6 +988,109 @@ export class IntelGraphPanel extends Panel {
 
       this.recalcWeights();
     } catch { /* corrupted state — start fresh */ }
+  }
+
+  // ── Graph Analytics Engine ───────────────────────────────────
+
+  private async runGraphAnalytics(): Promise<void> {
+    if (this.graphNodes.length < 2) {
+      this.showAnalysis('Add at least 2 entities to run graph analytics.', true);
+      return;
+    }
+
+    this.showAnalysis('<div class="igp-analyzing">Computing graph analytics...</div>', false);
+
+    try {
+      const { analyzeGraph } = await import('../utils/graph-analytics');
+
+      const analyticsGraph = {
+        nodes: this.graphNodes.map(n => ({ id: n.id, label: n.label, category: n.category })),
+        edges: this.graphEdges.map(e => ({
+          source: typeof e.source === 'object' ? (e.source as GraphNode).id : e.source,
+          target: typeof e.target === 'object' ? (e.target as GraphNode).id : e.target,
+          weight: (e.strength || 1) / 10,
+        })),
+      };
+
+      const analysis = analyzeGraph(analyticsGraph);
+      this.lastAnalysis = analysis;
+
+      // Apply analytics overlays to nodes
+      const comMap = new Map(analysis.communities.assignments.map(a => [a.nodeId, a.communityId]));
+      const inflMap = new Map(analysis.influence.map(r => [r.nodeId, r.score]));
+      const prMap = new Map(analysis.pageRank.map(r => [r.nodeId, r.rank]));
+      const bcMap = new Map(analysis.betweenness.map(r => [r.nodeId, r.normalized]));
+
+      for (const node of this.graphNodes) {
+        node._communityId = comMap.get(node.id);
+        node._influenceScore = inflMap.get(node.id);
+        node._pageRank = prMap.get(node.id);
+        node._betweenness = bcMap.get(node.id);
+      }
+
+      this.showAnalysis(this.formatGraphAnalytics(analysis), false);
+    } catch (err) {
+      this.showAnalysis('Analytics error: ' + (err instanceof Error ? err.message : 'Unknown'), true);
+    }
+  }
+
+  private formatGraphAnalytics(analysis: FullAnalysis): string {
+    const { metrics, communities, influence, bridges } = analysis;
+
+    let html = `<div class="igp-analysis-section"><strong>Graph Metrics</strong>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:4px;font-size:10px">
+        <span>Nodes: ${metrics.nodeCount}</span><span>Edges: ${metrics.edgeCount}</span>
+        <span>Density: ${(metrics.density * 100).toFixed(1)}%</span><span>Avg Degree: ${metrics.avgDegree.toFixed(1)}</span>
+        <span>Components: ${metrics.componentCount}</span><span>Avg Clustering: ${(metrics.avgClustering * 100).toFixed(1)}%</span>
+      </div>
+    </div>`;
+
+    // Top influencers
+    if (influence.length > 0) {
+      const top5 = influence.slice(0, 5);
+      html += `<div class="igp-analysis-section"><strong>Top Influencers</strong>
+        <div style="margin-top:4px;font-size:10px">
+          ${top5.map((r, i) => {
+            const node = this.graphNodes.find(n => n.id === r.nodeId);
+            return `<div>${i + 1}. ${node?.label ?? r.nodeId} — <span style="color:#ef4444">${Math.round(r.score * 100)}%</span></div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+
+    // Communities
+    if (communities.communities.length > 1) {
+      html += `<div class="igp-analysis-section"><strong>Communities Detected: ${communities.communities.length}</strong>
+        <span style="font-size:10px;color:#888"> (modularity: ${communities.modularity.toFixed(3)})</span>
+        <div style="margin-top:4px;font-size:10px">
+          ${communities.communities.slice(0, 5).map(c => {
+            const memberLabels = c.members.slice(0, 4).map(id => {
+              const node = this.graphNodes.find(n => n.id === id);
+              return node?.label ?? id;
+            }).join(', ');
+            const more = c.members.length > 4 ? ` +${c.members.length - 4} more` : '';
+            return `<div style="color:${COMMUNITY_COLORS[c.id % COMMUNITY_COLORS.length]}">Cluster ${c.id}: ${memberLabels}${more} (density: ${(c.density * 100).toFixed(0)}%)</div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+
+    // Bridges
+    if (bridges.length > 0) {
+      html += `<div class="igp-analysis-section"><strong>Bridge Edges</strong>
+        <span style="font-size:10px;color:#888"> (removing disconnects the graph)</span>
+        <div style="margin-top:4px;font-size:10px">
+          ${bridges.slice(0, 5).map(b => {
+            const sNode = this.graphNodes.find(n => n.id === b.source);
+            const tNode = this.graphNodes.find(n => n.id === b.target);
+            return `<div style="color:#f59e0b">${sNode?.label ?? b.source} ↔ ${tNode?.label ?? b.target}</div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+
+    html += `<div class="igp-analysis-note">Use the color mode selector to visualize communities or influence scores.</div>`;
+    return html;
   }
 
   // ── Utilities ────────────────────────────────────────────────

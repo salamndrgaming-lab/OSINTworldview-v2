@@ -28,7 +28,7 @@ describe('MapContainer globe routing', () => {
     // Expect the globe guard immediately inside setAisData
     assert.match(
       src,
-      /setAisData\(disruptions[^)]*\)[^{]*\{[^}]*if \(this\.useGlobe\)[^}]*this\.globeMap\?\.setAisData\(disruptions, density\)/s,
+      /setAisData\(disruptions[^)]*\)[^{]*\{[^}]*if \(this\.useGlobe\)[^}]*this\.globeMap\?\.setAisData\(disruptions, density[^)]*\)/s,
       'setAisData should delegate to globeMap when useGlobe=true'
     );
   });

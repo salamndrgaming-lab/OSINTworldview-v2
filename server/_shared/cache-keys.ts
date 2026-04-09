@@ -44,6 +44,13 @@ export const BOOTSTRAP_CACHE_KEYS: Record<string, string> = {
   techEvents:        'research:tech-events-bootstrap:v1',
   gdeltIntel:        'intelligence:gdelt-intel:v1',
   correlationCards:   'correlation:cards-bootstrap:v1',
+  poi:                'intelligence:poi:v1',
+  telegramNarratives: 'telegram:narratives:v1',
+  entityGraph:        'intelligence:entity-graph:v1',
+  hypotheses:         'intelligence:hypotheses:v1',
+  narrativeDrift:     'intelligence:narrative-drift:v1',
+  crossSourceSignals: 'intelligence:cross-source-signals:v1',
+  councilSynthesis:   'council:synthesis:v1',
 };
 
 export const BOOTSTRAP_TIERS: Record<string, 'slow' | 'fast'> = {
@@ -63,4 +70,11 @@ export const BOOTSTRAP_TIERS: Record<string, 'slow' | 'fast'> = {
   weatherAlerts: 'fast', spending: 'fast', gdeltIntel: 'fast',
   techEvents: 'slow',
   correlationCards: 'fast',
+  poi: 'slow',
+  telegramNarratives: 'slow',
+  entityGraph: 'slow',
+  hypotheses: 'slow',
+  narrativeDrift: 'slow',
+  crossSourceSignals: 'slow',
+  councilSynthesis: 'slow',
 };

@@ -240,7 +240,7 @@ describe('Bootstrap key hydration coverage', () => {
     const allSrc = srcFiles.map(f => readFileSync(f, 'utf-8')).join('\n');
 
     // Keys with planned but not-yet-wired consumers
-    const PENDING_CONSUMERS = new Set(['chokepointTransits', 'correlationCards']);
+    const PENDING_CONSUMERS = new Set(['chokepointTransits', 'correlationCards', 'poi', 'telegramNarratives', 'entityGraph', 'hypotheses', 'narrativeDrift', 'crossSourceSignals', 'councilSynthesis']);
     for (const key of keys) {
       if (PENDING_CONSUMERS.has(key)) continue;
       assert.ok(

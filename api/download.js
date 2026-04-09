@@ -32,7 +32,7 @@ function findAssetForVariant(assets, variant, platformMatcher) {
     const assetName = String(asset?.name || '');
     const normalizedAssetName = canonicalAssetName(assetName);
     const hasVariantIdentifier = identifiers.some((identifier) =>
-      normalizedAssetName.includes(identifier)
+      normalizedAssetName.includes(canonicalAssetName(identifier))
     );
     return hasVariantIdentifier && platformMatcher(assetName);
   }) ?? null;

@@ -26,16 +26,16 @@ describe('CorridorRisk type exports', () => {
 });
 
 describe('CorridorRisk relay seed loop', () => {
-  it('reads CORRIDOR_RISK_API_KEY from env', () => {
-    assert.match(relaySrc, /CORRIDOR_RISK_API_KEY.*process\.env\.CORRIDOR_RISK_API_KEY/);
+  it('defines CORRIDOR_RISK_BASE_URL constant', () => {
+    assert.match(relaySrc, /CORRIDOR_RISK_BASE_URL\s*=\s*'https:\/\/corridorrisk\.io\/api\/corridors'/);
   });
 
   it('uses corridorrisk.io API', () => {
-    assert.match(relaySrc, /api\.corridorrisk\.io/);
+    assert.match(relaySrc, /corridorrisk\.io\/api\/corridors/);
   });
 
-  it('uses Bearer token authentication', () => {
-    assert.match(relaySrc, /Authorization.*Bearer.*CORRIDOR_RISK_API_KEY/);
+  it('uses Referer header for authentication', () => {
+    assert.match(relaySrc, /Referer.*corridorrisk\.io/);
   });
 
   it('writes to supply_chain:corridorrisk:v1 Redis key', () => {
@@ -50,8 +50,8 @@ describe('CorridorRisk relay seed loop', () => {
     assert.match(relaySrc, /function startCorridorRiskSeedLoop/);
   });
 
-  it('skips when API key is not configured', () => {
-    assert.match(relaySrc, /if\s*\(\s*!CORRIDOR_RISK_API_KEY\s*\)\s*return/);
+  it('skips when seed is already in-flight', () => {
+    assert.match(relaySrc, /if\s*\(\s*corridorRiskSeedInFlight\s*\)\s*return/);
   });
 
   it('uses 10s timeout', () => {

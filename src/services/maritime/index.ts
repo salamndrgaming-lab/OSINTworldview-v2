@@ -4,7 +4,7 @@ import {
   type AisDensityZone as ProtoDensityZone,
   type AisDisruption as ProtoDisruption,
   type GetVesselSnapshotResponse,
-} from '@/generated/client/worldmonitor/maritime/v1/service_client';
+} from '@/generated/client/osintview/maritime/v1/service_client';
 import { createCircuitBreaker } from '@/utils';
 import type { AisDisruptionEvent, AisDensityZone, AisDisruptionType } from '@/types';
 import { dataFreshness } from '../data-freshness';

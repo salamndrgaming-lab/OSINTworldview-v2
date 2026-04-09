@@ -104,7 +104,7 @@ function renderHtml(sitrep) {
     html += `</div>`;
   }
 
-  html += `<div class="footer">World Monitor Agent SITREP · osintworldview.vercel.app · Powered by Groq + Llama 3.1</div>`;
+  html += `<div class="footer">OSINTview Agent SITREP · osintworldview.vercel.app · Powered by Groq + Llama 3.1</div>`;
   html += `</body></html>`;
   return html;
 }

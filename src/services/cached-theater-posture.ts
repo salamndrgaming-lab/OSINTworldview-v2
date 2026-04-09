@@ -4,7 +4,7 @@ import {
   MilitaryServiceClient,
   type GetTheaterPostureResponse,
   type TheaterPosture,
-} from '@/generated/client/worldmonitor/military/v1/service_client';
+} from '@/generated/client/osintview/military/v1/service_client';
 import { createCircuitBreaker } from '@/utils';
 import { getHydratedData } from '@/services/bootstrap';
 

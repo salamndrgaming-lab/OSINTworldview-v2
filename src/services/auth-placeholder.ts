@@ -107,7 +107,7 @@ export function initAuthPlaceholder(): void {
   document.getElementById('authUpgradeBtn')?.addEventListener('click', () => {
     isOpen = false;
     dropdown.classList.remove('open');
-    alert('Pro subscriptions coming soon! Follow @worldmonitorai for updates.');
+    alert('Pro subscriptions coming soon! Follow @osintview for updates.');
   });
 
   // Sign in — placeholder

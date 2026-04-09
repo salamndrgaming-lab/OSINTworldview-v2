@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { computeCIIScores } from '../server/worldmonitor/intelligence/v1/get-risk-scores.ts';
+import { computeCIIScores } from '../server/osintview/intelligence/v1/get-risk-scores.ts';
 
 function emptyAux() {
   return {

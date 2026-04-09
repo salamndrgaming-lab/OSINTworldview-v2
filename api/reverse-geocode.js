@@ -3,7 +3,7 @@ import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
 export const config = { runtime: 'edge' };
 
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/reverse';
-const CHROME_UA = 'WorldMonitor/2.0 (https://worldmonitor.app)';
+const CHROME_UA = 'OSINTview/2.0 (https://osintview.app)';
 
 export default async function handler(req) {
   if (isDisallowedOrigin(req))

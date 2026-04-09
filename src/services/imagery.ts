@@ -1,5 +1,5 @@
 import { toApiUrl } from '@/services/runtime';
-import type { ImageryScene } from '@/generated/server/worldmonitor/imagery/v1/service_server';
+import type { ImageryScene } from '@/generated/server/osintview/imagery/v1/service_server';
 
 export type { ImageryScene };
 

@@ -1,6 +1,6 @@
 /**
  * MobileNav.ts — Bottom Tab Navigation + Gesture Support
- * World Monitor OSINT Platform
+ * OSINTview OSINT Platform
  *
  * Drop into: src/components/MobileNav.ts
  * DO NOT paste integration code into main.ts yet — wire it later.

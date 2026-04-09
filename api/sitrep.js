@@ -175,7 +175,7 @@ function renderSitrepHtml(sections, generatedAt, aiNarrative) {
 
   let html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>World Monitor SITREP — ${dateStr}</title>
+<title>OSINTview SITREP — ${dateStr}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #e0e0e0; padding: 24px; max-width: 800px; margin: 0 auto; }
@@ -192,7 +192,7 @@ function renderSitrepHtml(sections, generatedAt, aiNarrative) {
   .empty { color: #666; font-style: italic; padding: 20px; text-align: center; }
   @media print { body { background: #fff; color: #000; } .section { border-color: #ccc; background: #f9f9f9; } .section-item { color: #333; } .section-item strong { color: #000; } }
 </style></head><body>
-<h1>🌐 WORLD MONITOR SITREP</h1>
+<h1>🌐 OSINTVIEW SITREP</h1>
 <div class="meta">Generated ${dateStr} · Classification: OPEN SOURCE</div>`;
 
   if (aiNarrative) {
@@ -217,7 +217,7 @@ function renderSitrepHtml(sections, generatedAt, aiNarrative) {
     html += `</div>`;
   }
 
-  html += `<div class="meta" style="margin-top:20px;text-align:center">World Monitor · osintworldview.vercel.app · Data sources: GDELT, VIEWS, WHO, Safecast, USGS, ACLED</div>`;
+  html += `<div class="meta" style="margin-top:20px;text-align:center">OSINTview · osintworldview.vercel.app · Data sources: GDELT, VIEWS, WHO, Safecast, USGS, ACLED</div>`;
   html += `</body></html>`;
   return html;
 }

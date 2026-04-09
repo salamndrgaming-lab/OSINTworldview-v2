@@ -240,13 +240,13 @@ function generateFullReport(data) {
     }
   }
 
-  s.push('*World Monitor Intelligence Brief*');
+  s.push('*OSINTview Intelligence Brief*');
   s.push('🔗 https://osintworldview.vercel.app/?variant=godmode');
   return s.join('\n');
 }
 
 function generateHelpMessage() {
-  return '# World Monitor Discord Bot\n\n' +
+  return '# OSINTview Discord Bot\n\n' +
     '**Available Commands:**\n' +
     '`/report` — Full intelligence brief\n' +
     '`/markets` — Market summary\n' +
@@ -515,7 +515,7 @@ export default async function handler(req) {
           }
           case 'status': {
             var redisStatus = data._error ? 'Error: ' + data._error : 'Connected (' + (data._keysFound || 0) + '/' + (data._keysTotal || 0) + ' keys)';
-            report = '## World Monitor Status\nTime: ' + new Date().toISOString() + '\nRedis: ' + redisStatus;
+            report = '## OSINTview Status\nTime: ' + new Date().toISOString() + '\nRedis: ' + redisStatus;
             break;
           }
           case 'help':

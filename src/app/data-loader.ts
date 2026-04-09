@@ -105,10 +105,10 @@ import { getHydratedData } from '@/services/bootstrap';
 import { canQueueAiClassification, AI_CLASSIFY_MAX_PER_FEED } from '@/services/ai-classify-queue';
 import { classifyWithAI } from '@/services/threat-classifier';
 import { ingestHeadlines } from '@/services/trending-keywords';
-import type { ListFeedDigestResponse } from '@/generated/client/worldmonitor/news/v1/service_client';
-import type { GetSectorSummaryResponse, ListMarketQuotesResponse } from '@/generated/client/worldmonitor/market/v1/service_client';
+import type { ListFeedDigestResponse } from '@/generated/client/osintview/news/v1/service_client';
+import type { GetSectorSummaryResponse, ListMarketQuotesResponse } from '@/generated/client/osintview/market/v1/service_client';
 import { mountCommunityWidget } from '@/components/CommunityWidget';
-import { ResearchServiceClient } from '@/generated/client/worldmonitor/research/v1/service_client';
+import { ResearchServiceClient } from '@/generated/client/osintview/research/v1/service_client';
 import {
   MarketPanel,
   StockAnalysisPanel,
@@ -150,7 +150,7 @@ import {
 } from '@/services/daily-market-brief';
 import { fetchCachedRiskScores } from '@/services/cached-risk-scores';
 import type { ThreatLevel as ClientThreatLevel } from '@/types';
-import type { NewsItem as ProtoNewsItem, ThreatLevel as ProtoThreatLevel } from '@/generated/client/worldmonitor/news/v1/service_client';
+import type { NewsItem as ProtoNewsItem, ThreatLevel as ProtoThreatLevel } from '@/generated/client/osintview/news/v1/service_client';
 
 const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
   THREAT_LEVEL_UNSPECIFIED: 'info',
@@ -275,7 +275,7 @@ export class DataLoaderManager implements AppModule {
   init(): void {
     this.boundMarketWatchlistHandler = () => {
       void this.loadMarkets().then(async () => {
-        if (SITE_VARIANT === 'finance' && getSecretState('WORLDMONITOR_API_KEY').present) {
+        if (SITE_VARIANT === 'finance' && getSecretState('OSINTVIEW_API_KEY').present) {
           await this.loadStockAnalysis();
           await this.loadStockBacktest();
           await this.loadDailyMarketBrief(true);
@@ -408,10 +408,10 @@ export class DataLoaderManager implements AppModule {
       if (shouldLoadAny(['markets', 'heatmap', 'commodities', 'crypto'])) {
         tasks.push({ name: 'markets', task: runGuarded('markets', () => this.loadMarkets()) });
       }
-      if (SITE_VARIANT === 'finance' && getSecretState('WORLDMONITOR_API_KEY').present && shouldLoad('stock-analysis')) {
+      if (SITE_VARIANT === 'finance' && getSecretState('OSINTVIEW_API_KEY').present && shouldLoad('stock-analysis')) {
         tasks.push({ name: 'stockAnalysis', task: runGuarded('stockAnalysis', () => this.loadStockAnalysis()) });
       }
-      if (SITE_VARIANT === 'finance' && getSecretState('WORLDMONITOR_API_KEY').present && shouldLoad('stock-backtest')) {
+      if (SITE_VARIANT === 'finance' && getSecretState('OSINTVIEW_API_KEY').present && shouldLoad('stock-backtest')) {
         tasks.push({ name: 'stockBacktest', task: runGuarded('stockBacktest', () => this.loadStockBacktest()) });
       }
       if (shouldLoad('polymarket')) {
@@ -541,7 +541,7 @@ export class DataLoaderManager implements AppModule {
 
     this.updateSearchIndex();
 
-    if (SITE_VARIANT === 'finance' && getSecretState('WORLDMONITOR_API_KEY').present) {
+    if (SITE_VARIANT === 'finance' && getSecretState('OSINTVIEW_API_KEY').present) {
       await this.loadDailyMarketBrief();
     }
 
@@ -1360,7 +1360,7 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadDailyMarketBrief(force = false): Promise<void> {
-    if (SITE_VARIANT !== 'finance' || !getSecretState('WORLDMONITOR_API_KEY').present) return;
+    if (SITE_VARIANT !== 'finance' || !getSecretState('OSINTVIEW_API_KEY').present) return;
     if (this.ctx.isDestroyed || this.ctx.inFlight.has('dailyMarketBrief')) return;
 
     this.ctx.inFlight.add('dailyMarketBrief');
@@ -1550,7 +1550,7 @@ export class DataLoaderManager implements AppModule {
 
   async loadIntelligenceSignals(): Promise<void> {
     resetHotspotActivity();
-    const _desktopLocked = isDesktopRuntime() && !getSecretState('WORLDMONITOR_API_KEY').present;
+    const _desktopLocked = isDesktopRuntime() && !getSecretState('OSINTVIEW_API_KEY').present;
     const tasks: Promise<void>[] = [];
 
     tasks.push((async () => {
@@ -1612,7 +1612,7 @@ export class DataLoaderManager implements AppModule {
       }
     })());
 
-    const hydratedUcdp = getHydratedData('ucdpEvents') as import('@/generated/client/worldmonitor/conflict/v1/service_client').ListUcdpEventsResponse | undefined;
+    const hydratedUcdp = getHydratedData('ucdpEvents') as import('@/generated/client/osintview/conflict/v1/service_client').ListUcdpEventsResponse | undefined;
 
     tasks.push((async () => {
       try {
@@ -2848,7 +2848,7 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadTelegramIntel(): Promise<void> {
-    if (isDesktopRuntime() && !getSecretState('WORLDMONITOR_API_KEY').present) return;
+    if (isDesktopRuntime() && !getSecretState('OSINTVIEW_API_KEY').present) return;
     try {
       const result = await fetchTelegramFeed();
       this.callPanel('telegram-intel', 'setData', result);

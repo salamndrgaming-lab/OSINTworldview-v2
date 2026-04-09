@@ -188,7 +188,7 @@ function renderOverview(area: HTMLElement): void {
   const dashOffset = circumference - (pct / 100) * circumference;
   const ringColor = ready === total ? 'var(--settings-green)' : ready > 0 ? 'var(--settings-blue)' : 'var(--settings-yellow)';
 
-  const wmState = getSecretState('WORLDMONITOR_API_KEY');
+  const wmState = getSecretState('OSINTVIEW_API_KEY');
   const wmStatusText = wmState.present ? 'Active' : 'Not set';
   const wmStatusClass = wmState.present ? 'ok' : 'warn';
   const catCards = SETTINGS_CATEGORIES.map(cat => {
@@ -219,12 +219,12 @@ function renderOverview(area: HTMLElement): void {
 
     <div class="settings-ov-license">
       <section class="wm-section">
-        <h2 class="wm-section-title">${t('modals.settingsWindow.worldMonitor.apiKey.title')}</h2>
-        <p class="wm-section-desc">${t('modals.settingsWindow.worldMonitor.apiKey.description')}</p>
+        <h2 class="wm-section-title">${t('modals.settingsWindow.osintview.apiKey.title')}</h2>
+        <p class="wm-section-desc">${t('modals.settingsWindow.osintview.apiKey.description')}</p>
         <div class="wm-key-row">
           <div class="wm-input-wrap">
             <input type="password" class="wm-input" data-wm-key-input
-              placeholder="${t('modals.settingsWindow.worldMonitor.apiKey.placeholder')}"
+              placeholder="${t('modals.settingsWindow.osintview.apiKey.placeholder')}"
               autocomplete="off" spellcheck="false"
               ${wmState.present ? `value="${MASKED_SENTINEL}"` : ''} />
             <button type="button" class="wm-toggle-vis" data-wm-toggle title="Show/hide">&#x1f441;</button>
@@ -233,14 +233,14 @@ function renderOverview(area: HTMLElement): void {
         </div>
       </section>
 
-      <div class="wm-divider"><span>${t('modals.settingsWindow.worldMonitor.dividerOr')}</span></div>
+      <div class="wm-divider"><span>${t('modals.settingsWindow.osintview.dividerOr')}</span></div>
 
       <section class="wm-section">
-        <h2 class="wm-section-title">${t('modals.settingsWindow.worldMonitor.register.title')}</h2>
-        <p class="wm-section-desc">${t('modals.settingsWindow.worldMonitor.register.description')}</p>
+        <h2 class="wm-section-title">${t('modals.settingsWindow.osintview.register.title')}</h2>
+        <p class="wm-section-desc">${t('modals.settingsWindow.osintview.register.description')}</p>
         <div class="wm-register-row">
           <button type="button" class="wm-submit-btn" data-wm-open-pro>
-            ${t('modals.settingsWindow.worldMonitor.register.submitBtn')}
+            ${t('modals.settingsWindow.osintview.register.submitBtn')}
           </button>
         </div>
       </section>
@@ -264,7 +264,7 @@ function initOverviewListeners(area: HTMLElement): void {
   });
 
   area.querySelector('[data-wm-open-pro]')?.addEventListener('click', () => {
-    const url = 'https://worldmonitor.app/pro';
+    const url = 'https://osintview.app/pro';
     void invokeTauri<void>('open_url', { url }).catch(() => window.open(url, '_blank'));
   });
 
@@ -895,7 +895,7 @@ async function initSettingsWindow(): Promise<void> {
         }
 
         if (hasWmKeyChange && wmKeyValue) {
-          await setSecretValue('WORLDMONITOR_API_KEY', wmKeyValue);
+          await setSecretValue('OSINTVIEW_API_KEY', wmKeyValue);
         }
 
         if (hasPending) {

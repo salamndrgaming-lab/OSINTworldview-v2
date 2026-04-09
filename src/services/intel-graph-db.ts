@@ -70,7 +70,7 @@ export interface GraphStats {
 
 // ── Constants ──────────────────────────────────────────────────
 
-const DB_NAME = 'worldmonitor_intel_graph';
+const DB_NAME = 'osintview_intel_graph';
 const DB_VERSION = 1;
 const NODE_STORE = 'nodes';
 const LINK_STORE = 'links';
@@ -534,7 +534,7 @@ export async function importDatabase(
 
 // ── Migrate localStorage graph into perpetual DB ───────────────
 
-const LEGACY_STORAGE_KEY = 'worldmonitor-link-graph-v2';
+const LEGACY_STORAGE_KEY = 'osintview-link-graph-v2';
 
 export async function migrateLegacyGraph(): Promise<number> {
   const raw = localStorage.getItem(LEGACY_STORAGE_KEY);

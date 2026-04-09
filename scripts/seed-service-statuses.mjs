@@ -12,7 +12,7 @@ import { loadEnvFile, CHROME_UA, getRedisCredentials, logSeedResult } from './_s
 
 loadEnvFile(import.meta.url);
 
-const RPC_URL = 'https://worldmonitor.app/api/infrastructure/v1/list-service-statuses';
+const RPC_URL = 'https://osintview.app/api/infrastructure/v1/list-service-statuses';
 const CANONICAL_KEY = 'infra:service-statuses:v1';
 
 async function warmPing() {
@@ -26,7 +26,7 @@ async function warmPing() {
     headers: {
       'Content-Type': 'application/json',
       'User-Agent': CHROME_UA,
-      Origin: 'https://worldmonitor.app',
+      Origin: 'https://osintview.app',
     },
     body: '{}',
     signal: AbortSignal.timeout(60_000),

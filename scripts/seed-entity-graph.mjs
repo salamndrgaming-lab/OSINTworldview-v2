@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // seed-entity-graph.mjs — Builds and updates a knowledge graph in Neo4j AuraDB
-// from World Monitor's intelligence data. Creates nodes for persons, countries,
+// from OSINTview's intelligence data. Creates nodes for persons, countries,
 // events, and regions, then links them with typed relationships.
 //
 // Node types:

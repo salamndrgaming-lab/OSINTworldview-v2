@@ -21,7 +21,7 @@
   --data-accent-dim: #4a7bc4;
   --data-accent-glow: rgba(91, 141, 217, 0.2);
 
-  /* Surface hierarchy (darker, more contrast than koala73) */
+  /* Surface hierarchy (darker, more contrast than upstream) */
   --vi-bg-deep: #060608;
   --vi-bg: #0c0c10;
   --vi-surface: #12121a;
@@ -499,7 +499,7 @@ body {
 
 /* ----------------------------------------------------------
    7. LAYER SIDEBAR — category groups with collapsible sections
-   Overrides the flat checkbox list inherited from koala73
+   Overrides the flat checkbox list inherited from upstream
    ---------------------------------------------------------- */
 
 .layers-sidebar,

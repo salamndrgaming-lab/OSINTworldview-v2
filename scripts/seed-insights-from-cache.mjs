@@ -195,8 +195,8 @@ Rules:
         headers: {
           Authorization: `Bearer ${openrouterKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://worldmonitor.app',
-          'X-Title': 'World Monitor',
+          'HTTP-Referer': 'https://osintview.app',
+          'X-Title': 'OSINTview',
         },
         body: JSON.stringify({
           model: 'google/gemini-2.5-flash',

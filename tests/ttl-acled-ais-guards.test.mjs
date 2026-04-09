@@ -23,13 +23,13 @@ const readSrc = (relPath) => readFileSync(resolve(root, relPath), 'utf-8');
 
 describe('cache TTL alignment with upstream refresh rates', () => {
   it('climate anomalies uses 3h TTL (ERA5 has 2-7 day lag)', () => {
-    const src = readSrc('server/worldmonitor/climate/v1/list-climate-anomalies.ts');
+    const src = readSrc('server/osintview/climate/v1/list-climate-anomalies.ts');
     assert.match(src, /REDIS_CACHE_TTL = 10800/,
       'Climate cache TTL should be 10800s (3 hours)');
   });
 
   it('fire detections uses 1h TTL (FIRMS NRT updates every ~3h)', () => {
-    const src = readSrc('server/worldmonitor/wildfire/v1/list-fire-detections.ts');
+    const src = readSrc('server/osintview/wildfire/v1/list-fire-detections.ts');
     assert.match(src, /REDIS_CACHE_TTL = 3600/,
       'Fire cache TTL should be 3600s (1 hour)');
   });
@@ -82,27 +82,27 @@ describe('ACLED shared cache layer', () => {
 
 describe('ACLED consumers use shared cache layer', () => {
   it('conflict handler imports fetchAcledCached', () => {
-    const src = readSrc('server/worldmonitor/conflict/v1/list-acled-events.ts');
+    const src = readSrc('server/osintview/conflict/v1/list-acled-events.ts');
     assert.match(src, /fetchAcledCached/,
       'Conflict handler should use shared ACLED fetch');
   });
 
   it('unrest handler imports fetchAcledCached', () => {
-    const src = readSrc('server/worldmonitor/unrest/v1/list-unrest-events.ts');
+    const src = readSrc('server/osintview/unrest/v1/list-unrest-events.ts');
     assert.match(src, /fetchAcledCached/,
       'Unrest handler should use shared ACLED fetch');
   });
 
   it('risk scores handler imports fetchAcledCached', () => {
-    const src = readSrc('server/worldmonitor/intelligence/v1/get-risk-scores.ts');
+    const src = readSrc('server/osintview/intelligence/v1/get-risk-scores.ts');
     assert.match(src, /fetchAcledCached/,
       'Risk scores handler should use shared ACLED fetch');
   });
 
   it('no handler has its own ACLED_API_URL constant', () => {
-    const conflict = readSrc('server/worldmonitor/conflict/v1/list-acled-events.ts');
-    const unrest = readSrc('server/worldmonitor/unrest/v1/list-unrest-events.ts');
-    const riskScores = readSrc('server/worldmonitor/intelligence/v1/get-risk-scores.ts');
+    const conflict = readSrc('server/osintview/conflict/v1/list-acled-events.ts');
+    const unrest = readSrc('server/osintview/unrest/v1/list-unrest-events.ts');
+    const riskScores = readSrc('server/osintview/intelligence/v1/get-risk-scores.ts');
     for (const [name, src] of [['conflict', conflict], ['unrest', unrest], ['risk-scores', riskScores]]) {
       assert.doesNotMatch(src, /ACLED_API_URL/,
         `${name} handler should not define its own ACLED_API_URL`);

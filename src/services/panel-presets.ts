@@ -17,8 +17,8 @@
 
 import type { PanelConfig } from '@/types';
 
-const ACTIVE_PRESET_KEY = 'worldmonitor-panel-preset';
-const CUSTOM_SNAPSHOT_KEY = 'worldmonitor-panel-preset-snapshot';
+const ACTIVE_PRESET_KEY = 'osintview-panel-preset';
+const CUSTOM_SNAPSHOT_KEY = 'osintview-panel-preset-snapshot';
 
 // ────────────────────────────────────────────────────────────
 // Preset definitions

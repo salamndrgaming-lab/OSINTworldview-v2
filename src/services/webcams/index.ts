@@ -5,7 +5,7 @@ import {
   type WebcamCluster,
   type ListWebcamsResponse,
   type GetWebcamImageResponse,
-} from '@/generated/client/worldmonitor/webcam/v1/service_client';
+} from '@/generated/client/osintview/webcam/v1/service_client';
 
 const client = new WebcamServiceClient(getRpcBaseUrl(), {
   fetch: (...args) => globalThis.fetch(...args),

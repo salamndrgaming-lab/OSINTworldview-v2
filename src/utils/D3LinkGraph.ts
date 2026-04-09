@@ -29,7 +29,7 @@ export interface GraphData {
 // ── Module-level graph state ─────────────────────────────────
 // Persisted in localStorage so manual edits survive tab switches
 
-const STORAGE_KEY = 'worldmonitor-link-graph-v2';
+const STORAGE_KEY = 'osintview-link-graph-v2';
 
 function loadStoredGraph(): GraphData {
   try {

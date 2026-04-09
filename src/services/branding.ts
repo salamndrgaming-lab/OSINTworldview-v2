@@ -10,7 +10,7 @@
  * before first paint to prevent flash of default branding.
  */
 
-const STORAGE_KEY = 'worldmonitor-branding';
+const STORAGE_KEY = 'osintview-branding';
 
 export interface BrandingConfig {
   /** Custom header text — replaces "MONITOR" in the header bar */

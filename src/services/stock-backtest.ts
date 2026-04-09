@@ -2,7 +2,7 @@ import { getRpcBaseUrl } from '@/services/rpc-client';
 import {
   MarketServiceClient,
   type BacktestStockResponse,
-} from '@/generated/client/worldmonitor/market/v1/service_client';
+} from '@/generated/client/osintview/market/v1/service_client';
 import { runThrottledTargetRequests } from '@/services/throttled-target-requests';
 
 const client = new MarketServiceClient(getRpcBaseUrl(), {

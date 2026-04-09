@@ -5,7 +5,7 @@ import {
   buildStockNewsSearchQuery,
   resetStockNewsSearchStateForTests,
   searchRecentStockHeadlines,
-} from '../server/worldmonitor/market/v1/stock-news-search.ts';
+} from '../server/osintview/market/v1/stock-news-search.ts';
 
 const originalFetch = globalThis.fetch;
 

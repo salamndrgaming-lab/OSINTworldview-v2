@@ -249,7 +249,7 @@ function renderHtml(rows, description, queryParams) {
     html += '</table>';
   }
 
-  html += `<div style="margin-top:16px;font-size:11px;opacity:.4;text-align:center">World Monitor Entity Graph · Powered by Neo4j AuraDB</div>`;
+  html += `<div style="margin-top:16px;font-size:11px;opacity:.4;text-align:center">OSINTview Entity Graph · Powered by Neo4j AuraDB</div>`;
   html += `</body></html>`;
   return html;
 }

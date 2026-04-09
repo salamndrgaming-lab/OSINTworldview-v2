@@ -38,7 +38,7 @@ export function exponentialDelay(attempt, { baseMs = 2_000, capMs = 90_000, jitt
  * Compute inter-request cooldown that shrinks as consecutive successes accumulate.
  * Starts at initialMs, decreases by decayPerSuccess each success, floors at floorMs.
  *
- * This matches the "worldmonitor" pattern of 20s base cooldown that adapts
+ * This matches the "upstream" pattern of 20s base cooldown that adapts
  * downward when GDELT is responding quickly.
  *
  * @param {number} consecutiveSuccesses — how many requests in a row have succeeded

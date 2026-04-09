@@ -53,7 +53,7 @@ export function loadEnvFile(metaUrl) {
     join(__dirname, '.env.local'),
   ];
   if (process.env.HOME) {
-    candidates.push(join(process.env.HOME, 'Documents/GitHub/worldmonitor', '.env.local'));
+    candidates.push(join(process.env.HOME, 'Documents/GitHub/OSINTworldview-v2', '.env.local'));
   }
   for (const envPath of candidates) {
     if (!existsSync(envPath)) continue;

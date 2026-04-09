@@ -16,7 +16,7 @@
  * Also manages TV/kiosk mode availability for all variants (not just happy).
  */
 
-const STORAGE_KEY = 'worldmonitor-dashboard-layout';
+const STORAGE_KEY = 'osintview-dashboard-layout';
 
 export type DashboardLayout = 'auto' | '1-col' | '2-col' | '3-col' | '4-col' | 'split' | 'focus';
 

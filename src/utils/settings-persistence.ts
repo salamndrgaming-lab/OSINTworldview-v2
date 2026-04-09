@@ -14,23 +14,23 @@ export interface ImportResult {
 const MAX_IMPORT_SIZE_BYTES = 5 * 1024 * 1024;
 
 const SETTINGS_KEY_PREFIXES = [
-  'worldmonitor-panels',
-  'worldmonitor-monitors',
-  'worldmonitor-layers',
-  'worldmonitor-disabled-feeds',
-  'worldmonitor-live-channels',
-  'worldmonitor-map-mode',
-  'worldmonitor-variant',
-  'worldmonitor-theme',
-  'worldmonitor-panel-spans',
-  'worldmonitor-panel-order',
-  'worldmonitor-runtime-feature-toggles',
+  'osintview-panels',
+  'osintview-monitors',
+  'osintview-layers',
+  'osintview-disabled-feeds',
+  'osintview-live-channels',
+  'osintview-map-mode',
+  'osintview-variant',
+  'osintview-theme',
+  'osintview-panel-spans',
+  'osintview-panel-order',
+  'osintview-runtime-feature-toggles',
   'wm-breaking-alerts-v1',
   'wm-globe-render-scale',
   'wm-live-streams-always-on',
   'wm-font-family',
-  'worldmonitor-active-channel',
-  'worldmonitor-webcam-prefs',
+  'osintview-active-channel',
+  'osintview-webcam-prefs',
   'wm-map-theme:',
   'map-height',
   'map-pinned',
@@ -55,7 +55,7 @@ export function exportSettings(): void {
   const exportData: ExportedSettings = {
     version: 1,
     timestamp: new Date().toISOString(),
-    variant: localStorage.getItem('worldmonitor-variant') || 'full',
+    variant: localStorage.getItem('osintview-variant') || 'full',
     data,
   };
 
@@ -64,7 +64,7 @@ export function exportSettings(): void {
   const a = document.createElement('a');
   a.href = url;
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  a.download = `worldmonitor-settings-${ts}.json`;
+  a.download = `osintview-settings-${ts}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

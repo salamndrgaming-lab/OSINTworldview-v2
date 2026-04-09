@@ -25,7 +25,7 @@ export type RuntimeSecretKey =
   | 'UCDP_ACCESS_TOKEN'
   | 'OLLAMA_API_URL'
   | 'OLLAMA_MODEL'
-  | 'WORLDMONITOR_API_KEY'
+  | 'OSINTVIEW_API_KEY'
   | 'WTO_API_KEY'
   | 'AVIATIONSTACK_API'
   | 'ICAO_API_KEY';
@@ -76,7 +76,7 @@ export interface RuntimeConfig {
   secrets: Partial<Record<RuntimeSecretKey, RuntimeSecretState>>;
 }
 
-const TOGGLES_STORAGE_KEY = 'worldmonitor-runtime-feature-toggles';
+const TOGGLES_STORAGE_KEY = 'osintview-runtime-feature-toggles';
 function getSidecarEnvUpdateUrl(): string {
   return `${getApiBaseUrl()}/api/local-env-update`;
 }
@@ -344,7 +344,7 @@ export function validateSecret(key: RuntimeSecretKey, value: string): { valid: b
     }
   }
 
-  if (key === 'WORLDMONITOR_API_KEY') {
+  if (key === 'OSINTVIEW_API_KEY') {
     if (trimmed.length < 16) return { valid: false, hint: 'API key must be at least 16 characters' };
     return { valid: true };
   }

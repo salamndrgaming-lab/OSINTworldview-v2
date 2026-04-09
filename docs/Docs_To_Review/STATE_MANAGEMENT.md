@@ -1,6 +1,6 @@
 # State Management
 
-World Monitor is an AI-powered real-time global intelligence dashboard built with **vanilla TypeScript** — no framework, no reactive stores. All state is managed manually through class properties, `localStorage`, `IndexedDB`, and URL query parameters.
+OSINTview is an AI-powered real-time global intelligence dashboard built with **vanilla TypeScript** — no framework, no reactive stores. All state is managed manually through class properties, `localStorage`, `IndexedDB`, and URL query parameters.
 
 This document is the canonical reference for how state is stored, updated, and persisted across the application.
 
@@ -203,7 +203,7 @@ Panels use `localStorage` for persistence. Defined in `src/components/Panel.ts`:
 ### Panel Spans
 
 ```typescript
-const PANEL_SPANS_KEY = 'worldmonitor-panel-spans';
+const PANEL_SPANS_KEY = 'osintview-panel-spans';
 
 // Stored as Record<string, number> — panel ID → grid span (1–4)
 function loadPanelSpans(): Record<string, number> {
@@ -237,7 +237,7 @@ Stored in `localStorage` under `panel-order` as a JSON `string[]` of panel IDs. 
 
 ### Panel Settings
 
-Stored in `localStorage` under `worldmonitor-panels` as `Record<string, PanelConfig>`. Includes per-panel `enabled` state, `name`, and `priority`. Controlled by the variant config and user overrides.
+Stored in `localStorage` under `osintview-panels` as `Record<string, PanelConfig>`. Includes per-panel `enabled` state, `name`, and `priority`. Controlled by the variant config and user overrides.
 
 ### STORAGE_KEYS
 
@@ -245,19 +245,19 @@ Defined in `src/config/variants/base.ts` (and mirrored in `src/config/panels.ts`
 
 ```typescript
 export const STORAGE_KEYS = {
-  panels:        'worldmonitor-panels',
-  monitors:      'worldmonitor-monitors',
-  mapLayers:     'worldmonitor-layers',
-  disabledFeeds: 'worldmonitor-disabled-feeds',
+  panels:        'osintview-panels',
+  monitors:      'osintview-monitors',
+  mapLayers:     'osintview-layers',
+  disabledFeeds: 'osintview-disabled-feeds',
 } as const;
 ```
 
 | Key | Type | Purpose |
 |-----|------|---------|
-| `worldmonitor-panels` | `Record<string, PanelConfig>` | Per-panel enabled/name/priority |
-| `worldmonitor-monitors` | `Monitor[]` | Color/label configs for monitors |
-| `worldmonitor-layers` | `MapLayers` | Enabled/disabled map layer toggles |
-| `worldmonitor-disabled-feeds` | `string[]` | User-disabled news feed sources |
+| `osintview-panels` | `Record<string, PanelConfig>` | Per-panel enabled/name/priority |
+| `osintview-monitors` | `Monitor[]` | Color/label configs for monitors |
+| `osintview-layers` | `MapLayers` | Enabled/disabled map layer toggles |
+| `osintview-disabled-feeds` | `string[]` | User-disabled news feed sources |
 
 ---
 
@@ -267,7 +267,7 @@ Defined in `src/utils/theme-manager.ts`. Supported themes: `'dark' | 'light'`.
 
 ### Storage
 
-- **Key:** `worldmonitor-theme`
+- **Key:** `osintview-theme`
 - **Default:** `'dark'`
 
 ### API
@@ -300,7 +300,7 @@ sequenceDiagram
     User->>setTheme: setTheme('light')
     setTheme->>DOM: data-theme = 'light'
     setTheme->>ColorCache: invalidateColorCache()
-    setTheme->>localStorage: setItem('worldmonitor-theme', 'light')
+    setTheme->>localStorage: setItem('osintview-theme', 'light')
     setTheme->>DOM: meta[theme-color].content = '#f8f9fa'
     setTheme->>Window: dispatchEvent('theme-changed')
 ```
@@ -343,7 +343,7 @@ All colors are driven by CSS custom properties under `[data-theme]` selectors. C
 
 Defined in `src/services/storage.ts`.
 
-- **Database name:** `worldmonitor_db`
+- **Database name:** `osintview_db`
 - **Version:** `1`
 - **Stores:** `baselines`, `snapshots`
 
@@ -411,7 +411,7 @@ getSnapshotTimestamps(): Promise<number[]>
 
 ```typescript
 export async function initDB(): Promise<IDBDatabase> {
-  // Opens or creates worldmonitor_db v1
+  // Opens or creates osintview_db v1
   // Creates 'baselines' store (keyPath: 'key')
   // Creates 'snapshots' store (keyPath: 'timestamp', index: 'by_time')
 }
@@ -582,7 +582,7 @@ flowchart TD
     end
 ```
 
-- **Toggles key:** `worldmonitor-runtime-feature-toggles` in `localStorage`
+- **Toggles key:** `osintview-runtime-feature-toggles` in `localStorage`
 - **Toggles format:** `Record<RuntimeFeatureId, boolean>` (JSON)
 - **Secrets (desktop):** stored in the OS keychain via Tauri IPC commands (`read_secret`, `write_secret`)
 - **Secrets (web):** sourced from environment variables at build time
@@ -688,23 +688,23 @@ stateDiagram-v2
 
 ## 9. All localStorage Keys
 
-Complete reference of every `localStorage` key used by World Monitor:
+Complete reference of every `localStorage` key used by OSINTview:
 
 | Key | Purpose | Format | Source |
 |-----|---------|--------|--------|
-| `worldmonitor-variant` | Active variant override | `'full' \| 'tech' \| 'finance'` | `src/config/variant.ts`, `App.ts` |
-| `worldmonitor-theme` | Theme preference | `'dark' \| 'light'` | `src/utils/theme-manager.ts` |
+| `osintview-variant` | Active variant override | `'full' \| 'tech' \| 'finance'` | `src/config/variant.ts`, `App.ts` |
+| `osintview-theme` | Theme preference | `'dark' \| 'light'` | `src/utils/theme-manager.ts` |
 | `panel-order` | Panel arrangement order | `string[]` (JSON) | `App.ts` |
-| `worldmonitor-panel-spans` | Panel grid sizes | `Record<string, number>` (JSON) | `src/components/Panel.ts` |
-| `worldmonitor-panels` | Panel enabled/config state | `Record<string, PanelConfig>` (JSON) | `STORAGE_KEYS.panels` |
-| `worldmonitor-monitors` | Monitor color/label configs | `Monitor[]` (JSON) | `STORAGE_KEYS.monitors` |
-| `worldmonitor-layers` | Map layer toggles | `MapLayers` (JSON) | `STORAGE_KEYS.mapLayers` |
-| `worldmonitor-disabled-feeds` | User-disabled news sources | `string[]` (JSON) | `STORAGE_KEYS.disabledFeeds` |
-| `worldmonitor-runtime-feature-toggles` | Desktop feature toggles | `Record<RuntimeFeatureId, boolean>` (JSON) | `src/services/runtime-config.ts` |
-| `worldmonitor-persistent-cache:{key}` | Persistent data cache entries | `CacheEnvelope<T>` (JSON) | `src/services/persistent-cache.ts` |
+| `osintview-panel-spans` | Panel grid sizes | `Record<string, number>` (JSON) | `src/components/Panel.ts` |
+| `osintview-panels` | Panel enabled/config state | `Record<string, PanelConfig>` (JSON) | `STORAGE_KEYS.panels` |
+| `osintview-monitors` | Monitor color/label configs | `Monitor[]` (JSON) | `STORAGE_KEYS.monitors` |
+| `osintview-layers` | Map layer toggles | `MapLayers` (JSON) | `STORAGE_KEYS.mapLayers` |
+| `osintview-disabled-feeds` | User-disabled news sources | `string[]` (JSON) | `STORAGE_KEYS.disabledFeeds` |
+| `osintview-runtime-feature-toggles` | Desktop feature toggles | `Record<RuntimeFeatureId, boolean>` (JSON) | `src/services/runtime-config.ts` |
+| `osintview-persistent-cache:{key}` | Persistent data cache entries | `CacheEnvelope<T>` (JSON) | `src/services/persistent-cache.ts` |
 | `wm-update-dismissed-{version}` | Dismissed update notifications | `'1'` | `App.ts` |
-| `worldmonitor-panel-order-v1.9` | Panel order migration flag | `'done'` | `App.ts` (one-time migration) |
-| `worldmonitor-tech-insights-top-v1` | Tech variant migration flag | `'done'` | `App.ts` (one-time migration) |
+| `osintview-panel-order-v1.9` | Panel order migration flag | `'done'` | `App.ts` (one-time migration) |
+| `osintview-tech-insights-top-v1` | Tech variant migration flag | `'done'` | `App.ts` (one-time migration) |
 
 ### CacheEnvelope Format
 
@@ -728,7 +728,7 @@ On desktop (Tauri), the persistent cache prefers the Tauri IPC bridge (`read_cac
 flowchart TB
     subgraph "Persistent Storage"
         LS["localStorage"]
-        IDB["IndexedDB (worldmonitor_db)"]
+        IDB["IndexedDB (osintview_db)"]
         KC["OS Keychain (desktop only)"]
     end
 

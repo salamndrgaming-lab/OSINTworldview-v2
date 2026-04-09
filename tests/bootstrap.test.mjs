@@ -83,7 +83,7 @@ describe('Bootstrap cache key registry', () => {
       keys.push(m[1]);
     }
 
-    const handlerDirs = join(root, 'server', 'worldmonitor');
+    const handlerDirs = join(root, 'server', 'osintview');
     const handlerFiles = [];
     function walk(dir) {
       for (const entry of readdirSync(dir)) {

@@ -1,4 +1,4 @@
-// Happy variant - happy.worldmonitor.app
+// Happy variant - happy.osintview.app
 import type { PanelConfig, MapLayers } from '@/types';
 import type { VariantConfig } from './base';
 

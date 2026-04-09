@@ -1,6 +1,6 @@
 import { Panel } from './Panel';
 import { getRpcBaseUrl } from '@/services/rpc-client';
-import { IntelligenceServiceClient } from '@/generated/client/worldmonitor/intelligence/v1/service_client';
+import { IntelligenceServiceClient } from '@/generated/client/osintview/intelligence/v1/service_client';
 import { h, replaceChildren } from '@/utils/dom-utils';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';

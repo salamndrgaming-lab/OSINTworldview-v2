@@ -5,7 +5,7 @@ import { getUSNIRegionApproxCoords, getUSNIRegionCoords, HULL_HOMEPORT } from '@
 import {
   MilitaryServiceClient,
   type GetUSNIFleetReportResponse,
-} from '@/generated/client/worldmonitor/military/v1/service_client';
+} from '@/generated/client/osintview/military/v1/service_client';
 
 const client = new MilitaryServiceClient(getRpcBaseUrl(), { fetch: (...args) => globalThis.fetch(...args) });
 

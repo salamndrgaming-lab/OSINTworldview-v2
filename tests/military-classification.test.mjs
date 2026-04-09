@@ -11,7 +11,7 @@ const root = resolve(__dirname, '..');
 // Extract server-side classification data from _shared.ts source
 // ---------------------------------------------------------------------------
 const sharedSrc = readFileSync(
-  join(root, 'server/worldmonitor/military/v1/_shared.ts'),
+  join(root, 'server/osintview/military/v1/_shared.ts'),
   'utf-8',
 );
 

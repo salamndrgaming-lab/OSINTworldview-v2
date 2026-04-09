@@ -1,6 +1,6 @@
 /**
  * GlobePerf.ts — Globe Performance Optimization Module
- * World Monitor OSINT Platform
+ * OSINTview OSINT Platform
  *
  * Drop into: src/components/GlobePerf.ts
  */

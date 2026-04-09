@@ -1,13 +1,13 @@
-# World Monitor Pro — Implementation Roadmap
+# OSINTview Pro — Implementation Roadmap
 
 ## Context
 
 The `/pro` landing page promises features across 4 tiers (Free, Pro, API, Enterprise) but almost nothing beyond the marketing page exists. Current state:
 
 - **Convex**: bare — `registrations` + `counters` tables only
-- **Auth**: none — no Clerk, no sessions. Desktop uses manual `WORLDMONITOR_API_KEY` in keychain
+- **Auth**: none — no Clerk, no sessions. Desktop uses manual `OSINTVIEW_API_KEY` in keychain
 - **Payments**: none — no Stripe
-- **Gating**: UI-only on desktop (6 panels, 3 map layers). No server-side enforcement. `api/_api-key.js` validates against static `WORLDMONITOR_VALID_KEYS` env var
+- **Gating**: UI-only on desktop (6 panels, 3 map layers). No server-side enforcement. `api/_api-key.js` validates against static `OSINTVIEW_VALID_KEYS` env var
 - **User dashboard**: none
 - **API tier**: none (marketed as separate product)
 - **Delivery channels**: none (Slack/Telegram/Discord/WhatsApp/Email)
@@ -72,7 +72,7 @@ Phase 0 (Decisions)
 **Priority**: P0 | **Size**: S | **Dependencies**: None
 
 **Description**:
-Evaluate and select an authentication provider for World Monitor Pro.
+Evaluate and select an authentication provider for OSINTview Pro.
 
 **Options**:
 
@@ -220,7 +220,7 @@ Implement Clerk auth flow for the Tauri desktop app with proper session persiste
 
 **Implementation**:
 
-1. Register `worldmonitor://auth/callback` deep link URI scheme in Tauri config
+1. Register `osintview://auth/callback` deep link URI scheme in Tauri config
 2. Use PKCE OAuth flow (Clerk supports this)
 3. On successful callback, store Clerk session token in macOS Keychain via existing `setSecret()` pattern
 4. Token lifecycle: refresh on app foreground, auto-refresh if <5min remaining
@@ -502,10 +502,10 @@ Create Stripe products and price objects for all tiers.
 
 **Products**:
 
-1. **World Monitor Pro Monthly** — $X/mo
-2. **World Monitor Pro Annual** — $X/yr (discount)
-3. **World Monitor API Starter** — $Y/mo (1,000 req/day, 5 webhook rules)
-4. **World Monitor API Business** — $Z/mo (50,000 req/day, unlimited webhooks + SLA)
+1. **OSINTview Pro Monthly** — $X/mo
+2. **OSINTview Pro Annual** — $X/yr (discount)
+3. **OSINTview API Starter** — $Y/mo (1,000 req/day, 5 webhook rules)
+4. **OSINTview API Business** — $Z/mo (50,000 req/day, unlimited webhooks + SLA)
 
 **Environment variables**:
 
@@ -683,7 +683,7 @@ Add entitlement-aware middleware to the server gateway so pro-only endpoints are
 
 **API key migration (dual-read rollout)**:
 
-1. **Phase A**: validate against BOTH static `WORLDMONITOR_VALID_KEYS` AND new entitlements. Log comparison metrics.
+1. **Phase A**: validate against BOTH static `OSINTVIEW_VALID_KEYS` AND new entitlements. Log comparison metrics.
 2. **Phase B**: after 1 week with 0 mismatches, flip flag to new system only. Keep env var as emergency rollback.
 3. **Phase C**: remove static key validation code after 30 days.
 
@@ -719,7 +719,7 @@ Create a client-side service that exposes user plan/entitlements for UI gating.
 1. New service: `src/services/plan-context.ts`
 2. On auth, query user entitlements from Convex
 3. Expose helpers: `isPro()`, `hasApiAccess()`, `getPlan()`, `hasFeature(name)`
-4. Replace ALL `getSecretState('WORLDMONITOR_API_KEY').present` checks with plan context
+4. Replace ALL `getSecretState('OSINTVIEW_API_KEY').present` checks with plan context
 5. Works for both web (Clerk session) and desktop (Clerk + Tauri keychain)
 6. Include `computedAt` timestamp for staleness detection
 
@@ -733,7 +733,7 @@ Create a client-side service that exposes user plan/entitlements for UI gating.
 **Acceptance criteria**:
 
 - [ ] `isPro()` returns true for pro users, false for free
-- [ ] All `getSecretState('WORLDMONITOR_API_KEY')` references replaced
+- [ ] All `getSecretState('OSINTVIEW_API_KEY')` references replaced
 - [ ] Plan context updates within 60s of subscription change
 
 ---
@@ -941,7 +941,7 @@ Build a new data pipeline for equity research features (pro-only).
 
 **Implementation**:
 
-- New sebuf proto service: `worldmonitor/equity/v1/`
+- New sebuf proto service: `osintview/equity/v1/`
 - RPCs: `get-company-financials`, `get-analyst-consensus`, `get-valuation-metrics`, `list-earnings-calendar`
 - Redis caching via `cachedFetchJson` pattern
 - New panel: Equity Research dashboard (pro-only, gated via entitlements)
@@ -1051,7 +1051,7 @@ Build multi-channel delivery infrastructure for AI briefs and alerts.
 
 1. **Email** — Resend (already integrated). Extend for formatted briefs/alerts.
 2. **Slack** — incoming webhook URL (user provides). Format messages with blocks.
-3. **Telegram** — Bot API. Create `@WorldMonitorBot`. User starts conversation, store `chat_id`.
+3. **Telegram** — Bot API. Create `@OSINTviewBot`. User starts conversation, store `chat_id`.
 4. **Discord** — webhook URL (user provides). Format with embeds.
 5. **WhatsApp** — P3 (requires Twilio/Meta business verification, highest cost)
 
@@ -1137,11 +1137,11 @@ Enhance existing risk analytics with scenario analysis and convergence alerting.
 **Priority**: P1 | **Size**: M | **Dependencies**: #4.1
 
 **Description**:
-Pro users should NOT need to configure individual API keys for Finnhub, FRED, ACLED, etc. A single World Monitor Pro subscription gives access to all 24 services.
+Pro users should NOT need to configure individual API keys for Finnhub, FRED, ACLED, etc. A single OSINTview Pro subscription gives access to all 24 services.
 
 **Implementation**:
 
-- Server-side: pro requests use World Monitor's own upstream API keys (already configured as env vars)
+- Server-side: pro requests use OSINTview's own upstream API keys (already configured as env vars)
 - Free tier: continues using BYOK via desktop settings panel
 - Gateway identifies pro user → skips BYOK requirement → uses server-side keys for upstream calls
 
@@ -1386,7 +1386,7 @@ Dedicated Android TV app for SOC walls and trading floors. Separate codebase.
 2. **Edge + Convex plan lookups**: Vercel Edge can't import Convex. Must cache in Upstash Redis with active invalidation on webhook events.
 3. **Sub-60s refresh at scale**: 10x more requests from pro users. SSE/WebSocket needed long-term.
 4. **API as separate product**: Multiple Stripe subscriptions per user adds billing complexity. `entitlements` projection table mitigates scattered logic.
-5. **Desktop auth + Tauri WKWebView**: Known limitations. PKCE flow with `worldmonitor://` deep link callback.
+5. **Desktop auth + Tauri WKWebView**: Known limitations. PKCE flow with `osintview://` deep link callback.
 6. **API key migration outage**: Dual-read rollout (old + new in parallel) with comparison metrics before cutover.
 
 ## Observability & Operations

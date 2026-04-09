@@ -2,7 +2,7 @@
 
 > **This document is outdated.** The current architecture reference is [`/ARCHITECTURE.md`](../../ARCHITECTURE.md) at the repository root.
 
-World Monitor is an AI-powered real-time global intelligence dashboard built as a TypeScript single-page application. It aggregates 30+ external data sources — covering geopolitics, military activity, financial markets, cyber threats, climate events, and more — into a unified operational picture rendered through an interactive 3D globe and a grid of specialised panels.
+OSINTview is an AI-powered real-time global intelligence dashboard built as a TypeScript single-page application. It aggregates 30+ external data sources — covering geopolitics, military activity, financial markets, cyber threats, climate events, and more — into a unified operational picture rendered through an interactive 3D globe and a grid of specialised panels.
 
 This document covers the full system architecture: deployment topology, variant configuration, data pipelines, signal intelligence, map rendering, caching, desktop packaging, machine-learning inference, and error handling.
 
@@ -96,7 +96,7 @@ graph TD
 | **External APIs** | 30+ heterogeneous sources | RSS feeds, conflict databases (ACLED, UCDP), geospatial (GDELT, NASA FIRMS, OpenSky), markets (Finnhub, Yahoo Finance, CoinGecko), LLMs (Groq, OpenRouter), and more. |
 | **Upstash Redis** | Redis REST API | Server-side response cache with TTL-based expiry. Falls back to in-memory Map in sidecar mode. |
 | **Service Worker** | Workbox | Offline support, runtime caching strategies, background sync. |
-| **IndexedDB** | `worldmonitor_db` | Client-side storage for playback snapshots and temporal baseline data. |
+| **IndexedDB** | `osintview_db` | Client-side storage for playback snapshots and temporal baseline data. |
 | **Tauri Shell** | Tauri 2 (Rust) + Node.js sidecar | Desktop packaging. Sidecar runs a local API server; Rust layer provides OS keychain, window management, and IPC. |
 | **ML Worker** | Web Worker + ONNX Runtime / Transformers.js | In-browser inference for embeddings, sentiment, summarisation, and NER. |
 
@@ -104,20 +104,20 @@ graph TD
 
 ## 2. Variant Architecture
 
-World Monitor ships as three product variants from a single codebase. Each variant surfaces a different subset of panels, map layers, and data sources.
+OSINTview ships as three product variants from a single codebase. Each variant surfaces a different subset of panels, map layers, and data sources.
 
 | Variant | Domain | Focus |
 |---|---|---|
-| `full` | worldmonitor.app | Geopolitics, military, OSINT, conflicts, markets |
-| `tech` | tech.worldmonitor.app | AI/ML, startups, cybersecurity, developer tools |
-| `finance` | finance.worldmonitor.app | Markets, trading, central banks, macro indicators |
+| `full` | osintview.app | Geopolitics, military, OSINT, conflicts, markets |
+| `tech` | tech.osintview.app | AI/ML, startups, cybersecurity, developer tools |
+| `finance` | finance.osintview.app | Markets, trading, central banks, macro indicators |
 
 ### Variant Resolution
 
 The active variant is resolved at startup in src/config/variant.ts via a strict priority chain:
 
 ```
-localStorage('worldmonitor-variant')  →  import.meta.env.VITE_VARIANT  →  default 'full'
+localStorage('osintview-variant')  →  import.meta.env.VITE_VARIANT  →  default 'full'
 ```
 
 The exported constant `SITE_VARIANT` is computed once as an IIFE:
@@ -125,7 +125,7 @@ The exported constant `SITE_VARIANT` is computed once as an IIFE:
 ```typescript
 export const SITE_VARIANT: string = (() => {
   if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('worldmonitor-variant');
+    const stored = localStorage.getItem('osintview-variant');
     if (stored === 'tech' || stored === 'full' || stored === 'finance') return stored;
   }
   return import.meta.env.VITE_VARIANT || 'full';
@@ -418,7 +418,7 @@ graph TD
 
     subgraph LayerConfig["Layer Configuration"]
         Defaults["FULL_MAP_LAYERS<br/>(35+ boolean toggles)"]
-        UserPref["localStorage overrides<br/>(worldmonitor-layers)"]
+        UserPref["localStorage overrides<br/>(osintview-layers)"]
         URLState["URL state overrides"]
         Variant["Variant-specific defaults"]
     end
@@ -462,7 +462,7 @@ Map layers follow a three-tier override system:
 
 1. **Variant defaults** — `FULL_MAP_LAYERS`, `TECH_MAP_LAYERS`, or `FINANCE_MAP_LAYERS` define the base layer state for each variant. The full variant enables `conflicts`, `bases`, `hotspots`, `nuclear`, `sanctions`, `weather`, `economic`, `waterways`, `outages`, and `military` by default.
 
-2. **User localStorage** — Stored under the key `worldmonitor-layers`. Users toggle layers in the map controls UI, and their preferences persist across sessions.
+2. **User localStorage** — Stored under the key `osintview-layers`. Users toggle layers in the map controls UI, and their preferences persist across sessions.
 
 3. **URL state** — Query parameters can override individual layers for shareable links and embeds.
 
@@ -486,7 +486,7 @@ The **MapPopup** component (src/components/MapPopup.ts) provides a unified popup
 
 ## 6. Caching Architecture
 
-World Monitor employs a five-tier caching strategy to minimise API costs, reduce latency, and enable offline operation.
+OSINTview employs a five-tier caching strategy to minimise API costs, reduce latency, and enable offline operation.
 
 ```mermaid
 graph TD
@@ -507,7 +507,7 @@ graph TD
     end
 
     subgraph Tier4["Tier 4: IndexedDB (Client)"]
-        IDB["worldmonitor_db"]
+        IDB["osintview_db"]
         Baselines["baselines store<br/>(keyPath: 'key')"]
         Snapshots["snapshots store<br/>(keyPath: 'timestamp'<br/>index: 'by_time')"]
         IDB --> Baselines
@@ -517,7 +517,7 @@ graph TD
     subgraph Tier5["Tier 5: Persistent Cache"]
         PC["persistent-cache.ts<br/>CacheEnvelope&lt;T&gt;"]
         TauriInvoke["Tauri invoke<br/>(OS filesystem)"]
-        LSFallback["localStorage fallback<br/>prefix: worldmonitor-persistent-cache:"]
+        LSFallback["localStorage fallback<br/>prefix: osintview-persistent-cache:"]
         PC --> TauriInvoke
         PC --> LSFallback
     end
@@ -562,7 +562,7 @@ The offline fallback page (public/offline.html) is served when the network is un
 
 ### Tier 4: IndexedDB
 
-The `worldmonitor_db` IndexedDB database contains two object stores:
+The `osintview_db` IndexedDB database contains two object stores:
 
 | Store | keyPath | Index | Purpose |
 |---|---|---|---|
@@ -581,7 +581,7 @@ type CacheEnvelope<T> = {
 };
 ```
 
-On desktop, `getPersistentCache()` and `setPersistentCache()` attempt Tauri IPC invocations (`read_cache_entry` / `write_cache_entry`) first, which store data on the OS filesystem via the Rust backend. If the Tauri call fails (or in web mode), the module falls back to `localStorage` with the prefix `worldmonitor-persistent-cache:`.
+On desktop, `getPersistentCache()` and `setPersistentCache()` attempt Tauri IPC invocations (`read_cache_entry` / `write_cache_entry`) first, which store data on the OS filesystem via the Rust backend. If the Tauri call fails (or in web mode), the module falls back to `localStorage` with the prefix `osintview-persistent-cache:`.
 
 ---
 
@@ -631,7 +631,7 @@ function detectDesktopRuntime(probe: RuntimeProbe): boolean {
 }
 ```
 
-When desktop mode is detected, `getApiBaseUrl()` returns `http://127.0.0.1:46123` instead of relative paths, routing all API calls through the local sidecar. A global `fetch()` monkey-patch (applied once via `__wmFetchPatched` guard) rewrites API URLs to point at the sidecar.
+When desktop mode is detected, `getApiBaseUrl()` returns `http://127.0.0.1:46123` instead of relative paths, routing all API calls through the local sidecar. A global `fetch()` monkey-patch (applied once via `__ovFetchPatched` guard) rewrites API URLs to point at the sidecar.
 
 ### Tauri Configuration
 
@@ -662,7 +662,7 @@ The src/services/runtime-config.ts module manages two concerns:
 
 On desktop, secrets are read from the OS keychain via Tauri IPC. In web mode, they fall back to environment variables. A `validateSecret()` function provides format validation with user-facing hints.
 
-**2. Feature Toggles** — 14 `RuntimeFeatureId` values stored in localStorage under the key `worldmonitor-runtime-feature-toggles`:
+**2. Feature Toggles** — 14 `RuntimeFeatureId` values stored in localStorage under the key `osintview-runtime-feature-toggles`:
 
 `aiGroq`, `aiOpenRouter`, `economicFred`, `energyEia`, `internetOutages`, `acledConflicts`, `abuseChThreatIntel`, `alienvaultOtxThreatIntel`, `abuseIpdbThreatIntel`, `wingbitsEnrichment`, `aisRelay`, `openskyRelay`, `finnhubMarkets`, `nasaFirms`.
 
@@ -674,7 +674,7 @@ The settings page listens for `storage` events on the toggles key, enabling cros
 
 ## 8. ML Pipeline
 
-World Monitor runs machine-learning inference directly in the browser using ONNX Runtime Web via Transformers.js, with API-based fallbacks for constrained devices.
+OSINTview runs machine-learning inference directly in the browser using ONNX Runtime Web via Transformers.js, with API-based fallbacks for constrained devices.
 
 ```mermaid
 graph TD
@@ -818,7 +818,7 @@ The fallback is not automatic at the ML worker level; each consumer service choo
 
 ## 9. Error Handling Hierarchy
 
-World Monitor uses a circuit-breaker pattern to manage transient failures across its many data sources, preventing cascade failures and providing graceful degradation.
+OSINTview uses a circuit-breaker pattern to manage transient failures across its many data sources, preventing cascade failures and providing graceful degradation.
 
 ```mermaid
 stateDiagram-v2

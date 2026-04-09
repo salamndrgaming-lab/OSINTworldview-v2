@@ -92,7 +92,7 @@ describe('Legacy api/*.js endpoint allowlist', () => {
         ALLOWED_LEGACY_ENDPOINTS.has(file),
         `${file} is a new api/*.js endpoint not in the allowlist. ` +
           'New data endpoints must use the sebuf protobuf RPC pattern ' +
-          '(proto definition → buf generate → handler in server/worldmonitor/{domain}/v1/ → wired in handler.ts). ' +
+          '(proto definition → buf generate → handler in server/osintview/{domain}/v1/ → wired in handler.ts). ' +
           'If this is a non-data ops endpoint, add it to ALLOWED_LEGACY_ENDPOINTS in tests/edge-functions.test.mjs.',
       );
     });

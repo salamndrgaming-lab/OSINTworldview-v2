@@ -45,7 +45,7 @@ import {
   COMMODITY_HUBS,
 } from '@/config';
 import { pinWebcam, isPinned } from '@/services/webcams/pinned-store';
-import type { WebcamEntry, WebcamCluster } from '@/generated/client/worldmonitor/webcam/v1/service_client';
+import type { WebcamEntry, WebcamCluster } from '@/generated/client/osintview/webcam/v1/service_client';
 import { tokenizeForMatch, matchKeyword, findMatchingKeywords } from '@/utils/keyword-match';
 import { MapPopup } from './MapPopup';
 import {

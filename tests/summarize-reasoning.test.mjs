@@ -25,7 +25,7 @@ const readSrc = (relPath) => readFileSync(resolve(root, relPath), 'utf-8');
 // ========================================================================
 
 describe('Fix 1: message.reasoning fallback', () => {
-  const src = readSrc('server/worldmonitor/news/v1/summarize-article.ts');
+  const src = readSrc('server/osintview/news/v1/summarize-article.ts');
 
   it('does NOT fall back to message.reasoning', () => {
     assert.doesNotMatch(src, /message\?\.reasoning/,
@@ -43,7 +43,7 @@ describe('Fix 1: message.reasoning fallback', () => {
 // ========================================================================
 
 describe('Fix 2: thinking tag stripping formats', () => {
-  const src = readSrc('server/worldmonitor/news/v1/summarize-article.ts');
+  const src = readSrc('server/osintview/news/v1/summarize-article.ts');
 
   it('strips <think> tags', () => {
     assert.match(src, /<think>/i, 'Should handle <think> tags');
@@ -108,7 +108,7 @@ describe('Fix 2: thinking tag stripping formats', () => {
 // ========================================================================
 
 describe('Fix 3: hasReasoningPreamble', () => {
-  const src = readSrc('server/worldmonitor/news/v1/summarize-article.ts');
+  const src = readSrc('server/osintview/news/v1/summarize-article.ts');
 
   // Extract production regexes from source to avoid drift between test and implementation.
   // Pattern: `export const TASK_NARRATION = /.../.../;`

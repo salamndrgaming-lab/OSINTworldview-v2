@@ -12,7 +12,7 @@
  * existing panels (news, POI, markets).
  */
 
-const STORAGE_KEY = 'worldmonitor-watchlist';
+const STORAGE_KEY = 'osintview-watchlist';
 
 export type WatchlistCategory = 'country' | 'poi' | 'stock' | 'keyword';
 

@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "World Monitor",
+    "title": "OSINTview",
     "description": "Globální situace s postřehy umělé inteligence"
   },
   "countryBrief": {
@@ -495,7 +495,7 @@
         "some": "Některé funkce vyžadují klíče API"
       },
       "openSettings": "Otevřít nastavení",
-      "skipSetup": "Přeskočit nastavení — jedna licence World Monitor odemkne vše. Zapište se na čekací listinu pro předběžný přístup.",
+      "skipSetup": "Přeskočit nastavení — jedna licence OSINTview odemkne vše. Zapište se na čekací listinu pro předběžný přístup.",
       "summary": {
         "desktop": "Desktopový režim",
         "web": "Webový režim (pouze pro čtení, přihlašovací údaje spravuje server)",
@@ -539,10 +539,10 @@
       "noTraffic": "Zatím nebyl zaznamenán žádný provoz.",
       "sidecarUnreachable": "Sidecar aplikace není dostupná.",
       "logCleared": "Protokol vymazán.",
-      "worldMonitor": {
-        "tabLabel": "World Monitor",
+      "osintview": {
+        "tabLabel": "OSINTview",
         "heroTitle": "Jeden klíč. Vše v ceně.",
-        "heroDescription": "Jediná licence World Monitor nahradí všechny API klíče a poskytovatele LLM, které byste jinak museli konfigurovat sami. AI souhrny, zpravodajství v reálném čase, tržní data, sledování konfliktů, detekce požárů, satelitní snímky — vše poháněno, vše spravováno, nulové nastavení.",
+        "heroDescription": "Jediná licence OSINTview nahradí všechny API klíče a poskytovatele LLM, které byste jinak museli konfigurovat sami. AI souhrny, zpravodajství v reálném čase, tržní data, sledování konfliktů, detekce požárů, satelitní snímky — vše poháněno, vše spravováno, nulové nastavení.",
         "apiKey": {
           "title": "Licenční klíč",
           "placeholder": "wm_xxxxxxxxxxxxxxxxxxxxxxxx",
@@ -553,7 +553,7 @@
         "dividerOr": "NEBO",
         "register": {
           "title": "Rezervujte si své místo",
-          "description": "Připravujeme spuštění licencí World Monitor. Zaregistrujte se nyní a buďte první v řadě — první členové získají prioritní přístup a zakladatelské ceny.",
+          "description": "Připravujeme spuštění licencí OSINTview. Zaregistrujte se nyní a buďte první v řadě — první členové získají prioritní přístup a zakladatelské ceny.",
           "emailPlaceholder": "vas@email.cz",
           "submitBtn": "Zapsat na čekací listinu",
           "submitting": "Odesílám...",

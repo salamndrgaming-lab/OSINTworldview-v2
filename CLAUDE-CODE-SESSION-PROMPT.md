@@ -32,3 +32,35 @@ pnpm lint && pnpm type-check
 cargo check --manifest-path src-tauri/Cargo.toml
 redis-cli ping && echo "Redis OK"
 # plus any custom test commands you have defined in package.json
+
+BRIDGE AI WORKFLOW — AUTOMATIC DETECTION & SWITCHINGIf the task touches ANY of the following high-risk sections, you MUST call out the better tool in your plan:Deep Rust/Tauri interop, src-tauri/ folder, IPC, credential injection, or sidecar changes → Cursor performs better (visual diffs + Rust intellisense).
+Any changes to DeckGLMap.ts, globe shaders, WebGL layers, Three.js rendering, or complex map performance → Cursor performs better (visual preview + layer debugging).
+Core bootstrap files (8-phase App.init(), startSmartPollLoop(), loadAllData(), primeVisiblePanelData(), AppContext) → Cursor performs better (safe multi-file refactoring).
+Protobuf/generated code, large-scale refactors, or cross-cutting changes across 10+ files → Cursor or Aider performs better (Git-safe, visual approval).
+E2E testing, Playwright visual regression, or heavy performance optimization → Continue.dev or Cursor performs better (integrated test runner + previews).
+Any Tauri desktop UI polish or visual tweaks → Cursor performs better (GUI editor experience).
+
+In these cases, end your plan with: “Switch to Cursor for visual review and polishing” or “Recommend Aider/Continue.dev for this refactor.”ULTRA-STRICT SURGICAL EDITING RULEFor DeckGLMap.ts, Tauri Rust files, core bootstrap files, or protobuf/generated folders: NEVER rewrite the whole file. Use surgical edits only. Reference exact line numbers.TOKEN-EFFICIENT & CONTEXT PROTECTION RULESReference this file and ARCHITECTURE.md by filename only — never paste their full content again.
+After every 3 turns, give a <50-word summary of changes.
+Use “ultrathink” mode only on complex tasks.
+
+PERSISTENT MEMORY & SKILLS (install these once)Install these open-source GitHub projects into your workflow for maximum first-try success:Persistent Memory → https://github.com/thedotmack/claude-mem (latest v12.0.1 as of April 2026)
+Install with: claude plugin marketplace add thedotmack/claude-mem && claude plugin install claude-mem
+Skills Packs (drop into .claude/skills/ folder):https://github.com/alirezarezvani/claude-skills (220+ production skills)
+https://github.com/travisvn/awesome-claude-skills (curated 1000+ skills list)
+
+Multi-Agent Orchestration → https://github.com/louislva/claude-peers-mcp
+(Enables multiple CC instances to talk to each other — perfect for spawning Rust + WebGL + tester agents.)
+
+CC is allowed to automatically use any installed skills from .claude/skills/ and any MCP servers.BRIDGING GAPS (when high-risk sections are detected)When the plan flags a high-risk section, CC will already recommend the switch. After CC finishes its part:Open the project in Cursor (https://cursor.com) for visual review, polishing, and final approval.
+Use Continue.dev → https://github.com/continuedev/continue (free VS Code extension) as backup.
+Use Aider → https://github.com/paul-gauthier/aider (terminal Git agent) for large safe refactors.
+
+SAFETY & PRE-APPROVED COMMANDSPermanently pre-approve these commands (never ask again):
+cargo, npm, pnpm, redis-cli, tauri, vitest, playwright, git, claude skills, claude mcp.FINAL INSTRUCTIONSMaximize first-try success and minimize tokens.
+Always stay inside the rigid architecture walls.
+Produce clean, production-viable, sellable code.
+Help me turn this into a multi-million-dollar enterprise product.
+
+Begin every session by confirming you have loaded this prompt and the latest ARCHITECTURE.md, then run diagnostics.
+

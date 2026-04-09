@@ -92,6 +92,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'narrative-drift': { name: 'Narrative Drift', enabled: false, priority: 2 },
   'counterfactual-sim': { name: 'Counterfactual Engine', enabled: false, priority: 2 },
   'osint-report': { name: 'OSINT Report', enabled: false, priority: 2 },
+  'agent-council': { name: 'Agent Council', enabled: false, priority: 1 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {
@@ -973,7 +974,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
     panelKeys: ['cii', 'strategic-risk', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel',
       'poi', 'insights', 'telegram-osint', 'counterfactual-sim', 'osint-report',
       'hypothesis-generator', 'narrative-drift', 'auto-brief', 'cross-source-signals',
-      'intel-graph', 'missile-tracker', 'osint-toolkit'],
+      'intel-graph', 'missile-tracker', 'osint-toolkit', 'agent-council'],
     variants: ['full'],
   },
   correlation: {

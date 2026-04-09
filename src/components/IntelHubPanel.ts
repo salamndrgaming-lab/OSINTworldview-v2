@@ -9,6 +9,7 @@ const TABS: CompoundTab[] = [
   { id: 'cross-source-signals', label: 'Cross-Source', loader: () => import('./CrossSourceSignalsPanel').then(m => new m.CrossSourceSignalsPanel()) },
   { id: 'insights', label: 'AI Insights', loader: () => import('./InsightsPanel').then(m => new m.InsightsPanel()) },
   { id: 'cascade', label: 'Cascade', loader: () => import('./CascadePanel').then(m => new m.CascadePanel()) },
+  { id: 'agent-council', label: 'Council', loader: () => import('./AgentCouncilPanel').then(m => new m.AgentCouncilPanel()) },
 ];
 
 export class IntelHubPanel extends CompoundPanel {

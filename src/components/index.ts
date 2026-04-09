@@ -71,6 +71,8 @@ export { TimeTravelPanel } from './TimeTravelPanel';
 export { SignalConfidencePanel } from './SignalConfidencePanel';
 export { AutoBriefPanel } from './AutoBriefPanel';
 
+export { AgentCouncilPanel } from './AgentCouncilPanel';
+
 // Compound Hub Panels
 export { IntelHubPanel } from './IntelHubPanel';
 export { SignalsHubPanel } from './SignalsHubPanel';

@@ -9,8 +9,8 @@
  * Pro tier: unlimited custom workspaces + sharing (future)
  */
 
-const STORAGE_KEY = 'worldmonitor-workspaces';
-const ACTIVE_KEY = 'worldmonitor-active-workspace';
+const STORAGE_KEY = 'osintview-workspaces';
+const ACTIVE_KEY = 'osintview-active-workspace';
 const MAX_FREE_CUSTOM = 2;
 
 export interface Workspace {

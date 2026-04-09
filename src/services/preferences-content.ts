@@ -24,7 +24,7 @@ import { createAccentColorPicker } from '@/services/accent-color';
 import { getTelegramConfig, saveTelegramConfig, clearTelegramConfig, testTelegramConnection, sendReport } from '@/services/telegram-report';
 import { getStoredBranding as getStoredBrandingConfig, saveBranding, clearBranding } from '@/services/branding';
 import { getWatchlist, addToWatchlist, removeFromWatchlist, clearWatchlist, type WatchlistCategory } from '@/services/watchlist';
-const DESKTOP_RELEASES_URL = 'https://github.com/koala73/worldmonitor/releases';
+const DESKTOP_RELEASES_URL = 'https://github.com/salamndrgaming-lab/OSINTworldview-v2/releases';
 
 export interface PreferencesHost {
   isDesktopApp: boolean;

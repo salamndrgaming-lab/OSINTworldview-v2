@@ -1,11 +1,11 @@
-# World Monitor - protect API routes from crawlers
+# OSINTview - protect API routes from crawlers
 User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /tests/
 
-Sitemap: https://www.worldmonitor.app/sitemap.xml
-Sitemap: https://www.worldmonitor.app/blog/sitemap-index.xml
+Sitemap: https://www.osintview.app/sitemap.xml
+Sitemap: https://www.osintview.app/blog/sitemap-index.xml
 
 # Allow social media bots for OG previews
 User-agent: Twitterbot

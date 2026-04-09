@@ -109,7 +109,7 @@ No external state library. `AppContext` is a central mutable object holding: map
 
 ### Variant System
 
-Detected by hostname (`tech.worldmonitor.app` → tech, `finance.worldmonitor.app` → finance, etc.) or localStorage on desktop. Controls: default panels, map layers, refresh intervals, theme, UI text. Variant change resets all settings to defaults.
+Detected by hostname (`tech.osintview.app` → tech, `finance.osintview.app` → finance, etc.) or localStorage on desktop. Controls: default panels, map layers, refresh intervals, theme, UI text. Variant change resets all settings to defaults.
 
 **Source files**: `src/main.ts`, `src/App.ts`, `src/app/`, `src/components/Panel.ts`, `src/components/DeckGLMap.ts`, `src/components/GlobeMap.ts`, `src/config/variant.ts`, `src/workers/`
 
@@ -125,7 +125,7 @@ All API endpoints live in `api/` as self-contained JavaScript files deployed as 
 
 | File | Purpose |
 |------|---------|
-| `_cors.js` | Origin allowlist (worldmonitor.app, Vercel previews, tauri://localhost, localhost) |
+| `_cors.js` | Origin allowlist (osintview.app, Vercel previews, tauri://localhost, localhost) |
 | `_rate-limit.js` | Upstash sliding window rate limiting, IP extraction |
 | `_api-key.js` | Origin-aware API key validation (desktop requires key, trusted browser exempt) |
 | `_relay.js` | Factory for proxying requests to Railway relay service |
@@ -158,9 +158,9 @@ All API endpoints live in `api/` as self-contained JavaScript files deployed as 
 
 ### Domain Handlers
 
-`server/worldmonitor/<domain>/v1/handler.ts` exports handler objects with per-RPC functions. Each RPC function uses `cachedFetchJson()` from `server/_shared/redis.ts` for cache-miss coalescing: concurrent requests for the same key share a single upstream fetch and Redis write.
+`server/osintview/<domain>/v1/handler.ts` exports handler objects with per-RPC functions. Each RPC function uses `cachedFetchJson()` from `server/_shared/redis.ts` for cache-miss coalescing: concurrent requests for the same key share a single upstream fetch and Redis write.
 
-**Source files**: `api/`, `server/gateway.ts`, `server/router.ts`, `server/_shared/redis.ts`, `server/worldmonitor/`
+**Source files**: `api/`, `server/gateway.ts`, `server/router.ts`, `server/_shared/redis.ts`, `server/osintview/`
 
 ---
 
@@ -381,7 +381,7 @@ Runs before every `git push`:
 │   ├── _shared/            Redis, rate-limit, LLM, caching utilities
 │   ├── gateway.ts          Domain gateway factory
 │   ├── router.ts           Route matching
-│   └── worldmonitor/       Domain handlers (mirrors proto structure)
+│   └── osintview/       Domain handlers (mirrors proto structure)
 ├── shared/                 Cross-platform JSON configs (markets, RSS domains)
 ├── src/                    Browser SPA (TypeScript)
 │   ├── app/                App orchestration managers

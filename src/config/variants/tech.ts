@@ -1,4 +1,4 @@
-// Tech/AI variant - tech.worldmonitor.app
+// Tech/AI variant - tech.osintview.app
 import type { PanelConfig, MapLayers } from '@/types';
 import type { VariantConfig } from './base';
 

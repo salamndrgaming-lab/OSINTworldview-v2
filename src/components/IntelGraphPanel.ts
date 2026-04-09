@@ -52,7 +52,7 @@ interface GraphState {
 
 // ── Constants ──────────────────────────────────────────────────
 
-const STORAGE_KEY = 'worldmonitor-intel-graph';
+const STORAGE_KEY = 'osintview-intel-graph';
 const CATEGORY_COLORS: Record<NodeCategory, string> = {
   country: '#3b82f6',      // blue
   person: '#8b5cf6',       // purple

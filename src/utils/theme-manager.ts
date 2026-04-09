@@ -16,8 +16,8 @@ import { invalidateColorCache } from './theme-colors';
 export type Theme = 'dark' | 'light' | 'tactical';
 export type ThemePreference = 'auto' | 'dark' | 'light' | 'tactical';
 
-const STORAGE_KEY = 'worldmonitor-theme';
-const CUSTOM_COLORS_KEY = 'worldmonitor-custom-colors';
+const STORAGE_KEY = 'osintview-theme';
+const CUSTOM_COLORS_KEY = 'osintview-custom-colors';
 const DEFAULT_THEME: Theme = 'dark';
 
 // ────────────────────────────────────────────────────────────

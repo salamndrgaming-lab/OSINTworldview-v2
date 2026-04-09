@@ -3,12 +3,12 @@
  * seed-gdelt-intel.mjs — Reads from gdelt:raw:v1 cache (no direct GDELT calls)
  * Requires seed-gdelt-raw.mjs to have run first in this seed cycle.
  *
- * Improvements over previous version (informed by worldmonitor's implementation):
+ * Improvements over previous version (informed by upstream's implementation):
  *  - 24h TTL (was 1h) — outlasts multiple cron cycles so consumers always have data
  *  - publishTransform strips internal fields before writing to canonical key
  *  - afterPublish writes per-topic tone/vol timeline keys (gdelt:intel:tone:*, gdelt:intel:vol:*)
  *  - Snapshot merge: if cache returns 0 articles for a topic, restores from previous snapshot
- *  - validate threshold raised to 3/6 topics (was 2/6) — matches worldmonitor
+ *  - validate threshold raised to 3/6 topics (was 2/6) — matches upstream
  */
 import { loadEnvFile, runSeed, verifySeedKey, writeExtraKey } from './_seed-utils.mjs';
 import { getGdeltIntelTopics, getGdeltIntelTopicsWithTimelines } from './_gdelt-cache.mjs';
@@ -18,7 +18,7 @@ loadEnvFile(import.meta.url);
 const CANONICAL_KEY = 'intelligence:gdelt-intel:v1';
 // 24h — intentionally much longer than the cron interval so verifySeedKey
 // always has a prior snapshot to merge from when GDELT rate-limits topics.
-// Matches worldmonitor's CACHE_TTL for this key.
+// Matches upstream's CACHE_TTL for this key.
 const CACHE_TTL    = 86_400;
 const TIMELINE_TTL = 43_200; // 12h — 2× cron interval; tone/vol survive until next run
 
@@ -29,7 +29,7 @@ async function buildIntelData() {
 
   // For topics that returned 0 articles (circuit tripped in the raw crawl),
   // restore the previous snapshot's articles rather than publishing empty
-  // results over good cached data — same pattern as worldmonitor's fetchAllTopics().
+  // results over good cached data — same pattern as upstream's fetchAllTopics().
   const emptyTopics = cached.topics.filter(t => t.articles.length === 0);
   if (emptyTopics.length > 0) {
     const previous = await verifySeedKey(CANONICAL_KEY).catch(() => null);
@@ -84,7 +84,7 @@ function validate(data) {
 }
 
 // Strip private/internal fields before writing to canonical Redis key.
-// Matches worldmonitor's publishTransform pattern.
+// Matches upstream's publishTransform pattern.
 function publishTransform(data) {
   return {
     ...data,
@@ -94,7 +94,7 @@ function publishTransform(data) {
 
 // Write per-topic tone/vol timeline keys (12h TTL) — separate from the 24h
 // canonical key. Consumers that want sparkline data read these directly.
-// Matches worldmonitor's afterPublish hook.
+// Matches upstream's afterPublish hook.
 async function afterPublish(data) {
   for (const topic of data.topics ?? []) {
     const fetchedAt = topic.fetchedAt ?? data.fetchedAt;

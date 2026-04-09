@@ -5,11 +5,11 @@ const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
 
 function makeRequest(body, opts = {}) {
-  return new Request('https://worldmonitor.app/api/contact', {
+  return new Request('https://osintview.app/api/contact', {
     method: opts.method || 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'origin': 'https://worldmonitor.app',
+      'origin': 'https://osintview.app',
       ...(opts.headers || {}),
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -53,9 +53,9 @@ describe('api/contact', () => {
 
   describe('validation', () => {
     it('rejects GET requests', async () => {
-      const res = await handler(new Request('https://worldmonitor.app/api/contact', {
+      const res = await handler(new Request('https://osintview.app/api/contact', {
         method: 'GET',
-        headers: { origin: 'https://worldmonitor.app' },
+        headers: { origin: 'https://osintview.app' },
       }));
       assert.equal(res.status, 405);
     });
@@ -134,7 +134,7 @@ describe('api/contact', () => {
     });
 
     it('rejects disallowed origins', async () => {
-      const req = new Request('https://worldmonitor.app/api/contact', {
+      const req = new Request('https://osintview.app/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', origin: 'https://evil.com' },
         body: JSON.stringify(validBody()),

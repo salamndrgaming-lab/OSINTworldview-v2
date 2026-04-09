@@ -4,7 +4,7 @@
  * Combines a full country-names.json base with city/capital/adjective aliases
  * and geopolitical short-forms that appear frequently in OSINT news headlines.
  *
- * Design goals (vs worldmonitor's version which this builds on):
+ * Design goals (vs upstream's version which this builds on):
  *  - Extended ALIAS_MAP with more conflict-zone capitals and militia/faction terms
  *  - Supranational markers (NATO, EU) return null instead of 'XX' — consumers
  *    get a clean null rather than a sentinel they have to filter

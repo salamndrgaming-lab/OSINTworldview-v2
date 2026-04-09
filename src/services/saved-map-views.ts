@@ -10,7 +10,7 @@
  * All custom views are persisted in localStorage.
  */
 
-const STORAGE_KEY = 'worldmonitor-saved-views';
+const STORAGE_KEY = 'osintview-saved-views';
 
 export interface SavedMapView {
   /** Unique ID (timestamp-based for user views, string for built-ins) */

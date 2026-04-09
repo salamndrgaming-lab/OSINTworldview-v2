@@ -35,7 +35,7 @@ import {
 } from './intel-graph-db';
 
 const ANALYST_CONTAINER_ID = 'analystWorkspace';
-const ACTIVE_SUBTAB_KEY = 'worldmonitor-analyst-subtab';
+const ACTIVE_SUBTAB_KEY = 'osintview-analyst-subtab';
 
 export type AnalystSubtab = 'entities' | 'graph' | 'timeline' | 'notepad' | 'toolkit';
 
@@ -181,7 +181,7 @@ function renderTimeline(): string {
 }
 
 function renderNotepad(): string {
-  const saved = localStorage.getItem('worldmonitor-analyst-notes') || '';
+  const saved = localStorage.getItem('osintview-analyst-notes') || '';
   return `<div class="analyst-pane" data-pane="notepad">
     <div class="analyst-pane-header">
       <h2 class="analyst-pane-title">Analyst Notepad</h2>
@@ -921,13 +921,13 @@ function initNotepad(): void {
   editor.addEventListener('input', () => {
     clearTimeout(timer);
     timer = setTimeout(() => {
-      localStorage.setItem('worldmonitor-analyst-notes', editor.value);
+      localStorage.setItem('osintview-analyst-notes', editor.value);
       if (status) { status.textContent = 'Saved'; setTimeout(() => { if (status) status.textContent = ''; }, 2000); }
     }, 3000);
   });
 
   document.getElementById('analystNotepadClear')?.addEventListener('click', () => {
-    if (confirm('Clear all notes?')) { editor.value = ''; localStorage.removeItem('worldmonitor-analyst-notes'); }
+    if (confirm('Clear all notes?')) { editor.value = ''; localStorage.removeItem('osintview-analyst-notes'); }
   });
 
   document.getElementById('analystNotepadExport')?.addEventListener('click', () => {

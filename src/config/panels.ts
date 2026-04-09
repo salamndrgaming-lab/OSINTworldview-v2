@@ -1108,8 +1108,8 @@ export const MONITOR_COLORS = [
 ];
 
 export const STORAGE_KEYS = {
-  panels: 'worldmonitor-panels',
-  monitors: 'worldmonitor-monitors',
-  mapLayers: 'worldmonitor-layers',
-  disabledFeeds: 'worldmonitor-disabled-feeds',
+  panels: 'osintview-panels',
+  monitors: 'osintview-monitors',
+  mapLayers: 'osintview-layers',
+  disabledFeeds: 'osintview-disabled-feeds',
 } as const;

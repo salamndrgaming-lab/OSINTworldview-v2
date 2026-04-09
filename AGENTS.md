@@ -30,10 +30,10 @@ Real-time global intelligence dashboard. TypeScript SPA (Vite + Preact) with 86 
 │   ├── _shared/            # Redis, rate-limit, LLM, caching, response headers
 │   ├── gateway.ts          # Domain gateway factory (CORS, auth, cache tiers)
 │   ├── router.ts           # Route matching
-│   └── worldmonitor/       # Domain handlers (mirrors proto service structure)
+│   └── osintview/       # Domain handlers (mirrors proto service structure)
 ├── proto/                  # Protobuf definitions (sebuf framework)
 │   ├── buf.yaml            # Buf configuration
-│   └── worldmonitor/       # Service definitions with HTTP annotations
+│   └── osintview/       # Service definitions with HTTP annotations
 ├── shared/                 # Cross-platform data (JSON configs for markets, RSS domains)
 ├── scripts/                # Seed scripts, build helpers, data fetchers
 ├── src-tauri/              # Tauri desktop shell (Rust + Node.js sidecar)
@@ -85,7 +85,7 @@ types -> config -> services -> components -> app -> App.ts
 
 - `server/` code is bundled INTO Edge Functions at deploy time via gateway
 - `server/_shared/` contains Redis client, rate limiting, LLM helpers
-- `server/worldmonitor/<domain>/` has RPC handlers matching proto services
+- `server/osintview/<domain>/` has RPC handlers matching proto services
 - All handlers use `cachedFetchJson()` for Redis caching with stampede protection
 
 ### Proto Contract Flow
@@ -115,10 +115,10 @@ Variant is set via `VITE_VARIANT` env var. Config lives in `src/config/variants/
 
 ### Adding a New API Endpoint
 
-1. Define proto message in `proto/worldmonitor/<domain>/`
+1. Define proto message in `proto/osintview/<domain>/`
 2. Add RPC with `(sebuf.http.config)` annotation
 3. Run `make generate`
-4. Create handler in `server/worldmonitor/<domain>/`
+4. Create handler in `server/osintview/<domain>/`
 5. Wire handler in domain's `handler.ts`
 6. Use `cachedFetchJson()` for caching, include request params in cache key
 

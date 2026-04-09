@@ -1,5 +1,6 @@
+// Copyright (C) 2026 Chip / salamndrgaming-lab
 const ALLOWED_ORIGIN_PATTERNS = [
-  /^https:\/\/(.*\.)?worldmonitor\.app$/,
+  /^https:\/\/(.*\.)?osintview\.app$/,
   /^https:\/\/[a-z0-9-]+\.vercel\.app$/,
   /^https?:\/\/localhost(:\d+)?$/,
   /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
@@ -15,11 +16,11 @@ function isAllowedOrigin(origin) {
 
 export function getCorsHeaders(req, methods = 'GET, OPTIONS') {
   const origin = req.headers.get('origin') || '';
-  const allowOrigin = isAllowedOrigin(origin) ? origin : 'https://worldmonitor.app';
+  const allowOrigin = isAllowedOrigin(origin) ? origin : 'https://osintview.app';
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': methods,
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-WorldMonitor-Key',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-OSINTView-Key',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };

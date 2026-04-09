@@ -9,16 +9,16 @@ const posts = (await getCollection('blog')).sort(
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "Blog",
-  "name": "World Monitor Blog",
-  "description": "Analysis, guides, and deep dives on real-time intelligence, OSINT, geopolitics, markets, and the open-source tools behind World Monitor.",
-  "url": "https://www.worldmonitor.app/blog/",
+  "name": "OSINTview Blog",
+  "description": "Analysis, guides, and deep dives on real-time intelligence, OSINT, geopolitics, markets, and the open-source tools behind OSINTview.",
+  "url": "https://www.osintview.app/blog/",
   "publisher": {
     "@type": "Organization",
-    "name": "World Monitor",
-    "url": "https://worldmonitor.app",
+    "name": "OSINTview",
+    "url": "https://osintview.app",
     "logo": {
       "@type": "ImageObject",
-      "url": "https://www.worldmonitor.app/favico/apple-touch-icon.png"
+      "url": "https://www.osintview.app/favico/apple-touch-icon.png"
     }
   },
   "blogPost": posts.map(post => ({
@@ -26,16 +26,16 @@ const jsonLd = {
     "headline": post.data.title,
     "description": post.data.description,
     "datePublished": post.data.pubDate.toISOString(),
-    "url": `https://www.worldmonitor.app/blog/posts/${post.id}/`,
-    "image": post.data.heroImage ? `https://www.worldmonitor.app${post.data.heroImage}` : "https://www.worldmonitor.app/favico/og-image.png"
+    "url": `https://www.osintview.app/blog/posts/${post.id}/`,
+    "image": post.data.heroImage ? `https://www.osintview.app${post.data.heroImage}` : "https://www.osintview.app/favico/og-image.png"
   }))
 };
 ---
 
 <Base
-  title="World Monitor Blog"
+  title="OSINTview Blog"
   description="Insights on real-time global intelligence, OSINT, geopolitics, markets, and the open-source tools that power situational awareness."
-  metaTitle="World Monitor Blog | Real-Time Intelligence, OSINT, Geopolitics & Markets"
+  metaTitle="OSINTview Blog | Real-Time Intelligence, OSINT, Geopolitics & Markets"
   jsonLd={jsonLd}
 >
   <div class="blog-hero">
@@ -45,7 +45,7 @@ const jsonLd = {
     </div>
     <h1>Noise<span class="green">.</span>Signal<span class="green">.</span>Blog</h1>
     <p class="subtitle">
-      Analysis, guides, and deep dives on real-time intelligence, OSINT, geopolitics, markets, and the open-source tools behind World Monitor.
+      Analysis, guides, and deep dives on real-time intelligence, OSINT, geopolitics, markets, and the open-source tools behind OSINTview.
     </p>
   </div>
   <div class="blog-list">

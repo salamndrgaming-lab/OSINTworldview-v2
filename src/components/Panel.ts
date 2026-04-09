@@ -18,7 +18,7 @@ export interface PanelOptions {
   defaultRowSpan?: number;
 }
 
-const PANEL_SPANS_KEY = 'worldmonitor-panel-spans';
+const PANEL_SPANS_KEY = 'osintview-panel-spans';
 
 function loadPanelSpans(): Record<string, number> {
   try {
@@ -35,7 +35,7 @@ function savePanelSpan(panelId: string, span: number): void {
   localStorage.setItem(PANEL_SPANS_KEY, JSON.stringify(spans));
 }
 
-const PANEL_COL_SPANS_KEY = 'worldmonitor-panel-col-spans';
+const PANEL_COL_SPANS_KEY = 'osintview-panel-col-spans';
 const ROW_RESIZE_STEP_PX = 80;
 const COL_RESIZE_STEP_PX = 80;
 const PANELS_GRID_MIN_TRACK_PX = 280;
@@ -777,9 +777,9 @@ export class Panel {
 
     const ctaBtn = h('button', { type: 'button', className: 'panel-locked-cta' }, t('premium.joinWaitlist'));
     if (isDesktopRuntime()) {
-      ctaBtn.addEventListener('click', () => void invokeTauri<void>('open_url', { url: 'https://worldmonitor.app/pro' }).catch(() => window.open('https://worldmonitor.app/pro', '_blank')));
+      ctaBtn.addEventListener('click', () => void invokeTauri<void>('open_url', { url: 'https://osintview.app/pro' }).catch(() => window.open('https://osintview.app/pro', '_blank')));
     } else {
-      ctaBtn.addEventListener('click', () => window.open('https://worldmonitor.app/pro', '_blank'));
+      ctaBtn.addEventListener('click', () => window.open('https://osintview.app/pro', '_blank'));
     }
     lockedChildren.push(ctaBtn);
 

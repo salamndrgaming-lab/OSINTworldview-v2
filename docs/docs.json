@@ -1,23 +1,23 @@
 {
   "$schema": "https://mintlify.com/schema.json",
   "theme": "mint",
-  "name": "World Monitor",
+  "name": "OSINTview",
   "description": "AI-powered real-time global intelligence dashboard",
   "logo": {
     "dark": "/logo.png",
     "light": "/logo.png",
-    "href": "https://www.worldmonitor.app"
+    "href": "https://www.osintview.app"
   },
   "favicon": "/favicon.png",
   "seo": {
     "metatags": {
-      "og:image": "https://www.worldmonitor.app/favico/og-image.png",
-      "og:site_name": "World Monitor Documentation",
+      "og:image": "https://www.osintview.app/favico/og-image.png",
+      "og:site_name": "OSINTview Documentation",
       "og:type": "website",
       "og:locale": "en_US",
       "twitter:card": "summary_large_image",
-      "twitter:site": "@worldmonitorai",
-      "twitter:image": "https://www.worldmonitor.app/favico/og-image.png"
+      "twitter:site": "@osintview",
+      "twitter:image": "https://www.osintview.app/favico/og-image.png"
     }
   },
   "colors": {
@@ -29,25 +29,25 @@
     "links": [
       {
         "label": "Blog",
-        "href": "https://www.worldmonitor.app/blog"
+        "href": "https://www.osintview.app/blog"
       },
       {
         "label": "Dashboard",
-        "href": "https://www.worldmonitor.app"
+        "href": "https://www.osintview.app"
       },
       {
         "label": "Pro",
-        "href": "https://www.worldmonitor.app/pro"
+        "href": "https://www.osintview.app/pro"
       },
       {
         "label": "GitHub",
-        "href": "https://github.com/koala73/worldmonitor"
+        "href": "https://github.com/salamndrgaming-lab/OSINTworldview-v2"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Get Early Access",
-      "href": "https://www.worldmonitor.app/pro#waitlist"
+      "href": "https://www.osintview.app/pro#waitlist"
     }
   },
   "navigation": {
@@ -263,24 +263,24 @@
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/koala73/worldmonitor",
-      "x": "https://x.com/worldmonitorai"
+      "github": "https://github.com/salamndrgaming-lab/OSINTworldview-v2",
+      "x": "https://x.com/osintviewai"
     },
     "links": [
       {
-        "header": "World Monitor",
+        "header": "OSINTview",
         "items": [
           {
             "label": "Dashboard",
-            "href": "https://www.worldmonitor.app"
+            "href": "https://www.osintview.app"
           },
           {
             "label": "Pro",
-            "href": "https://www.worldmonitor.app/pro"
+            "href": "https://www.osintview.app/pro"
           },
           {
             "label": "Blog",
-            "href": "https://www.worldmonitor.app/blog"
+            "href": "https://www.osintview.app/blog"
           }
         ]
       },
@@ -289,19 +289,19 @@
         "items": [
           {
             "label": "GitHub",
-            "href": "https://github.com/koala73/worldmonitor"
+            "href": "https://github.com/salamndrgaming-lab/OSINTworldview-v2"
           },
           {
             "label": "Discussions",
-            "href": "https://github.com/koala73/worldmonitor/discussions"
+            "href": "https://github.com/salamndrgaming-lab/OSINTworldview-v2/discussions"
           },
           {
             "label": "X",
-            "href": "https://x.com/worldmonitorai"
+            "href": "https://x.com/osintviewai"
           },
           {
             "label": "Status",
-            "href": "https://status.worldmonitor.app/"
+            "href": "https://status.osintview.app/"
           }
         ]
       }

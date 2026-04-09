@@ -20,7 +20,7 @@
     "asFeaturedIn": "掲載メディア"
   },
   "livePreview": {
-    "windowTitle": "worldmonitor.app — ライブダッシュボード",
+    "windowTitle": "osintview.app — ライブダッシュボード",
     "openFullScreen": "フルスクリーンで開く",
     "tryLiveDashboard": "ライブダッシュボードを試す",
     "iframeTitle": "World Monitor — ライブ OSINT ダッシュボード",

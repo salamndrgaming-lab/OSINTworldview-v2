@@ -76,7 +76,7 @@ export interface RuntimeConfig {
   secrets: Partial<Record<RuntimeSecretKey, RuntimeSecretState>>;
 }
 
-const TOGGLES_STORAGE_KEY = 'worldmonitor-runtime-feature-toggles';
+const TOGGLES_STORAGE_KEY = 'osintview-runtime-feature-toggles';
 function getSidecarEnvUpdateUrl(): string {
   return `${getApiBaseUrl()}/api/local-env-update`;
 }

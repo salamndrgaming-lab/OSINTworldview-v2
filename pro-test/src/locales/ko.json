@@ -20,7 +20,7 @@
     "asFeaturedIn": "게재 매체"
   },
   "livePreview": {
-    "windowTitle": "worldmonitor.app — 라이브 대시보드",
+    "windowTitle": "osintview.app — 라이브 대시보드",
     "openFullScreen": "전체 화면으로 열기",
     "tryLiveDashboard": "라이브 대시보드 사용해 보기",
     "iframeTitle": "World Monitor — 라이브 OSINT 대시보드",

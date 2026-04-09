@@ -99,7 +99,7 @@ for (const file of files) {
       borderTop: '1px solid #222222',
       paddingTop: 24,
     }, [
-      h('span', { fontSize: 14, color: '#666666' }, 'worldmonitor.app/blog'),
+      h('span', { fontSize: 14, color: '#666666' }, 'osintview.app/blog'),
       h('div', { display: 'flex', alignItems: 'center', gap: 8 }, [
         h('div', { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ade80' }, ''),
         h('span', { fontSize: 14, color: '#4ade80' }, 'Real-time Global Intelligence'),

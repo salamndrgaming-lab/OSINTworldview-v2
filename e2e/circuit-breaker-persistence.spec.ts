@@ -101,7 +101,7 @@ test.describe('circuit breaker persistent cache', () => {
 
       // Pre-seed IndexedDB with an entry that's older than the TTL.
       // We do this by writing directly to IndexedDB with an old timestamp.
-      const DB_NAME = 'worldmonitor_persistent_cache';
+      const DB_NAME = 'osintview_persistent_cache';
       const STORE = 'entries';
 
       await new Promise<void>((resolve, reject) => {
@@ -171,7 +171,7 @@ test.describe('circuit breaker persistent cache', () => {
       const name = `test-stale-${Date.now()}`;
       const cacheKey = `breaker:${name}`;
 
-      const DB_NAME = 'worldmonitor_persistent_cache';
+      const DB_NAME = 'osintview_persistent_cache';
       const STORE = 'entries';
 
       // Seed with a 25-hour-old entry
@@ -372,7 +372,7 @@ test.describe('circuit breaker persistent cache', () => {
       await setPersistentCache(cacheKey, { value: 777 });
 
       // Backdate the updatedAt to 30 minutes ago
-      const DB_NAME = 'worldmonitor_persistent_cache';
+      const DB_NAME = 'osintview_persistent_cache';
       const STORE = 'entries';
       await new Promise<void>((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, 1);

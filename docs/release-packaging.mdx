@@ -1,10 +1,10 @@
 ---
 title: "Desktop Release Packaging Guide (Local, Reproducible)"
-description: "This guide provides reproducible local packaging steps for both desktop variants: full (World Monitor) and tech (Tech Monitor)."
+description: "This guide provides reproducible local packaging steps for both desktop variants: full (OSINTview) and tech (Tech Monitor)."
 ---
 This guide provides reproducible local packaging steps for both desktop variants:
 
-- **full** → `World Monitor`
+- **full** → `OSINTview`
 - **tech** → `Tech Monitor`
 
 Variant identity is controlled by Tauri config:
@@ -184,12 +184,12 @@ npm run desktop:package:windows:full:sign
 
 ## Variant-aware outputs (names/icons)
 
-- Full variant: `World Monitor` / `world-monitor`
+- Full variant: `OSINTview` / `world-monitor`
 - Tech variant: `Tech Monitor` / `tech-monitor`
 
 Distinct names are configured in Tauri:
 
-- `src-tauri/tauri.conf.json` → `World Monitor` / `world-monitor`
+- `src-tauri/tauri.conf.json` → `OSINTview` / `world-monitor`
 - `src-tauri/tauri.tech.conf.json` → `Tech Monitor` / `tech-monitor`
 
 If you want variant-specific icons, set `bundle.icon` separately in each config and point each variant to dedicated icon assets.

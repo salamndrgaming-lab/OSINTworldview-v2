@@ -195,7 +195,7 @@ Rules:
         headers: {
           Authorization: `Bearer ${openrouterKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://worldmonitor.app',
+          'HTTP-Referer': 'https://osintview.app',
           'X-Title': 'World Monitor',
         },
         body: JSON.stringify({

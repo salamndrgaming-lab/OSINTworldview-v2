@@ -1,10 +1,10 @@
 ---
 title: "Changelog"
-description: "All notable changes to World Monitor, organized by release."
+description: "All notable changes to OSINTview, organized by release."
 rss: true
 ---
 
-All notable changes to World Monitor are documented here. Subscribe via [RSS](/changelog/rss.xml) to stay updated.
+All notable changes to OSINTview are documented here. Subscribe via [RSS](/changelog/rss.xml) to stay updated.
 
 <Update label="Unreleased" description="Unreleased" tags={["Supply Chain", "Maritime", "Charts"]}>
 
@@ -324,7 +324,7 @@ All notable changes to World Monitor are documented here. Subscribe via [RSS](/c
 ### Added
 
 - **Edge caching**: Complete Cloudflare edge cache tier coverage with degraded-response policy (#484)
-- **Edge caching**: Cloudflare edge caching for proxy.worldmonitor.app (#478) and api.worldmonitor.app (#471)
+- **Edge caching**: Cloudflare edge caching for proxy.osintview.app (#478) and api.osintview.app (#471)
 - **Edge caching**: Tiered edge Cache-Control aligned to upstream TTLs (#474)
 - **API migration**: Convert 52 API endpoints from POST to GET for edge caching (#468)
 - **Gateway**: Configurable VITE_WS_API_URL + harden POST-to-GET shim (#480)
@@ -544,7 +544,7 @@ All notable changes to World Monitor are documented here. Subscribe via [RSS](/c
 
 ### Added
 
-- **Finance variant**: Added a dedicated market-first variant (`finance.worldmonitor.app`) with finance/trading-focused feeds, panels, and map defaults
+- **Finance variant**: Added a dedicated market-first variant (`finance.osintview.app`) with finance/trading-focused feeds, panels, and map defaults
 - **Finance desktop profile**: Added finance-specific desktop config and build profile for Tauri packaging
 
 ### Changed
@@ -635,7 +635,7 @@ All notable changes to World Monitor are documented here. Subscribe via [RSS](/c
 
 ### Security
 
-- **CORS hardening**: Tighten Vercel preview deployment regex to block origin spoofing (`worldmonitorEVIL.vercel.app`)
+- **CORS hardening**: Tighten Vercel preview deployment regex to block origin spoofing (`osintviewEVIL.vercel.app`)
 - **Sidecar auth bypass**: Move `/api/local-env-update` behind `LOCAL_API_TOKEN` auth check
 - **Env key allowlist**: Restrict sidecar env mutations to 18 known secret keys (matching `SUPPORTED_SECRET_KEYS`)
 - **postMessage validation**: Add `origin` and `source` checks on incoming messages in LiveNewsPanel

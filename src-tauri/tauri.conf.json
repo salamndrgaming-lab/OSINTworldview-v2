@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "World Monitor",
-  "mainBinaryName": "world-monitor",
+  "productName": "OSINTview",
+  "mainBinaryName": "osintview",
   "version": "2.6.1",
   "identifier": "app.osintview.desktop",
   "build": {
@@ -13,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "World Monitor",
+        "title": "OSINTview",
         "width": 1440,
         "height": 900,
         "minWidth": 1200,
@@ -42,8 +42,8 @@
       "appimage"
     ],
     "category": "Productivity",
-    "shortDescription": "World Monitor desktop app (supports World and Tech variants)",
-    "longDescription": "World Monitor desktop app for real-time global intelligence. Build with VITE_VARIANT=tech to package Tech Monitor branding and dataset defaults.",
+    "shortDescription": "OSINTview desktop app (supports World and Tech variants)",
+    "longDescription": "OSINTview desktop app for real-time global intelligence. Build with VITE_VARIANT=tech to package Tech Monitor branding and dataset defaults.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

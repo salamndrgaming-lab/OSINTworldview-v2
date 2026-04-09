@@ -1,6 +1,6 @@
 /**
  * POIPanel.ts — Persons of Interest Dashboard Panel
- * World Monitor OSINT Platform
+ * OSINTview OSINT Platform
  *
  * Drop into: src/components/POIPanel.ts
  *

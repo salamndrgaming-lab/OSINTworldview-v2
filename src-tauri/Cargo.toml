@@ -1,8 +1,8 @@
 [package]
-name = "world-monitor"
+name = "osintview"
 version = "2.6.1"
-description = "World Monitor desktop application"
-authors = ["World Monitor"]
+description = "OSINTview desktop application"
+authors = ["OSINTview"]
 edition = "2021"
 
 [build-dependencies]

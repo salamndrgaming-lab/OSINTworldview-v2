@@ -4,7 +4,7 @@ description: "OSINTview supports 21 languages including Arabic (RTL), Japanese, 
 metaTitle: "Global Intelligence Dashboard in 21 Languages | Arabic RTL, Japanese, Chinese | OSINTview"
 keywords: "multilingual intelligence dashboard, Arabic OSINT tool, Japanese intelligence platform, global dashboard localized, RTL intelligence dashboard"
 audience: "Non-English-speaking analysts, international organizations, global enterprises, multilingual researchers"
-heroImage: "/blog/images/blog/worldmonitor-in-21-languages-global-intelligence-for-everyone.jpg"
+heroImage: "/blog/images/blog/osintview-in-21-languages-global-intelligence-for-everyone.jpg"
 pubDate: "2026-03-04"
 ---
 

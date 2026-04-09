@@ -52,7 +52,7 @@ const SUPPORTED_SECRET_KEYS: [&str; 28] = [
     "UCDP_ACCESS_TOKEN",
     "OLLAMA_API_URL",
     "OLLAMA_MODEL",
-    "WORLDMONITOR_API_KEY",
+    "OSINTVIEW_API_KEY",
     "WTO_API_KEY",
     "AVIATIONSTACK_API",
     "ICAO_API_KEY",
@@ -661,7 +661,7 @@ fn open_settings_window(app: &AppHandle) -> Result<(), String> {
     }
 
     let _settings_window = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
-        .title("World Monitor Settings")
+        .title("OSINTview Settings")
         .title_bar_style(tauri::TitleBarStyle::Overlay)
         .inner_size(980.0, 600.0)
         .min_inner_size(820.0, 480.0)
@@ -699,7 +699,7 @@ fn open_live_channels_window(app: &AppHandle, base_url: Option<String>) -> Resul
     };
 
     let _live_channels_window = WebviewWindowBuilder::new(app, "live-channels", url)
-    .title("Channel management - World Monitor")
+    .title("Channel management - OSINTview")
     .title_bar_style(tauri::TitleBarStyle::Overlay)
     .inner_size(680.0, 760.0)
     .min_inner_size(520.0, 600.0)
@@ -765,7 +765,7 @@ fn build_app_menu(handle: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     )?;
 
     let about_metadata = AboutMetadata {
-        name: Some("World Monitor".into()),
+        name: Some("OSINTview".into()),
         version: Some(env!("CARGO_PKG_VERSION").into()),
         copyright: Some("\u{00a9} 2025 Elie Habib".into()),
         website: Some("https://osintview.app".into()),
@@ -773,7 +773,7 @@ fn build_app_menu(handle: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         ..Default::default()
     };
     let about_item =
-        PredefinedMenuItem::about(handle, Some("About World Monitor"), Some(about_metadata))?;
+        PredefinedMenuItem::about(handle, Some("About OSINTview"), Some(about_metadata))?;
     let github_item = MenuItem::with_id(
         handle,
         MENU_HELP_GITHUB_ID,

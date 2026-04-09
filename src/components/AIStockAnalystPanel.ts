@@ -161,7 +161,7 @@ export class AIStockAnalystPanel extends Panel {
       html += `</div>`;
     }
 
-    html += `<div style="font-size:10px;opacity:.3;margin-top:6px">Analysis powered by World Monitor · Not financial advice</div>`;
+    html += `<div style="font-size:10px;opacity:.3;margin-top:6px">Analysis powered by OSINTview · Not financial advice</div>`;
     resultEl.innerHTML = html;
   }
 

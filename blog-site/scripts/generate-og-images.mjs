@@ -81,7 +81,7 @@ for (const file of files) {
         color: '#050505',
       }, 'WM'),
       h('div', { display: 'flex', flexDirection: 'column' }, [
-        h('span', { fontSize: 16, fontWeight: 700, letterSpacing: 3, color: '#e5e5e5' }, 'WORLD MONITOR'),
+        h('span', { fontSize: 16, fontWeight: 700, letterSpacing: 3, color: '#e5e5e5' }, 'OSINTVIEW'),
         h('span', { fontSize: 12, color: '#666666', letterSpacing: 1 }, 'BLOG'),
       ]),
     ]),

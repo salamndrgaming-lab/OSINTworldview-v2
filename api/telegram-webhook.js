@@ -338,7 +338,7 @@ function generateFullReport(data) {
     s.push('');
   }
 
-  s.push('<i>World Monitor Intelligence Brief</i>');
+  s.push('<i>OSINTview Intelligence Brief</i>');
   return s.join('\n');
 }
 
@@ -448,7 +448,7 @@ function generatePoiSearch(data, query) {
 
 function generateHelpMessage() {
   return [
-    '<b>World Monitor Bot</b>', '',
+    '<b>OSINTview Bot</b>', '',
     'Intelligence:',
     '/report - Full intelligence brief',
     '/poi - Persons of interest',
@@ -618,7 +618,7 @@ export default async function handler(req) {
       case '/status': {
         var sdata = await getBootstrapData();
         var redisStatus = sdata._error ? 'Error: ' + sdata._error : 'Connected (' + (sdata._keysFound || 0) + '/' + (sdata._keysTotal || 0) + ' keys)';
-        report = '<b>World Monitor Bot Online</b>\n\nTime: ' + new Date().toISOString() + '\nRedis: ' + redisStatus;
+        report = '<b>OSINTview Bot Online</b>\n\nTime: ' + new Date().toISOString() + '\nRedis: ' + redisStatus;
         break;
       }
       case '/help':

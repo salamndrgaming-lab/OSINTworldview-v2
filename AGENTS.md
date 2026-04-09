@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Agent entry point for WorldMonitor. Read this first, then follow links for depth.
+Agent entry point for OSINTview. Read this first, then follow links for depth.
 
 ## What This Project Is
 

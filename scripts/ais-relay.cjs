@@ -2613,7 +2613,7 @@ function classifyFetchLlm(titles, apiKey, apiUrl, model) {
 let classifyInFlight = false;
 
 async function seedClassifyForVariant(variant, apiKey, apiUrl, model) {
-  const digestUrl = `https://api.worldmonitor.app/api/news/v1/list-feed-digest?variant=${variant}&lang=en`;
+  const digestUrl = `https://api.osintview.app/api/news/v1/list-feed-digest?variant=${variant}&lang=en`;
   let digest;
   try {
     const resp = await new Promise((resolve, reject) => {
@@ -2754,7 +2754,7 @@ async function startClassifySeedLoop() {
 // so service statuses are always cached (TTL is 30 min).
 // ─────────────────────────────────────────────────────────────
 const SERVICE_STATUSES_SEED_INTERVAL_MS = 15 * 60 * 1000; // 15 min (TTL/2)
-const SERVICE_STATUSES_RPC_URL = 'https://api.worldmonitor.app/api/infrastructure/v1/list-service-statuses';
+const SERVICE_STATUSES_RPC_URL = 'https://api.osintview.app/api/infrastructure/v1/list-service-statuses';
 
 async function seedServiceStatuses() {
   try {
@@ -2763,7 +2763,7 @@ async function seedServiceStatuses() {
       headers: {
         'Content-Type': 'application/json',
         'User-Agent': CHROME_UA,
-        Origin: 'https://worldmonitor.app',
+        Origin: 'https://osintview.app',
       },
       body: '{}',
       signal: AbortSignal.timeout(60_000),
@@ -3034,14 +3034,14 @@ function startTheaterPostureSeedLoop() {
 // The RPC handler itself refreshes the stale key on every call.
 // ─────────────────────────────────────────────────────────────
 const CII_WARM_PING_INTERVAL_MS = 8 * 60 * 1000; // 8 min (live cache TTL is 10 min)
-const CII_RPC_URL = 'https://api.worldmonitor.app/api/intelligence/v1/get-risk-scores';
+const CII_RPC_URL = 'https://api.osintview.app/api/intelligence/v1/get-risk-scores';
 
 async function seedCiiWarmPing() {
   try {
     const resp = await fetch(CII_RPC_URL, {
       headers: {
         'User-Agent': CHROME_UA,
-        Origin: 'https://worldmonitor.app',
+        Origin: 'https://osintview.app',
       },
       signal: AbortSignal.timeout(60_000),
     });
@@ -3465,7 +3465,7 @@ const WB_RENEWABLE_REGION_NAMES = {
 function wbFetchJson(url) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, {
-      headers: { 'User-Agent': 'WorldMonitor-Seed/1.0', Accept: 'application/json' },
+      headers: { 'User-Agent': 'OSINTview-Seed/1.0', Accept: 'application/json' },
       timeout: 30000,
     }, (resp) => {
       if (resp.statusCode < 200 || resp.statusCode >= 300) {
@@ -4721,7 +4721,7 @@ const TRANSIT_SUMMARY_INTERVAL_MS = 10 * 60 * 1000;
 
 // Threat levels for anomaly detection.
 // IMPORTANT: Must stay in sync with CHOKEPOINTS[].threatLevel in
-// server/worldmonitor/supply-chain/v1/get-chokepoint-status.ts
+// server/osintview/supply-chain/v1/get-chokepoint-status.ts
 // Only war_zone and critical trigger anomaly signals.
 const CHOKEPOINT_THREAT_LEVELS = {
   suez: 'high', malacca_strait: 'normal', hormuz_strait: 'war_zone',
@@ -4743,7 +4743,7 @@ const RELAY_NAME_TO_ID = {
   'South China Sea': null, 'Black Sea': null, // area geofences, not chokepoints
 };
 
-// Duplicated from server/worldmonitor/supply-chain/v1/_scoring.mjs because
+// Duplicated from server/osintview/supply-chain/v1/_scoring.mjs because
 // ais-relay.cjs is CJS and cannot import .mjs modules. Keep in sync.
 function detectTrafficAnomalyRelay(history, threatLevel) {
   if (!history || history.length < 37) return { dropPct: 0, signal: false };
@@ -5218,7 +5218,7 @@ function _attemptOpenSkyTokenFetch(clientId, clientSecret) {
   const reqHeaders = {
     'Content-Type': 'application/x-www-form-urlencoded',
     'Content-Length': Buffer.byteLength(postData),
-    'User-Agent': 'WorldMonitor/1.0',
+    'User-Agent': 'OSINTview/1.0',
   };
 
   if (OPENSKY_PROXY_ENABLED) {
@@ -5349,7 +5349,7 @@ function _openskyRawFetch(url, token) {
   const reqHeaders = {
     'Accept': 'application/json',
     'Accept-Encoding': 'gzip, deflate, br',
-    'User-Agent': 'WorldMonitor/1.0',
+    'User-Agent': 'OSINTview/1.0',
     'Authorization': `Bearer ${token}`,
   };
 
@@ -5699,7 +5699,7 @@ function handleWorldBankRequest(req, res) {
   const request = https.get(wbUrl, {
     headers: {
       'Accept': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (compatible; WorldMonitor/1.0; +https://worldmonitor.app)',
+      'User-Agent': 'Mozilla/5.0 (compatible; OSINTview/2.0; +https://osintview.app)',
     },
     timeout: 15000,
   }, (response) => {
@@ -6387,9 +6387,9 @@ function handleNotamProxyRequest(req, res) {
 
 // CORS origin allowlist — only our domains can use this relay
 const ALLOWED_ORIGINS = [
-  'https://worldmonitor.app',
-  'https://tech.worldmonitor.app',
-  'https://finance.worldmonitor.app',
+  'https://osintview.app',
+  'https://tech.osintview.app',
+  'https://finance.osintview.app',
   'http://localhost:5173',   // Vite dev
   'http://localhost:5174',   // Vite dev alt port
   'http://localhost:4173',   // Vite preview
@@ -6400,10 +6400,10 @@ const ALLOWED_ORIGINS = [
 function getCorsOrigin(req) {
   const origin = req.headers.origin || '';
   if (ALLOWED_ORIGINS.includes(origin)) return origin;
-  // Wildcard: any *.worldmonitor.app subdomain (for variant subdomains)
+  // Wildcard: any *.osintview.app subdomain (for variant subdomains)
   try {
     const url = new URL(origin);
-    if (url.hostname.endsWith('.worldmonitor.app') && url.protocol === 'https:') return origin;
+    if (url.hostname.endsWith('.osintview.app') && url.protocol === 'https:') return origin;
   } catch { /* invalid origin — fall through */ }
   // Optional: allow Vercel preview deployments when explicitly enabled.
   if (ALLOW_VERCEL_PREVIEW_ORIGINS && origin.endsWith('.vercel.app')) return origin;

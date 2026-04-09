@@ -75,7 +75,7 @@ http {
       if ($request_method = 'OPTIONS') {
         add_header Access-Control-Allow-Origin "*" always;
         add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-WorldMonitor-Key" always;
+        add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-OSINTView-Key" always;
         add_header Content-Length 0;
         return 204;
       }
@@ -87,7 +87,7 @@ http {
       proxy_set_header X-Forwarded-Proto $scheme;
       add_header Access-Control-Allow-Origin "*" always;
       add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
-      add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-WorldMonitor-Key" always;
+      add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-OSINTView-Key" always;
     }
   }
 }

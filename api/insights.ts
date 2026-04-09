@@ -95,7 +95,7 @@ export default async function handler(_request: Request): Promise<Response> {
 
     const context = contextParts.join('\n\n');
 
-    const systemPrompt = `You are an elite OSINT intelligence analyst for the World Monitor platform.
+    const systemPrompt = `You are an elite OSINT intelligence analyst for the OSINTview platform.
 Analyze the provided intelligence data and produce a structured JSON assessment.
 
 Respond with ONLY valid JSON matching this exact schema:

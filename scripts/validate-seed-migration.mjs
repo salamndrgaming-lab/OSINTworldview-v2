@@ -6,7 +6,7 @@
  * Usage:
  *   node scripts/validate-seed-migration.mjs [--base-url URL]
  *
- * Requires: Referer header from trusted origin OR X-WorldMonitor-Key header.
+ * Requires: Referer header from trusted origin OR X-OSINTView-Key header.
  * Uses api.osintview.app by default.
  */
 
@@ -130,7 +130,7 @@ const TESTS = [
 // Seed Health check
 // ========================================================================
 
-const API_KEY = process.env.WORLDMONITOR_KEY || '';
+const API_KEY = process.env.OSINTVIEW_KEY || '';
 
 const SEED_HEALTH_TEST = {
   name: 'Seed Health',
@@ -156,7 +156,7 @@ async function fetchEndpoint(endpoint) {
       Origin: ORIGIN,
       Referer: `${ORIGIN}/`,
       'User-Agent': 'validate-seed-migration/1.0',
-      ...(API_KEY ? { 'X-WorldMonitor-Key': API_KEY } : {}),
+      ...(API_KEY ? { 'X-OSINTView-Key': API_KEY } : {}),
     },
     signal: AbortSignal.timeout(15_000),
   });

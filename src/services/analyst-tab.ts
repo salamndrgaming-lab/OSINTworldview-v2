@@ -1386,7 +1386,7 @@ function initBuiltinTool(id: string): void {
         result.innerHTML = 'Checking breach databases...';
         try {
           const resp = await fetch('https://haveibeenpwned.com/api/v3/breachedaccount/' + encodeURIComponent(input) + '?truncateResponse=true', {
-            headers: { 'hibp-api-key': '', 'User-Agent': 'WorldMonitor-OSINT' },
+            headers: { 'hibp-api-key': '', 'User-Agent': 'OSINTview-OSINT' },
             signal: AbortSignal.timeout(8000),
           });
           if (resp.status === 404) { result.innerHTML = '<span style="color:#22c55e;font-weight:600">✅ No breaches found</span> for ' + esc(input); return; }

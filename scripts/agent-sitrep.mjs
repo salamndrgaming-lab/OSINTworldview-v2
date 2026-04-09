@@ -380,7 +380,7 @@ const GROQ_MODEL = 'llama-3.1-8b-instant';  // 8B has 131K TPM vs 12K on the 70B
 const MAX_AGENT_STEPS = 6; // Reduced from 8 — 8B model needs fewer steps with targeted prompting
 const STEP_DELAY_MS = 3_000; // 3s delay between steps to avoid rate limits
 
-const SYSTEM_PROMPT = `You are an expert intelligence analyst working for World Monitor, an open-source OSINT platform. Your task is to generate a comprehensive Situation Report (SITREP) by querying available intelligence data sources and synthesizing findings.
+const SYSTEM_PROMPT = `You are an expert intelligence analyst working for OSINTview, an open-source OSINT platform. Your task is to generate a comprehensive Situation Report (SITREP) by querying available intelligence data sources and synthesizing findings.
 
 WORKFLOW:
 1. Start by querying the alert stream (get_active_alerts) to see what anomalies have been detected

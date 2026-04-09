@@ -11275,7 +11275,7 @@ a.prediction-link:hover {
     display: none !important;
   }
 
-  /* Mobile: show "World Monitor" instead of "MONITOR" */
+  /* Mobile: show "OSINTview" instead of "VIEW" */
   .logo {
     display: none;
   }

@@ -631,7 +631,7 @@ function detectDesktopRuntime(probe: RuntimeProbe): boolean {
 }
 ```
 
-When desktop mode is detected, `getApiBaseUrl()` returns `http://127.0.0.1:46123` instead of relative paths, routing all API calls through the local sidecar. A global `fetch()` monkey-patch (applied once via `__wmFetchPatched` guard) rewrites API URLs to point at the sidecar.
+When desktop mode is detected, `getApiBaseUrl()` returns `http://127.0.0.1:46123` instead of relative paths, routing all API calls through the local sidecar. A global `fetch()` monkey-patch (applied once via `__ovFetchPatched` guard) rewrites API URLs to point at the sidecar.
 
 ### Tauri Configuration
 

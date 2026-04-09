@@ -175,7 +175,7 @@ export function getProviderCredentials(provider: string): ProviderCredentials | 
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://osintview.app',
-        'X-Title': 'World Monitor',
+        'X-Title': 'OSINTview',
       },
     };
   }

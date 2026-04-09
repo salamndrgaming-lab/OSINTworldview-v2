@@ -4321,7 +4321,7 @@ export class DeckGLMap {
     const toggles = document.createElement('div');
     toggles.className = 'layer-toggles deckgl-layer-toggles';
 
-    const _wmKey = getSecretState('WORLDMONITOR_API_KEY').present;
+    const _wmKey = getSecretState('OSINTVIEW_API_KEY').present;
     const grouped = getGroupedLayersForVariant((SITE_VARIANT || 'full') as MapVariant, 'flat');
 
     // Build category-grouped HTML

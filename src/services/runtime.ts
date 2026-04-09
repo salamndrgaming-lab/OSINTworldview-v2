@@ -111,7 +111,7 @@ export function getApiBaseUrl(): string {
   return `http://127.0.0.1:${getLocalApiPort()}`;
 }
 
-function isWorldMonitorWebHost(hostname: string): boolean {
+function isOSINTviewWebHost(hostname: string): boolean {
   return hostname === 'osintview.app'
     || hostname === 'www.osintview.app'
     || hostname.endsWith('.osintview.app');
@@ -131,7 +131,7 @@ export function getConfiguredWebApiBaseUrl(): string {
   }
 
   const hostname = window.location?.hostname ?? '';
-  if (!isWorldMonitorWebHost(hostname)) {
+  if (!isOSINTviewWebHost(hostname)) {
     return '';
   }
 
@@ -554,7 +554,7 @@ async function fetchLocalWithStartupRetry(
 const TOKEN_TTL_MS = 5 * 60 * 1000;
 
 export function installRuntimeFetchPatch(): void {
-  if (!isDesktopRuntime() || typeof window === 'undefined' || (window as unknown as Record<string, unknown>).__wmFetchPatched) {
+  if (!isDesktopRuntime() || typeof window === 'undefined' || (window as unknown as Record<string, unknown>).__ovFetchPatched) {
     return;
   }
 
@@ -606,7 +606,7 @@ export function installRuntimeFetchPatch(): void {
       try {
         const { getSecretState, secretsReady } = await import('@/services/runtime-config');
         await Promise.race([secretsReady, new Promise<void>(r => setTimeout(r, 2000))]);
-        const wmKeyState = getSecretState('WORLDMONITOR_API_KEY');
+        const wmKeyState = getSecretState('OSINTVIEW_API_KEY');
         if (!wmKeyState.present || !wmKeyState.valid) {
           allowCloudFallback = false;
         }
@@ -624,9 +624,9 @@ export function installRuntimeFetchPatch(): void {
       const cloudHeaders = new Headers(init?.headers);
       if (KEYED_CLOUD_API_PATTERN.test(target)) {
         const { getRuntimeConfigSnapshot } = await import('@/services/runtime-config');
-        const wmKeyValue = getRuntimeConfigSnapshot().secrets['WORLDMONITOR_API_KEY']?.value;
+        const wmKeyValue = getRuntimeConfigSnapshot().secrets['OSINTVIEW_API_KEY']?.value;
         if (wmKeyValue) {
-          cloudHeaders.set('X-WorldMonitor-Key', wmKeyValue);
+          cloudHeaders.set('X-OSINTView-Key', wmKeyValue);
         }
       }
       return nativeFetch(cloudUrl, { ...init, headers: cloudHeaders });
@@ -681,7 +681,7 @@ export function installRuntimeFetchPatch(): void {
     }
   };
 
-  (window as unknown as Record<string, unknown>).__wmFetchPatched = true;
+  (window as unknown as Record<string, unknown>).__ovFetchPatched = true;
 }
 
 const ALLOWED_REDIRECT_HOSTS = /^https:\/\/([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)*osintview\.app(:\d+)?$/;

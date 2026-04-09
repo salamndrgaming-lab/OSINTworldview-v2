@@ -154,7 +154,7 @@ export class App {
     if (shouldPrime('supply-chain')) {
       primeTask('supplyChain', () => this.dataLoader.loadSupplyChain());
     }
-    if (SITE_VARIANT === 'finance' && getSecretState('WORLDMONITOR_API_KEY').present) {
+    if (SITE_VARIANT === 'finance' && getSecretState('OSINTVIEW_API_KEY').present) {
       if (shouldPrime('stock-analysis')) {
         primeTask('stockAnalysis', () => this.dataLoader.loadStockAnalysis());
       }
@@ -834,19 +834,19 @@ export class App {
         'stock-analysis',
         () => this.dataLoader.loadStockAnalysis(),
         15 * 60 * 1000,
-        () => getSecretState('WORLDMONITOR_API_KEY').present && this.isPanelNearViewport('stock-analysis'),
+        () => getSecretState('OSINTVIEW_API_KEY').present && this.isPanelNearViewport('stock-analysis'),
       );
       this.refreshScheduler.scheduleRefresh(
         'daily-market-brief',
         () => this.dataLoader.loadDailyMarketBrief(),
         60 * 60 * 1000,
-        () => getSecretState('WORLDMONITOR_API_KEY').present && this.isPanelNearViewport('daily-market-brief'),
+        () => getSecretState('OSINTVIEW_API_KEY').present && this.isPanelNearViewport('daily-market-brief'),
       );
       this.refreshScheduler.scheduleRefresh(
         'stock-backtest',
         () => this.dataLoader.loadStockBacktest(),
         4 * 60 * 60 * 1000,
-        () => getSecretState('WORLDMONITOR_API_KEY').present && this.isPanelNearViewport('stock-backtest'),
+        () => getSecretState('OSINTVIEW_API_KEY').present && this.isPanelNearViewport('stock-backtest'),
       );
     }
 

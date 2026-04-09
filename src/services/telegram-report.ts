@@ -207,7 +207,7 @@ export async function generateIntelligenceReport(): Promise<string> {
     sections.push('');
   }
 
-  sections.push('<i>— World Monitor Intelligence Brief</i>');
+  sections.push('<i>— OSINTview Intelligence Brief</i>');
   return sections.join('\n');
 }
 
@@ -255,5 +255,5 @@ export async function sendReport(config?: TelegramConfig): Promise<{ ok: boolean
 export async function testTelegramConnection(
   botToken: string, chatId: string
 ): Promise<{ ok: boolean; error?: string }> {
-  return sendTelegramMessage(botToken, chatId, '✅ <b>World Monitor</b> connected successfully!');
+  return sendTelegramMessage(botToken, chatId, '✅ <b>OSINTview</b> connected successfully!');
 }

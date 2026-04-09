@@ -113,10 +113,10 @@ test.describe('desktop runtime routing guardrails', () => {
 
       const previousTauri = globalWindow.__TAURI__;
       globalWindow.__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
-      delete globalWindow.__wmFetchPatched;
+      delete globalWindow.__ovFetchPatched;
 
-      // Set a valid WM API key so cloud fallback is allowed
-      await runtimeConfig.setSecretValue('WORLDMONITOR_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, 'wm_test_key_1234567890abcdef');
+      // Set a valid OSINTview API key so cloud fallback is allowed
+      await runtimeConfig.setSecretValue('OSINTVIEW_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, 'ov_test_key_1234567890abcdef');
 
       try {
         runtime.installRuntimeFetchPatch();
@@ -136,13 +136,13 @@ test.describe('desktop runtime routing guardrails', () => {
         };
       } finally {
         window.fetch = originalFetch;
-        delete globalWindow.__wmFetchPatched;
+        delete globalWindow.__ovFetchPatched;
         if (previousTauri === undefined) {
           delete globalWindow.__TAURI__;
         } else {
           globalWindow.__TAURI__ = previousTauri;
         }
-        await runtimeConfig.setSecretValue('WORLDMONITOR_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, '');
+        await runtimeConfig.setSecretValue('OSINTVIEW_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, '');
       }
     });
 
@@ -200,7 +200,7 @@ test.describe('desktop runtime routing guardrails', () => {
 
       const previousTauri = globalWindow.__TAURI__;
       globalWindow.__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
-      delete globalWindow.__wmFetchPatched;
+      delete globalWindow.__ovFetchPatched;
 
       try {
         runtime.installRuntimeFetchPatch();
@@ -229,7 +229,7 @@ test.describe('desktop runtime routing guardrails', () => {
         };
       } finally {
         window.fetch = originalFetch;
-        delete globalWindow.__wmFetchPatched;
+        delete globalWindow.__ovFetchPatched;
         if (previousTauri === undefined) {
           delete globalWindow.__TAURI__;
         } else {
@@ -725,7 +725,7 @@ test.describe('desktop runtime routing guardrails', () => {
     expect(result.hasIso3Field).toBe(false);
   });
 
-  test('cloud fallback blocked without WorldMonitor API key', async ({ page }) => {
+  test('cloud fallback blocked without OSINTview API key', async ({ page }) => {
     await page.goto('/tests/runtime-harness.html');
 
     const result = await page.evaluate(async () => {
@@ -761,7 +761,7 @@ test.describe('desktop runtime routing guardrails', () => {
 
       const previousTauri = globalWindow.__TAURI__;
       globalWindow.__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
-      delete globalWindow.__wmFetchPatched;
+      delete globalWindow.__ovFetchPatched;
 
       try {
         runtime.installRuntimeFetchPatch();
@@ -782,7 +782,7 @@ test.describe('desktop runtime routing guardrails', () => {
         };
       } finally {
         window.fetch = originalFetch;
-        delete globalWindow.__wmFetchPatched;
+        delete globalWindow.__ovFetchPatched;
         if (previousTauri === undefined) {
           delete globalWindow.__TAURI__;
         } else {
@@ -796,7 +796,7 @@ test.describe('desktop runtime routing guardrails', () => {
     expect(result.localCalls).toBeGreaterThan(0);
   });
 
-  test('cloud fallback allowed with valid WorldMonitor API key', async ({ page }) => {
+  test('cloud fallback allowed with valid OSINTview API key', async ({ page }) => {
     await page.goto('/tests/runtime-harness.html');
 
     const result = await page.evaluate(async () => {
@@ -825,8 +825,8 @@ test.describe('desktop runtime routing guardrails', () => {
 
         if (url.includes('osintview.app') && init?.headers) {
           const h = new Headers(init.headers);
-          const wmKey = h.get('X-WorldMonitor-Key');
-          if (wmKey) capturedHeaders['X-WorldMonitor-Key'] = wmKey;
+          const ovKey = h.get('X-OSINTView-Key');
+          if (ovKey) capturedHeaders['X-OSINTView-Key'] = ovKey;
         }
 
         if (url.includes('127.0.0.1:46123/api/market/v1/test')) {
@@ -840,10 +840,10 @@ test.describe('desktop runtime routing guardrails', () => {
 
       const previousTauri = globalWindow.__TAURI__;
       globalWindow.__TAURI__ = { core: { invoke: () => Promise.resolve(null) } };
-      delete globalWindow.__wmFetchPatched;
+      delete globalWindow.__ovFetchPatched;
 
-      const testKey = 'wm_test_key_1234567890abcdef';
-      await runtimeConfig.setSecretValue('WORLDMONITOR_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, testKey);
+      const testKey = 'ov_test_key_1234567890abcdef';
+      await runtimeConfig.setSecretValue('OSINTVIEW_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, testKey);
 
       try {
         runtime.installRuntimeFetchPatch();
@@ -855,24 +855,24 @@ test.describe('desktop runtime routing guardrails', () => {
           status: response.status,
           hasQuotes: Array.isArray(body.quotes),
           cloudCalls: calls.filter(u => u.includes('osintview.app')).length,
-          wmKeyHeader: capturedHeaders['X-WorldMonitor-Key'] || null,
+          ovKeyHeader: capturedHeaders['X-OSINTView-Key'] || null,
         };
       } finally {
         window.fetch = originalFetch;
-        delete globalWindow.__wmFetchPatched;
+        delete globalWindow.__ovFetchPatched;
         if (previousTauri === undefined) {
           delete globalWindow.__TAURI__;
         } else {
           globalWindow.__TAURI__ = previousTauri;
         }
-        await runtimeConfig.setSecretValue('WORLDMONITOR_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, '');
+        await runtimeConfig.setSecretValue('OSINTVIEW_API_KEY' as import('/src/services/runtime-config.ts').RuntimeSecretKey, '');
       }
     });
 
     expect(result.status).toBe(200);
     expect(result.hasQuotes).toBe(true);
     expect(result.cloudCalls).toBe(1);
-    expect(result.wmKeyHeader).toBe('wm_test_key_1234567890abcdef');
+    expect(result.ovKeyHeader).toBe('ov_test_key_1234567890abcdef');
   });
 
   test('country-instability HAPI fallback ignores eventsCivilianTargeting in score', async ({ page }) => {

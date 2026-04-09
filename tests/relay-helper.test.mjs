@@ -171,10 +171,10 @@ describe('createRelayHandler', () => {
   });
 
   it('responds 401 when requireApiKey and no valid key', async () => {
-    process.env.WORLDMONITOR_VALID_KEYS = 'real-key-123';
+    process.env.OSINTVIEW_VALID_KEYS = 'real-key-123';
     const handler = createRelayHandler({ relayPath: '/test', requireApiKey: true });
     const res = await handler(makeRequest('https://osintview.app/api/test', {
-      headers: { Origin: 'https://tauri.localhost', 'X-WorldMonitor-Key': 'wrong-key' },
+      headers: { Origin: 'https://tauri.localhost', 'X-OSINTView-Key': 'wrong-key' },
     }));
     assert.equal(res.status, 401);
     const body = await res.json();
@@ -182,11 +182,11 @@ describe('createRelayHandler', () => {
   });
 
   it('allows request when requireApiKey and key is valid', async () => {
-    process.env.WORLDMONITOR_VALID_KEYS = 'real-key-123';
+    process.env.OSINTVIEW_VALID_KEYS = 'real-key-123';
     mockFetchOk();
     const handler = createRelayHandler({ relayPath: '/test', requireApiKey: true });
     const res = await handler(makeRequest('https://osintview.app/api/test', {
-      headers: { Origin: 'https://tauri.localhost', 'X-WorldMonitor-Key': 'real-key-123' },
+      headers: { Origin: 'https://tauri.localhost', 'X-OSINTView-Key': 'real-key-123' },
     }));
     assert.equal(res.status, 200);
   });

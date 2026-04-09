@@ -1,6 +1,6 @@
 /**
  * GroqInsightsPanel.ts — AI Insights Dashboard Panel
- * World Monitor OSINT Platform
+ * OSINTview OSINT Platform
  *
  * Drop into: src/components/GroqInsightsPanel.ts
  */

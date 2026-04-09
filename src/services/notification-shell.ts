@@ -149,7 +149,7 @@ export function initNotificationBell(): void {
     if (notifications.length === 0) {
       pushNotification(
         'system',
-        'Welcome to World Monitor',
+        'Welcome to OSINTview',
         'Notifications will appear here for threat alerts, market moves, and intelligence updates.'
       );
     }

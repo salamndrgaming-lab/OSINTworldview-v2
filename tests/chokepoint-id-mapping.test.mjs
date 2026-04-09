@@ -5,7 +5,7 @@ import {
   relayNameToId,
   portwatchNameToId,
   corridorRiskNameToId,
-} from '../server/worldmonitor/supply-chain/v1/_chokepoint-ids.ts';
+} from '../server/osintview/supply-chain/v1/_chokepoint-ids.ts';
 
 describe('CANONICAL_CHOKEPOINTS registry', () => {
   it('contains exactly 13 canonical chokepoints', () => {
@@ -71,7 +71,7 @@ describe('portwatchNameToId', () => {
 
 import { readFileSync } from 'node:fs';
 const relaySrc = readFileSync('scripts/ais-relay.cjs', 'utf8');
-const handlerSrc = readFileSync('server/worldmonitor/supply-chain/v1/get-chokepoint-status.ts', 'utf8');
+const handlerSrc = readFileSync('server/osintview/supply-chain/v1/get-chokepoint-status.ts', 'utf8');
 
 describe('relay CHOKEPOINT_THREAT_LEVELS sync', () => {
 

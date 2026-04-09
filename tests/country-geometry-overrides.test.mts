@@ -73,10 +73,10 @@ describe('country geometry overrides', () => {
 
     globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-      if (url === 'https://maps.worldmonitor.app/countries.geojson') {
+      if (url === 'https://maps.osintview.app/countries.geojson') {
         return Promise.resolve(jsonResponse(makeFeatureCollection(1)));
       }
-      if (url === 'https://maps.worldmonitor.app/country-boundary-overrides.geojson') {
+      if (url === 'https://maps.osintview.app/country-boundary-overrides.geojson') {
         return new Promise((_resolve, reject) => {
           init?.signal?.addEventListener('abort', () => {
             overrideAborted = true;
@@ -100,10 +100,10 @@ describe('country geometry overrides', () => {
   it('applies override geometry when the CDN responds in time', async () => {
     globalThis.fetch = ((input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-      if (url === 'https://maps.worldmonitor.app/countries.geojson') {
+      if (url === 'https://maps.osintview.app/countries.geojson') {
         return Promise.resolve(jsonResponse(makeFeatureCollection(1)));
       }
-      if (url === 'https://maps.worldmonitor.app/country-boundary-overrides.geojson') {
+      if (url === 'https://maps.osintview.app/country-boundary-overrides.geojson') {
         return Promise.resolve(jsonResponse(makeFeatureCollection(2)));
       }
       return Promise.reject(new Error(`Unexpected URL: ${url}`));

@@ -30,7 +30,7 @@
   <a href="https://docs.osintview.app/contributing"><strong>Contributing</strong></a>
 </p>
 
-![OSINTview Dashboard](docs/images/worldmonitor-7-mar-2026.jpg)
+![OSINTview Dashboard](docs/images/osintview-dashboard.jpg)
 
 ---
 

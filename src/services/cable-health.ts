@@ -3,7 +3,7 @@ import {
   InfrastructureServiceClient,
   type GetCableHealthResponse,
   type CableHealthRecord as ProtoCableHealthRecord,
-} from '@/generated/client/worldmonitor/infrastructure/v1/service_client';
+} from '@/generated/client/osintview/infrastructure/v1/service_client';
 import type { CableHealthRecord, CableHealthResponse, CableHealthStatus } from '@/types';
 import { createCircuitBreaker } from '@/utils';
 

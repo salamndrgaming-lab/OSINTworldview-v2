@@ -377,7 +377,7 @@ import {
   IntelligenceServiceClient,
   ApiError,
   type ClassifyEventResponse,
-} from '@/generated/client/worldmonitor/intelligence/v1/service_client';
+} from '@/generated/client/osintview/intelligence/v1/service_client';
 
 const classifyClient = new IntelligenceServiceClient(getRpcBaseUrl(), { fetch: (...args) => globalThis.fetch(...args) });
 

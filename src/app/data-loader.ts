@@ -105,10 +105,10 @@ import { getHydratedData } from '@/services/bootstrap';
 import { canQueueAiClassification, AI_CLASSIFY_MAX_PER_FEED } from '@/services/ai-classify-queue';
 import { classifyWithAI } from '@/services/threat-classifier';
 import { ingestHeadlines } from '@/services/trending-keywords';
-import type { ListFeedDigestResponse } from '@/generated/client/worldmonitor/news/v1/service_client';
-import type { GetSectorSummaryResponse, ListMarketQuotesResponse } from '@/generated/client/worldmonitor/market/v1/service_client';
+import type { ListFeedDigestResponse } from '@/generated/client/osintview/news/v1/service_client';
+import type { GetSectorSummaryResponse, ListMarketQuotesResponse } from '@/generated/client/osintview/market/v1/service_client';
 import { mountCommunityWidget } from '@/components/CommunityWidget';
-import { ResearchServiceClient } from '@/generated/client/worldmonitor/research/v1/service_client';
+import { ResearchServiceClient } from '@/generated/client/osintview/research/v1/service_client';
 import {
   MarketPanel,
   StockAnalysisPanel,
@@ -150,7 +150,7 @@ import {
 } from '@/services/daily-market-brief';
 import { fetchCachedRiskScores } from '@/services/cached-risk-scores';
 import type { ThreatLevel as ClientThreatLevel } from '@/types';
-import type { NewsItem as ProtoNewsItem, ThreatLevel as ProtoThreatLevel } from '@/generated/client/worldmonitor/news/v1/service_client';
+import type { NewsItem as ProtoNewsItem, ThreatLevel as ProtoThreatLevel } from '@/generated/client/osintview/news/v1/service_client';
 
 const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
   THREAT_LEVEL_UNSPECIFIED: 'info',
@@ -1612,7 +1612,7 @@ export class DataLoaderManager implements AppModule {
       }
     })());
 
-    const hydratedUcdp = getHydratedData('ucdpEvents') as import('@/generated/client/worldmonitor/conflict/v1/service_client').ListUcdpEventsResponse | undefined;
+    const hydratedUcdp = getHydratedData('ucdpEvents') as import('@/generated/client/osintview/conflict/v1/service_client').ListUcdpEventsResponse | undefined;
 
     tasks.push((async () => {
       try {

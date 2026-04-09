@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 
-import { analyzeStock } from '../server/worldmonitor/market/v1/analyze-stock.ts';
-import { MarketServiceClient } from '../src/generated/client/worldmonitor/market/v1/service_client.ts';
+import { analyzeStock } from '../server/osintview/market/v1/analyze-stock.ts';
+import { MarketServiceClient } from '../src/generated/client/osintview/market/v1/service_client.ts';
 
 const originalFetch = globalThis.fetch;
 

@@ -4,7 +4,7 @@ import {
   type ArxivPaper,
   type GithubRepo,
   type HackernewsItem,
-} from '@/generated/client/worldmonitor/research/v1/service_client';
+} from '@/generated/client/osintview/research/v1/service_client';
 import { createCircuitBreaker } from '@/utils';
 
 // Re-export proto types (no legacy mapping needed -- proto types are clean)

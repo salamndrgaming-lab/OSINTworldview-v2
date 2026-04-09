@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
-const src = readFileSync(resolve(root, 'server/worldmonitor/supply-chain/v1/_corridorrisk-upstream.ts'), 'utf-8');
+const src = readFileSync(resolve(root, 'server/osintview/supply-chain/v1/_corridorrisk-upstream.ts'), 'utf-8');
 const relaySrc = readFileSync(resolve(root, 'scripts/ais-relay.cjs'), 'utf-8');
 
 describe('CorridorRisk type exports', () => {

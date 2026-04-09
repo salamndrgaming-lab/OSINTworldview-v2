@@ -13,7 +13,7 @@ import { isFeatureAvailable } from './runtime-config';
 import {
   MilitaryServiceClient,
   type AircraftDetails,
-} from '@/generated/client/worldmonitor/military/v1/service_client';
+} from '@/generated/client/osintview/military/v1/service_client';
 
 export interface WingbitsAircraftDetails {
   icao24: string;

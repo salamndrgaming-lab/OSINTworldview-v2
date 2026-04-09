@@ -54,7 +54,7 @@ import { fetchAircraftPositions } from '@/services/aviation';
 import { type IranEvent, getIranEventColor, getIranEventRadius } from '@/services/conflict';
 import type { GpsJamHex } from '@/services/gps-interference';
 import { fetchImageryScenes } from '@/services/imagery';
-import type { ImageryScene } from '@/generated/server/worldmonitor/imagery/v1/service_server';
+import type { ImageryScene } from '@/generated/server/osintview/imagery/v1/service_server';
 import type { DisplacementFlow } from '@/services/displacement';
 import type { Earthquake } from '@/services/earthquakes';
 import type { ClimateAnomaly } from '@/services/climate';
@@ -124,7 +124,7 @@ import type { FeatureCollection, Geometry } from 'geojson';
 
 import { isAllowedPreviewUrl } from '@/utils/imagery-preview';
 import { pinWebcam, isPinned } from '@/services/webcams/pinned-store';
-import type { WebcamEntry, WebcamCluster } from '@/generated/client/worldmonitor/webcam/v1/service_client';
+import type { WebcamEntry, WebcamCluster } from '@/generated/client/osintview/webcam/v1/service_client';
 import { fetchWebcamImage } from '@/services/webcams';
 
 export type TimeRange = '1h' | '6h' | '24h' | '48h' | '7d' | 'all';

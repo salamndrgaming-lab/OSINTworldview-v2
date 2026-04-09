@@ -42,8 +42,8 @@ import type { RenewableInstallation } from '@/services/renewable-installations';
 import type { GpsJamHex } from '@/services/gps-interference';
 import type { SatellitePosition } from '@/services/satellites';
 import type { IranEvent } from '@/services/conflict';
-import type { ImageryScene } from '@/generated/server/worldmonitor/imagery/v1/service_server';
-import type { WebcamEntry, WebcamCluster } from '@/generated/client/worldmonitor/webcam/v1/service_client';
+import type { ImageryScene } from '@/generated/server/osintview/imagery/v1/service_server';
+import type { WebcamEntry, WebcamCluster } from '@/generated/client/osintview/webcam/v1/service_client';
 
 export type TimeRange = '1h' | '6h' | '24h' | '48h' | '7d' | 'all';
 export type MapView = 'global' | 'america' | 'mena' | 'eu' | 'asia' | 'latam' | 'africa' | 'oceania';

@@ -5,7 +5,7 @@ import {
   IntelligenceServiceClient,
   type GdeltArticle as ProtoGdeltArticle,
   type SearchGdeltDocumentsResponse,
-} from '@/generated/client/worldmonitor/intelligence/v1/service_client';
+} from '@/generated/client/osintview/intelligence/v1/service_client';
 import { createCircuitBreaker } from '@/utils';
 import { getHydratedData } from '@/services/bootstrap';
 

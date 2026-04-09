@@ -3,16 +3,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { detectTrafficAnomaly } from '../server/worldmonitor/supply-chain/v1/_scoring.mjs';
+import { detectTrafficAnomaly } from '../server/osintview/supply-chain/v1/_scoring.mjs';
 import {
   CANONICAL_CHOKEPOINTS,
   corridorRiskNameToId,
-} from '../server/worldmonitor/supply-chain/v1/_chokepoint-ids.ts';
+} from '../server/osintview/supply-chain/v1/_chokepoint-ids.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
 const relaySrc = readFileSync(resolve(root, 'scripts/ais-relay.cjs'), 'utf-8');
-const handlerSrc = readFileSync(resolve(root, 'server/worldmonitor/supply-chain/v1/get-chokepoint-status.ts'), 'utf-8');
+const handlerSrc = readFileSync(resolve(root, 'server/osintview/supply-chain/v1/get-chokepoint-status.ts'), 'utf-8');
 
 function makeDays(count, dailyTotal, startOffset) {
   const days = [];

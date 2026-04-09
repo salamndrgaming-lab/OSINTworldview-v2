@@ -11,7 +11,7 @@ import {
   type GetHumanitarianSummaryBatchResponse,
   type IranEvent,
   type ListIranEventsResponse,
-} from '@/generated/client/worldmonitor/conflict/v1/service_client';
+} from '@/generated/client/osintview/conflict/v1/service_client';
 import type { UcdpGeoEvent, UcdpEventType } from '@/types';
 import { createCircuitBreaker } from '@/utils';
 import { getHydratedData } from '@/services/bootstrap';

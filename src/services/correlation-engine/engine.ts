@@ -8,7 +8,7 @@ import type {
   TrendDirection,
 } from './types';
 import { haversineKm } from '@/utils/distance';
-import { IntelligenceServiceClient } from '@/generated/client/worldmonitor/intelligence/v1/service_client';
+import { IntelligenceServiceClient } from '@/generated/client/osintview/intelligence/v1/service_client';
 
 const LLM_SCORE_THRESHOLD = 60;
 const LLM_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes

@@ -12,7 +12,7 @@ import {
   Landmark, Fuel
 } from 'lucide-react';
 import { t } from './i18n';
-import dashboardFallback from './assets/worldmonitor-7-mar-2026.jpg';
+import dashboardFallback from './assets/osintview-dashboard.jpg';
 import wiredLogo from './assets/wired-logo.svg';
 
 const API_BASE = 'https://api.osintview.app/api';

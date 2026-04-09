@@ -6,7 +6,7 @@ import {
   type GetRiskScoresResponse,
   type CiiScore,
   type StrategicRisk,
-} from '@/generated/client/worldmonitor/intelligence/v1/service_client';
+} from '@/generated/client/osintview/intelligence/v1/service_client';
 import { createCircuitBreaker } from '@/utils';
 import { getHydratedData } from '@/services/bootstrap';
 

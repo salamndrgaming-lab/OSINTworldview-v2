@@ -188,9 +188,9 @@ function renderOverview(area: HTMLElement): void {
   const dashOffset = circumference - (pct / 100) * circumference;
   const ringColor = ready === total ? 'var(--settings-green)' : ready > 0 ? 'var(--settings-blue)' : 'var(--settings-yellow)';
 
-  const wmState = getSecretState('OSINTVIEW_API_KEY');
-  const wmStatusText = wmState.present ? 'Active' : 'Not set';
-  const wmStatusClass = wmState.present ? 'ok' : 'warn';
+  const ovKeyState = getSecretState('OSINTVIEW_API_KEY');
+  const ovStatusText = ovKeyState.present ? 'Active' : 'Not set';
+  const ovStatusClass = ovKeyState.present ? 'ok' : 'warn';
   const catCards = SETTINGS_CATEGORIES.map(cat => {
     const { ready: catReady, total: catTotal } = getFeatureStatusCounts(cat);
     const cls = catReady === catTotal ? 'ov-cat-ok' : catReady > 0 ? 'ov-cat-partial' : 'ov-cat-warn';
@@ -223,13 +223,13 @@ function renderOverview(area: HTMLElement): void {
         <p class="ov-section-desc">${t('modals.settingsWindow.osintview.apiKey.description')}</p>
         <div class="ov-key-row">
           <div class="ov-input-wrap">
-            <input type="password" class="ov-input" data-wm-key-input
+            <input type="password" class="ov-input" data-ov-key-input
               placeholder="${t('modals.settingsWindow.osintview.apiKey.placeholder')}"
               autocomplete="off" spellcheck="false"
-              ${wmState.present ? `value="${MASKED_SENTINEL}"` : ''} />
-            <button type="button" class="ov-toggle-vis" data-wm-toggle title="Show/hide">&#x1f441;</button>
+              ${ovKeyState.present ? `value="${MASKED_SENTINEL}"` : ''} />
+            <button type="button" class="ov-toggle-vis" data-ov-toggle title="Show/hide">&#x1f441;</button>
           </div>
-          <span class="ov-badge ${wmStatusClass}">${wmStatusText}</span>
+          <span class="ov-badge ${ovStatusClass}">${ovStatusText}</span>
         </div>
       </section>
 
@@ -239,7 +239,7 @@ function renderOverview(area: HTMLElement): void {
         <h2 class="ov-section-title">${t('modals.settingsWindow.osintview.register.title')}</h2>
         <p class="ov-section-desc">${t('modals.settingsWindow.osintview.register.description')}</p>
         <div class="ov-register-row">
-          <button type="button" class="ov-submit-btn" data-wm-open-pro>
+          <button type="button" class="ov-submit-btn" data-ov-open-pro>
             ${t('modals.settingsWindow.osintview.register.submitBtn')}
           </button>
         </div>
@@ -251,19 +251,19 @@ function renderOverview(area: HTMLElement): void {
 }
 
 function initOverviewListeners(area: HTMLElement): void {
-  area.querySelector('[data-wm-toggle]')?.addEventListener('click', () => {
-    const input = area.querySelector<HTMLInputElement>('[data-wm-key-input]');
+  area.querySelector('[data-ov-toggle]')?.addEventListener('click', () => {
+    const input = area.querySelector<HTMLInputElement>('[data-ov-key-input]');
     if (input) input.type = input.type === 'password' ? 'text' : 'password';
   });
 
-  area.querySelector<HTMLInputElement>('[data-wm-key-input]')?.addEventListener('input', (e) => {
+  area.querySelector<HTMLInputElement>('[data-ov-key-input]')?.addEventListener('input', (e) => {
     const input = e.target as HTMLInputElement;
     if (input.value.startsWith(MASKED_SENTINEL)) {
       input.value = input.value.slice(MASKED_SENTINEL.length);
     }
   });
 
-  area.querySelector('[data-wm-open-pro]')?.addEventListener('click', () => {
+  area.querySelector('[data-ov-open-pro]')?.addEventListener('click', () => {
     const url = 'https://osintview.app/pro';
     void invokeTauri<void>('open_url', { url }).catch(() => window.open(url, '_blank'));
   });
@@ -881,21 +881,21 @@ async function initSettingsWindow(): Promise<void> {
   document.getElementById('okBtn')?.addEventListener('click', () => {
     void (async () => {
       try {
-        const wmKeyInput = document.querySelector<HTMLInputElement>('[data-wm-key-input]');
-        const wmKeyValue = wmKeyInput?.value.trim();
-        const hasWmKeyChange = !!(wmKeyValue && wmKeyValue !== MASKED_SENTINEL && wmKeyValue.length > 0);
+        const ovKeyInput = document.querySelector<HTMLInputElement>('[data-ov-key-input]');
+        const ovKeyValue = ovKeyInput?.value.trim();
+        const hasOvKeyChange = !!(ovKeyValue && ovKeyValue !== MASKED_SENTINEL && ovKeyValue.length > 0);
 
         const contentArea = document.getElementById('contentArea');
         if (contentArea) settingsManager.captureUnsavedInputs(contentArea);
 
         const hasPending = settingsManager.hasPendingChanges();
-        if (!hasPending && !hasWmKeyChange) {
+        if (!hasPending && !hasOvKeyChange) {
           closeSettingsWindow();
           return;
         }
 
-        if (hasWmKeyChange && wmKeyValue) {
-          await setSecretValue('OSINTVIEW_API_KEY', wmKeyValue);
+        if (hasOvKeyChange && ovKeyValue) {
+          await setSecretValue('OSINTVIEW_API_KEY', ovKeyValue);
         }
 
         if (hasPending) {

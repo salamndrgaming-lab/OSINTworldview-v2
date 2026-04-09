@@ -498,6 +498,10 @@ export class DataLoaderManager implements AppModule {
         }
       } catch { /* non-fatal */ }
       tasks.push({ name: 'intelligence', task: runGuarded('intelligence', () => this.loadIntelligenceSignals()) });
+
+      // Hydrate entity graph and council from bootstrap or direct fetch
+      tasks.push({ name: 'entityGraph', task: runGuarded('entityGraph', () => this.loadEntityGraph()) });
+      tasks.push({ name: 'councilSynthesis', task: runGuarded('councilSynthesis', () => this.loadCouncilSynthesis()) });
     }
 
     if (SITE_VARIANT === 'full' || SITE_VARIANT === 'godmode') tasks.push({ name: 'firms', task: runGuarded('firms', () => this.loadFirmsData()) });
@@ -2177,6 +2181,46 @@ export class DataLoaderManager implements AppModule {
     } catch (err) {
       console.warn('[POI] Failed to load markers:', err);
       this.ctx.map?.setLayerReady('poi', false);
+    }
+  }
+
+  async loadEntityGraph(): Promise<void> {
+    try {
+      // Check bootstrap cache first
+      const hydrated = getHydratedData('entityGraph') as { nodes?: Array<Record<string, unknown>>; links?: Array<Record<string, unknown>> } | undefined;
+      let data = hydrated;
+      if (!data?.nodes?.length) {
+        const res = await fetch(toApiUrl('/api/intelligence/entity-graph'), { signal: AbortSignal.timeout(8000) });
+        if (res.ok) data = await res.json();
+      }
+      if (data?.nodes?.length) {
+        // Push to IntelGraphPanel and perpetual DB
+        this.callPanel('intel-graph', 'setData', data);
+        try {
+          const { ingestBatch } = await import('@/services/intel-graph-db');
+          await ingestBatch('neo4j', data.nodes!, data.links || []);
+        } catch { /* non-fatal */ }
+        console.log(`[EntityGraph] Loaded ${data.nodes!.length} entities, ${(data.links || []).length} links`);
+      }
+    } catch (err) {
+      console.warn('[EntityGraph] Failed to load:', err);
+    }
+  }
+
+  async loadCouncilSynthesis(): Promise<void> {
+    try {
+      const hydrated = getHydratedData('councilSynthesis') as Record<string, unknown> | undefined;
+      let data = hydrated;
+      if (!data?.overallAssessment) {
+        const res = await fetch(toApiUrl('/api/council/synthesis'), { signal: AbortSignal.timeout(8000) });
+        if (res.ok) data = await res.json();
+      }
+      if (data?.overallAssessment) {
+        this.callPanel('agent-council', 'setData', data);
+        console.log('[Council] Synthesis loaded');
+      }
+    } catch (err) {
+      console.warn('[Council] Failed to load:', err);
     }
   }
 

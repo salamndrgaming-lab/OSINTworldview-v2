@@ -504,7 +504,44 @@ async function main() {
             lastSeen: Date.now(),
           });
         }
-        links.push({ source: id, target: countryId, type: 'LOCATED_IN', weight: 1 });
+        const role = (p.role || '').toLowerCase();
+        const isLeader = role.includes('president') || role.includes('prime minister') || role.includes('leader') || role.includes('supreme');
+        links.push({
+          source: id,
+          target: countryId,
+          type: isLeader ? 'LEADS' : 'LOCATED_IN',
+          weight: isLeader ? 3 : 1,
+          context: isLeader
+            ? `${p.name} serves as ${p.role || 'leader'} of ${p.country || p.region}`
+            : `${p.name} is associated with ${p.country || p.region}${p.role ? ' (' + p.role + ')' : ''}`,
+        });
+      }
+
+      // Link person to organization if role suggests one
+      const orgMatch = (p.role || '').match(/(?:of|at|for)\s+(?:the\s+)?(.+)/i);
+      if (orgMatch) {
+        const orgName = orgMatch[1].trim();
+        if (orgName.length > 2 && orgName.length < 60) {
+          const orgId = 'org-' + orgName.toLowerCase().replace(/\s+/g, '-');
+          if (!nodeIds.has(orgId)) {
+            nodeIds.add(orgId);
+            nodes.push({
+              id: orgId,
+              label: orgName,
+              type: 'Organization',
+              source: 'seed',
+              confidence: 0.8,
+              lastSeen: Date.now(),
+            });
+          }
+          links.push({
+            source: id,
+            target: orgId,
+            type: 'MEMBER_OF',
+            weight: 2,
+            context: `${p.name} holds role "${p.role}" in ${orgName}`,
+          });
+        }
       }
     }
 
@@ -527,21 +564,38 @@ async function main() {
       }
     }
 
-    // Missile events → Event nodes linked to regions
+    // Missile events → Event nodes linked to countries
     const missileEvents = missiles?.events || [];
     for (const ev of missileEvents.slice(0, 20)) {
       const evId = 'event-' + (ev.id || ev.title || '').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 40);
       if (!evId || evId === 'event-' || nodeIds.has(evId)) continue;
       nodeIds.add(evId);
+      const evLabel = (ev.title || 'Missile Event').slice(0, 60);
       nodes.push({
         id: evId,
-        label: (ev.title || 'Missile Event').slice(0, 60),
+        label: evLabel,
         type: 'Event',
+        subtype: 'missile_strike',
         source: 'seed',
         confidence: 0.8,
+        severity: ev.severity || 'unknown',
         country: ev.country || ev.region || '',
+        location: ev.locationName || '',
         lastSeen: ev.timestamp || Date.now(),
       });
+
+      // Link to location (city/region) if available
+      if (ev.locationName) {
+        const locId = 'location-' + ev.locationName.toLowerCase().replace(/\s+/g, '-');
+        if (!nodeIds.has(locId)) {
+          nodeIds.add(locId);
+          nodes.push({ id: locId, label: ev.locationName, type: 'Location', source: 'seed', confidence: 0.8, lastSeen: Date.now() });
+        }
+        links.push({
+          source: evId, target: locId, type: 'OCCURRED_AT', weight: 2,
+          context: `${ev.eventType || 'Strike'} reported at ${ev.locationName}${ev.severity ? ' (severity: ' + ev.severity + ')' : ''}`,
+        });
+      }
 
       if (ev.country || ev.region) {
         const tgtId = 'country-' + (ev.country || ev.region || '').toLowerCase().replace(/\s+/g, '-');
@@ -549,8 +603,112 @@ async function main() {
           nodeIds.add(tgtId);
           nodes.push({ id: tgtId, label: ev.country || ev.region, type: 'Country', source: 'seed', confidence: 1.0, lastSeen: Date.now() });
         }
-        links.push({ source: evId, target: tgtId, type: 'TARGETS', weight: 1 });
+        links.push({
+          source: evId, target: tgtId, type: 'TARGETS', weight: 2,
+          context: `${ev.eventType || 'Missile strike'} targeting ${ev.country || ev.region}${ev.locationName ? ' at ' + ev.locationName : ''}`,
+        });
       }
+    }
+
+    // Disease outbreaks → Event nodes linked to countries
+    const diseaseEvents = diseases?.events || [];
+    for (const ev of diseaseEvents.slice(0, 20)) {
+      const evId = 'event-disease-' + (ev.id || ev.title || '').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 40);
+      if (!evId || evId === 'event-disease-' || nodeIds.has(evId)) continue;
+      nodeIds.add(evId);
+      const evLabel = (ev.title || `${ev.diseaseType || 'Disease'} Outbreak`).slice(0, 60);
+      nodes.push({
+        id: evId,
+        label: evLabel,
+        type: 'Event',
+        subtype: 'disease_outbreak',
+        source: 'seed',
+        confidence: 0.8,
+        severity: ev.severity || 'unknown',
+        country: ev.country || '',
+        lastSeen: ev.timestamp || Date.now(),
+      });
+
+      const countryCode = locationToCountry(ev.country);
+      if (countryCode || ev.country) {
+        const countryLabel = ev.country || countryCode;
+        const tgtId = 'country-' + (countryLabel).toLowerCase().replace(/\s+/g, '-');
+        if (!nodeIds.has(tgtId)) {
+          nodeIds.add(tgtId);
+          nodes.push({ id: tgtId, label: countryLabel, type: 'Country', source: 'seed', confidence: 1.0, lastSeen: Date.now() });
+        }
+        links.push({
+          source: evId, target: tgtId, type: 'TARGETS', weight: 1,
+          context: `${ev.diseaseType || 'Disease'} outbreak reported in ${countryLabel}${ev.severity ? ' (severity: ' + ev.severity + ')' : ''}`,
+        });
+      }
+    }
+
+    // Unrest / protest events → Event nodes linked to countries
+    const unrestEvents = unrest?.events || (unrest?.topics?.flatMap(t => t.events || []) || []);
+    for (const ev of unrestEvents.slice(0, 20)) {
+      const loc = ev.location?.name || ev.country || '';
+      const evId = 'event-unrest-' + (ev.id || loc + '-' + (ev.description || '').slice(0, 20)).toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 40);
+      if (!evId || evId === 'event-unrest-' || nodeIds.has(evId)) continue;
+      nodeIds.add(evId);
+      const evLabel = (ev.description || ev.title || `Unrest in ${loc}`).slice(0, 60);
+      nodes.push({
+        id: evId,
+        label: evLabel,
+        type: 'Event',
+        subtype: ev.eventType || ev.type || 'civil_unrest',
+        source: 'seed',
+        confidence: 0.75,
+        severity: (ev.severityLevel || ev.severity || 'unknown').toLowerCase(),
+        location: loc,
+        lastSeen: Date.now(),
+      });
+
+      // Link to location
+      if (loc) {
+        const locId = 'location-' + loc.toLowerCase().replace(/\s+/g, '-');
+        if (!nodeIds.has(locId)) {
+          nodeIds.add(locId);
+          nodes.push({ id: locId, label: loc, type: 'Location', source: 'seed', confidence: 0.7, lastSeen: Date.now() });
+        }
+        links.push({
+          source: evId, target: locId, type: 'OCCURRED_AT', weight: 1,
+          context: `${ev.eventType || 'Unrest'} event at ${loc}`,
+        });
+      }
+
+      const countryCode = locationToCountry(loc);
+      if (countryCode) {
+        const countryLabel = loc; // best available
+        const tgtId = 'country-' + countryLabel.toLowerCase().replace(/\s+/g, '-');
+        if (!nodeIds.has(tgtId)) {
+          nodeIds.add(tgtId);
+          nodes.push({ id: tgtId, label: countryLabel, type: 'Country', source: 'seed', confidence: 1.0, lastSeen: Date.now() });
+        }
+        links.push({
+          source: evId, target: tgtId, type: 'TARGETS', weight: 1,
+          context: `${ev.eventType || 'Civil unrest'} event in ${countryLabel}`,
+        });
+      }
+    }
+
+    // Conflict forecast countries → Region nodes + links
+    for (const fc of fcs.slice(0, 30)) {
+      const code = fc.countryCode;
+      if (!code) continue;
+      const region = getRegion(code);
+      if (region === 'Other') continue;
+      const countryId = 'country-' + (fc.countryName || fc.country || '').toLowerCase().replace(/\s+/g, '-');
+      if (!nodeIds.has(countryId)) continue; // only link countries we already have
+      const regionId = 'region-' + region.toLowerCase().replace(/\s+/g, '-');
+      if (!nodeIds.has(regionId)) {
+        nodeIds.add(regionId);
+        nodes.push({ id: regionId, label: region, type: 'Region', source: 'seed', confidence: 1.0, lastSeen: Date.now() });
+      }
+      links.push({
+        source: countryId, target: regionId, type: 'IN_REGION', weight: 1,
+        context: `${fc.countryName || code} is in the ${region} region`,
+      });
     }
 
     const graphPayload = {

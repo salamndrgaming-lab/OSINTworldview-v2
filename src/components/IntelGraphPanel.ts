@@ -19,7 +19,7 @@ import type { FullAnalysis } from '../utils/graph-analytics';
 
 // ── Types ──────────────────────────────────────────────────────
 
-type NodeCategory = 'country' | 'person' | 'organization' | 'event' | 'topic';
+type NodeCategory = 'country' | 'person' | 'organization' | 'event' | 'topic' | 'location';
 
 interface GraphNode extends d3.SimulationNodeDatum {
   id: string;
@@ -65,6 +65,7 @@ const CATEGORY_COLORS: Record<NodeCategory, string> = {
   organization: '#14b8a6', // teal
   event: '#ef4444',        // red
   topic: '#f59e0b',        // amber
+  location: '#06b6d4',     // cyan
 };
 const CATEGORY_ICONS: Record<NodeCategory, string> = {
   country: '🌍',
@@ -72,6 +73,7 @@ const CATEGORY_ICONS: Record<NodeCategory, string> = {
   organization: '🏢',
   event: '⚡',
   topic: '🔍',
+  location: '📍',
 };
 const NODE_BASE_RADIUS = 18;
 const EDGE_MIN_WIDTH = 0.8;
@@ -210,6 +212,7 @@ export class IntelGraphPanel extends Panel {
           <option value="person">👤 Person</option>
           <option value="organization">🏢 Organization</option>
           <option value="event">⚡ Event</option>
+          <option value="location">📍 Location</option>
           <option value="topic">🔍 Topic</option>
         </select>
         <input type="text" class="igp-add-input" id="igpAddInput" placeholder="Add entity..." spellcheck="false" />
@@ -354,12 +357,34 @@ export class IntelGraphPanel extends Panel {
             </div>
           `;
         }
+        // Build connection details for tooltip
+        let connHtml = '';
+        if (connections.length > 0) {
+          const connDetails = connections.slice(0, 5).map(edge => {
+            const s = typeof edge.source === 'object' ? edge.source as GraphNode : null;
+            const t = typeof edge.target === 'object' ? edge.target as GraphNode : null;
+            const other = s?.id === node.id ? t : s;
+            const otherLabel = other?.label || '?';
+            const icon = other ? (CATEGORY_ICONS[other.category] || '') : '';
+            return `<div style="font-size:9px;color:var(--text-dim);padding:1px 0;line-height:1.3">
+              ${icon} <strong>${this.escHtml(otherLabel)}</strong>: ${this.escHtml(edge.reason)}
+              <span style="color:var(--text-ghost)"> (${edge.strength}/10)</span>
+            </div>`;
+          }).join('');
+          const moreCount = connections.length > 5 ? connections.length - 5 : 0;
+          connHtml = `<div class="igp-tooltip-links" style="margin-top:4px;border-top:1px solid rgba(255,255,255,0.06);padding-top:3px">
+            ${connDetails}
+            ${moreCount > 0 ? `<div style="font-size:8px;color:var(--text-ghost)">+${moreCount} more</div>` : ''}
+          </div>`;
+        }
+
         tooltip.innerHTML = `
           <div class="igp-tooltip-header">${CATEGORY_ICONS[node.category]} ${this.escHtml(node.label)}</div>
           <div class="igp-tooltip-cat">${node.category}</div>
           <div class="igp-tooltip-conn">${connections.length} connection${connections.length !== 1 ? 's' : ''}</div>
           ${node.notes ? `<div class="igp-tooltip-notes">${this.escHtml(node.notes)}</div>` : ''}
           ${analyticsHtml}
+          ${connHtml}
         `;
         tooltip.style.display = 'block';
         tooltip.style.left = `${Math.min(e.offsetX + 14, this.width - 200)}px`;
@@ -786,6 +811,8 @@ export class IntelGraphPanel extends Panel {
       'Country': 'country',
       'Event': 'event',
       'Region': 'organization',
+      'Organization': 'organization',
+      'Location': 'location',
     };
 
     for (const n of nodes) {
@@ -809,11 +836,15 @@ export class IntelGraphPanel extends Panel {
         n.id === targetLabel || n.label.toLowerCase() === targetLabel.toLowerCase()
       );
       if (sourceNode && targetNode) {
+        // Use context (rich description) if available, fall back to humanized type
+        const reason = link.context
+          ? String(link.context)
+          : this.humanizeRelationType(String(link.type || 'related'), sourceNode.label, targetNode.label);
         this.addEdge(
           sourceNode.id,
           targetNode.id,
           Math.min(10, Math.max(1, Number(link.weight) || 3)),
-          String(link.type || 'related'),
+          reason,
           true
         );
       }
@@ -1094,6 +1125,26 @@ export class IntelGraphPanel extends Panel {
   }
 
   // ── Utilities ────────────────────────────────────────────────
+
+  /** Convert bare relationship types (LOCATED_IN, TARGETS) to human-readable descriptions */
+  private humanizeRelationType(type: string, sourceLabel: string, targetLabel: string): string {
+    const typeMap: Record<string, string> = {
+      'LOCATED_IN': `${sourceLabel} is located in ${targetLabel}`,
+      'LEADS': `${sourceLabel} leads ${targetLabel}`,
+      'TARGETS': `${sourceLabel} targets ${targetLabel}`,
+      'OCCURRED_IN': `${sourceLabel} occurred in ${targetLabel}`,
+      'OCCURRED_AT': `${sourceLabel} occurred at ${targetLabel}`,
+      'IN_REGION': `${sourceLabel} is in ${targetLabel}`,
+      'MEMBER_OF': `${sourceLabel} is a member of ${targetLabel}`,
+      'CONFLICT_FORECAST': `Conflict forecast linking ${sourceLabel} and ${targetLabel}`,
+      'SUPPLIES': `${sourceLabel} supplies ${targetLabel}`,
+      'ALLIED_WITH': `${sourceLabel} is allied with ${targetLabel}`,
+      'SANCTIONED_BY': `${sourceLabel} is sanctioned by ${targetLabel}`,
+      'related': `${sourceLabel} is related to ${targetLabel}`,
+      'associated': `${sourceLabel} is associated with ${targetLabel}`,
+    };
+    return typeMap[type] || `${sourceLabel} — ${type.toLowerCase().replace(/_/g, ' ')} — ${targetLabel}`;
+  }
 
   private escHtml(s: string): string {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

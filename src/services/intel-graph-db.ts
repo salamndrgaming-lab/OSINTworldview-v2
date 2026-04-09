@@ -490,7 +490,7 @@ export async function ingestPOI(
 }
 
 /**
- * Ingest news headlines — extract entity names and create nodes.
+ * Ingest news headlines — extract entities (countries, orgs, events, locations) and create nodes + links.
  */
 export async function ingestHeadlines(
   headlines: Array<Record<string, unknown>>,
@@ -499,21 +499,55 @@ export async function ingestHeadlines(
 
   for (const h of headlines) {
     const title = String(h.title || '');
-    // Extract country names from headline using a simple pattern
+    const allEntities: Array<{ id: string; label: string; type: string }> = [];
+
+    // Extract country names
     const countries = extractCountries(title);
     for (const country of countries) {
       const canonId = canonicalNodeId('Country', country);
       const existing = await tx<PersistedNode | undefined>(NODE_STORE, 'readonly', s => s.get(canonId));
       await upsertNode('Country', country, 'news', { confidence: 0.7 });
       if (!existing) newNodes++;
+      allEntities.push({ id: canonId, label: country, type: 'Country' });
     }
 
-    // If two countries mentioned in same headline, link them
-    for (let i = 0; i < countries.length; i++) {
-      for (let j = i + 1; j < countries.length; j++) {
-        const srcId = canonicalNodeId('Country', countries[i]!);
-        const tgtId = canonicalNodeId('Country', countries[j]!);
-        await upsertLink(srcId, tgtId, 'co-mentioned in news', 'news', 0.3);
+    // Extract organizations
+    const orgs = extractOrganizations(title);
+    for (const org of orgs) {
+      const canonId = canonicalNodeId('Organization', org);
+      const existing = await tx<PersistedNode | undefined>(NODE_STORE, 'readonly', s => s.get(canonId));
+      await upsertNode('Organization', org, 'news', { confidence: 0.65 });
+      if (!existing) newNodes++;
+      allEntities.push({ id: canonId, label: org, type: 'Organization' });
+    }
+
+    // Extract event keywords
+    const events = extractEvents(title);
+    for (const event of events) {
+      const canonId = canonicalNodeId('Event', event);
+      const existing = await tx<PersistedNode | undefined>(NODE_STORE, 'readonly', s => s.get(canonId));
+      await upsertNode('Event', event, 'news', { confidence: 0.6, notes: title.slice(0, 120) });
+      if (!existing) newNodes++;
+      allEntities.push({ id: canonId, label: event, type: 'Event' });
+    }
+
+    // Extract locations (cities/regions)
+    const locations = extractLocations(title);
+    for (const loc of locations) {
+      const canonId = canonicalNodeId('Location', loc);
+      const existing = await tx<PersistedNode | undefined>(NODE_STORE, 'readonly', s => s.get(canonId));
+      await upsertNode('Location', loc, 'news', { confidence: 0.6 });
+      if (!existing) newNodes++;
+      allEntities.push({ id: canonId, label: loc, type: 'Location' });
+    }
+
+    // Link all co-mentioned entities from same headline
+    for (let i = 0; i < allEntities.length; i++) {
+      for (let j = i + 1; j < allEntities.length; j++) {
+        const a = allEntities[i]!;
+        const b = allEntities[j]!;
+        const context = `Co-mentioned in: "${title.slice(0, 80)}${title.length > 80 ? '...' : ''}"`;
+        await upsertLink(a.id, b.id, context, 'news', 0.3);
       }
     }
   }
@@ -825,6 +859,72 @@ function extractCountries(text: string): string[] {
   const found: string[] = [];
   for (const c of KNOWN_COUNTRIES) {
     if (text.includes(c)) found.push(c);
+  }
+  return found;
+}
+
+const KNOWN_ORGANIZATIONS = [
+  'NATO', 'UN', 'EU', 'WHO', 'IAEA', 'OPEC', 'IMF', 'World Bank',
+  'Hamas', 'Hezbollah', 'ISIS', 'Wagner', 'IDF', 'Pentagon', 'CIA',
+  'Mossad', 'FSB', 'GRU', 'MI6', 'GCHQ', 'NSA', 'FBI',
+  'Houthis', 'Taliban', 'Al-Qaeda', 'Boko Haram', 'Al-Shabaab',
+  'African Union', 'ASEAN', 'BRICS', 'G7', 'G20', 'SCO',
+  'Red Cross', 'Amnesty International', 'Human Rights Watch',
+  'SWIFT', 'Federal Reserve', 'ECB', 'RAND', 'Brookings',
+];
+
+function extractOrganizations(text: string): string[] {
+  const found: string[] = [];
+  for (const org of KNOWN_ORGANIZATIONS) {
+    if (text.includes(org)) found.push(org);
+  }
+  return found;
+}
+
+const EVENT_PATTERNS: Array<{ pattern: RegExp; label: (m: RegExpMatchArray) => string }> = [
+  { pattern: /\b(missile\s+(?:strike|attack)s?)\b/i, label: m => m[1]! },
+  { pattern: /\b(drone\s+(?:strike|attack)s?)\b/i, label: m => m[1]! },
+  { pattern: /\b(airstrike|air\s+strike)s?\b/i, label: () => 'Airstrike' },
+  { pattern: /\b(ceasefire|cease[- ]fire)\b/i, label: () => 'Ceasefire' },
+  { pattern: /\b(coup(?:\s+attempt)?)\b/i, label: m => m[1]! },
+  { pattern: /\b(sanctions?)\b/i, label: () => 'Sanctions' },
+  { pattern: /\b(protests?|demonstrations?)\b/i, label: () => 'Protests' },
+  { pattern: /\b(earthquake)\b/i, label: () => 'Earthquake' },
+  { pattern: /\b(tsunami)\b/i, label: () => 'Tsunami' },
+  { pattern: /\b(nuclear\s+test)\b/i, label: () => 'Nuclear Test' },
+  { pattern: /\b(election|referendum)\b/i, label: m => m[1]! },
+  { pattern: /\b(invasion|offensive)\b/i, label: m => m[1]! },
+  { pattern: /\b(cyber[- ]?attack)\b/i, label: () => 'Cyberattack' },
+  { pattern: /\b(assassination|bombing)\b/i, label: m => m[1]! },
+  { pattern: /\b(summit|peace\s+talks?)\b/i, label: m => m[1]! },
+];
+
+function extractEvents(text: string): string[] {
+  const found: string[] = [];
+  for (const { pattern, label } of EVENT_PATTERNS) {
+    const match = text.match(pattern);
+    if (match) {
+      const eventLabel = label(match);
+      if (!found.includes(eventLabel)) found.push(eventLabel);
+    }
+  }
+  return found;
+}
+
+const KNOWN_LOCATIONS = [
+  'Kyiv', 'Kharkiv', 'Odesa', 'Dnipro', 'Mariupol', 'Bakhmut', 'Crimea', 'Donbas',
+  'Moscow', 'Belgorod', 'Kursk', 'St Petersburg',
+  'Gaza City', 'Rafah', 'Khan Younis', 'West Bank', 'Tel Aviv', 'Jerusalem', 'Haifa',
+  'Beirut', 'Damascus', 'Aleppo', 'Baghdad', 'Tehran', 'Kabul',
+  'Taipei', 'Hong Kong', 'Beijing', 'Shanghai', 'Pyongyang',
+  'Red Sea', 'Black Sea', 'South China Sea', 'Taiwan Strait', 'Strait of Hormuz',
+  'Suez Canal', 'Bab el-Mandeb', 'Arctic', 'Baltic Sea',
+];
+
+function extractLocations(text: string): string[] {
+  const found: string[] = [];
+  for (const loc of KNOWN_LOCATIONS) {
+    if (text.includes(loc)) found.push(loc);
   }
   return found;
 }

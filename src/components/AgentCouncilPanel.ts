@@ -348,6 +348,13 @@ export class AgentCouncilPanel extends Panel {
     }
   }
 
+  /** Accept data pushed from data-loader bootstrap hydration */
+  public setData(data: CouncilSynthesis): void {
+    if (data?.overallAssessment) {
+      this.renderSynthesis(data);
+    }
+  }
+
   private esc(s: string): string {
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }

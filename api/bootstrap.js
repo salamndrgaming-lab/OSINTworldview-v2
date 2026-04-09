@@ -51,6 +51,7 @@ const BOOTSTRAP_CACHE_KEYS = {
   hypotheses:        'intelligence:hypotheses:v1',
   narrativeDrift:    'intelligence:narrative-drift:v1',
   crossSourceSignals: 'intelligence:cross-source-signals:v1',
+  councilSynthesis:   'council:synthesis:v1',
 };
 
 const SLOW_KEYS = new Set([
@@ -60,7 +61,7 @@ const SLOW_KEYS = new Set([
   'naturalEvents',
   'cryptoQuotes', 'gulfQuotes', 'stablecoinMarkets', 'unrestEvents', 'ucdpEvents',
   'techEvents', 'poi', 'telegramNarratives', 'entityGraph',
-  'hypotheses', 'narrativeDrift', 'crossSourceSignals',
+  'hypotheses', 'narrativeDrift', 'crossSourceSignals', 'councilSynthesis',
 ]);
 
 const FAST_KEYS = new Set([

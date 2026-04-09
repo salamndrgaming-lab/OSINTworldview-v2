@@ -165,12 +165,15 @@ wave_5_ai_powered() {
     "seed-poi-discovery.mjs:$TIMEOUT_LONG"
 }
 
+TIMEOUT_COUNCIL=900   # 15 min for agent council (7 LLM calls)
+
 wave_6_derivatives() {
   run_wave "Derivative Seeds (read upstream keys)" \
     "seed-alerts.mjs" \
     "agent-sitrep.mjs:$TIMEOUT_LONG" \
     "seed-hypothesis-generator.mjs:$TIMEOUT_LONG" \
-    "seed-cross-source-signals.mjs"
+    "seed-cross-source-signals.mjs" \
+    "seed-agent-council.mjs:$TIMEOUT_COUNCIL"
 }
 
 wave_7_archival() {

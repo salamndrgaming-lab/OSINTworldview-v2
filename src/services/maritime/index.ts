@@ -178,17 +178,35 @@ function parseSnapshot(data: unknown): {
   // Relay format: has disruptions + density arrays
   if (Array.isArray(raw.disruptions) && Array.isArray(raw.density)) {
     const status = raw.status || {};
+    const candidates: SnapshotCandidateReport[] = Array.isArray(raw.candidateReports) ? raw.candidateReports : [];
+
+    // Extract vessel positions from candidateReports for map display.
+    // The relay sends individual vessel positions as candidates; we
+    // promote them to the vessels array so DeckGL renders ship markers.
+    const vessels: AisPositionData[] = candidates
+      .filter(c => c && Number.isFinite(c.lat) && Number.isFinite(c.lon) && c.mmsi)
+      .map(c => ({
+        mmsi: String(c.mmsi),
+        name: c.name || '',
+        lat: c.lat,
+        lon: c.lon,
+        shipType: c.shipType,
+        heading: c.heading,
+        speed: c.speed,
+        course: c.course,
+      }));
+
     return {
       sequence: Number.isFinite(raw.sequence as number) ? Number(raw.sequence) : 0,
       status: {
         connected: Boolean(status.connected),
-        vessels: Number.isFinite(status.vessels as number) ? Number(status.vessels) : 0,
+        vessels: Number.isFinite(status.vessels as number) ? Number(status.vessels) : vessels.length,
         messages: Number.isFinite(status.messages as number) ? Number(status.messages) : 0,
       },
       disruptions: raw.disruptions,
       density: raw.density,
-      vessels: [],
-      candidateReports: Array.isArray(raw.candidateReports) ? raw.candidateReports : [],
+      vessels,
+      candidateReports: candidates,
     };
   }
 

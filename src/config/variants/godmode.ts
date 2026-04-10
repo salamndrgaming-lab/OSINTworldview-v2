@@ -76,6 +76,10 @@ export const DEFAULT_PANELS: Record<string, PanelConfig> = {
   'signal-confidence': { name: 'Signal Confidence', enabled: true, priority: 1 },
   'auto-brief': { name: 'Auto-Briefs', enabled: true, priority: 1 },
   insights: { name: 'AI Insights', enabled: true, priority: 1 },
+  'missile-tracker': { name: 'Missile / Drone Tracker', enabled: true, priority: 1 },
+  'intel-graph': { name: 'Intel Link Graph', enabled: true, priority: 1 },
+  'agent-council': { name: 'Agent Council', enabled: true, priority: 1 },
+  'cross-source-signals': { name: 'Cross-Source Signals', enabled: true, priority: 1 },
 };
 
 // ALL map layers ON — the full intelligence picture

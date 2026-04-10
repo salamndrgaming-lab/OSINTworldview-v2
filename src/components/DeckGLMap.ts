@@ -3426,9 +3426,8 @@ export class DeckGLMap {
   }
 
   private createMissileStrikesLayer(): ScatterplotLayer {
-    // 6-hour time filter: seed stores 12h, render only recent 6h
-    const sixHoursAgo = Date.now() - 6 * 3600_000;
-    const recentEvents = this.missileEvents.filter(e => e.timestamp >= sixHoursAgo);
+    // Show all events from seed (seed already curates to recent 24h from GDELT)
+    const recentEvents = this.missileEvents;
 
     return new ScatterplotLayer({
       id: 'missile-strikes-layer',

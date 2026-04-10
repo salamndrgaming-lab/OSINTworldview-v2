@@ -507,7 +507,7 @@ export class DataLoaderManager implements AppModule {
     if (SITE_VARIANT === 'full' || SITE_VARIANT === 'godmode') tasks.push({ name: 'firms', task: runGuarded('firms', () => this.loadFirmsData()) });
     if (this.ctx.mapLayers.natural) tasks.push({ name: 'natural', task: runGuarded('natural', () => this.loadNatural()) });
     if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.weather) tasks.push({ name: 'weather', task: runGuarded('weather', () => this.loadWeatherAlerts()) });
-    if (SITE_VARIANT !== 'happy' && !isDesktopRuntime() && this.ctx.mapLayers.ais) tasks.push({ name: 'ais', task: runGuarded('ais', () => this.loadAisSignals()) });
+    if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.ais) tasks.push({ name: 'ais', task: runGuarded('ais', () => this.loadAisSignals()) });
     if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.cables) tasks.push({ name: 'cables', task: runGuarded('cables', () => this.loadCableActivity()) });
     if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.cables) tasks.push({ name: 'cableHealth', task: runGuarded('cableHealth', () => this.loadCableHealth()) });
     if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.flights) tasks.push({ name: 'flights', task: runGuarded('flights', () => this.loadFlightDelays()) });
@@ -1936,8 +1936,27 @@ export class DataLoaderManager implements AppModule {
 
   async loadAisSignals(): Promise<void> {
     try {
-      const { disruptions, density, vessels } = await fetchAisSignals();
+      let { disruptions, density, vessels } = await fetchAisSignals();
       const aisStatus = getAisStatus();
+
+      // If maritime service returned no vessels, try bootstrap hydration as fallback
+      if (vessels.length === 0) {
+        const hydrated = getHydratedData('aisSnapshot') as { vessels?: Array<{ mmsi: string; name?: string; lat: number; lon: number; shipType?: number; heading?: number; speed?: number; course?: number }> } | undefined;
+        if (hydrated?.vessels?.length) {
+          vessels = hydrated.vessels.map(v => ({
+            mmsi: String(v.mmsi),
+            name: v.name || '',
+            lat: v.lat,
+            lon: v.lon,
+            shipType: v.shipType,
+            heading: v.heading,
+            speed: v.speed,
+            course: v.course,
+          }));
+          console.log(`[Ships] Bootstrap fallback: ${vessels.length} vessels`);
+        }
+      }
+
       console.log('[Ships] Events:', { disruptions: disruptions.length, density: density.length, vessels: vessels.length });
       this.ctx.map?.setAisData(disruptions, density, vessels);
       signalAggregator.ingestAisDisruptions(disruptions);
@@ -1970,6 +1989,21 @@ export class DataLoaderManager implements AppModule {
         dataFreshness.recordUpdate('ais', shippingCount);
       }
     } catch (error) {
+      // Last resort: try bootstrap AIS data even on total failure
+      try {
+        const hydrated = getHydratedData('aisSnapshot') as { vessels?: Array<{ mmsi: string; name?: string; lat: number; lon: number; shipType?: number; heading?: number; speed?: number; course?: number }> } | undefined;
+        if (hydrated?.vessels?.length) {
+          const vessels = hydrated.vessels.map(v => ({
+            mmsi: String(v.mmsi), name: v.name || '', lat: v.lat, lon: v.lon,
+            shipType: v.shipType, heading: v.heading, speed: v.speed, course: v.course,
+          }));
+          this.ctx.map?.setAisData([], [], vessels);
+          this.ctx.map?.setLayerReady('ais', true);
+          console.log(`[Ships] Bootstrap rescue: ${vessels.length} vessels`);
+          return;
+        }
+      } catch { /* bootstrap also failed */ }
+
       this.ctx.map?.setLayerReady('ais', false);
       this.ctx.statusPanel?.updateFeed('Shipping', { status: 'error', errorMessage: String(error) });
       this.ctx.statusPanel?.updateApi('AISStream', { status: 'error' });
@@ -2225,14 +2259,26 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadMissileEvents(): Promise<void> {
+    type MissileEvent = { id: string; title: string; eventType: string; severity: string; latitude: number; longitude: number; locationName: string; timestamp: number; sources: string[]; dataSource: string };
     try {
-      const res = await fetch(toApiUrl('/api/missile-events'));
-      if (!res.ok) throw new Error(`Missile events API ${res.status}`);
-      const data = await res.json();
-      const events: Array<{ id: string; title: string; eventType: string; severity: string; latitude: number; longitude: number; locationName: string; timestamp: number; sources: string[]; dataSource: string }> = data?.events || [];
+      // Try bootstrap hydration first (instant, no extra fetch)
+      const hydrated = getHydratedData('missileEvents') as { events?: MissileEvent[] } | undefined;
+      let events: MissileEvent[] = [];
+
+      if (hydrated?.events?.length) {
+        events = hydrated.events;
+        console.log(`[MissileStrikes] Bootstrap hydration: ${events.length} events`);
+      } else {
+        const res = await fetch(toApiUrl('/api/missile-events'));
+        if (!res.ok) throw new Error(`Missile events API ${res.status}`);
+        const data = await res.json();
+        events = data?.events || [];
+      }
 
       this.ctx.map?.setMissileEvents(events);
       this.ctx.map?.setLayerReady('missileStrikes', events.length > 0);
+      // Also hydrate the panel directly
+      this.callPanel('missile-tracker', 'setData', { events });
       console.log(`[MissileStrikes] Loaded ${events.length} events`);
     } catch (err) {
       console.warn('[MissileStrikes] Failed to load:', err);

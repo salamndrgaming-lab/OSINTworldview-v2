@@ -95,7 +95,7 @@ jobs:
     needs: [seed-gdelt-raw]
     if: always() && needs.seed-gdelt-raw.result != 'cancelled'
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 22
     env:
       UPSTASH_REDIS_REST_URL:   ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}

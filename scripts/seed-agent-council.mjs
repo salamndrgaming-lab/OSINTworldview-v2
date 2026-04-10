@@ -535,10 +535,12 @@ async function fetchCouncilAnalysis() {
   const digest = buildContextDigest(data);
   console.log(`  Context digest: ${digest.length} chars`);
 
-  // Phase 1: Run agents in batches of 2 with delays to avoid LLM rate limits
-  console.log('\n  Phase 1: Running 6 specialist agents (batched to avoid rate limits)...');
-  const BATCH_SIZE = 2;
-  const BATCH_DELAY_MS = 3000; // 3s between batches
+  // Phase 1: Run agents in batches of 3 with minimal delay.
+  // Groq allows 30 req/min on the free tier — 6 small calls in 2 batches is well under.
+  // Each call is ~3-8s with 30s abort cap. BATCH_SIZE=3 cuts total wall time vs BATCH_SIZE=2.
+  console.log('\n  Phase 1: Running 6 specialist agents (batched)...');
+  const BATCH_SIZE = 3;
+  const BATCH_DELAY_MS = 800; // 0.8s between batches (was 3s — excessive, Groq handles burst fine)
   const agentResults = [];
   for (let i = 0; i < AGENTS.length; i += BATCH_SIZE) {
     const batch = AGENTS.slice(i, i + BATCH_SIZE);
@@ -556,20 +558,20 @@ async function fetchCouncilAnalysis() {
     throw new Error('All agents failed. Cannot produce synthesis.');
   }
 
-  // Write individual agent results to Redis
-  for (let i = 0; i < AGENTS.length; i++) {
-    const agent = AGENTS[i];
-    const result = agentResults[i];
-    if (result) {
-      await writeExtraKeyWithMeta(
+  // Write individual agent results to Redis in parallel (was sequential — added 2-3s)
+  await Promise.all(
+    AGENTS.map((agent, i) => {
+      const result = agentResults[i];
+      if (!result) return null;
+      return writeExtraKeyWithMeta(
         agent.key,
         result,
         CACHE_TTL,
         result.findings?.length || 0,
         `seed-meta:council:${agent.id}`,
       );
-    }
-  }
+    }).filter(Boolean),
+  );
 
   // Phase 2: Chair synthesis
   console.log('\n  Phase 2: Chair synthesis...');

@@ -17,7 +17,7 @@ jobs:
   # of calling GDELT themselves, dropping ~91 direct API calls to ~26.
   seed-gdelt-raw:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 32
     env:
       UPSTASH_REDIS_REST_URL:   ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
@@ -37,7 +37,7 @@ jobs:
 
       # Single master GDELT crawl — topics + persons + GKG
       - name: Run GDELT crawl
-        timeout-minutes: 40
+        timeout-minutes: 28
         run: |
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
             node scripts/seed-gdelt-raw.mjs --force
@@ -95,7 +95,7 @@ jobs:
     needs: [seed-gdelt-raw]
     if: always() && needs.seed-gdelt-raw.result != 'cancelled'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 18
     env:
       UPSTASH_REDIS_REST_URL:   ${{ secrets.UPSTASH_REDIS_REST_URL }}
       UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}

@@ -165,7 +165,7 @@ wave_5_ai_powered() {
     "seed-poi-discovery.mjs:$TIMEOUT_LONG"
 }
 
-TIMEOUT_COUNCIL=900   # 15 min for agent council (7 LLM calls)
+TIMEOUT_COUNCIL=480   # 8 min for agent council (6 agents batched + chair)
 
 wave_6_derivatives() {
   run_wave "Derivative Seeds (read upstream keys)" \

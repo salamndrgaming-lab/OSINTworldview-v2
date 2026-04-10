@@ -502,6 +502,8 @@ export class DataLoaderManager implements AppModule {
       // Hydrate entity graph and council from bootstrap or direct fetch
       tasks.push({ name: 'entityGraph', task: runGuarded('entityGraph', () => this.loadEntityGraph()) });
       tasks.push({ name: 'councilSynthesis', task: runGuarded('councilSynthesis', () => this.loadCouncilSynthesis()) });
+      tasks.push({ name: 'narrativeDrift', task: runGuarded('narrativeDrift', () => this.loadNarrativeDrift()) });
+      tasks.push({ name: 'crossSourceSignals', task: runGuarded('crossSourceSignals', () => this.loadCrossSourceSignals()) });
     }
 
     if (SITE_VARIANT === 'full' || SITE_VARIANT === 'godmode') tasks.push({ name: 'firms', task: runGuarded('firms', () => this.loadFirmsData()) });
@@ -2255,6 +2257,35 @@ export class DataLoaderManager implements AppModule {
       }
     } catch (err) {
       console.warn('[Council] Failed to load:', err);
+    }
+  }
+
+  async loadNarrativeDrift(): Promise<void> {
+    try {
+      const hydrated = getHydratedData('narrativeDrift') as Record<string, unknown> | undefined;
+      let data = hydrated;
+      if (!data?.themes) {
+        const res = await fetch(toApiUrl('/api/intelligence/narrative-drift'), { signal: AbortSignal.timeout(8000) });
+        if (res.ok) data = await res.json();
+      }
+      if (data?.themes) {
+        this.callPanel('narrative-drift', 'setData', data);
+        console.log('[NarrativeDrift] Loaded');
+      }
+    } catch (err) {
+      console.warn('[NarrativeDrift] Failed to load:', err);
+    }
+  }
+
+  async loadCrossSourceSignals(): Promise<void> {
+    try {
+      const hydrated = getHydratedData('crossSourceSignals') as { signals?: unknown[] } | undefined;
+      if (hydrated?.signals) {
+        this.callPanel('cross-source-signals', 'setData', hydrated);
+        console.log(`[CrossSourceSignals] Bootstrap hydration: ${hydrated.signals.length} signals`);
+      }
+    } catch (err) {
+      console.warn('[CrossSourceSignals] Failed to load:', err);
     }
   }
 

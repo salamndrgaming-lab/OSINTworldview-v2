@@ -535,10 +535,19 @@ async function fetchCouncilAnalysis() {
   const digest = buildContextDigest(data);
   console.log(`  Context digest: ${digest.length} chars`);
 
-  // Phase 1: Run all 6 agents concurrently
-  console.log('\n  Phase 1: Running 6 specialist agents concurrently...');
-  const agentPromises = AGENTS.map(agent => runAgent(agent, digest));
-  const agentResults = await Promise.all(agentPromises);
+  // Phase 1: Run agents in batches of 2 with delays to avoid LLM rate limits
+  console.log('\n  Phase 1: Running 6 specialist agents (batched to avoid rate limits)...');
+  const BATCH_SIZE = 2;
+  const BATCH_DELAY_MS = 3000; // 3s between batches
+  const agentResults = [];
+  for (let i = 0; i < AGENTS.length; i += BATCH_SIZE) {
+    const batch = AGENTS.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.all(batch.map(agent => runAgent(agent, digest)));
+    agentResults.push(...batchResults);
+    if (i + BATCH_SIZE < AGENTS.length) {
+      await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+    }
+  }
 
   const successCount = agentResults.filter(r => r !== null).length;
   console.log(`\n  Phase 1 complete: ${successCount}/${AGENTS.length} agents succeeded`);
@@ -566,6 +575,25 @@ async function fetchCouncilAnalysis() {
   console.log('\n  Phase 2: Chair synthesis...');
   const synthesis = await runChair(agentResults, digest);
 
+  // Build agent reports for ALL agents (including failed ones)
+  const allAgentReports = AGENTS.map((agent, i) => {
+    const result = agentResults[i];
+    if (result) {
+      return {
+        agentId: result.agentId,
+        summary: result.summary || '',
+        findingCount: result.findings?.length || 0,
+        status: 'ok',
+      };
+    }
+    return {
+      agentId: agent.id,
+      summary: 'Analysis unavailable — LLM call failed.',
+      findingCount: 0,
+      status: 'failed',
+    };
+  });
+
   if (!synthesis) {
     // Still publish agent results even if chair fails
     return {
@@ -575,11 +603,7 @@ async function fetchCouncilAnalysis() {
       threatLevel: 'guarded',
       topPriority: 'Review individual agent reports for details.',
       watchItems: [],
-      agentReports: agentResults.filter(r => r !== null).map(r => ({
-        agentId: r.agentId,
-        summary: r.summary || '',
-        findingCount: r.findings?.length || 0,
-      })),
+      agentReports: allAgentReports,
       meta: {
         generatedAt: new Date().toISOString(),
         agentSuccessCount: successCount,
@@ -592,11 +616,7 @@ async function fetchCouncilAnalysis() {
   // Build final synthesis payload
   return {
     ...synthesis,
-    agentReports: agentResults.filter(r => r !== null).map(r => ({
-      agentId: r.agentId,
-      summary: r.summary || '',
-      findingCount: r.findings?.length || 0,
-    })),
+    agentReports: allAgentReports,
     meta: {
       ...synthesis.meta,
       agentSuccessCount: successCount,

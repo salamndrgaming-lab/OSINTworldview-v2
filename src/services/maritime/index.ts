@@ -162,7 +162,10 @@ const isLocalhost = isClientRuntime && window.location.hostname === 'localhost';
 // ---- Internal Helpers ----
 
 function shouldIncludeCandidates(): boolean {
-  return positionCallbacks.size > 0;
+  // Always request candidate reports — they contain the individual vessel
+  // positions needed for the AIS vessel map layer.  Without them, the relay
+  // format path in parseSnapshot produces zero vessels.
+  return true;
 }
 
 function parseSnapshot(data: unknown): {

@@ -13,8 +13,8 @@ import { invalidateColorCache } from './theme-colors';
  * without building a full theme from scratch.
  */
 
-export type Theme = 'dark' | 'light' | 'tactical';
-export type ThemePreference = 'auto' | 'dark' | 'light' | 'tactical';
+export type Theme = 'dark' | 'light' | 'tactical' | 'palantir';
+export type ThemePreference = 'auto' | 'dark' | 'light' | 'tactical' | 'palantir';
 
 const STORAGE_KEY = 'osintview-theme';
 const CUSTOM_COLORS_KEY = 'osintview-custom-colors';
@@ -31,7 +31,7 @@ const DEFAULT_THEME: Theme = 'dark';
 export interface CustomColorScheme {
   name: string;
   /** Which built-in theme to use as the base (inherits any vars not overridden) */
-  base: 'dark' | 'light' | 'tactical';
+  base: 'dark' | 'light' | 'tactical' | 'palantir';
   /** Override individual CSS variables — keys are variable names without '--' prefix */
   overrides: Record<string, string>;
 }
@@ -130,6 +130,7 @@ export const CUSTOM_SCHEME_PRESETS: CustomColorScheme[] = [
 
 function resolveThemeColor(theme: Theme, variant: string | undefined): string {
   if (theme === 'tactical') return '#000000';
+  if (theme === 'palantir') return '#0a0d14';
   if (theme === 'dark') return variant === 'happy' ? '#1A2332' : '#0a0f0a';
   return variant === 'happy' ? '#FAFAF5' : '#f8f9fa';
 }
@@ -146,7 +147,7 @@ function updateThemeMetaColor(theme: Theme, variant = document.documentElement.d
 export function getStoredTheme(): Theme {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === 'dark' || stored === 'light' || stored === 'tactical') return stored;
+    if (stored === 'dark' || stored === 'light' || stored === 'tactical' || stored === 'palantir') return stored;
   } catch {
     // localStorage unavailable
   }
@@ -156,7 +157,7 @@ export function getStoredTheme(): Theme {
 export function getThemePreference(): ThemePreference {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === 'auto' || stored === 'dark' || stored === 'light' || stored === 'tactical') {
+    if (stored === 'auto' || stored === 'dark' || stored === 'light' || stored === 'tactical' || stored === 'palantir') {
       return stored;
     }
   } catch { /* noop */ }
@@ -195,7 +196,7 @@ export function setThemePreference(pref: ThemePreference): void {
 
 export function getCurrentTheme(): Theme {
   const value = document.documentElement.dataset.theme;
-  if (value === 'dark' || value === 'light' || value === 'tactical') return value;
+  if (value === 'dark' || value === 'light' || value === 'tactical' || value === 'palantir') return value;
   return DEFAULT_THEME;
 }
 
@@ -237,13 +238,25 @@ export function applyStoredTheme(): void {
 
   let raw: string | null = null;
   try { raw = localStorage.getItem(STORAGE_KEY); } catch { /* noop */ }
-  const hasExplicitPreference = raw === 'dark' || raw === 'light' || raw === 'tactical' || raw === 'auto';
+
+  // URL override: ?theme=palantir activates without touching localStorage
+  try {
+    const urlTheme = new URL(window.location.href).searchParams.get('theme');
+    if (urlTheme === 'dark' || urlTheme === 'light' || urlTheme === 'tactical' || urlTheme === 'palantir') {
+      raw = urlTheme;
+    }
+  } catch { /* noop */ }
+
+  const hasExplicitPreference =
+    raw === 'dark' || raw === 'light' || raw === 'tactical' || raw === 'palantir' || raw === 'auto';
 
   let effective: Theme;
   if (raw === 'auto') {
     effective = resolveAutoTheme();
   } else if (raw === 'tactical') {
     effective = 'tactical';
+  } else if (raw === 'palantir') {
+    effective = 'palantir';
   } else if (hasExplicitPreference) {
     effective = raw as Theme;
   } else {

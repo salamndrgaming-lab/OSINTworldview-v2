@@ -1,6 +1,7 @@
 @import './rtl-overrides.css';
 @import './panels.css';
 @import './tactical-theme.css';
+@import './palantir-theme.css';
 @import './ui-overhaul.css';
 @import './visual-identity.css';
 @import './mobile-enhancements.css';

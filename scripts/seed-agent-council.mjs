@@ -341,6 +341,8 @@ async function callLLM(systemPrompt, userPrompt, opts = {}) {
     throw new Error('No LLM key available (GROQ_API_KEY or OPENROUTER_API_KEY)');
   }
 
+  let groqError = null;
+
   // Try Groq first
   if (groqKey) {
     try {
@@ -363,12 +365,23 @@ async function callLLM(systemPrompt, userPrompt, opts = {}) {
         const json = await resp.json();
         const text = json.choices?.[0]?.message?.content?.trim();
         if (text && text.length > 10) return { text, provider: 'groq', model: json.model || model };
+        groqError = new Error('Groq returned empty response');
       } else {
         const errText = await resp.text().catch(() => '');
         console.warn(`  Groq ${resp.status}: ${errText.slice(0, 150)}`);
+        // 429 = rate limit. THROW so withRetry() catches and backs off.
+        // Without throwing, withRetry never fires because callLLM swallows failures.
+        if (resp.status === 429) {
+          const err = new Error(`Groq 429: ${errText.slice(0, 150)}`);
+          err.status = 429;
+          throw err;
+        }
+        groqError = new Error(`Groq ${resp.status}`);
       }
     } catch (err) {
+      if (err.status === 429) throw err; // Rethrow rate-limit so retry logic fires
       console.warn(`  Groq failed: ${err.message}`);
+      groqError = err;
     }
   }
 
@@ -399,12 +412,14 @@ async function callLLM(systemPrompt, userPrompt, opts = {}) {
         const text = json.choices?.[0]?.message?.content?.trim();
         if (text && text.length > 10) return { text, provider: 'openrouter', model: json.model || 'gemini-2.5-flash' };
       }
+      console.warn(`  OpenRouter ${resp.status}`);
     } catch (err) {
       console.warn(`  OpenRouter failed: ${err.message}`);
     }
   }
 
-  return null;
+  // Both providers failed — throw so withRetry can retry
+  throw groqError || new Error('All LLM providers failed');
 }
 
 function parseJsonSafe(text) {
@@ -426,11 +441,16 @@ async function runAgent(agent, digest) {
   console.log(`  [${agent.id}] Starting analysis...`);
   const startMs = Date.now();
 
+  // 3 retries with exponential backoff (2s, 4s, 8s). callLLM now throws on 429 so
+  // withRetry actually fires and gives Groq's TPM window time to replenish.
   const result = await withRetry(
-    () => callLLM(systemPrompt, userPrompt, { model: GROQ_FAST_MODEL, maxTokens: 800 }),
-    1, // 1 retry
+    () => callLLM(systemPrompt, userPrompt, { model: GROQ_FAST_MODEL, maxTokens: 600 }),
+    3,
     2000,
-  );
+  ).catch(err => {
+    console.warn(`  [${agent.id}] All retries exhausted: ${err.message}`);
+    return null;
+  });
 
   const elapsed = Date.now() - startMs;
 
@@ -535,19 +555,20 @@ async function fetchCouncilAnalysis() {
   const digest = buildContextDigest(data);
   console.log(`  Context digest: ${digest.length} chars`);
 
-  // Phase 1: Run agents in batches of 3 with minimal delay.
-  // Groq allows 30 req/min on the free tier — 6 small calls in 2 batches is well under.
-  // Each call is ~3-8s with 30s abort cap. BATCH_SIZE=3 cuts total wall time vs BATCH_SIZE=2.
-  console.log('\n  Phase 1: Running 6 specialist agents (batched)...');
-  const BATCH_SIZE = 3;
-  const BATCH_DELAY_MS = 800; // 0.8s between batches (was 3s — excessive, Groq handles burst fine)
+  // Phase 1: Run agents SEQUENTIALLY with 4s spacing.
+  // Groq free tier has 6000 TPM on llama-3.1-8b-instant. Each agent call uses
+  // ~2500 tokens (digest + system + response). Running concurrently burned
+  // through TPM budget and caused 4-5/6 agents to get 429'd. Sequential with
+  // 4s spacing = 1 call per 4s = ~15 calls/min = well under TPM limit.
+  // Total: 6 agents × ~5s call + 5 × 4s delay = ~50s. Well inside 240s timeout.
+  console.log('\n  Phase 1: Running 6 specialist agents (sequential, TPM-safe)...');
+  const AGENT_DELAY_MS = 4000;
   const agentResults = [];
-  for (let i = 0; i < AGENTS.length; i += BATCH_SIZE) {
-    const batch = AGENTS.slice(i, i + BATCH_SIZE);
-    const batchResults = await Promise.all(batch.map(agent => runAgent(agent, digest)));
-    agentResults.push(...batchResults);
-    if (i + BATCH_SIZE < AGENTS.length) {
-      await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+  for (let i = 0; i < AGENTS.length; i++) {
+    const result = await runAgent(AGENTS[i], digest);
+    agentResults.push(result);
+    if (i < AGENTS.length - 1) {
+      await new Promise(r => setTimeout(r, AGENT_DELAY_MS));
     }
   }
 

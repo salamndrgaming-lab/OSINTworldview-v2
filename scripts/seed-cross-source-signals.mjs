@@ -836,11 +836,20 @@ runSeed('intelligence', 'cross-source-signals', CANONICAL_KEY, aggregateCrossSou
     const { url, token } = getRedisCredentials();
     const metaKey = 'seed-meta:intelligence:cross-source-signals';
     const meta = { fetchedAt: Date.now(), recordCount: data.signals?.length ?? 0 };
-    await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(['SET', metaKey, JSON.stringify(meta), 'EX', 86400 * 7]),
-      signal: AbortSignal.timeout(5_000),
-    }).catch(err => console.warn(`  seed-meta write failed: ${err.message}`));
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(['SET', metaKey, JSON.stringify(meta), 'EX', 86400 * 7]),
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!resp.ok) {
+        console.warn(`  seed-meta write HTTP ${resp.status} — signal-confidence panel will show missing`);
+      } else {
+        console.log(`  seed-meta written: ${meta.recordCount} signals`);
+      }
+    } catch (err) {
+      console.warn(`  seed-meta write failed: ${err.message}`);
+    }
   },
 });

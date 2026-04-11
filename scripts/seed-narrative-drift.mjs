@@ -39,9 +39,15 @@ async function redisSet(url, token, key, value, ttl) {
 // ---------- Volume extraction from cached timelinevol data ----------
 
 function extractVolume(timelineData) {
-  // timelinevol response shape: { timeline: [{ data: [{ date, value }] }] }
-  const timeline = timelineData?.timeline?.[0]?.data || timelineData?.timeline || [];
-  if (!Array.isArray(timeline) || timeline.length === 0) return { totalVolume: 0, recentVolume: 0, dataPoints: 0 };
+  // timelinevol is stored as an array of series objects: [{ data: [{date, value}], ... }]
+  // (writer: seed-gdelt-raw.mjs stores `topicResult.timelinevol = timeline` where
+  //  timeline comes from fetchTimelineVol() -> validateTimelineResponse() -> validSeries)
+  const timeline = Array.isArray(timelineData?.[0]?.data)
+    ? timelineData[0].data
+    : Array.isArray(timelineData)
+      ? timelineData
+      : [];
+  if (timeline.length === 0) return { totalVolume: 0, recentVolume: 0, dataPoints: 0 };
 
   const totalVolume  = timeline.reduce((sum, pt) => sum + (Number(pt.value) || 0), 0);
   const recentVolume = timeline.slice(-3).reduce((sum, pt) => sum + (Number(pt.value) || 0), 0);

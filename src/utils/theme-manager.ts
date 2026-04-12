@@ -18,7 +18,7 @@ export type ThemePreference = 'auto' | 'dark' | 'light' | 'tactical' | 'palantir
 
 const STORAGE_KEY = 'osintview-theme';
 const CUSTOM_COLORS_KEY = 'osintview-custom-colors';
-const DEFAULT_THEME: Theme = 'dark';
+const DEFAULT_THEME: Theme = 'palantir';
 
 // ────────────────────────────────────────────────────────────
 // Custom color scheme types
@@ -168,7 +168,7 @@ function resolveAutoTheme(): Theme {
   if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches) {
     return 'light';
   }
-  return 'dark';
+  return DEFAULT_THEME;
 }
 
 let autoMediaQuery: MediaQueryList | null = null;

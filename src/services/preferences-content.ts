@@ -162,6 +162,7 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
   html += '<select class="unified-settings-select" id="us-theme">';
   for (const opt of [
     { value: 'auto', label: t('preferences.themeAuto') },
+    { value: 'palantir', label: 'Palantir OPS (Default)' },
     { value: 'dark', label: t('preferences.themeDark') },
     { value: 'light', label: t('preferences.themeLight') },
     { value: 'tactical', label: 'Tactical (Green-on-Black)' },

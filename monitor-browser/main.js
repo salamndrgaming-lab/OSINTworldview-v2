@@ -24,6 +24,7 @@ const {
   ipcMain,
   shell,
   Menu,
+  session,
 } = require('electron');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
@@ -34,9 +35,43 @@ const { pathToFileURL } = require('node:url');
 // ---------------------------------------------------------------------------
 
 const CHROME_HEIGHT = 76; // titlebar (32) + toolbar (44)
-const HOMEPAGE_PATH = path.join(__dirname, 'homepage', 'index.html');
-const HOMEPAGE_URL = pathToFileURL(HOMEPAGE_PATH).toString();
+// The homepage IS the full OSINTworldview dashboard (same code that runs at
+// osintview.app). It ships with a panel registry of 80+ panels, add/remove,
+// multiple layout modes, map-layer toggles, and saved workspace presets.
+// Monitor Browser just hosts it in a branded Chromium shell.
+const HOMEPAGE_URL = 'https://osintview.app/';
+const HOMEPAGE_FALLBACK_PATH = path.join(__dirname, 'homepage', 'index.html');
+const HOMEPAGE_FALLBACK_URL = pathToFileURL(HOMEPAGE_FALLBACK_PATH).toString();
 const CHROME_HTML = path.join(__dirname, 'renderer', 'index.html');
+
+// Hosts that should be treated as "the Monitor home dashboard" for URL-bar
+// display purposes (hides the raw URL, shows the ◉ brand glyph).
+const HOMEPAGE_HOSTS = new Set([
+  'osintview.app',
+  'www.osintview.app',
+  'tech.osintview.app',
+  'finance.osintview.app',
+  'commodity.osintview.app',
+  'happy.osintview.app',
+]);
+
+function isHomepageUrl(url) {
+  if (!url) return false;
+  if (url === HOMEPAGE_URL) return true;
+  if (url === HOMEPAGE_FALLBACK_URL) return true;
+  try {
+    const u = new URL(url);
+    if (u.protocol === 'file:' && url.startsWith(HOMEPAGE_FALLBACK_URL)) return true;
+    if ((u.protocol === 'https:' || u.protocol === 'http:') &&
+        HOMEPAGE_HOSTS.has(u.hostname) &&
+        (u.pathname === '/' || u.pathname === '')) {
+      return true;
+    }
+  } catch {
+    /* not a URL */
+  }
+  return false;
+}
 
 // ---------------------------------------------------------------------------
 // State
@@ -232,6 +267,12 @@ function wireTabEvents(id, tab) {
     if (!isMainFrame) return;
     // -3 is ABORTED (user-initiated navigation). Don't surface.
     if (errorCode === -3) return;
+    // Homepage offline? Fall back to the bundled local dashboard shell so
+    // the user still has a usable new-tab page without a network.
+    if (validatedURL === HOMEPAGE_URL || (validatedURL && isHomepageUrl(validatedURL))) {
+      wc.loadURL(HOMEPAGE_FALLBACK_URL);
+      return;
+    }
     const escaped = escapeHtml(errorDescription || 'Page could not be loaded');
     const escapedUrl = escapeHtml(validatedURL || '');
     const html = renderErrorPage(escaped, escapedUrl, errorCode);
@@ -392,7 +433,7 @@ function broadcastTabs() {
         isLoading: t.isLoading,
         canGoBack: t.canGoBack,
         canGoForward: t.canGoForward,
-        isHomepage: t.url === HOMEPAGE_URL || t.url.startsWith('file://'),
+        isHomepage: isHomepageUrl(t.url),
       };
     })
     .filter(Boolean);
@@ -522,7 +563,37 @@ ipcMain.handle('intel:fetch', async (event, url) => {
 // handles everything.
 Menu.setApplicationMenu(null);
 
+// Branding — the app is Chromium-powered but presents as Monitor Browser.
+app.setName('Monitor Browser');
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.osint.monitor-browser');
+}
+
+/**
+ * Build a branded user-agent. We keep the full Chrome UA (so servers continue
+ * to serve modern web UIs) but strip Electron's fingerprint and append our
+ * product token: `MonitorBrowser/1.0`.
+ */
+function buildBrandedUA(baseUA) {
+  return baseUA
+    .replace(/\s*Electron\/\S+/g, '')
+    .replace(/\s*monitor-browser\/\S+/gi, '')
+    .trim()
+    + ' MonitorBrowser/1.0';
+}
+
 app.whenReady().then(() => {
+  // Rewrite the default session's user-agent so every tab (and the chrome
+  // renderer) presents as "Chrome … MonitorBrowser/1.0".
+  try {
+    const defaultSession = session.defaultSession;
+    const ua = buildBrandedUA(defaultSession.getUserAgent());
+    defaultSession.setUserAgent(ua);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[monitor] failed to set branded user-agent', err);
+  }
+
   createWindow();
   app.on('activate', () => {
     if (!mainWindow) createWindow();

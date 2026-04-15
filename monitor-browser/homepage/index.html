@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitor — Home</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./homepage.css" />
+  </head>
+  <body>
+    <!-- Ambient radar sweep background -->
+    <div class="radar-bg" aria-hidden="true">
+      <svg viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="sweep-gradient" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#d4a843" stop-opacity="0" />
+            <stop offset="100%" stop-color="#d4a843" stop-opacity="0.75" />
+          </linearGradient>
+        </defs>
+        <circle class="radar-ring" cx="500" cy="500" r="480" />
+        <circle class="radar-ring" cx="500" cy="500" r="360" />
+        <circle class="radar-ring" cx="500" cy="500" r="240" />
+        <circle class="radar-ring" cx="500" cy="500" r="120" />
+        <line class="radar-ring" x1="500" y1="20" x2="500" y2="980" opacity="0.3" />
+        <line class="radar-ring" x1="20" y1="500" x2="980" y2="500" opacity="0.3" />
+        <path class="radar-sweep" d="M 500 500 L 500 20 A 480 480 0 0 1 980 500 Z" />
+      </svg>
+    </div>
+
+    <main class="shell">
+      <!-- Top header: brand + clock -->
+      <header class="top-header">
+        <div class="brand">
+          <span class="brand-mark">◉</span>
+          <span class="brand-name"><b>Monitor</b> · OSINT Edition</span>
+        </div>
+        <div class="clock-group">
+          <span class="clock-label">UTC</span>
+          <span class="clock-time" id="clock-time">—</span>
+          <span class="clock-date" id="clock-date">—</span>
+        </div>
+      </header>
+
+      <!-- Hero: search + tagline -->
+      <section class="hero">
+        <h1>
+          Every new tab is a <span class="accent">live threat picture</span>.
+        </h1>
+        <form class="search" id="search-form" autocomplete="off" spellcheck="false">
+          <span class="search-icon">⌕</span>
+          <input
+            id="search-input"
+            type="text"
+            placeholder="Search Google or enter URL…"
+            autofocus
+          />
+          <span class="search-hint">↵</span>
+        </form>
+      </section>
+
+      <!-- Live intel dashboard row -->
+      <section class="dash">
+        <article class="card dash-card" data-panel="threat">
+          <header class="card-header">
+            <h2><span class="card-icon">◉</span> Live Threat Feed</h2>
+            <span class="card-status" data-status="idle">—</span>
+          </header>
+          <div class="card-body" id="threat-body">
+            <div class="skeleton skeleton-row"></div>
+            <div class="skeleton skeleton-row"></div>
+            <div class="skeleton skeleton-row"></div>
+          </div>
+        </article>
+
+        <article class="card dash-card" data-panel="commodity">
+          <header class="card-header">
+            <h2><span class="card-icon">⧗</span> Commodity Pulse</h2>
+            <span class="card-status" data-status="idle">—</span>
+          </header>
+          <div class="card-body" id="commodity-body">
+            <div class="skeleton skeleton-row"></div>
+            <div class="skeleton skeleton-row"></div>
+          </div>
+        </article>
+
+        <article class="card dash-card" data-panel="conflict">
+          <header class="card-header">
+            <h2><span class="card-icon">⚔</span> Active Conflicts</h2>
+            <span class="card-status" data-status="idle">—</span>
+          </header>
+          <div class="card-body" id="conflict-body">
+            <div class="skeleton skeleton-row"></div>
+            <div class="skeleton skeleton-row"></div>
+            <div class="skeleton skeleton-row"></div>
+          </div>
+        </article>
+      </section>
+
+      <!-- Quick-launch OSINT sources -->
+      <section class="sources">
+        <div class="section-heading">
+          <span class="section-label">Quick-launch · OSINT sources</span>
+          <span class="section-divider"></span>
+        </div>
+        <div class="source-grid" id="sources"></div>
+      </section>
+
+      <!-- OSINT Toolkit (inline, no network except dns.google) -->
+      <section class="toolkit">
+        <div class="section-heading">
+          <span class="section-label">OSINT Toolkit</span>
+          <span class="section-divider"></span>
+        </div>
+        <div class="toolkit-wrap">
+          <div class="toolkit-tabs" id="toolkit-tabs">
+            <button class="toolkit-tab is-active" data-tool="domain">Domain</button>
+            <button class="toolkit-tab" data-tool="ip">IP Geo</button>
+            <button class="toolkit-tab" data-tool="dns">DNS</button>
+            <button class="toolkit-tab" data-tool="subnet">Subnet</button>
+          </div>
+          <div class="toolkit-body" id="toolkit-body"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="status-bar">
+      <div>
+        <span class="status-dot"></span>
+        Monitor Browser v1.0 · <span id="footer-date">—</span> · OSINT Edition
+      </div>
+      <div>
+        <span class="hint"><kbd>Ctrl+T</kbd> new tab</span>
+        <span class="hint"><kbd>Ctrl+L</kbd> URL bar</span>
+        <span class="hint"><kbd>Alt+←</kbd> back</span>
+      </div>
+    </footer>
+
+    <script src="./homepage.js"></script>
+  </body>
+</html>

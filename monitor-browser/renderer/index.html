@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; script-src 'self'"
+    />
+    <title>Monitor Browser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./chrome.css" />
+  </head>
+  <body>
+    <div id="chrome">
+      <header class="titlebar" data-drag>
+        <div class="titlebar-left" data-drag>
+          <div class="wordmark" data-drag>MONITOR</div>
+          <div class="tabs" id="tabs"></div>
+          <button class="new-tab" id="new-tab" title="New tab (Ctrl+T)" aria-label="New tab">
+            +
+          </button>
+        </div>
+        <div class="window-controls">
+          <button class="wb wb-min" id="wb-min" title="Minimize" aria-label="Minimize">
+            <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 5h8" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
+          </button>
+          <button class="wb wb-max" id="wb-max" title="Maximize" aria-label="Maximize">
+            <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
+          </button>
+          <button class="wb wb-close" id="wb-close" title="Close" aria-label="Close">
+            <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="toolbar">
+        <div class="nav-group">
+          <button class="nav-btn" id="nav-back" title="Back (Alt+Left)" aria-label="Back">
+            <svg width="16" height="16" viewBox="0 0 16 16"><path d="M10 3l-5 5 5 5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="nav-btn" id="nav-forward" title="Forward (Alt+Right)" aria-label="Forward">
+            <svg width="16" height="16" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="nav-btn" id="nav-reload" title="Reload (Ctrl+R)" aria-label="Reload">
+            <svg width="16" height="16" viewBox="0 0 16 16"><path d="M13 4.5a5.5 5.5 0 1 0 1.5 5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M13 2v3h-3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="nav-btn" id="nav-home" title="Homepage" aria-label="Homepage">
+            <svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 7l6-5 6 5v7H2V7z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+
+        <form class="url-form" id="url-form" autocomplete="off">
+          <div class="url-wrap">
+            <span class="url-scheme" id="url-scheme">⌕</span>
+            <input
+              class="url-input"
+              id="url-input"
+              type="text"
+              spellcheck="false"
+              placeholder="Search or enter address"
+              aria-label="Address and search bar"
+            />
+          </div>
+        </form>
+
+        <div class="action-group">
+          <button class="nav-btn" id="action-devtools" title="Page DevTools" aria-label="Page DevTools">
+            <svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 3l4 4m0 0l-4 4m9-8l-4 4m0 0l4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./chrome.js"></script>
+  </body>
+</html>

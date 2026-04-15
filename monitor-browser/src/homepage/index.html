@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitor Browser — OSINT Homepage</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --intel-accent: #d4a843;
+        --intel-accent-dim: #a07820;
+        --surface-base: #060608;
+        --surface-raised: #0e0e14;
+        --surface-panel: #181822;
+        --surface-border: #2a2a3a;
+        --text-primary: #e8e8f0;
+        --text-secondary: #8888a0;
+        --text-data: #a0c8ff;
+        --font-ui: 'Geist', system-ui, -apple-system, sans-serif;
+        --font-data: 'JetBrains Mono', 'Fira Code', monospace;
+        --radius: 8px;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: var(--surface-base);
+        color: var(--text-primary);
+        font-family: var(--font-ui);
+        overflow: hidden;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        position: relative;
+      }
+      .radar-bg {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        opacity: 0.12;
+        z-index: 0;
+      }
+      .radar-bg svg {
+        width: min(80vh, 80vw);
+        height: min(80vh, 80vw);
+      }
+      .radar-ring {
+        fill: none;
+        stroke: var(--intel-accent);
+        stroke-width: 1;
+        opacity: 0.5;
+      }
+      .radar-sweep {
+        fill: url(#sweep-gradient);
+        transform-origin: 500px 500px;
+        animation: radar-sweep 4s linear infinite;
+      }
+      @keyframes radar-sweep {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      main {
+        position: relative;
+        z-index: 1;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 48px clamp(24px, 6vw, 96px);
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+      header.top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 32px;
+      }
+      .wordmark {
+        font-family: var(--font-data);
+        font-size: 12px;
+        letter-spacing: 0.25em;
+        color: var(--intel-accent);
+        text-transform: uppercase;
+      }
+      .wordmark b {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+      .clock {
+        font-family: var(--font-data);
+        font-size: 13px;
+        letter-spacing: 0.12em;
+        color: var(--text-secondary);
+      }
+      .clock .time {
+        color: var(--text-primary);
+      }
+      .hero {
+        text-align: center;
+        margin: 32px auto 48px;
+        max-width: 680px;
+      }
+      .hero h1 {
+        font-family: var(--font-ui);
+        font-size: clamp(28px, 4vw, 44px);
+        font-weight: 500;
+        margin: 0 0 12px;
+        letter-spacing: -0.01em;
+      }
+      .hero h1 .accent {
+        color: var(--intel-accent);
+      }
+      .hero p {
+        color: var(--text-secondary);
+        margin: 0 0 32px;
+        font-size: 15px;
+      }
+      .search {
+        position: relative;
+        max-width: 640px;
+        margin: 0 auto;
+      }
+      .search input {
+        width: 100%;
+        padding: 14px 20px 14px 44px;
+        background: var(--surface-raised);
+        border: 1px solid var(--surface-border);
+        border-radius: var(--radius);
+        color: var(--text-primary);
+        font-family: var(--font-ui);
+        font-size: 15px;
+        outline: none;
+        transition: border-color 150ms ease, box-shadow 150ms ease;
+      }
+      .search input:focus {
+        border-color: var(--intel-accent-dim);
+        box-shadow: 0 0 0 4px rgba(212, 168, 67, 0.1);
+      }
+      .search-icon {
+        position: absolute;
+        left: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-secondary);
+        pointer-events: none;
+      }
+      .search-hint {
+        text-align: center;
+        margin-top: 8px;
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-family: var(--font-data);
+      }
+      .cards-heading {
+        font-family: var(--font-data);
+        font-size: 11px;
+        letter-spacing: 0.2em;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        margin: 16px 0 16px;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+      @media (max-width: 900px) {
+        .cards {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 600px) {
+        .cards {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        background: var(--surface-raised);
+        border: 1px solid var(--surface-border);
+        border-radius: var(--radius);
+        padding: 16px 18px;
+        cursor: pointer;
+        text-decoration: none;
+        color: inherit;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        transition: border-color 150ms ease, transform 150ms ease, background 150ms ease;
+      }
+      .card:hover {
+        border-color: var(--intel-accent-dim);
+        background: var(--surface-panel);
+        transform: translateY(-1px);
+      }
+      .card-title {
+        font-weight: 500;
+        font-size: 14px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .card-title::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--intel-accent);
+        flex-shrink: 0;
+      }
+      .card-url {
+        font-family: var(--font-data);
+        font-size: 11px;
+        color: var(--text-data);
+        word-break: break-all;
+      }
+      .card-desc {
+        font-size: 12px;
+        color: var(--text-secondary);
+        line-height: 1.4;
+      }
+      footer {
+        position: relative;
+        z-index: 1;
+        border-top: 1px solid var(--surface-border);
+        padding: 12px 32px;
+        font-family: var(--font-data);
+        font-size: 11px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        background: var(--surface-base);
+      }
+      footer .status-dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #2ecc71;
+        margin-right: 8px;
+        box-shadow: 0 0 8px rgba(46, 204, 113, 0.6);
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--surface-border);
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--intel-accent-dim);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="radar-bg" aria-hidden="true">
+      <svg viewBox="0 0 1000 1000">
+        <defs>
+          <linearGradient id="sweep-gradient" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#d4a843" stop-opacity="0" />
+            <stop offset="100%" stop-color="#d4a843" stop-opacity="0.7" />
+          </linearGradient>
+        </defs>
+        <circle class="radar-ring" cx="500" cy="500" r="480" />
+        <circle class="radar-ring" cx="500" cy="500" r="360" />
+        <circle class="radar-ring" cx="500" cy="500" r="240" />
+        <circle class="radar-ring" cx="500" cy="500" r="120" />
+        <line
+          class="radar-ring"
+          x1="500"
+          y1="20"
+          x2="500"
+          y2="980"
+          stroke="#d4a843"
+          stroke-width="1"
+          opacity="0.3"
+        />
+        <line
+          class="radar-ring"
+          x1="20"
+          y1="500"
+          x2="980"
+          y2="500"
+          stroke="#d4a843"
+          stroke-width="1"
+          opacity="0.3"
+        />
+        <path class="radar-sweep" d="M 500 500 L 500 20 A 480 480 0 0 1 980 500 Z" />
+      </svg>
+    </div>
+
+    <main>
+      <header class="top">
+        <div class="wordmark"><b>Monitor</b> · OSINT Edition</div>
+        <div class="clock">
+          <span class="date" id="clock-date">—</span> · <span class="time" id="clock-time">—</span>
+          UTC
+        </div>
+      </header>
+
+      <section class="hero">
+        <h1>Every new tab is a <span class="accent">live threat picture</span>.</h1>
+        <p>
+          Search the open web or jump directly into an OSINT source. The Intel sidebar is one
+          keystroke away (⌘B).
+        </p>
+        <form class="search" id="search-form" autocomplete="off">
+          <span class="search-icon">⌕</span>
+          <input
+            id="search-input"
+            type="text"
+            placeholder="Search Google or enter URL…"
+            autofocus
+          />
+        </form>
+        <div class="search-hint">PRESS ENTER TO NAVIGATE</div>
+      </section>
+
+      <div class="cards-heading">Quick-launch · OSINT sources</div>
+      <section class="cards" id="cards"></section>
+    </main>
+
+    <footer>
+      <div>
+        <span class="status-dot"></span>
+        Monitor Browser v1.0 · <span id="footer-date">—</span> · OSINT Edition
+      </div>
+      <div>Intel sidebar: ⌘B · Overlay: ⌘I · New tab: ⌘T</div>
+    </footer>
+
+    <script>
+      (function () {
+        'use strict';
+
+        const SOURCES = [
+          {
+            name: 'Bellingcat',
+            url: 'https://www.bellingcat.com',
+            desc: 'Open-source investigation platform, techniques & casework.',
+          },
+          {
+            name: 'ACLED',
+            url: 'https://acleddata.com',
+            desc: 'Armed Conflict Location & Event Data, global incidents.',
+          },
+          {
+            name: 'Global Incident Map',
+            url: 'https://www.globalincidentmap.com',
+            desc: 'Real-time mapping of terrorism, outbreaks, and breaking events.',
+          },
+          {
+            name: 'Flightradar24',
+            url: 'https://www.flightradar24.com',
+            desc: 'Live global flight tracking, ADS-B coverage.',
+          },
+          {
+            name: 'MarineTraffic',
+            url: 'https://www.marinetraffic.com',
+            desc: 'Live AIS tracking of commercial vessels worldwide.',
+          },
+          {
+            name: 'OSINT Framework',
+            url: 'https://osintframework.com',
+            desc: 'Curated directory of OSINT tools organised by category.',
+          },
+          {
+            name: 'IntelligenceX',
+            url: 'https://intelx.io',
+            desc: 'Darknet, breach data, and document search engine.',
+          },
+          {
+            name: 'Shodan',
+            url: 'https://www.shodan.io',
+            desc: 'Search engine for internet-connected devices and banners.',
+          },
+          {
+            name: 'GreyNoise',
+            url: 'https://viz.greynoise.io',
+            desc: 'Internet background noise intel, scanner fingerprinting.',
+          },
+          {
+            name: 'Recorded Future Free',
+            url: 'https://www.recordedfuture.com/free-tools',
+            desc: 'Free threat-intel lookup tools and daily reporting.',
+          },
+          {
+            name: 'ISW',
+            url: 'https://www.understandingwar.org',
+            desc: 'Institute for the Study of War — conflict assessments & maps.',
+          },
+          {
+            name: 'GDELT',
+            url: 'https://www.gdeltproject.org',
+            desc: 'Global events database, 100+ languages, near real-time.',
+          },
+        ];
+
+        const cards = document.getElementById('cards');
+        if (cards) {
+          for (const source of SOURCES) {
+            const a = document.createElement('a');
+            a.className = 'card';
+            a.href = source.url;
+            a.target = '_self';
+            a.rel = 'noopener noreferrer';
+            a.innerHTML =
+              '<div class="card-title"></div>' +
+              '<div class="card-url"></div>' +
+              '<div class="card-desc"></div>';
+            a.querySelector('.card-title').textContent = source.name;
+            a.querySelector('.card-url').textContent = source.url.replace(/^https?:\/\//, '');
+            a.querySelector('.card-desc').textContent = source.desc;
+            a.addEventListener('click', function (e) {
+              e.preventDefault();
+              requestNavigate(source.url);
+            });
+            cards.appendChild(a);
+          }
+        }
+
+        function pad(n) {
+          return n < 10 ? '0' + n : String(n);
+        }
+        function updateClock() {
+          const now = new Date();
+          const time =
+            pad(now.getUTCHours()) +
+            ':' +
+            pad(now.getUTCMinutes()) +
+            ':' +
+            pad(now.getUTCSeconds());
+          const date =
+            now.getUTCFullYear() +
+            '-' +
+            pad(now.getUTCMonth() + 1) +
+            '-' +
+            pad(now.getUTCDate());
+          const t = document.getElementById('clock-time');
+          const d = document.getElementById('clock-date');
+          const fd = document.getElementById('footer-date');
+          if (t) t.textContent = time;
+          if (d) d.textContent = date;
+          if (fd) fd.textContent = date;
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        function requestNavigate(url) {
+          // Post message up to the host shell so the chrome can handle navigation.
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'monitor:navigate', url: url }, '*');
+            return;
+          }
+          // Standalone fallback.
+          window.location.href = url;
+        }
+
+        const form = document.getElementById('search-form');
+        const input = document.getElementById('search-input');
+        if (form && input) {
+          form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const raw = input.value.trim();
+            if (!raw) return;
+            const looksLikeUrl =
+              /^[a-z]+:\/\//i.test(raw) ||
+              (/[.]/.test(raw) && !/\s/.test(raw) && raw.split('.').length >= 2);
+            const target = looksLikeUrl
+              ? /^[a-z]+:\/\//i.test(raw)
+                ? raw
+                : 'https://' + raw
+              : 'https://www.google.com/search?q=' + encodeURIComponent(raw);
+            requestNavigate(target);
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

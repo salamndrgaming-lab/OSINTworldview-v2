@@ -1,0 +1,22 @@
+node_modules
+dist
+dist-ssr
+*.local
+.vite
+.env
+
+# Rust / Tauri
+src-tauri/target
+src-tauri/gen/schemas
+
+# Editors
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

@@ -1,0 +1,603 @@
+/* ============================================================
+   Palantir OPS Theme — Foundry 2026 × Gotham synthesis
+   ------------------------------------------------------------
+   Activated via [data-theme="palantir"] on <html>.
+
+   Design philosophy:
+     Navy #0a0d14 base · Source Code Pro everywhere · one blue
+     accent #3b82f6 · 1px borders at 0.05 opacity · 4px radii ·
+     font weights 200–300 for numbers · maximum information per
+     pixel · zero decoration · dense SQL-grid aesthetic · 6px
+     map dots with glow halo.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@200;300;400;500;600;700&display=swap');
+
+[data-theme="palantir"] {
+  /* ── Backgrounds: deep navy, near-black ─────────────────── */
+  --bg:            #0a0d14;
+  --bg-secondary:  #0c1018;
+  --surface:       #0e131c;
+  --surface-hover: #131926;
+  --surface-active:#17202e;
+
+  /* ── Borders: 1px at 0.05 opacity (rgba white) ──────────── */
+  --border:        rgba(255, 255, 255, 0.05);
+  --border-strong: rgba(255, 255, 255, 0.09);
+  --border-subtle: rgba(255, 255, 255, 0.03);
+
+  /* ── Text: cool white hierarchy ─────────────────────────── */
+  --text:          #e5e9f0;
+  --text-secondary:#a8b0bf;
+  --text-dim:      #6b7280;
+  --text-muted:    #4b5563;
+  --text-faint:    #374151;
+  --text-ghost:    #1f2937;
+  --accent:        #ffffff;
+
+  /* ── Overlays: blue-tinted whites ───────────────────────── */
+  --overlay-subtle:rgba(59, 130, 246, 0.02);
+  --overlay-light: rgba(255, 255, 255, 0.03);
+  --overlay-medium:rgba(255, 255, 255, 0.06);
+  --overlay-heavy: rgba(255, 255, 255, 0.12);
+  --shadow-color:  rgba(0, 0, 0, 0.6);
+  --darken-light:  rgba(0, 0, 0, 0.20);
+  --darken-medium: rgba(0, 0, 0, 0.30);
+  --darken-heavy:  rgba(0, 0, 0, 0.45);
+
+  /* ── Scrollbar: thin, dim ───────────────────────────────── */
+  --scrollbar-thumb:       rgba(255, 255, 255, 0.08);
+  --scrollbar-thumb-hover: rgba(59, 130, 246, 0.35);
+
+  /* ── Input ──────────────────────────────────────────────── */
+  --input-bg: #0c1018;
+
+  /* ── Panels ─────────────────────────────────────────────── */
+  --panel-bg:     #0e131c;
+  --panel-border: rgba(255, 255, 255, 0.05);
+
+  /* ── Map: deeper navy with blue stroke ──────────────────── */
+  --map-bg:      #070a11;
+  --map-grid:    rgba(59, 130, 246, 0.06);
+  --map-country: #0a0f18;
+  --map-stroke:  rgba(59, 130, 246, 0.22);
+
+  /* ── Single accent: government blue ─────────────────────── */
+  --accent-primary:     #3b82f6;
+  --accent-primary-dim: #1e3a8a;
+
+  /* ── Semantic severity: restrained palette ──────────────── */
+  --semantic-critical: #ef4444;
+  --semantic-high:     #f97316;
+  --semantic-elevated: #eab308;
+  --semantic-normal:   #3b82f6;
+  --semantic-low:      #64748b;
+  --semantic-info:     #3b82f6;
+  --semantic-positive: #22c55e;
+
+  --threat-critical: #ef4444;
+  --threat-high:     #f97316;
+  --threat-medium:   #eab308;
+  --threat-low:      #3b82f6;
+  --threat-info:     #64748b;
+
+  --defcon-1: #ef4444;
+  --defcon-2: #f97316;
+  --defcon-3: #eab308;
+  --defcon-4: #3b82f6;
+  --defcon-5: #22c55e;
+
+  --status-live:        #22c55e;
+  --status-cached:      #eab308;
+  --status-unavailable: #ef4444;
+
+  --red:    #ef4444;
+  --green:  #22c55e;
+  --yellow: #eab308;
+
+  /* ── Typography: Source Code Pro everywhere ─────────────── */
+  --font-mono: 'Source Code Pro', 'IBM Plex Mono', 'SF Mono', 'Monaco',
+               'Cascadia Code', 'Fira Code', ui-monospace, monospace;
+  --font-body: var(--font-mono);
+}
+
+/* ============================================================
+   GLOBAL STRUCTURAL RESET
+   4px radii · tabular numerals · tight letter-spacing · 200–300
+   weights for numbers · 1.2 line-height · no text shadows
+   ============================================================ */
+[data-theme="palantir"],
+[data-theme="palantir"] * {
+  font-family: var(--font-mono) !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.005em;
+  text-shadow: none !important;
+}
+
+[data-theme="palantir"] body {
+  font-size: 12px;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'tnum' 1, 'zero' 1, 'ss01' 1;
+}
+
+/* 4px radii throughout — override any larger values */
+[data-theme="palantir"] .panel,
+[data-theme="palantir"] .panel-header,
+[data-theme="palantir"] .panel-content,
+[data-theme="palantir"] button,
+[data-theme="palantir"] input,
+[data-theme="palantir"] select,
+[data-theme="palantir"] textarea,
+[data-theme="palantir"] .card,
+[data-theme="palantir"] .badge,
+[data-theme="palantir"] .pill,
+[data-theme="palantir"] .chip,
+[data-theme="palantir"] .search-btn,
+[data-theme="palantir"] .variant-option,
+[data-theme="palantir"] .unified-settings-panel,
+[data-theme="palantir"] .search-modal-panel,
+[data-theme="palantir"] .modal {
+  border-radius: 4px !important;
+}
+
+/* ============================================================
+   PANELS — 1px 0.05 borders · flat · no shadow · tight headers
+   ============================================================ */
+[data-theme="palantir"] .panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  box-shadow: none !important;
+  border-radius: 4px;
+}
+
+[data-theme="palantir"] .panel:hover {
+  border-color: var(--border-strong);
+  box-shadow: none !important;
+}
+
+[data-theme="palantir"] .panel-header {
+  padding: 6px 10px !important;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  min-height: 24px;
+}
+
+[data-theme="palantir"] .panel-header .panel-title,
+[data-theme="palantir"] .panel-title {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+[data-theme="palantir"] .panel-header .panel-count,
+[data-theme="palantir"] .panel-count {
+  font-size: 9px;
+  font-weight: 300;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  padding: 1px 5px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 2px;
+  margin-left: 6px;
+}
+
+[data-theme="palantir"] .panel-content {
+  padding: 6px 8px;
+}
+
+/* ============================================================
+   NUMERIC DISPLAYS — light weights for figures
+   ============================================================ */
+[data-theme="palantir"] .metric-value,
+[data-theme="palantir"] .big-number,
+[data-theme="palantir"] .stat-value,
+[data-theme="palantir"] .quote-price,
+[data-theme="palantir"] .ticker-price,
+[data-theme="palantir"] [data-value],
+[data-theme="palantir"] .value-large,
+[data-theme="palantir"] .value-display {
+  font-weight: 200 !important;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-theme="palantir"] .metric-label,
+[data-theme="palantir"] .stat-label,
+[data-theme="palantir"] .value-label {
+  font-weight: 400 !important;
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ============================================================
+   PROGRESS BARS — 1.5px rails · blue fill · no gradients
+   ============================================================ */
+[data-theme="palantir"] progress,
+[data-theme="palantir"] .progress,
+[data-theme="palantir"] .progress-bar,
+[data-theme="palantir"] .progress-rail {
+  height: 1.5px !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  overflow: hidden;
+}
+
+[data-theme="palantir"] progress::-webkit-progress-bar {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0;
+}
+[data-theme="palantir"] progress::-webkit-progress-value,
+[data-theme="palantir"] .progress-fill,
+[data-theme="palantir"] .progress > div,
+[data-theme="palantir"] .progress-bar > div {
+  background: #3b82f6 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+/* ============================================================
+   BUTTONS — flat · single blue accent · no gradients
+   ============================================================ */
+[data-theme="palantir"] button,
+[data-theme="palantir"] .btn,
+[data-theme="palantir"] .search-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+[data-theme="palantir"] button:hover,
+[data-theme="palantir"] .btn:hover,
+[data-theme="palantir"] .search-btn:hover {
+  border-color: rgba(59, 130, 246, 0.40);
+  background: rgba(59, 130, 246, 0.05);
+  color: #3b82f6;
+}
+
+[data-theme="palantir"] button.active,
+[data-theme="palantir"] .btn.active,
+[data-theme="palantir"] .variant-option.active {
+  border-color: #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.08) !important;
+  color: #3b82f6 !important;
+}
+
+/* ============================================================
+   INPUTS
+   ============================================================ */
+[data-theme="palantir"] input,
+[data-theme="palantir"] select,
+[data-theme="palantir"] textarea {
+  background: var(--input-bg) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  padding: 4px 6px !important;
+}
+
+[data-theme="palantir"] input:focus,
+[data-theme="palantir"] select:focus,
+[data-theme="palantir"] textarea:focus {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25) !important;
+}
+
+/* ============================================================
+   SCROLLBARS — thin · blue on hover
+   ============================================================ */
+[data-theme="palantir"] ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+[data-theme="palantir"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-theme="palantir"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 0;
+}
+[data-theme="palantir"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.35);
+}
+
+/* ============================================================
+   HEADER BAR → intelligence status strip
+   ============================================================ */
+[data-theme="palantir"] .header {
+  background: #060910 !important;
+  border-bottom: 1px solid var(--border) !important;
+  box-shadow: none !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 12px !important;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+[data-theme="palantir"] .header .logo,
+[data-theme="palantir"] .header .logo-mobile {
+  color: var(--text) !important;
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+[data-theme="palantir"] .version {
+  color: var(--text-dim);
+  font-weight: 300;
+  font-size: 9px;
+}
+
+[data-theme="palantir"] .status-indicator {
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+[data-theme="palantir"] .status-dot {
+  background: #22c55e !important;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.25) !important;
+  width: 6px !important;
+  height: 6px !important;
+}
+
+/* ============================================================
+   DATA-TABLE AESTHETIC — rows, columns, object-id, severity
+   ============================================================ */
+[data-theme="palantir"] table,
+[data-theme="palantir"] .data-grid,
+[data-theme="palantir"] .sql-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-theme="palantir"] table th,
+[data-theme="palantir"] .data-grid-header,
+[data-theme="palantir"] .sql-grid-header {
+  text-align: left;
+  padding: 5px 8px;
+  font-size: 9px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border-subtle);
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+}
+
+[data-theme="palantir"] table th:hover,
+[data-theme="palantir"] .sql-grid-header:hover {
+  color: #3b82f6;
+}
+
+[data-theme="palantir"] table td,
+[data-theme="palantir"] .data-grid-cell,
+[data-theme="palantir"] .sql-grid-cell {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 300;
+  border-bottom: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  vertical-align: top;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-theme="palantir"] table tr:hover td,
+[data-theme="palantir"] .data-grid-row:hover .data-grid-cell {
+  background: rgba(59, 130, 246, 0.04);
+  color: var(--text);
+}
+
+/* Object ID column — the Gotham signature */
+[data-theme="palantir"] .object-id,
+[data-theme="palantir"] [data-object-id] {
+  color: #3b82f6;
+  font-weight: 400;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+/* Severity badges — tight rectangles, uppercase, no radius */
+[data-theme="palantir"] .severity-badge,
+[data-theme="palantir"] .badge-critical,
+[data-theme="palantir"] .badge-high,
+[data-theme="palantir"] .badge-medium,
+[data-theme="palantir"] .badge-low,
+[data-theme="palantir"] .severity {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-radius: 2px;
+  border: 1px solid;
+  background: transparent;
+  line-height: 1.4;
+}
+
+[data-theme="palantir"] .badge-critical,
+[data-theme="palantir"] .severity-critical {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+[data-theme="palantir"] .badge-high,
+[data-theme="palantir"] .severity-high {
+  color: #f97316;
+  border-color: rgba(249, 115, 22, 0.35);
+  background: rgba(249, 115, 22, 0.08);
+}
+[data-theme="palantir"] .badge-medium,
+[data-theme="palantir"] .severity-medium {
+  color: #eab308;
+  border-color: rgba(234, 179, 8, 0.35);
+  background: rgba(234, 179, 8, 0.06);
+}
+[data-theme="palantir"] .badge-low,
+[data-theme="palantir"] .severity-low {
+  color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.06);
+}
+
+/* ============================================================
+   MAP — 6px dots with glow halo, navy background
+   ============================================================ */
+[data-theme="palantir"] .map-container,
+[data-theme="palantir"] #map,
+[data-theme="palantir"] .deckgl-wrapper {
+  background: var(--map-bg) !important;
+}
+
+/* Apply glow halo to all point-like markers projected onto the map */
+[data-theme="palantir"] .map-marker-dot,
+[data-theme="palantir"] .event-dot,
+[data-theme="palantir"] .earthquake-dot,
+[data-theme="palantir"] .threat-dot {
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50%;
+  background: #3b82f6;
+  box-shadow:
+    0 0 0 1px rgba(59, 130, 246, 0.40),
+    0 0 8px rgba(59, 130, 246, 0.55),
+    0 0 16px rgba(59, 130, 246, 0.25);
+}
+
+/* ============================================================
+   MODALS / POPOVERS
+   ============================================================ */
+[data-theme="palantir"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(2px);
+}
+
+[data-theme="palantir"] .unified-settings-panel,
+[data-theme="palantir"] .search-modal-panel,
+[data-theme="palantir"] .modal {
+  background: #0e131c !important;
+  border: 1px solid var(--border-strong) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.03) inset,
+    0 20px 50px rgba(0, 0, 0, 0.6) !important;
+  border-radius: 4px !important;
+}
+
+/* ============================================================
+   LINKS
+   ============================================================ */
+[data-theme="palantir"] a {
+  color: #3b82f6;
+  text-decoration: none;
+}
+[data-theme="palantir"] a:hover {
+  color: #60a5fa;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+/* ============================================================
+   ALERT TICKER — zero decoration
+   ============================================================ */
+[data-theme="palantir"] .alert-ticker {
+  background: #060910 !important;
+  border-top: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text-secondary);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: none !important;
+}
+
+/* ============================================================
+   VARIANT SWITCHER
+   ============================================================ */
+[data-theme="palantir"] .variant-option {
+  border: 1px solid var(--border) !important;
+  background: transparent !important;
+  color: var(--text-dim) !important;
+  font-size: 10px;
+  padding: 3px 8px !important;
+}
+
+[data-theme="palantir"] .variant-option:hover {
+  color: #3b82f6 !important;
+  border-color: rgba(59, 130, 246, 0.40) !important;
+  background: rgba(59, 130, 246, 0.04) !important;
+}
+
+/* ============================================================
+   GODMODE TOGGLE
+   ============================================================ */
+[data-theme="palantir"] #godmodeToggle {
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border) !important;
+  background: transparent !important;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+[data-theme="palantir"] #godmodeToggle:hover {
+  color: #3b82f6 !important;
+  border-color: rgba(59, 130, 246, 0.40) !important;
+  background: rgba(59, 130, 246, 0.04) !important;
+  box-shadow: none !important;
+}
+
+/* ============================================================
+   DISABLE DECORATIVE EFFECTS
+   ============================================================ */
+[data-theme="palantir"] .glow,
+[data-theme="palantir"] .glass,
+[data-theme="palantir"] .glassmorphism {
+  backdrop-filter: none !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
+}
+
+[data-theme="palantir"] *::selection {
+  background: rgba(59, 130, 246, 0.35);
+  color: #ffffff;
+}
+
+/* ============================================================
+   TIME / TIMESTAMP — always dim, always mono
+   ============================================================ */
+[data-theme="palantir"] .timestamp,
+[data-theme="palantir"] time,
+[data-theme="palantir"] .time-ago {
+  color: var(--text-muted);
+  font-weight: 300;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}

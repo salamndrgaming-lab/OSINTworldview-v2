@@ -52,6 +52,8 @@ const BOOTSTRAP_CACHE_KEYS = {
   narrativeDrift:    'intelligence:narrative-drift:v1',
   crossSourceSignals: 'intelligence:cross-source-signals:v1',
   councilSynthesis:   'council:synthesis:v1',
+  missileEvents:      'intelligence:missile-events:v1',
+  aisSnapshot:        'ais:snapshot:latest',
 };
 
 const SLOW_KEYS = new Set([
@@ -62,6 +64,7 @@ const SLOW_KEYS = new Set([
   'cryptoQuotes', 'gulfQuotes', 'stablecoinMarkets', 'unrestEvents', 'ucdpEvents',
   'techEvents', 'poi', 'telegramNarratives', 'entityGraph',
   'hypotheses', 'narrativeDrift', 'crossSourceSignals', 'councilSynthesis',
+  'missileEvents', 'aisSnapshot',
 ]);
 
 const FAST_KEYS = new Set([

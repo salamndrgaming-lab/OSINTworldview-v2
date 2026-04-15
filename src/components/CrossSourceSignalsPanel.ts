@@ -81,6 +81,14 @@ export class CrossSourceSignalsPanel extends Panel {
     this.refreshTimer = setInterval(() => { void this.fetchData(); }, 300_000); // 5 min
   }
 
+  /** Hydrate panel with pre-fetched data (from bootstrap or data-loader). */
+  setData(data: { signals?: Signal[] }): void {
+    if (!Array.isArray(data?.signals) || data.signals.length === 0) return;
+    this.signals = data.signals;
+    this.setCount(this.signals.length);
+    this.render();
+  }
+
   private buildUI(): void {
     this.content.style.cssText = 'padding:0;display:flex;flex-direction:column;overflow:hidden;';
 

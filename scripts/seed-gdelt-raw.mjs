@@ -61,16 +61,16 @@ loadEnvFile(import.meta.url);
 
 export const RAW_KEY           = 'gdelt:raw:v1';
 const RATELIMIT_FLAG_KEY        = 'gdelt:raw:ratelimit-at';
-const TTL                       = 4 * 3600;        // 4h
-const MIN_CACHE_AGE_MIN         = 30;
+const TTL                       = 24 * 3600;       // 24h — survives missed cron cycles
+const MIN_CACHE_AGE_MIN         = 150;             // 2.5h — skip crawl if cache younger than this (cron runs every 3h)
 const MIN_TOPICS_TO_OVERWRITE   = 3;
 const MIN_PERSONS_TO_OVERWRITE  = 3;
 
 // Cooldown parameters (adaptive via cooldownDelay())
-const COOLDOWN_INITIAL_MS       = 20_000;  // 20s between calls on first request
-const COOLDOWN_FLOOR_MS         = 5_000;   // 5s minimum once GDELT is responding well
-const COOLDOWN_DECAY_MS         = 2_000;   // reduce by 2s per consecutive success
-const COOLDOWN_POST_EXHAUST_MS  = 120_000; // 2 min after a topic exhausts retries
+const COOLDOWN_INITIAL_MS       = 6_000;   // 6s between calls on first request (was 20s)
+const COOLDOWN_FLOOR_MS         = 3_000;   // 3s minimum once GDELT is responding well (was 5s)
+const COOLDOWN_DECAY_MS         = 1_000;   // reduce by 1s per consecutive success (was 2s)
+const COOLDOWN_POST_EXHAUST_MS  = 20_000;  // 20s after a topic exhausts retries (was 120s)
 
 const FORCE = process.argv.includes('--force');
 
@@ -213,7 +213,7 @@ async function crawlTopics() {
   let consecutiveSuccesses = 0;
   let isFirstCall = true;
   const crawlStart = Date.now();
-  const MAX_CRAWL_MS = 40 * 60_000; // 40 min hard cap — leaves margin for persons + GKG + write
+  const MAX_CRAWL_MS = 18 * 60_000; // 18 min hard cap — leaves margin for persons (~5 min) + GKG + write within 28-min step timeout
 
   for (const topic of TOPICS) {
     // Time guard — stop before GitHub Actions kills us
@@ -294,8 +294,15 @@ async function crawlPersons() {
   const results = {};
   const activePersons = TRACKED_PERSONS.filter(p => p.status === 'active');
   let consecutiveSuccesses = 0;
+  const phaseStart = Date.now();
+  const MAX_PHASE_MS = 6 * 60_000; // 6 min hard cap on persons phase
 
   for (const person of activePersons) {
+    if (Date.now() - phaseStart > MAX_PHASE_MS) {
+      console.warn(`  ⏱ Persons phase stopped at "${person.name}" — 6 min cap reached (${Object.keys(results).length}/${activePersons.length} done)`);
+      break;
+    }
+
     if (!canRequest('person')) {
       console.warn(`  ⚡ Stopping person crawl at "${person.name}" — person circuit open`);
       break;

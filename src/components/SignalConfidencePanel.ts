@@ -132,8 +132,15 @@ export class SignalConfidencePanel extends Panel {
   private async fetchData(): Promise<void> {
     try {
       const resp = await fetch('/api/health', { signal: AbortSignal.timeout(10_000) });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      // /api/health returns HTTP 503 when overall === 'DEGRADED' | 'UNHEALTHY', but
+      // the body STILL contains the per-domain checks we need to render. Only a
+      // real network/parse failure should wipe the panel — degraded is the whole
+      // point of this panel, not an error state.
+      if (resp.status !== 200 && resp.status !== 503) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
       const data: HealthData = await resp.json();
+      if (!data || typeof data !== 'object') throw new Error('Invalid health body');
       this.render(data);
     } catch {
       const body = this.content.querySelector('#sig-body');

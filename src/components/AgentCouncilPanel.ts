@@ -11,6 +11,7 @@
  */
 
 import { Panel } from './Panel';
+import { toApiUrl } from '@/services/runtime';
 
 interface CouncilFinding {
   title: string;
@@ -24,6 +25,7 @@ interface AgentReport {
   agentId: string;
   summary: string;
   findingCount: number;
+  status?: 'ok' | 'failed';
 }
 
 interface CouncilConflict {
@@ -136,7 +138,7 @@ export class AgentCouncilPanel extends Panel {
     if (!body) return;
 
     try {
-      const resp = await fetch('/api/council/synthesis', {
+      const resp = await fetch(toApiUrl('/api/council/synthesis'), {
         signal: AbortSignal.timeout(10_000),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -158,7 +160,7 @@ export class AgentCouncilPanel extends Panel {
     body.innerHTML = this.loadingHTML();
 
     try {
-      const resp = await fetch(`/api/council/synthesis?agent=${encodeURIComponent(agentId)}`, {
+      const resp = await fetch(toApiUrl(`/api/council/synthesis?agent=${encodeURIComponent(agentId)}`), {
         signal: AbortSignal.timeout(10_000),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -269,13 +271,18 @@ export class AgentCouncilPanel extends Panel {
       html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px">`;
       for (const r of agentReports) {
         const label = AGENT_LABELS[r.agentId] || { icon: '\u2022', name: r.agentId };
-        html += `<button class="council-agent-btn" data-agent="${this.esc(r.agentId)}" style="
+        const isFailed = r.status === 'failed';
+        const opacity = isFailed ? 'opacity:0.5;' : '';
+        const statusHtml = isFailed
+          ? '<div style="font-size:9px;color:#ef4444">unavailable</div>'
+          : `<div style="font-size:9px;color:var(--text-muted)">${r.findingCount} findings</div>`;
+        html += `<button class="council-agent-btn" data-agent="${this.esc(r.agentId)}" ${isFailed ? 'disabled' : ''} style="
           background:var(--vi-surface,#12121a);border:1px solid var(--vi-border,#252535);border-radius:6px;
-          padding:8px;cursor:pointer;text-align:left;font-family:inherit;transition:border-color 0.15s;
+          padding:8px;${isFailed ? '' : 'cursor:pointer;'}text-align:left;font-family:inherit;transition:border-color 0.15s;${opacity}
         ">
           <div style="font-size:14px;margin-bottom:3px">${label.icon}</div>
           <div style="font-size:10px;font-weight:600;color:var(--text)">${label.name}</div>
-          <div style="font-size:9px;color:var(--text-muted)">${r.findingCount} findings</div>
+          ${statusHtml}
         </button>`;
       }
       html += `</div>`;
@@ -345,6 +352,13 @@ export class AgentCouncilPanel extends Panel {
       backBtn.addEventListener('click', () => {
         void this.fetchSynthesis();
       });
+    }
+  }
+
+  /** Accept data pushed from data-loader bootstrap hydration */
+  public setData(data: CouncilSynthesis): void {
+    if (data?.overallAssessment) {
+      this.renderSynthesis(data);
     }
   }
 

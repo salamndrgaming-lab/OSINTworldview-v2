@@ -276,8 +276,8 @@ const MARKER_ICONS = {
   star: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><polygon points="16,2 20,12 30,12 22,19 25,30 16,23 7,30 10,19 2,12 12,12" fill="white"/></svg>`),
   // Airplane silhouette - top-down with wings and tail (pointing north, rotated by trackDeg)
   plane: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M16 2 L17.5 10 L17 12 L27 17 L27 19 L17 16 L17 24 L20 26.5 L20 28 L16 27 L12 28 L12 26.5 L15 24 L15 16 L5 19 L5 17 L15 12 L14.5 10 Z" fill="white"/></svg>`),
-  // Ship silhouette - top-down vessel pointing north
-  ship: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M16 2 L20 8 L20 22 L22 24 L22 26 L10 26 L10 24 L12 22 L12 8 Z" fill="white"/></svg>`),
+  // Ship silhouette - AIS-style top-down vessel with pointed bow and wide beam (pointing north)
+  ship: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M16 1 L22 10 L22 24 L20 28 L12 28 L10 24 L10 10 Z" fill="white" stroke="rgba(0,0,0,0.3)" stroke-width="0.5"/><line x1="16" y1="4" x2="16" y2="12" stroke="rgba(0,0,0,0.2)" stroke-width="1"/></svg>`),
 };
 
 const BASES_ICON_MAPPING = { triangleUp: { x: 0, y: 0, width: 32, height: 32, mask: true } };
@@ -2394,27 +2394,32 @@ export class DeckGLMap {
       getIcon: () => 'ship',
       getSize: (d: AisPositionData) => {
         const t = d.shipType ?? 0;
-        if (t >= 80 && t < 90) return 24; // tankers larger
-        if (t >= 70 && t < 80) return 22; // cargo
-        if (t >= 60 && t < 70) return 20; // passenger
-        return 16;
+        if (t >= 80 && t < 90) return 28; // tankers — largest
+        if (t >= 70 && t < 80) return 24; // cargo
+        if (t >= 60 && t < 70) return 22; // passenger
+        if (t === 35) return 26;           // military
+        if (t >= 30 && t < 40) return 18;  // fishing/towing
+        return 18;
       },
       getColor: (d: AisPositionData) => {
         const t = d.shipType ?? 0;
-        if (t >= 80 && t < 90) return [255, 160, 40, 230] as [number, number, number, number]; // tanker = orange
-        if (t >= 70 && t < 80) return [40, 200, 255, 210] as [number, number, number, number]; // cargo = cyan
-        if (t >= 60 && t < 70) return [160, 120, 255, 210] as [number, number, number, number]; // passenger = purple
-        return [200, 220, 240, 190] as [number, number, number, number]; // other = light
+        if (t >= 80 && t < 90) return [255, 140, 20, 240] as [number, number, number, number];  // tanker = orange
+        if (t >= 70 && t < 80) return [30, 190, 255, 220] as [number, number, number, number];  // cargo = cyan
+        if (t >= 60 && t < 70) return [150, 110, 255, 220] as [number, number, number, number]; // passenger = purple
+        if (t === 35) return [255, 60, 60, 240] as [number, number, number, number];             // military = red
+        if (t >= 30 && t < 40) return [100, 200, 120, 200] as [number, number, number, number]; // fishing = green
+        if (t >= 50 && t < 56) return [255, 220, 80, 210] as [number, number, number, number];  // service = yellow
+        return [180, 200, 220, 180] as [number, number, number, number];                         // other = light steel
       },
       getAngle: (d: AisPositionData) => -(d.heading ?? d.course ?? 0),
-      sizeMinPixels: 6,
-      sizeMaxPixels: 28,
+      sizeMinPixels: 4,
+      sizeMaxPixels: 32,
       sizeScale: 1,
       billboard: false,
       pickable: true,
       stroked: false,
       autoHighlight: true,
-      highlightColor: [255, 255, 255, 100],
+      highlightColor: [255, 255, 255, 120],
     });
   }
 
@@ -3421,9 +3426,8 @@ export class DeckGLMap {
   }
 
   private createMissileStrikesLayer(): ScatterplotLayer {
-    // 6-hour time filter: seed stores 12h, render only recent 6h
-    const sixHoursAgo = Date.now() - 6 * 3600_000;
-    const recentEvents = this.missileEvents.filter(e => e.timestamp >= sixHoursAgo);
+    // Show all events from seed (seed already curates to recent 24h from GDELT)
+    const recentEvents = this.missileEvents;
 
     return new ScatterplotLayer({
       id: 'missile-strikes-layer',

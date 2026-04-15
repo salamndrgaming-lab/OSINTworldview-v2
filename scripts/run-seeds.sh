@@ -165,19 +165,25 @@ wave_5_ai_powered() {
     "seed-poi-discovery.mjs:$TIMEOUT_LONG"
 }
 
-TIMEOUT_COUNCIL=900   # 15 min for agent council (7 LLM calls)
+TIMEOUT_COUNCIL=240   # 4 min for agent council (6 agents batched + chair; ~60s typical, 4 min safety)
 
+# WAVE 6 — Primary derivatives. All read ONLY from waves 1-5 keys.
+# hypothesis-generator and agent-council MOVED to wave 7 because they read
+# intelligence:agent-sitrep:v1 which is written by agent-sitrep.mjs in this wave.
 wave_6_derivatives() {
   run_wave "Derivative Seeds (read upstream keys)" \
     "seed-alerts.mjs" \
     "agent-sitrep.mjs:$TIMEOUT_LONG" \
-    "seed-hypothesis-generator.mjs:$TIMEOUT_LONG" \
-    "seed-cross-source-signals.mjs" \
-    "seed-agent-council.mjs:$TIMEOUT_COUNCIL"
+    "seed-cross-source-signals.mjs"
 }
 
+# WAVE 7 — Secondary derivatives + archival. Reads wave 6 agent-sitrep output.
+# Merged with archival so agent-council/hypothesis-generator run in parallel
+# with vector-index/snapshot/entity-graph instead of serialising after them.
 wave_7_archival() {
-  run_wave "Indexing + Archival (runs last)" \
+  run_wave "Final: archival + agent council (parallel)" \
+    "seed-hypothesis-generator.mjs:$TIMEOUT_LONG" \
+    "seed-agent-council.mjs:$TIMEOUT_COUNCIL" \
     "seed-vector-index.mjs:$TIMEOUT_LONG" \
     "seed-snapshot.mjs" \
     "seed-entity-graph.mjs:$TIMEOUT_LONG"

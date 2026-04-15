@@ -8,6 +8,7 @@
  */
 
 import { Panel } from './Panel';
+import { toApiUrl } from '@/services/runtime';
 
 interface MissileEvent {
   id: string;
@@ -103,9 +104,20 @@ export class MissileTrackerPanel extends Panel {
     });
   }
 
+  /** Hydrate panel with pre-fetched data (from bootstrap or data-loader). */
+  setData(data: { events?: MissileEvent[] }): void {
+    const events = data?.events;
+    if (!Array.isArray(events) || events.length === 0) return;
+    this.events = events;
+    this.setCount(this.events.length);
+    this.applyFilter();
+    this.renderStats();
+    console.log(`[MissileTracker] Hydrated with ${events.length} events`);
+  }
+
   async fetchData(): Promise<void> {
     try {
-      const resp = await fetch('/api/missile-events', {
+      const resp = await fetch(toApiUrl('/api/missile-events'), {
         signal: AbortSignal.timeout(10_000),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -115,6 +127,8 @@ export class MissileTrackerPanel extends Panel {
       this.applyFilter();
       this.renderStats();
     } catch {
+      // Only show empty state if we don't already have data (e.g. from bootstrap)
+      if (this.events.length > 0) return;
       const list = this.content.querySelector('#mtpList');
       if (list) {
         list.innerHTML = `<div class="mtp-empty" style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:32px 16px;text-align:center">

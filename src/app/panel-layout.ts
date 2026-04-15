@@ -967,6 +967,11 @@ export class PanelLayoutManager implements AppModule {
       import('@/components/OsintToolkitPanel').then(m => new m.OsintToolkitPanel()),
     );
 
+    // Agent Council — 6-agent intelligence council synthesis
+    this.lazyPanel('agent-council', () =>
+      import('@/components/AgentCouncilPanel').then(m => new m.AgentCouncilPanel()),
+    );
+
         // Godmode-exclusive panels — these only load when godmode variant is active
     if (SITE_VARIANT === 'godmode') {
       this.lazyPanel('ai-stock-analyst', () =>

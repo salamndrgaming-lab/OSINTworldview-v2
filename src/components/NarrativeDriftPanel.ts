@@ -14,6 +14,7 @@
  */
 
 import { Panel } from './Panel';
+import { toApiUrl } from '@/services/runtime';
 
 interface ThemeDrift {
   id: string;
@@ -107,11 +108,18 @@ export class NarrativeDriftPanel extends Panel {
     </div>`;
   }
 
+  /** Hydrate panel with pre-fetched data (from bootstrap or data-loader). */
+  setData(data: NarrativeDriftData): void {
+    if (data?.themes?.length > 0 || data?.overallDriftIndex != null) {
+      this.render(data);
+    }
+  }
+
   private async fetchData(): Promise<void> {
     const body = this.content.querySelector('#drift-body');
     if (!body) return;
     try {
-      const resp = await fetch('/api/intelligence/narrative-drift', {
+      const resp = await fetch(toApiUrl('/api/intelligence/narrative-drift'), {
         signal: AbortSignal.timeout(10_000),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

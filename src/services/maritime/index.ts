@@ -116,6 +116,7 @@ interface AisSnapshotResponse {
   }>;
   configured?: boolean;
   source?: string;
+  note?: string;
 }
 
 // ---- Callback System ----
@@ -161,7 +162,10 @@ const isLocalhost = isClientRuntime && window.location.hostname === 'localhost';
 // ---- Internal Helpers ----
 
 function shouldIncludeCandidates(): boolean {
-  return positionCallbacks.size > 0;
+  // Always request candidate reports — they contain the individual vessel
+  // positions needed for the AIS vessel map layer.  Without them, the relay
+  // format path in parseSnapshot produces zero vessels.
+  return true;
 }
 
 function parseSnapshot(data: unknown): {
@@ -178,22 +182,40 @@ function parseSnapshot(data: unknown): {
   // Relay format: has disruptions + density arrays
   if (Array.isArray(raw.disruptions) && Array.isArray(raw.density)) {
     const status = raw.status || {};
+    const candidates: SnapshotCandidateReport[] = Array.isArray(raw.candidateReports) ? raw.candidateReports : [];
+
+    // Extract vessel positions from candidateReports for map display.
+    // The relay sends individual vessel positions as candidates; we
+    // promote them to the vessels array so DeckGL renders ship markers.
+    const vessels: AisPositionData[] = candidates
+      .filter(c => c && Number.isFinite(c.lat) && Number.isFinite(c.lon) && c.mmsi)
+      .map(c => ({
+        mmsi: String(c.mmsi),
+        name: c.name || '',
+        lat: c.lat,
+        lon: c.lon,
+        shipType: c.shipType,
+        heading: c.heading,
+        speed: c.speed,
+        course: c.course,
+      }));
+
     return {
       sequence: Number.isFinite(raw.sequence as number) ? Number(raw.sequence) : 0,
       status: {
         connected: Boolean(status.connected),
-        vessels: Number.isFinite(status.vessels as number) ? Number(status.vessels) : 0,
+        vessels: Number.isFinite(status.vessels as number) ? Number(status.vessels) : vessels.length,
         messages: Number.isFinite(status.messages as number) ? Number(status.messages) : 0,
       },
       disruptions: raw.disruptions,
       density: raw.density,
-      vessels: [],
-      candidateReports: Array.isArray(raw.candidateReports) ? raw.candidateReports : [],
+      vessels,
+      candidateReports: candidates,
     };
   }
 
   // Seed format: has vessels array (from seed-ais-vessels.mjs via Redis)
-  if (Array.isArray(raw.vessels) && raw.vessels.length > 0) {
+  if (Array.isArray(raw.vessels)) {
     const vessels: AisPositionData[] = raw.vessels
       .filter(v => v && Number.isFinite(v.lat) && Number.isFinite(v.lon) && v.mmsi)
       .map(v => ({
@@ -212,10 +234,23 @@ function parseSnapshot(data: unknown): {
 
     return {
       sequence: 0,
-      status: { connected: true, vessels: vessels.length, messages: 0 },
+      status: { connected: vessels.length > 0, vessels: vessels.length, messages: 0 },
       disruptions: [],
       density,
       vessels,
+      candidateReports: [],
+    };
+  }
+
+  // Recognized response structure but no usable data — return empty rather than null
+  // to avoid throwing and allow graceful fallback
+  if (raw.configured !== undefined || raw.timestamp || raw.note) {
+    return {
+      sequence: 0,
+      status: { connected: false, vessels: 0, messages: 0 },
+      disruptions: [],
+      density: [],
+      vessels: [],
       candidateReports: [],
     };
   }

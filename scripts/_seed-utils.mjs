@@ -172,6 +172,17 @@ export async function releaseLock(domain, runId) {
   }
 }
 
+// Minimum TTL floor: data survives even if seeds miss several cron cycles.
+// Seeds set short TTLs (3h) for freshness semantics, but we enforce a 7-day
+// floor so panels always have data to display (LKG / last-known-good pattern).
+// Staleness is tracked separately via seed-meta: keys (fetchedAt timestamp).
+const MIN_TTL_SECONDS = 604_800; // 7 days
+
+function enforceTtlFloor(ttl) {
+  if (!ttl || ttl < MIN_TTL_SECONDS) return MIN_TTL_SECONDS;
+  return ttl;
+}
+
 export async function atomicPublish(canonicalKey, data, validateFn, ttlSeconds) {
   const { url, token } = getRedisCredentials();
   const runId = String(Date.now());
@@ -193,12 +204,9 @@ export async function atomicPublish(canonicalKey, data, validateFn, ttlSeconds) 
   // Write to staging key
   await redisSet(url, token, stagingKey, data, 300); // 5 min staging TTL
 
-  // Overwrite canonical key
-  if (ttlSeconds) {
-    await redisCommand(url, token, ['SET', canonicalKey, payload, 'EX', ttlSeconds]);
-  } else {
-    await redisCommand(url, token, ['SET', canonicalKey, payload]);
-  }
+  // Overwrite canonical key — enforce TTL floor so data survives missed cron cycles
+  const effectiveTtl = enforceTtlFloor(ttlSeconds);
+  await redisCommand(url, token, ['SET', canonicalKey, payload, 'EX', effectiveTtl]);
 
   // Cleanup staging
   await redisDel(url, token, stagingKey).catch(() => {});
@@ -238,10 +246,11 @@ export async function withRetry(fn, maxRetries = 3, delayMs = 1000) {
 export async function writeExtraKey(key, data, ttl) {
   const { url, token } = getRedisCredentials();
   const payload = JSON.stringify(data);
+  const effectiveTtl = enforceTtlFloor(ttl);
   const resp = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(['SET', key, payload, 'EX', ttl]),
+    body: JSON.stringify(['SET', key, payload, 'EX', effectiveTtl]),
     signal: AbortSignal.timeout(10_000),
   });
   if (!resp.ok) console.warn(`  Extra key ${key}: write failed (HTTP ${resp.status})`);
@@ -272,8 +281,9 @@ export async function extendExistingTtl(keys, ttlSeconds = 600) {
     console.error('  Cannot extend TTL: missing Redis credentials');
     return;
   }
+  const effectiveTtl = enforceTtlFloor(ttlSeconds);
   try {
-    const pipeline = keys.map(k => ['EXPIRE', k, ttlSeconds]);
+    const pipeline = keys.map(k => ['EXPIRE', k, effectiveTtl]);
     const resp = await fetch(`${url}/pipeline`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

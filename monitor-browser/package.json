@@ -2,25 +2,52 @@
   "name": "monitor-browser",
   "version": "1.0.0",
   "private": true,
-  "description": "The browser built for intelligence analysts.",
-  "type": "module",
+  "description": "The browser built for intelligence analysts. New-tab page IS the OSINT dashboard.",
+  "main": "main.js",
   "scripts": {
-    "dev": "tauri dev",
-    "dev:vite": "vite",
-    "build": "tauri build",
-    "build:vite": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
-    "tauri": "tauri"
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "electron-builder --publish never",
+    "build:win": "electron-builder --win --publish never",
+    "build:mac": "electron-builder --mac --publish never",
+    "build:linux": "electron-builder --linux --publish never"
   },
-  "dependencies": {
-    "@tauri-apps/api": "^2.0.0",
-    "@tauri-apps/plugin-http": "^2.0.0",
-    "@tauri-apps/plugin-shell": "^2.0.0"
-  },
+  "author": "OSINT Worldview",
+  "license": "MIT",
+  "dependencies": {},
   "devDependencies": {
-    "@tauri-apps/cli": "^2.0.0",
-    "typescript": "^5.3.3",
-    "vite": "^5.4.0"
+    "electron": "^32.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.osint.monitor-browser",
+    "productName": "Monitor Browser",
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload-chrome.js",
+      "preload-content.js",
+      "renderer/**/*",
+      "homepage/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "assets/icon.png"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "assets/icon.png",
+      "category": "Development"
+    }
   }
 }

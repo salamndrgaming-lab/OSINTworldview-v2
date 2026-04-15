@@ -45,9 +45,20 @@
       "category": "public.app-category.developer-tools"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": ["AppImage", "deb", "rpm", "tar.gz"],
       "icon": "assets/icon.png",
-      "category": "Development"
+      "category": "Network;Security;WebBrowser",
+      "maintainer": "OSINT Worldview <support@osintview.app>",
+      "synopsis": "Intelligence browser with OSINT home dashboard",
+      "description": "Monitor Browser is a Chromium-based web browser whose new-tab page is a customizable OSINT intelligence dashboard with live news, world map, conflicts, markets, crypto, and analyst tools.",
+      "desktop": {
+        "entry": {
+          "Name": "Monitor Browser",
+          "GenericName": "Web Browser",
+          "Comment": "Chromium browser with OSINT home dashboard",
+          "Keywords": "osint;intelligence;browser;news;map;threat;"
+        }
+      }
     }
   }
 }

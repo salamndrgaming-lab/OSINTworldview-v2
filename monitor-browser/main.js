@@ -35,36 +35,22 @@ const { pathToFileURL } = require('node:url');
 // ---------------------------------------------------------------------------
 
 const CHROME_HEIGHT = 76; // titlebar (32) + toolbar (44)
-// The homepage IS the full OSINTworldview dashboard (same code that runs at
-// osintview.app). It ships with a panel registry of 80+ panels, add/remove,
-// multiple layout modes, map-layer toggles, and saved workspace presets.
-// Monitor Browser just hosts it in a branded Chromium shell.
-const HOMEPAGE_URL = 'https://osintview.app/';
-const HOMEPAGE_FALLBACK_PATH = path.join(__dirname, 'homepage', 'index.html');
-const HOMEPAGE_FALLBACK_URL = pathToFileURL(HOMEPAGE_FALLBACK_PATH).toString();
+// The homepage IS the Monitor Browser intelligence dashboard — a real
+// customizable workspace with live panels (news, markets, map, intel,
+// crypto, conflicts, …) backed by public OSINT data sources. Panels can
+// be added/removed by the user; the map supports toggleable layers.
+// This is a first-party dashboard, NOT a web view onto an external site.
+const HOMEPAGE_PATH = path.join(__dirname, 'homepage', 'index.html');
+const HOMEPAGE_URL = pathToFileURL(HOMEPAGE_PATH).toString();
+const HOMEPAGE_FALLBACK_URL = HOMEPAGE_URL; // kept for compatibility
 const CHROME_HTML = path.join(__dirname, 'renderer', 'index.html');
-
-// Hosts that should be treated as "the Monitor home dashboard" for URL-bar
-// display purposes (hides the raw URL, shows the ◉ brand glyph).
-const HOMEPAGE_HOSTS = new Set([
-  'osintview.app',
-  'www.osintview.app',
-  'tech.osintview.app',
-  'finance.osintview.app',
-  'commodity.osintview.app',
-  'happy.osintview.app',
-]);
 
 function isHomepageUrl(url) {
   if (!url) return false;
   if (url === HOMEPAGE_URL) return true;
-  if (url === HOMEPAGE_FALLBACK_URL) return true;
   try {
     const u = new URL(url);
-    if (u.protocol === 'file:' && url.startsWith(HOMEPAGE_FALLBACK_URL)) return true;
-    if ((u.protocol === 'https:' || u.protocol === 'http:') &&
-        HOMEPAGE_HOSTS.has(u.hostname) &&
-        (u.pathname === '/' || u.pathname === '')) {
+    if (u.protocol === 'file:' && url.startsWith(HOMEPAGE_URL.split('#')[0].split('?')[0])) {
       return true;
     }
   } catch {
@@ -267,12 +253,6 @@ function wireTabEvents(id, tab) {
     if (!isMainFrame) return;
     // -3 is ABORTED (user-initiated navigation). Don't surface.
     if (errorCode === -3) return;
-    // Homepage offline? Fall back to the bundled local dashboard shell so
-    // the user still has a usable new-tab page without a network.
-    if (validatedURL === HOMEPAGE_URL || (validatedURL && isHomepageUrl(validatedURL))) {
-      wc.loadURL(HOMEPAGE_FALLBACK_URL);
-      return;
-    }
     const escaped = escapeHtml(errorDescription || 'Page could not be loaded');
     const escapedUrl = escapeHtml(validatedURL || '');
     const html = renderErrorPage(escaped, escapedUrl, errorCode);

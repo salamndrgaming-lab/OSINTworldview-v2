@@ -4,25 +4,30 @@
 > picture.**
 
 Monitor Browser is a real, standalone web browser — like Firefox or Microsoft
-Edge — whose new-tab / homepage IS the full OSINT Worldview intelligence
-dashboard served from `osintview.app`. Open it and you immediately see:
+Edge — whose new-tab / homepage is a fully-customizable first-party OSINT
+intelligence dashboard. Open it and you immediately see:
 
-- Live world situation map with toggleable layers (conflicts, threats,
-  military bases, aircraft, shipping, protests, and more)
-- Live news feed (Bloomberg, Sky News, Euronews, DW, CNN, France 24, …)
-- Intelligence link graph
-- Live webcams (Iran, Mideast, Europe, Americas, Asia, Space)
-- Markets / commodities / finance panels
-- 80+ other panels from the panel registry
+- **World Situation Map** (Leaflet + OpenStreetMap) with toggleable layers:
+  conflicts, intel hotspots, military bases, maritime chokepoints, key cities
+- **Live News** from BBC, Al Jazeera, DW, AP, CNBC (tabbed, 5-min auto-refresh)
+- **Intel Feed** sourced from GDELT's global doc API
+- **Threat Level** — DEFCON-style indicator
+- **Active Conflicts** — curated list of ongoing state & non-state conflicts
+- **Markets** (commodities / equities / FX via Stooq: Gold, WTI, S&P, VIX, …)
+- **Crypto** (BTC, ETH, SOL, BNB, XRP, ADA, DOGE, TRX via CoinGecko)
+- **OSINT Sources** — 16 quick-launch tiles (Bellingcat, ACLED, Flightradar24,
+  MarineTraffic, Shodan, GreyNoise, ISW, GDELT, FIRMS, EMSC, …)
+- **OSINT Toolkit** — inline Domain, IP Geo, DNS, Subnet calculator
 
-Every panel is add/remove-able. The dashboard supports 7 layout modes
-(auto / 1- / 2- / 3- / 4-col / split / focus) and saved workspace presets,
-all driven by the existing OSINTworldview customization engine.
+Every panel is **add/remove-able** through the <kbd>+ Add panel</kbd> button;
+layout + map-layer state persist across sessions via `localStorage`. Ships
+with 5 one-click layout **presets** (Full OSINT / Geopolitical / Markets /
+Minimal / Analyst toolkit).
 
 Type a URL and it browses the web normally via Chromium.
 
 Built on **Electron** (bundled Chromium). Ships a branded Chrome
-user-agent (`… Chrome/… MonitorBrowser/1.0`) so servers serve it modern
+user-agent (`… Chrome/… MonitorBrowser/1.0`) so servers serve modern
 pages. No Rust toolchain required — if you have Node.js you can run it.
 
 ---
@@ -57,11 +62,34 @@ Monitor home dashboard.
 npm run build           # auto-detects host OS
 npm run build:win       # NSIS installer (.exe)
 npm run build:mac       # DMG
-npm run build:linux     # AppImage + .deb
+npm run build:linux     # AppImage + .deb + .rpm + .tar.gz
 ```
 
 Output goes to `monitor-browser/dist/`. Code-signing is **not** configured by
 default — see `package.json` → `build` to wire in certificates.
+
+### Linux install
+
+After `npm run build:linux`:
+
+```bash
+# AppImage (any distro) — single-file, no install
+chmod +x dist/Monitor\ Browser-*.AppImage
+./dist/Monitor\ Browser-*.AppImage
+
+# Debian / Ubuntu
+sudo apt install ./dist/monitor-browser_*.deb
+
+# Fedora / RHEL
+sudo dnf install ./dist/monitor-browser-*.rpm
+
+# Portable tarball
+tar -xzf dist/monitor-browser-*.tar.gz && cd monitor-browser-* && ./monitor-browser
+```
+
+The `.desktop` entry registers Monitor Browser under
+`Network → Security → Web Browser` in GNOME/KDE app menus. It shows up
+with the radar icon from `assets/icon.png`.
 
 ---
 
@@ -116,12 +144,15 @@ renderer that draws the tab strip + URL bar. Methods (`newTab`, `navigate`,
 `ipcMain` handlers in `main.js`. The main process broadcasts a `tabs:updated`
 snapshot after every state change so the renderer is purely reactive.
 
-**Homepage dashboard.** New tabs load `https://osintview.app/` — the real
-OSINTworldview dashboard. All panel / layer / layout customization is
-delivered by that app (panel registry, dashboard-layout service, saved
-presets), not re-implemented here. If the site is unreachable, the main
-process catches `did-fail-load` and swaps in a bundled offline page
-(`homepage/index.html`) that auto-retries every 15 seconds.
+**Homepage dashboard.** The new-tab page is a first-party dashboard at
+`homepage/index.html`, driven by `homepage.js`. A panel registry defines
+all available panels (map, news, intel, markets, crypto, threat level,
+conflicts, sources, toolkit). Users add/remove panels via the picker
+modal; the selection + map-layer toggles persist to `localStorage` under
+the key `monitor:dashboard:v2`. Live panels pull public OSINT APIs
+(BBC/AlJazeera/DW/AP RSS, GDELT, Stooq, CoinGecko, dns.google,
+ip-api.com) through the `intel:fetch` IPC proxy — origin-gated to
+`file://` senders so arbitrary websites you browse to can't abuse it.
 
 ---
 
@@ -156,8 +187,10 @@ monitor-browser/
 │   ├── index.html
 │   ├── chrome.css
 │   └── chrome.js
-└── homepage/                   offline-fallback new-tab page
-    └── index.html              (live homepage is https://osintview.app/)
+└── homepage/                   new-tab OSINT dashboard
+    ├── index.html              shell
+    ├── homepage.css            dashboard styling (grid, panels, map, modal)
+    └── homepage.js             panel registry, dashboard engine, all panels
 ```
 
 ---

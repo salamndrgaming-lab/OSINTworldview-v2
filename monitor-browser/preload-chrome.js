@@ -27,6 +27,17 @@ contextBridge.exposeInMainWorld('browser', {
 
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
 
+  // Settings
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
+  resetSettings: () => ipcRenderer.invoke('settings:reset'),
+  clearBrowsingData: () => ipcRenderer.invoke('settings:clear-data'),
+  onSettingsChanged: (handler) => {
+    const listener = (_e, payload) => { try { handler(payload); } catch (err) { console.error('[chrome] settings handler threw', err); } };
+    ipcRenderer.on('settings:changed', listener);
+    return () => ipcRenderer.off('settings:changed', listener);
+  },
+
   // Subscribe to tab list updates from the main process.
   onTabsUpdated: (handler) => {
     const listener = (_event, payload) => {

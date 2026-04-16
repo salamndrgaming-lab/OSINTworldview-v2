@@ -17,6 +17,42 @@
   const fetchIntel = hasApi
     ? (url) => window.monitorApi.fetchIntel(url)
     : () => Promise.reject(new Error('Intel proxy unavailable (preload missing)'));
+  const settingsApi = window.monitorApi && typeof window.monitorApi.getSettings === 'function'
+    ? window.monitorApi
+    : null;
+
+  // Search engines known to the browser; keep in sync with main.js.
+  const SEARCH_URLS = {
+    google:     'https://www.google.com/search?q=%s',
+    duckduckgo: 'https://duckduckgo.com/?q=%s',
+    brave:      'https://search.brave.com/search?q=%s',
+    startpage:  'https://www.startpage.com/do/search?q=%s',
+    bing:       'https://www.bing.com/search?q=%s',
+    kagi:       'https://kagi.com/search?q=%s',
+    ecosia:     'https://www.ecosia.org/search?q=%s',
+  };
+
+  /** Live mirror of the browser settings (theme, search engine, …). */
+  let browserSettings = { searchEngine: 'duckduckgo', theme: 'amber' };
+  function applyTheme(name) {
+    const valid = ['amber', 'cyber', 'palantir', 'crimson', 'mono'];
+    document.documentElement.dataset.theme = valid.includes(name) ? name : 'amber';
+  }
+  applyTheme('amber');
+  if (settingsApi) {
+    settingsApi.getSettings().then((payload) => {
+      if (payload && payload.settings) {
+        browserSettings = payload.settings;
+        applyTheme(browserSettings.theme);
+      }
+    }).catch(() => {});
+    if (typeof settingsApi.onSettingsChanged === 'function') {
+      settingsApi.onSettingsChanged((s) => {
+        browserSettings = s || browserSettings;
+        applyTheme(browserSettings.theme);
+      });
+    }
+  }
 
   function escapeHtml(str) {
     return String(str ?? '').replace(/[&<>"']/g, (c) => ({
@@ -115,9 +151,12 @@
       const v = searchInput.value.trim();
       if (!v) return;
       // Delegate to the browser chrome — navigate the current tab.
-      window.location.href = looksLikeUrl(v)
-        ? coerceUrl(v)
-        : 'https://www.google.com/search?q=' + encodeURIComponent(v);
+      if (looksLikeUrl(v)) {
+        window.location.href = coerceUrl(v);
+        return;
+      }
+      const tpl = SEARCH_URLS[browserSettings.searchEngine] || SEARCH_URLS.duckduckgo;
+      window.location.href = tpl.replace('%s', encodeURIComponent(v));
     });
   }
   function looksLikeUrl(v) {
@@ -921,11 +960,34 @@
         worldCopyJump: true,
       }).setView([25, 15], 2);
 
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 8,
-        minZoom: 2,
-        attribution: '&copy; OpenStreetMap contributors',
-      }).addTo(map);
+      // CartoDB dark basemap — no Referer policy issues, already styled dark.
+      // Subdomains a/b/c/d spread the load. Fallback to OpenStreetMap if
+      // Carto is unreachable (Referer hook in main.js covers OSM's policy).
+      const tilePrimary = L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        {
+          maxZoom: 10,
+          minZoom: 2,
+          subdomains: 'abcd',
+          attribution: '&copy; OpenStreetMap &copy; CARTO',
+        }
+      );
+      tilePrimary.on('tileerror', () => {
+        // One-shot fallback to OSM if Carto errors out.
+        if (!map.hasLayer(tileFallback)) {
+          map.removeLayer(tilePrimary);
+          tileFallback.addTo(map);
+        }
+      });
+      const tileFallback = L.tileLayer(
+        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {
+          maxZoom: 10,
+          minZoom: 2,
+          attribution: '&copy; OpenStreetMap contributors',
+        }
+      );
+      tilePrimary.addTo(map);
 
       const groups = {
         conflicts: L.layerGroup(),

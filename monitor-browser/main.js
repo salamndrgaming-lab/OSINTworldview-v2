@@ -27,6 +27,7 @@ const {
   session,
 } = require('electron');
 const path = require('node:path');
+const fs = require('node:fs');
 const { randomUUID } = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 
@@ -57,6 +58,100 @@ function isHomepageUrl(url) {
     /* not a URL */
   }
   return false;
+}
+
+// ---------------------------------------------------------------------------
+// Settings store
+// ---------------------------------------------------------------------------
+// Persisted to userData/settings.json. Changes broadcast to every webContents
+// so chrome + every tab can react (theme switch, search engine change, etc.).
+
+const SEARCH_ENGINES = {
+  google:      { label: 'Google',       url: 'https://www.google.com/search?q=%s' },
+  duckduckgo:  { label: 'DuckDuckGo',   url: 'https://duckduckgo.com/?q=%s' },
+  brave:       { label: 'Brave Search', url: 'https://search.brave.com/search?q=%s' },
+  startpage:   { label: 'Startpage',    url: 'https://www.startpage.com/do/search?q=%s' },
+  bing:        { label: 'Bing',         url: 'https://www.bing.com/search?q=%s' },
+  kagi:        { label: 'Kagi',         url: 'https://kagi.com/search?q=%s' },
+  ecosia:      { label: 'Ecosia',       url: 'https://www.ecosia.org/search?q=%s' },
+};
+
+const THEMES = {
+  amber:    { label: 'Amber OSINT',    accent: '#d4a843' },
+  cyber:    { label: 'Cyber Green',    accent: '#3aff8a' },
+  palantir: { label: 'Palantir Blue',  accent: '#4a90e2' },
+  crimson:  { label: 'Crimson Recon',  accent: '#ff4e4e' },
+  mono:     { label: 'Monochrome',     accent: '#e8e8f0' },
+};
+
+const DEFAULT_SETTINGS = {
+  searchEngine: 'duckduckgo',
+  theme: 'amber',
+  customHomepage: '',      // empty -> built-in Monitor Home
+  useCustomHomepage: false,
+  showBranding: true,      // false -> pure Chrome UA, no MonitorBrowser token
+};
+
+let settingsCache = null;
+
+function settingsPath() {
+  return path.join(app.getPath('userData'), 'settings.json');
+}
+
+function loadSettings() {
+  if (settingsCache) return settingsCache;
+  try {
+    const raw = fs.readFileSync(settingsPath(), 'utf8');
+    const parsed = JSON.parse(raw);
+    settingsCache = { ...DEFAULT_SETTINGS, ...parsed };
+  } catch {
+    settingsCache = { ...DEFAULT_SETTINGS };
+  }
+  return settingsCache;
+}
+
+function saveSettings(patch) {
+  const next = { ...loadSettings(), ...patch };
+  // Sanitize.
+  if (!SEARCH_ENGINES[next.searchEngine]) next.searchEngine = DEFAULT_SETTINGS.searchEngine;
+  if (!THEMES[next.theme]) next.theme = DEFAULT_SETTINGS.theme;
+  settingsCache = next;
+  try {
+    fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
+    fs.writeFileSync(settingsPath(), JSON.stringify(next, null, 2));
+  } catch (err) {
+    console.warn('[monitor] failed to persist settings', err);
+  }
+  broadcastSettings();
+  // UA depends on showBranding.
+  try {
+    applyBrandedUA();
+  } catch (err) {
+    console.warn('[monitor] failed to reapply UA', err);
+  }
+  return next;
+}
+
+function broadcastSettings() {
+  const payload = loadSettings();
+  // Chrome renderer.
+  if (chromeView && !chromeView.webContents.isDestroyed()) {
+    chromeView.webContents.send('settings:changed', payload);
+  }
+  // All tab contents (so homepage + open pages can retheme).
+  for (const [, tab] of tabs) {
+    try {
+      if (!tab.view.webContents.isDestroyed()) {
+        tab.view.webContents.send('settings:changed', payload);
+      }
+    } catch { /* ignore */ }
+  }
+}
+
+function getSearchUrl(query) {
+  const s = loadSettings();
+  const eng = SEARCH_ENGINES[s.searchEngine] || SEARCH_ENGINES.duckduckgo;
+  return eng.url.replace('%s', encodeURIComponent(query));
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +225,9 @@ function createWindow() {
 
   chromeView.webContents.once('did-finish-load', () => {
     mainWindow?.show();
-    newTab(HOMEPAGE_URL);
+    newTab(resolveHomepageUrl());
+    // Push initial settings to the chrome renderer.
+    try { chromeView.webContents.send('settings:changed', loadSettings()); } catch {}
   });
 
   // Surface chrome devtools on F12 / Ctrl+Shift+I in dev.
@@ -242,6 +339,11 @@ function wireTabEvents(id, tab) {
     broadcastTabs();
   });
 
+  // Fire initial settings push once the tab finishes loading.
+  wc.once('dom-ready', () => {
+    try { wc.send('settings:changed', loadSettings()); } catch {}
+  });
+
   wc.on('did-navigate-in-page', (_e, navUrl, isMainFrame) => {
     if (!isMainFrame) return;
     tab.url = navUrl;
@@ -319,7 +421,7 @@ function closeTab(id) {
       switchTab(tabOrder[nextIdx]);
     } else {
       activeTabId = null;
-      newTab(HOMEPAGE_URL);
+      newTab(resolveHomepageUrl());
     }
   } else {
     broadcastTabs();
@@ -339,9 +441,25 @@ function navigateActiveOr(id, rawUrl) {
 // URL handling
 // ---------------------------------------------------------------------------
 
+function resolveHomepageUrl() {
+  const s = loadSettings();
+  if (s.useCustomHomepage && s.customHomepage) {
+    try {
+      const u = new URL(s.customHomepage);
+      if (u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'file:') {
+        return u.toString();
+      }
+    } catch { /* fall through */ }
+  }
+  return HOMEPAGE_URL;
+}
+
 function normalizeUrl(raw) {
   const trimmed = String(raw ?? '').trim();
-  if (!trimmed) return HOMEPAGE_URL;
+  if (!trimmed) return resolveHomepageUrl();
+
+  // Special shortcut: "monitor:home" navigates to the built-in homepage.
+  if (/^monitor:\s*home$/i.test(trimmed)) return HOMEPAGE_URL;
 
   // Already-absolute URL.
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
@@ -356,8 +474,8 @@ function normalizeUrl(raw) {
   // Bare domain (has a dot, no whitespace, has a TLD-ish suffix).
   if (/^[^\s]+\.[a-z]{2,}(:\d+)?(\/.*)?$/i.test(trimmed)) return `https://${trimmed}`;
 
-  // Everything else becomes a Google search.
-  return `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`;
+  // Everything else becomes a search on the user-selected engine.
+  return getSearchUrl(trimmed);
 }
 
 function escapeHtml(str) {
@@ -423,7 +541,7 @@ function broadcastTabs() {
   });
 }
 
-ipcMain.handle('tab:new', (_e, url) => newTab(url || HOMEPAGE_URL));
+ipcMain.handle('tab:new', (_e, url) => newTab(url || resolveHomepageUrl()));
 ipcMain.handle('tab:close', (_e, id) => closeTab(id));
 ipcMain.handle('tab:switch', (_e, id) => switchTab(id));
 ipcMain.handle('tab:navigate', (_e, id, url) => navigateActiveOr(id, url));
@@ -457,7 +575,32 @@ ipcMain.handle('tab:stop', (_e, id) => {
 });
 
 ipcMain.handle('tab:home', (_e, id) => {
-  navigateActiveOr(id, HOMEPAGE_URL);
+  navigateActiveOr(id, resolveHomepageUrl());
+});
+
+// Settings IPC -----------------------------------------------------------
+ipcMain.handle('settings:get', () => ({
+  settings: loadSettings(),
+  searchEngines: Object.fromEntries(
+    Object.entries(SEARCH_ENGINES).map(([k, v]) => [k, { label: v.label }])
+  ),
+  themes: Object.fromEntries(
+    Object.entries(THEMES).map(([k, v]) => [k, { label: v.label, accent: v.accent }])
+  ),
+}));
+ipcMain.handle('settings:set', (_e, patch) => saveSettings(patch || {}));
+ipcMain.handle('settings:reset', () => saveSettings({ ...DEFAULT_SETTINGS }));
+ipcMain.handle('settings:clear-data', async () => {
+  try {
+    await session.defaultSession.clearCache();
+    await session.defaultSession.clearStorageData({
+      storages: ['cookies', 'localstorage', 'indexdb', 'filesystem', 'serviceworkers', 'shadercache', 'websql', 'cachestorage'],
+    });
+    return true;
+  } catch (err) {
+    console.warn('[monitor] clear-data failed', err);
+    return false;
+  }
 });
 
 ipcMain.handle('tab:devtools', (_e, id) => {
@@ -551,28 +694,48 @@ if (process.platform === 'win32') {
 
 /**
  * Build a branded user-agent. We keep the full Chrome UA (so servers continue
- * to serve modern web UIs) but strip Electron's fingerprint and append our
- * product token: `MonitorBrowser/1.0`.
+ * to serve modern web UIs) but strip Electron's fingerprint. When branding is
+ * enabled, append our product token `MonitorBrowser/1.0`; otherwise present
+ * as a stock Chromium UA.
  */
 function buildBrandedUA(baseUA) {
-  return baseUA
+  const clean = String(baseUA)
     .replace(/\s*Electron\/\S+/g, '')
     .replace(/\s*monitor-browser\/\S+/gi, '')
-    .trim()
-    + ' MonitorBrowser/1.0';
+    .replace(/\s*MonitorBrowser\/\S+/g, '')
+    .trim();
+  const s = loadSettings();
+  return s.showBranding ? clean + ' MonitorBrowser/1.0' : clean;
+}
+
+let baseUACache = null;
+function applyBrandedUA() {
+  try {
+    if (!baseUACache) baseUACache = session.defaultSession.getUserAgent();
+    const ua = buildBrandedUA(baseUACache);
+    session.defaultSession.setUserAgent(ua);
+  } catch (err) {
+    console.warn('[monitor] failed to set branded user-agent', err);
+  }
 }
 
 app.whenReady().then(() => {
-  // Rewrite the default session's user-agent so every tab (and the chrome
-  // renderer) presents as "Chrome … MonitorBrowser/1.0".
+  // Ensure settings are loaded so UA can honor showBranding.
+  loadSettings();
+
+  // Inject proper Referer for OSM tiles (OSM's tile policy requires a
+  // valid Referer; some upstream CDNs return 403 when it's missing).
   try {
-    const defaultSession = session.defaultSession;
-    const ua = buildBrandedUA(defaultSession.getUserAgent());
-    defaultSession.setUserAgent(ua);
+    const filter = { urls: ['https://*.tile.openstreetmap.org/*', 'https://tile.openstreetmap.org/*'] };
+    session.defaultSession.webRequest.onBeforeSendHeaders(filter, (details, cb) => {
+      const headers = { ...details.requestHeaders, Referer: 'https://www.openstreetmap.org/' };
+      cb({ requestHeaders: headers });
+    });
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn('[monitor] failed to set branded user-agent', err);
+    console.warn('[monitor] failed to register OSM referer hook', err);
   }
+
+  applyBrandedUA();
 
   createWindow();
   app.on('activate', () => {

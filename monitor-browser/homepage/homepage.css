@@ -594,9 +594,12 @@ html, body {
 }
 /* Leaflet overrides to match theme */
 .leaflet-container { background: #0a0a12 !important; }
-.leaflet-tile-pane {
-  filter: grayscale(0.85) brightness(0.55) contrast(1.1);
-}
+/* CartoDB dark tiles are pre-styled dark; keep a subtle tint per theme. */
+.leaflet-tile-pane { filter: saturate(0.9); }
+:root[data-theme='mono'] .leaflet-tile-pane { filter: saturate(0) brightness(1); }
+:root[data-theme='cyber'] .leaflet-tile-pane { filter: hue-rotate(75deg) saturate(1.2); }
+:root[data-theme='palantir'] .leaflet-tile-pane { filter: hue-rotate(-20deg) saturate(1.1); }
+:root[data-theme='crimson'] .leaflet-tile-pane { filter: hue-rotate(160deg) saturate(1.1); }
 .leaflet-control-attribution {
   background: rgba(14, 14, 20, 0.8) !important;
   color: var(--text-tertiary) !important;

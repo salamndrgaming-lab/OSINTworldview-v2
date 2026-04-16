@@ -11,4 +11,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('monitorApi', {
   fetchIntel: (url) => ipcRenderer.invoke('intel:fetch', url),
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
+  onSettingsChanged: (handler) => {
+    const listener = (_e, payload) => { try { handler(payload); } catch (err) { console.error('[monitor] settings handler threw', err); } };
+    ipcRenderer.on('settings:changed', listener);
+    return () => ipcRenderer.off('settings:changed', listener);
+  },
 });

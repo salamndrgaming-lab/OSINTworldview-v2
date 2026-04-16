@@ -17,6 +17,42 @@
   const fetchIntel = hasApi
     ? (url) => window.monitorApi.fetchIntel(url)
     : () => Promise.reject(new Error('Intel proxy unavailable (preload missing)'));
+  const settingsApi = window.monitorApi && typeof window.monitorApi.getSettings === 'function'
+    ? window.monitorApi
+    : null;
+
+  // Search engines known to the browser; keep in sync with main.js.
+  const SEARCH_URLS = {
+    google:     'https://www.google.com/search?q=%s',
+    duckduckgo: 'https://duckduckgo.com/?q=%s',
+    brave:      'https://search.brave.com/search?q=%s',
+    startpage:  'https://www.startpage.com/do/search?q=%s',
+    bing:       'https://www.bing.com/search?q=%s',
+    kagi:       'https://kagi.com/search?q=%s',
+    ecosia:     'https://www.ecosia.org/search?q=%s',
+  };
+
+  /** Live mirror of the browser settings (theme, search engine, …). */
+  let browserSettings = { searchEngine: 'duckduckgo', theme: 'amber' };
+  function applyTheme(name) {
+    const valid = ['amber', 'cyber', 'palantir', 'crimson', 'mono'];
+    document.documentElement.dataset.theme = valid.includes(name) ? name : 'amber';
+  }
+  applyTheme('amber');
+  if (settingsApi) {
+    settingsApi.getSettings().then((payload) => {
+      if (payload && payload.settings) {
+        browserSettings = payload.settings;
+        applyTheme(browserSettings.theme);
+      }
+    }).catch(() => {});
+    if (typeof settingsApi.onSettingsChanged === 'function') {
+      settingsApi.onSettingsChanged((s) => {
+        browserSettings = s || browserSettings;
+        applyTheme(browserSettings.theme);
+      });
+    }
+  }
 
   function escapeHtml(str) {
     return String(str ?? '').replace(/[&<>"']/g, (c) => ({
@@ -41,11 +77,26 @@
   const DEFAULT_STATE = {
     panels: DEFAULT_PANELS.slice(),
     mapLayers: {
+      // Security
       conflicts: true,
       threats: true,
       bases: false,
+      cyber: false,
+      nuclear: false,
+      spaceports: false,
+      // Infrastructure
+      cables: false,
+      pipelines: false,
       chokepoints: true,
+      ports: false,
+      airports: false,
+      // Economic
+      financial: false,
+      minerals: false,
+      trade: false,
       cities: false,
+      // Live
+      quakes: true,
     },
     newsSource: 'bbc',
   };
@@ -115,9 +166,12 @@
       const v = searchInput.value.trim();
       if (!v) return;
       // Delegate to the browser chrome — navigate the current tab.
-      window.location.href = looksLikeUrl(v)
-        ? coerceUrl(v)
-        : 'https://www.google.com/search?q=' + encodeURIComponent(v);
+      if (looksLikeUrl(v)) {
+        window.location.href = coerceUrl(v);
+        return;
+      }
+      const tpl = SEARCH_URLS[browserSettings.searchEngine] || SEARCH_URLS.duckduckgo;
+      window.location.href = tpl.replace('%s', encodeURIComponent(v));
     });
   }
   function looksLikeUrl(v) {
@@ -819,11 +873,26 @@
   // --------------------------------------------------------------------------
 
   const MAP_LAYERS_DEF = [
-    { id: 'conflicts',   label: 'Conflicts',       color: '#ff4e4e' },
-    { id: 'threats',     label: 'Intel hotspots',  color: '#e8a23a' },
-    { id: 'bases',       label: 'Military bases',  color: '#3aa9d8' },
-    { id: 'chokepoints', label: 'Chokepoints',     color: '#d4a843' },
-    { id: 'cities',      label: 'Key cities',      color: '#a0c8ff' },
+    // Security / kinetic
+    { id: 'conflicts',   label: 'Conflicts',        color: '#ff4e4e', group: 'Security' },
+    { id: 'threats',     label: 'Intel hotspots',   color: '#e8a23a', group: 'Security' },
+    { id: 'bases',       label: 'Military bases',   color: '#3aa9d8', group: 'Security' },
+    { id: 'cyber',       label: 'Cyber actors',     color: '#ff66cc', group: 'Security' },
+    { id: 'nuclear',     label: 'Nuclear facilities', color: '#7dd3fc', group: 'Security' },
+    { id: 'spaceports',  label: 'Spaceports',       color: '#c4b5fd', group: 'Security' },
+    // Infrastructure
+    { id: 'cables',      label: 'Undersea cables',  color: '#38bdf8', group: 'Infrastructure' },
+    { id: 'pipelines',   label: 'Pipelines',        color: '#fb923c', group: 'Infrastructure' },
+    { id: 'chokepoints', label: 'Chokepoints',      color: '#d4a843', group: 'Infrastructure' },
+    { id: 'ports',       label: 'Commercial ports', color: '#34d399', group: 'Infrastructure' },
+    { id: 'airports',    label: 'Major airports',   color: '#e5e7eb', group: 'Infrastructure' },
+    // Economic
+    { id: 'financial',   label: 'Financial centers', color: '#a7f3d0', group: 'Economic' },
+    { id: 'minerals',    label: 'Critical minerals', color: '#bef264', group: 'Economic' },
+    { id: 'trade',       label: 'Trade routes',     color: '#94a3b8', group: 'Economic' },
+    { id: 'cities',      label: 'Key cities',       color: '#a0c8ff', group: 'Economic' },
+    // Live feeds
+    { id: 'quakes',      label: 'Earthquakes (24h)', color: '#f97316', group: 'Live', live: true },
   ];
 
   const THREAT_HOTSPOTS = [
@@ -884,6 +953,186 @@
     { lat: -26.20, lng: 28.04, name: 'Johannesburg' },
   ];
 
+  const NUCLEAR_FACILITIES = [
+    { lat: 51.38, lng: 30.10, name: 'Chernobyl (decommissioned)' },
+    { lat: 37.42, lng: 141.03, name: 'Fukushima Daiichi' },
+    { lat: 47.82, lng: 35.56, name: 'Zaporizhzhia NPP (UA)' },
+    { lat: 35.14, lng: 129.29, name: 'Kori (KR)' },
+    { lat: 33.24, lng: -81.67, name: 'Savannah River (US)' },
+    { lat: 31.92, lng: 34.80, name: 'Soreq (IL)' },
+    { lat: 32.59, lng: 51.57, name: 'Natanz (IR)' },
+    { lat: 34.38, lng: 50.88, name: 'Fordow (IR)' },
+    { lat: 29.56, lng: 52.51, name: 'Bushehr (IR)' },
+    { lat: 40.43, lng: 124.75, name: 'Yongbyon (DPRK)' },
+    { lat: 33.67, lng: 73.35, name: 'Kahuta (PK)' },
+    { lat: 21.23, lng: 81.38, name: 'Kudankulam (IN)' },
+    { lat: 43.49, lng: 84.93, name: 'Lop Nur test site (CN)' },
+    { lat: 48.46, lng: 30.55, name: 'Yuzhnoukrayinsk (UA)' },
+    { lat: 51.27, lng: 30.22, name: 'Rivne NPP (UA)' },
+  ];
+
+  const SPACEPORTS = [
+    { lat: 28.57, lng: -80.65, name: 'Kennedy Space Center' },
+    { lat: 34.76, lng: -120.50, name: 'Vandenberg SFB' },
+    { lat: 25.98, lng: -97.18, name: 'Starbase (Boca Chica)' },
+    { lat: 5.24, lng: -52.77, name: 'Kourou (ESA)' },
+    { lat: 45.96, lng: 63.31, name: 'Baikonur' },
+    { lat: 62.93, lng: 40.58, name: 'Plesetsk' },
+    { lat: 51.88, lng: 128.33, name: 'Vostochny' },
+    { lat: 40.96, lng: 100.28, name: 'Jiuquan (CN)' },
+    { lat: 28.25, lng: 102.03, name: 'Xichang (CN)' },
+    { lat: 19.61, lng: 110.95, name: 'Wenchang (CN)' },
+    { lat: 13.73, lng: 80.24, name: 'Satish Dhawan (IN)' },
+    { lat: 30.40, lng: 130.97, name: 'Tanegashima (JP)' },
+    { lat: 39.66, lng: 124.71, name: 'Sohae (DPRK)' },
+    { lat: 38.43, lng: 34.82, name: 'Sinop (TR, planned)' },
+    { lat: -29.04, lng: 115.35, name: 'Whalers Way (AU)' },
+  ];
+
+  const CYBER_HUBS = [
+    { lat: 39.91, lng: 116.40, name: 'APT1 / Unit 61398 (Shanghai)' },
+    { lat: 31.23, lng: 121.47, name: 'Pudong — APT41' },
+    { lat: 55.75, lng: 37.62, name: 'GRU Unit 26165 (Moscow)' },
+    { lat: 59.93, lng: 30.33, name: 'APT28 ops (St. Petersburg)' },
+    { lat: 39.03, lng: 125.75, name: 'Lazarus Group (Pyongyang)' },
+    { lat: 35.70, lng: 51.33, name: 'APT33 / Elfin (Tehran)' },
+    { lat: 32.82, lng: 35.00, name: 'Unit 8200 (Glilot)' },
+    { lat: 39.11, lng: -76.77, name: 'NSA (Fort Meade)' },
+    { lat: 51.90, lng: -2.12, name: 'GCHQ (Cheltenham)' },
+    { lat: 45.42, lng: -75.69, name: 'CSE (Ottawa)' },
+    { lat: 50.06, lng: 19.94, name: 'APT group (Kraków)' },
+    { lat: 23.13, lng: 113.26, name: 'Guangzhou MSS' },
+    { lat: 12.97, lng: 77.59, name: 'APT IN (Bangalore)' },
+    { lat: 14.60, lng: 120.98, name: 'Pawn Storm nodes (Manila)' },
+  ];
+
+  const UNDERSEA_CABLES = [
+    // Transatlantic
+    { name: 'MAREA (US-ES)',     path: [[37.08, -76.48], [43.42, -8.40]] },
+    { name: 'Dunant (US-FR)',    path: [[36.63, -75.97], [46.37, -1.75]] },
+    { name: 'Grace Hopper (US-UK-ES)', path: [[40.47, -74.00], [50.21, -5.29], [43.42, -8.40]] },
+    { name: 'Amitié (US-FR)',    path: [[41.28, -71.10], [48.93, -2.39]] },
+    // Transpacific
+    { name: 'JUPITER (US-JP-PH)', path: [[33.58, -118.29], [34.74, 139.35], [15.00, 120.64]] },
+    { name: 'PLCN (US-PH/TW)',   path: [[33.58, -118.29], [24.80, 121.85]] },
+    { name: 'FASTER (US-JP)',    path: [[43.35, -124.33], [35.45, 139.87]] },
+    { name: 'SEA-US (US-ID-PH)', path: [[21.34, -157.97], [1.30, 125.17], [14.60, 120.98]] },
+    // Asia / Middle East
+    { name: 'SEA-ME-WE 6',       path: [[1.35, 103.82], [12.93, 77.62], [24.47, 54.37], [31.20, 29.92], [43.42, -8.40]] },
+    { name: 'AAE-1',             path: [[22.31, 114.17], [1.35, 103.82], [13.08, 80.28], [24.47, 54.37], [31.20, 29.92], [45.46, 12.33]] },
+    { name: '2Africa',           path: [[51.51, -0.13], [36.75, -3.01], [6.45, 3.39], [-33.91, 18.42], [-4.04, 39.67], [24.47, 54.37], [1.35, 103.82]] },
+    // Americas / Africa
+    { name: 'Equiano',           path: [[38.72, -9.15], [6.45, 3.39], [-8.83, 13.23], [-33.91, 18.42]] },
+    { name: 'BRUSA (US-BR)',     path: [[32.36, -64.70], [-23.00, -43.18]] },
+  ];
+
+  const PIPELINES = [
+    { name: 'Nord Stream 1',           path: [[60.20, 28.40], [54.80, 18.50], [54.08, 13.75]] },
+    { name: 'TurkStream',              path: [[45.00, 38.00], [41.58, 28.00]] },
+    { name: 'Power of Siberia',        path: [[59.00, 113.00], [52.00, 124.00], [42.94, 129.70]] },
+    { name: 'Yamal-Europe',            path: [[66.00, 69.00], [52.23, 21.01], [52.52, 13.40]] },
+    { name: 'Druzhba',                 path: [[52.75, 52.75], [52.00, 33.00], [50.07, 14.43]] },
+    { name: 'Trans-Mediterranean',     path: [[31.50, 10.00], [37.50, 13.00], [45.46, 12.33]] },
+    { name: 'MEDGAZ (DZ-ES)',          path: [[36.13, -0.10], [36.72, -2.45]] },
+    { name: 'EastMed (planned)',       path: [[31.80, 34.20], [35.15, 33.40], [40.63, 22.96]] },
+    { name: 'Keystone XL (canceled)',  path: [[54.00, -110.00], [40.00, -96.00], [29.75, -95.37]] },
+    { name: 'Trans-Alaska',            path: [[70.26, -148.64], [61.13, -146.36]] },
+    { name: 'Dakota Access',           path: [[48.00, -103.00], [38.70, -90.60]] },
+    { name: 'BTC (Baku-Ceyhan)',       path: [[40.38, 49.85], [40.60, 43.00], [36.83, 35.68]] },
+    { name: 'TAPI (planned)',          path: [[37.15, 62.35], [31.57, 65.75], [29.83, 68.37], [28.61, 77.20]] },
+  ];
+
+  const COMMERCIAL_PORTS = [
+    { lat: 31.22, lng: 121.47, name: 'Shanghai' },
+    { lat: 22.55, lng: 114.10, name: 'Shenzhen' },
+    { lat: 29.87, lng: 121.55, name: 'Ningbo-Zhoushan' },
+    { lat: 1.27,  lng: 103.85, name: 'Singapore' },
+    { lat: 35.10, lng: 129.04, name: 'Busan' },
+    { lat: 22.31, lng: 114.17, name: 'Hong Kong' },
+    { lat: 24.47, lng: 118.08, name: 'Xiamen' },
+    { lat: 25.22, lng: 55.29,  name: 'Jebel Ali (UAE)' },
+    { lat: 51.95, lng: 4.14,   name: 'Rotterdam' },
+    { lat: 51.26, lng: 4.40,   name: 'Antwerp' },
+    { lat: 53.54, lng: 9.98,   name: 'Hamburg' },
+    { lat: 43.11, lng: 5.93,   name: 'Marseille' },
+    { lat: 40.65, lng: -74.04, name: 'New York/NJ' },
+    { lat: 33.73, lng: -118.26, name: 'Los Angeles' },
+    { lat: -23.96, lng: -46.33, name: 'Santos (BR)' },
+    { lat: -33.91, lng: 18.42, name: 'Cape Town' },
+    { lat: 6.45, lng: 3.39,    name: 'Lagos / Apapa' },
+    { lat: 30.05, lng: 31.24,  name: 'Damietta / Port Said' },
+    { lat: -33.86, lng: 151.21, name: 'Sydney / Port Botany' },
+  ];
+
+  const MAJOR_AIRPORTS = [
+    { lat: 33.94, lng: -118.41, name: 'LAX — Los Angeles' },
+    { lat: 40.64, lng: -73.78, name: 'JFK — New York' },
+    { lat: 33.64, lng: -84.43, name: 'ATL — Atlanta' },
+    { lat: 51.47, lng: -0.45, name: 'LHR — London Heathrow' },
+    { lat: 49.01, lng: 2.55, name: 'CDG — Paris CDG' },
+    { lat: 50.03, lng: 8.56, name: 'FRA — Frankfurt' },
+    { lat: 52.31, lng: 4.76, name: 'AMS — Amsterdam' },
+    { lat: 25.25, lng: 55.36, name: 'DXB — Dubai' },
+    { lat: 25.26, lng: 51.56, name: 'DOH — Doha' },
+    { lat: 41.28, lng: 28.74, name: 'IST — Istanbul' },
+    { lat: 22.31, lng: 113.92, name: 'HKG — Hong Kong' },
+    { lat: 31.14, lng: 121.81, name: 'PVG — Shanghai' },
+    { lat: 40.08, lng: 116.58, name: 'PEK — Beijing Capital' },
+    { lat: 37.46, lng: 126.44, name: 'ICN — Incheon' },
+    { lat: 35.55, lng: 139.78, name: 'HND — Tokyo Haneda' },
+    { lat: 1.35, lng: 103.99, name: 'SIN — Singapore' },
+    { lat: 28.56, lng: 77.10, name: 'DEL — Delhi' },
+    { lat: -33.94, lng: 151.17, name: 'SYD — Sydney' },
+    { lat: -23.43, lng: -46.48, name: 'GRU — São Paulo' },
+    { lat: 19.44, lng: -99.07, name: 'MEX — Mexico City' },
+  ];
+
+  const FINANCIAL_CENTERS = [
+    { lat: 40.71, lng: -74.01, name: 'New York — NYSE/NASDAQ' },
+    { lat: 51.51, lng: -0.09,  name: 'London — City of London' },
+    { lat: 22.28, lng: 114.16, name: 'Hong Kong' },
+    { lat: 1.28,  lng: 103.85, name: 'Singapore' },
+    { lat: 35.68, lng: 139.77, name: 'Tokyo' },
+    { lat: 31.23, lng: 121.47, name: 'Shanghai' },
+    { lat: 47.37, lng: 8.54,   name: 'Zurich' },
+    { lat: 50.11, lng: 8.68,   name: 'Frankfurt' },
+    { lat: 41.90, lng: -87.63, name: 'Chicago (CME)' },
+    { lat: 37.79, lng: -122.40, name: 'San Francisco' },
+    { lat: 43.65, lng: -79.38, name: 'Toronto' },
+    { lat: 25.20, lng: 55.27,  name: 'Dubai (DIFC)' },
+    { lat: 19.07, lng: 72.88,  name: 'Mumbai (BSE)' },
+    { lat: 39.90, lng: 116.40, name: 'Beijing' },
+    { lat: 48.86, lng: 2.35,   name: 'Paris' },
+  ];
+
+  const CRITICAL_MINERALS = [
+    { lat: -21.50, lng: 26.50, name: 'Botswana — diamonds' },
+    { lat: -11.66, lng: 27.48, name: 'DRC — cobalt/copper (Kolwezi)' },
+    { lat: 40.88, lng: 113.18, name: 'China — rare earths (Baotou)' },
+    { lat: -23.70, lng: 133.88, name: 'Australia — lithium/rare earths' },
+    { lat: -22.91, lng: -43.17, name: 'Brazil — niobium (CBMM)' },
+    { lat: -24.66, lng: -69.33, name: 'Chile — lithium (Salar de Atacama)' },
+    { lat: -19.00, lng: -65.26, name: 'Bolivia — lithium (Uyuni)' },
+    { lat: 32.30, lng: -90.18, name: 'US — rare earths (Mountain Pass)' },
+    { lat: 67.85, lng: 20.23,  name: 'Sweden — iron (Kiruna)' },
+    { lat: -2.00, lng: 138.00, name: 'Indonesia — nickel (Halmahera)' },
+    { lat: 7.53,  lng: 134.58, name: 'Palau — seabed nodules' },
+    { lat: 22.78, lng: 5.52,   name: 'Algeria — natural gas' },
+    { lat: -25.66, lng: 116.75, name: 'WA — iron ore (Pilbara)' },
+    { lat: 52.27, lng: -113.81, name: 'Canada — oil sands (Alberta)' },
+  ];
+
+  // Great-circle paths between major ports/chokepoints to illustrate trade.
+  const TRADE_ROUTES = [
+    { name: 'Asia–Europe (Suez)',     path: [[31.22, 121.47], [1.35, 103.82], [11.59, 43.15], [30.00, 32.58], [45.46, 12.33], [51.95, 4.14]] },
+    { name: 'Trans-Pacific',          path: [[31.22, 121.47], [21.30, -157.86], [33.73, -118.26]] },
+    { name: 'Cape Route',             path: [[1.35, 103.82], [-33.91, 18.42], [51.95, 4.14]] },
+    { name: 'North Atlantic',         path: [[40.65, -74.04], [51.51, -0.13]] },
+    { name: 'Arctic (NSR)',           path: [[31.22, 121.47], [50.00, 180], [72.00, 60.00], [69.00, 33.40], [51.95, 4.14]] },
+    { name: 'Panama Canal',           path: [[33.73, -118.26], [9.08, -79.68], [40.65, -74.04]] },
+    { name: 'Hormuz oil route',       path: [[26.57, 56.25], [12.58, 43.33], [30.00, 32.58], [45.46, 12.33]] },
+  ];
+
   PANELS.map = {
     title: 'World Situation Map',
     icon: '&#9673;',
@@ -901,18 +1150,30 @@
       body.innerHTML =
         '<div class="map-wrap">' +
         '  <div id="' + mapId + '" class="map-canvas"></div>' +
-        '  <div class="map-layers"><h4>Layers</h4></div>' +
+        '  <div class="map-layers"></div>' +
         '</div>';
 
+      // Render grouped legend so the 15+ layers stay scannable.
       const layersBox = body.querySelector('.map-layers');
-      for (const def of MAP_LAYERS_DEF) {
-        const row = document.createElement('label');
-        row.innerHTML =
-          '<input type="checkbox" data-layer="' + def.id + '" ' +
-          (state.mapLayers[def.id] ? 'checked' : '') + ' />' +
-          '<span class="layer-swatch" style="background:' + def.color + '"></span>' +
-          '<span>' + escapeHtml(def.label) + '</span>';
-        layersBox.appendChild(row);
+      const grouped = MAP_LAYERS_DEF.reduce((acc, def) => {
+        (acc[def.group || 'Layers'] = acc[def.group || 'Layers'] || []).push(def);
+        return acc;
+      }, {});
+      for (const [group, defs] of Object.entries(grouped)) {
+        const section = document.createElement('div');
+        section.className = 'map-layer-group';
+        section.innerHTML = '<h4>' + escapeHtml(group) + '</h4>';
+        for (const def of defs) {
+          const row = document.createElement('label');
+          row.innerHTML =
+            '<input type="checkbox" data-layer="' + def.id + '" ' +
+            (state.mapLayers[def.id] ? 'checked' : '') + ' />' +
+            '<span class="layer-swatch" style="background:' + def.color + '"></span>' +
+            '<span>' + escapeHtml(def.label) + '</span>' +
+            (def.live ? '<span class="layer-live">LIVE</span>' : '');
+          section.appendChild(row);
+        }
+        layersBox.appendChild(section);
       }
 
       const map = L.map(mapId, {
@@ -921,53 +1182,149 @@
         worldCopyJump: true,
       }).setView([25, 15], 2);
 
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 8,
-        minZoom: 2,
-        attribution: '&copy; OpenStreetMap contributors',
-      }).addTo(map);
+      // CartoDB dark basemap — no Referer policy issues, already styled dark.
+      // Subdomains a/b/c/d spread the load. Fallback to OpenStreetMap if
+      // Carto is unreachable (Referer hook in main.js covers OSM's policy).
+      const tilePrimary = L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        {
+          maxZoom: 10,
+          minZoom: 2,
+          subdomains: 'abcd',
+          attribution: '&copy; OpenStreetMap &copy; CARTO',
+        }
+      );
+      tilePrimary.on('tileerror', () => {
+        // One-shot fallback to OSM if Carto errors out.
+        if (!map.hasLayer(tileFallback)) {
+          map.removeLayer(tilePrimary);
+          tileFallback.addTo(map);
+        }
+      });
+      const tileFallback = L.tileLayer(
+        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {
+          maxZoom: 10,
+          minZoom: 2,
+          attribution: '&copy; OpenStreetMap contributors',
+        }
+      );
+      tilePrimary.addTo(map);
 
-      const groups = {
-        conflicts: L.layerGroup(),
-        threats: L.layerGroup(),
-        bases: L.layerGroup(),
-        chokepoints: L.layerGroup(),
-        cities: L.layerGroup(),
+      const groups = {};
+      for (const def of MAP_LAYERS_DEF) groups[def.id] = L.layerGroup();
+
+      const marker = (lat, lng, color, radius, popup, opts) => {
+        return L.circleMarker([lat, lng], Object.assign({
+          radius, color, fillColor: color, fillOpacity: 0.45, weight: 1.5,
+        }, opts || {})).bindPopup(popup);
+      };
+      const line = (coords, color, popup, weight) => {
+        return L.polyline(coords, {
+          color, weight: weight || 2, opacity: 0.7, smoothFactor: 1.5,
+        }).bindPopup(popup);
       };
 
       for (const c of CONFLICTS) {
         const radius = c.sev === 'crit' ? 10 : c.sev === 'high' ? 8 : c.sev === 'med' ? 6 : 4;
-        L.circleMarker([c.lat, c.lng], {
-          radius,
-          color: '#ff4e4e',
-          fillColor: '#ff4e4e',
-          fillOpacity: 0.45,
-          weight: 1.5,
-        }).bindPopup('<b>' + escapeHtml(c.name) + '</b><br>' + escapeHtml(c.region) +
-                     ' &middot; severity ' + c.sev.toUpperCase())
-          .addTo(groups.conflicts);
+        marker(c.lat, c.lng, '#ff4e4e', radius,
+          '<b>' + escapeHtml(c.name) + '</b><br>' + escapeHtml(c.region) +
+          ' &middot; severity ' + c.sev.toUpperCase()).addTo(groups.conflicts);
       }
       for (const t of THREAT_HOTSPOTS) {
-        L.circleMarker([t.lat, t.lng], {
-          radius: 6, color: '#e8a23a', fillColor: '#e8a23a', fillOpacity: 0.35, weight: 1.5,
-        }).bindPopup('<b>' + escapeHtml(t.name) + '</b>').addTo(groups.threats);
+        marker(t.lat, t.lng, '#e8a23a', 6, '<b>' + escapeHtml(t.name) + '</b>',
+          { fillOpacity: 0.35 }).addTo(groups.threats);
       }
       for (const b of MILITARY_BASES) {
-        L.circleMarker([b.lat, b.lng], {
-          radius: 5, color: '#3aa9d8', fillColor: '#3aa9d8', fillOpacity: 0.35, weight: 1.5,
-        }).bindPopup('<b>' + escapeHtml(b.name) + '</b>').addTo(groups.bases);
+        marker(b.lat, b.lng, '#3aa9d8', 5, '<b>' + escapeHtml(b.name) + '</b>',
+          { fillOpacity: 0.35 }).addTo(groups.bases);
+      }
+      for (const n of NUCLEAR_FACILITIES) {
+        marker(n.lat, n.lng, '#7dd3fc', 6,
+          '<b>' + escapeHtml(n.name) + '</b><br>nuclear facility',
+          { fillOpacity: 0.5 }).addTo(groups.nuclear);
+      }
+      for (const s of SPACEPORTS) {
+        marker(s.lat, s.lng, '#c4b5fd', 6,
+          '<b>' + escapeHtml(s.name) + '</b><br>spaceport',
+          { fillOpacity: 0.5 }).addTo(groups.spaceports);
+      }
+      for (const c of CYBER_HUBS) {
+        marker(c.lat, c.lng, '#ff66cc', 5,
+          '<b>' + escapeHtml(c.name) + '</b><br>cyber threat actor',
+          { fillOpacity: 0.35 }).addTo(groups.cyber);
       }
       for (const cp of CHOKEPOINTS) {
-        L.circleMarker([cp.lat, cp.lng], {
-          radius: 7, color: '#d4a843', fillColor: '#d4a843', fillOpacity: 0.45, weight: 2,
-        }).bindPopup('<b>' + escapeHtml(cp.name) + '</b><br>maritime chokepoint')
-          .addTo(groups.chokepoints);
+        marker(cp.lat, cp.lng, '#d4a843', 7,
+          '<b>' + escapeHtml(cp.name) + '</b><br>maritime chokepoint').addTo(groups.chokepoints);
+      }
+      for (const p of COMMERCIAL_PORTS) {
+        marker(p.lat, p.lng, '#34d399', 4,
+          '<b>' + escapeHtml(p.name) + '</b><br>commercial port',
+          { fillOpacity: 0.5 }).addTo(groups.ports);
+      }
+      for (const a of MAJOR_AIRPORTS) {
+        marker(a.lat, a.lng, '#e5e7eb', 3,
+          '<b>' + escapeHtml(a.name) + '</b>',
+          { fillOpacity: 0.7 }).addTo(groups.airports);
+      }
+      for (const f of FINANCIAL_CENTERS) {
+        marker(f.lat, f.lng, '#a7f3d0', 5,
+          '<b>' + escapeHtml(f.name) + '</b><br>financial hub',
+          { fillOpacity: 0.45 }).addTo(groups.financial);
+      }
+      for (const m of CRITICAL_MINERALS) {
+        marker(m.lat, m.lng, '#bef264', 5,
+          '<b>' + escapeHtml(m.name) + '</b>',
+          { fillOpacity: 0.45 }).addTo(groups.minerals);
       }
       for (const city of KEY_CITIES) {
-        L.circleMarker([city.lat, city.lng], {
-          radius: 3, color: '#a0c8ff', fillColor: '#a0c8ff', fillOpacity: 0.6, weight: 1,
-        }).bindPopup('<b>' + escapeHtml(city.name) + '</b>').addTo(groups.cities);
+        marker(city.lat, city.lng, '#a0c8ff', 3,
+          '<b>' + escapeHtml(city.name) + '</b>',
+          { fillOpacity: 0.6 }).addTo(groups.cities);
       }
+
+      for (const cable of UNDERSEA_CABLES) {
+        line(cable.path, '#38bdf8',
+          '<b>' + escapeHtml(cable.name) + '</b><br>undersea cable', 2)
+          .addTo(groups.cables);
+      }
+      for (const p of PIPELINES) {
+        line(p.path, '#fb923c',
+          '<b>' + escapeHtml(p.name) + '</b><br>oil / gas pipeline', 2.5)
+          .addTo(groups.pipelines);
+      }
+      for (const tr of TRADE_ROUTES) {
+        line(tr.path, '#94a3b8',
+          '<b>' + escapeHtml(tr.name) + '</b><br>trade route', 1.5)
+          .addTo(groups.trade);
+      }
+
+      // Live: USGS earthquakes (past 24h, M2.5+). Fetched through
+      // the origin-gated intel proxy; re-fetches every 10 min.
+      let quakesTimer = null;
+      function loadQuakes() {
+        groups.quakes.clearLayers();
+        fetchIntel('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson')
+          .then((text) => {
+            const data = JSON.parse(text);
+            for (const f of (data.features || [])) {
+              const [lng, lat] = f.geometry?.coordinates || [];
+              if (typeof lat !== 'number' || typeof lng !== 'number') continue;
+              const mag = f.properties?.mag ?? 0;
+              const r = Math.max(4, Math.min(14, mag * 2.2));
+              marker(lat, lng, '#f97316', r,
+                '<b>M' + mag.toFixed(1) + '</b><br>' + escapeHtml(f.properties?.place || '') +
+                '<br><small>' + new Date(f.properties?.time || 0).toISOString().slice(0, 16).replace('T', ' ') + ' UTC</small>',
+                { fillOpacity: 0.3 }).addTo(groups.quakes);
+            }
+          })
+          .catch((err) => {
+            console.warn('[map] quake feed failed', err);
+          });
+      }
+      loadQuakes();
+      quakesTimer = setInterval(loadQuakes, 10 * 60 * 1000);
 
       // Apply persisted layer state
       for (const def of MAP_LAYERS_DEF) {
@@ -991,6 +1348,7 @@
       ro.observe(body);
 
       return () => {
+        if (quakesTimer) clearInterval(quakesTimer);
         ro.disconnect();
         map.remove();
       };

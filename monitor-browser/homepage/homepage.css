@@ -27,6 +27,35 @@
   --easing-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* ---------- Theme overrides ---------- */
+:root[data-theme='cyber'] {
+  --intel-accent: #3aff8a;
+  --intel-accent-dim: #1a9950;
+  --intel-accent-glow: rgba(58, 255, 138, 0.15);
+  --surface-hover: rgba(58, 255, 138, 0.08);
+  --text-success: #3aff8a;
+}
+:root[data-theme='palantir'] {
+  --intel-accent: #4a90e2;
+  --intel-accent-dim: #2b6cb5;
+  --intel-accent-glow: rgba(74, 144, 226, 0.15);
+  --surface-hover: rgba(74, 144, 226, 0.08);
+  --text-data: #93c5fd;
+}
+:root[data-theme='crimson'] {
+  --intel-accent: #ff4e4e;
+  --intel-accent-dim: #b33636;
+  --intel-accent-glow: rgba(255, 78, 78, 0.15);
+  --surface-hover: rgba(255, 78, 78, 0.08);
+}
+:root[data-theme='mono'] {
+  --intel-accent: #e8e8f0;
+  --intel-accent-dim: #a0a0b0;
+  --intel-accent-glow: rgba(232, 232, 240, 0.1);
+  --surface-hover: rgba(232, 232, 240, 0.06);
+  --text-data: #c0c0d0;
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body {
@@ -52,7 +81,7 @@ html, body {
   justify-content: center;
 }
 .radar-bg svg { width: min(90vh, 90vw); height: min(90vh, 90vw); }
-.radar-ring { fill: none; stroke: rgba(212, 168, 67, 0.14); stroke-width: 1; }
+.radar-ring { fill: none; stroke: var(--intel-accent); stroke-opacity: 0.14; stroke-width: 1; }
 .radar-sweep {
   fill: url(#sweep-gradient);
   opacity: 0.35;

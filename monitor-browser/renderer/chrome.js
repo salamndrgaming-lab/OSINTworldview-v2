@@ -311,6 +311,7 @@
   settingsBtn.addEventListener('click', () => openSettings());
 
   function openSettings() {
+    browser.settingsExpand();
     settingsOverlay.classList.remove('hidden');
 
     const engines = Object.entries(settingsMeta.searchEngines);
@@ -391,5 +392,12 @@
   function closeSettings() {
     settingsOverlay.classList.add('hidden');
     settingsOverlay.innerHTML = '';
+    browser.settingsCollapse();
   }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !settingsOverlay.classList.contains('hidden')) {
+      closeSettings();
+    }
+  }, true);
 })();

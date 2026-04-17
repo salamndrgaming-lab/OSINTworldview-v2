@@ -403,11 +403,13 @@ input {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(6, 6, 8, 0.85);
+  background: rgba(6, 6, 8, 0.92);
   backdrop-filter: blur(4px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding: 60px 24px 24px;
+  overflow-y: auto;
 }
 .settings-overlay.hidden { display: none; }
 

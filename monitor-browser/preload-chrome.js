@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('browser', {
   setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
   resetSettings: () => ipcRenderer.invoke('settings:reset'),
   clearBrowsingData: () => ipcRenderer.invoke('settings:clear-data'),
+  settingsExpand: () => ipcRenderer.invoke('window:settings-expand'),
+  settingsCollapse: () => ipcRenderer.invoke('window:settings-collapse'),
   onSettingsChanged: (handler) => {
     const listener = (_e, payload) => { try { handler(payload); } catch (err) { console.error('[chrome] settings handler threw', err); } };
     ipcRenderer.on('settings:changed', listener);

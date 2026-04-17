@@ -82,6 +82,15 @@ contextBridge.exposeInMainWorld('browser', {
     return () => ipcRenderer.off('settings:changed', listener);
   },
 
+  // Security / certificates
+  securityInfo: () => ipcRenderer.invoke('page:security-info'),
+
+  // Per-site permissions
+  permissionsGet: (origin) => ipcRenderer.invoke('permissions:get', origin),
+  permissionsSet: (origin, perm, value) => ipcRenderer.invoke('permissions:set', origin, perm, value),
+  permissionsList: () => ipcRenderer.invoke('permissions:list'),
+  permissionsRemoveSite: (origin) => ipcRenderer.invoke('permissions:remove-site', origin),
+
   // Subscribe to tab list updates from the main process.
   onTabsUpdated: (handler) => {
     const listener = (_event, payload) => {

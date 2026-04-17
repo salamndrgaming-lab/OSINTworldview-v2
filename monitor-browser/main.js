@@ -981,6 +981,126 @@ ipcMain.handle('page:reader', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Certificate / security info
+// ---------------------------------------------------------------------------
+ipcMain.handle('page:security-info', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return null;
+  const url = tab.url;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') {
+      return { secure: false, protocol: parsed.protocol, host: parsed.hostname, url };
+    }
+    const tls = require('tls');
+    return await new Promise((resolve) => {
+      const sock = tls.connect(parsed.port || 443, parsed.hostname, { servername: parsed.hostname }, () => {
+        const cert = sock.getPeerCertificate();
+        sock.destroy();
+        resolve({
+          secure: true,
+          protocol: 'https:',
+          host: parsed.hostname,
+          url,
+          cert: {
+            subject: cert.subject || {},
+            issuer: cert.issuer || {},
+            valid_from: cert.valid_from,
+            valid_to: cert.valid_to,
+            fingerprint: cert.fingerprint,
+            serialNumber: cert.serialNumber,
+          },
+        });
+      });
+      sock.on('error', () => {
+        resolve({ secure: false, protocol: 'https:', host: parsed.hostname, url, error: 'TLS error' });
+      });
+      setTimeout(() => { sock.destroy(); resolve({ secure: false, protocol: 'https:', host: parsed.hostname, url, error: 'Timeout' }); }, 5000);
+    });
+  } catch {
+    return { secure: false, protocol: 'unknown', host: '', url };
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Per-site permissions
+// ---------------------------------------------------------------------------
+const PERMISSION_TYPES = ['camera', 'microphone', 'geolocation', 'notifications', 'media'];
+
+function permissionsPath() {
+  return path.join(app.getPath('userData'), 'permissions.json');
+}
+
+function loadPermissions() {
+  try {
+    return JSON.parse(fs.readFileSync(permissionsPath(), 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function savePermissions(perms) {
+  try {
+    fs.mkdirSync(path.dirname(permissionsPath()), { recursive: true });
+    fs.writeFileSync(permissionsPath(), JSON.stringify(perms, null, 2));
+  } catch (err) {
+    console.warn('[monitor] failed to save permissions', err);
+  }
+}
+
+function getOriginPerms(origin) {
+  const all = loadPermissions();
+  return all[origin] || {};
+}
+
+function setOriginPerm(origin, perm, value) {
+  const all = loadPermissions();
+  if (!all[origin]) all[origin] = {};
+  all[origin][perm] = value;
+  savePermissions(all);
+}
+
+ipcMain.handle('permissions:get', (_e, origin) => {
+  return getOriginPerms(origin);
+});
+
+ipcMain.handle('permissions:set', (_e, origin, perm, value) => {
+  setOriginPerm(origin, perm, value);
+});
+
+ipcMain.handle('permissions:list', () => {
+  return loadPermissions();
+});
+
+ipcMain.handle('permissions:remove-site', (_e, origin) => {
+  const all = loadPermissions();
+  delete all[origin];
+  savePermissions(all);
+});
+
+function setupPermissionHandlers() {
+  session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
+    try {
+      const url = wc.getURL();
+      const origin = new URL(url).origin;
+      const perms = getOriginPerms(origin);
+      if (perms[permission] === 'allow') { callback(true); return; }
+      if (perms[permission] === 'deny') { callback(false); return; }
+      // Default: allow media, deny others until user grants
+      if (permission === 'media') { callback(true); return; }
+      callback(false);
+    } catch {
+      callback(false);
+    }
+  });
+
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
+    if (permission === 'media') return true;
+    return false;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Bookmarks store
 // ---------------------------------------------------------------------------
 function bookmarksPath() {
@@ -1350,6 +1470,7 @@ app.whenReady().then(() => {
   applyBrandedUA();
   applyRequestFilters();
   setupDownloadListener();
+  setupPermissionHandlers();
 
   createWindow();
   app.on('activate', () => {

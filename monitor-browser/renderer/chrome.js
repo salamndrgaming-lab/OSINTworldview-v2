@@ -210,6 +210,9 @@
   readerBtn.addEventListener('click', () => openReaderMode());
   pipBtn.addEventListener('click', () => browser.pip());
 
+  urlScheme.addEventListener('click', () => showSecurityPopup());
+  urlScheme.style.cursor = 'pointer';
+
   wbMin.addEventListener('click', () => browser.minimize());
   wbMax.addEventListener('click', () => browser.maximizeToggle());
   wbClose.addEventListener('click', () => browser.closeWindow());
@@ -608,6 +611,10 @@
       '      <button class="settings-btn" id="clear-data">Clear browsing data</button>' +
       '      <button class="settings-btn" id="reset-settings">Reset all settings</button>' +
       '    </section>' +
+      '    <section class="settings-section">' +
+      '      <h3>Site permissions</h3>' +
+      '      <button class="settings-btn" id="manage-perms">Manage site permissions</button>' +
+      '    </section>' +
       '  </div>' +
       '</div>';
 
@@ -670,6 +677,11 @@
 
     document.getElementById('reset-settings').addEventListener('click', () => {
       browser.resetSettings().then(() => closeSettings());
+    });
+
+    document.getElementById('manage-perms').addEventListener('click', () => {
+      closeSettings();
+      togglePanel('permissions');
     });
   }
 
@@ -773,6 +785,82 @@
   }
 
   // ------------------------------------------------------------------
+  // Security / certificate popup
+  // ------------------------------------------------------------------
+
+  async function showSecurityPopup() {
+    removeSecurityPopup();
+    const info = await browser.securityInfo();
+    if (!info) return;
+
+    const popup = document.createElement('div');
+    popup.className = 'security-popup';
+
+    let certHtml = '';
+    if (info.cert) {
+      const c = info.cert;
+      const subj = c.subject ? (c.subject.CN || c.subject.O || '') : '';
+      const issuer = c.issuer ? (c.issuer.O || c.issuer.CN || '') : '';
+      certHtml =
+        '<div class="sec-section">' +
+        '<div class="sec-label">Certificate</div>' +
+        '<div class="sec-value">' + esc(subj) + '</div>' +
+        '<div class="sec-detail">Issued by: ' + esc(issuer) + '</div>' +
+        '<div class="sec-detail">Valid: ' + esc(c.valid_from || '') + ' — ' + esc(c.valid_to || '') + '</div>' +
+        '<div class="sec-detail sec-mono">SHA-256: ' + esc(c.fingerprint || '') + '</div>' +
+        '</div>';
+    }
+
+    // Load per-site permissions
+    let permsHtml = '';
+    if (info.host) {
+      const origin = info.protocol + '//' + info.host;
+      const perms = await browser.permissionsGet(origin);
+      const permLabels = { camera: 'Camera', microphone: 'Microphone', geolocation: 'Location', notifications: 'Notifications' };
+      permsHtml = '<div class="sec-section">' +
+        '<div class="sec-label">Site permissions</div>' +
+        Object.entries(permLabels).map(([key, label]) => {
+          const val = perms[key] || 'default';
+          return '<div class="sec-perm-row">' +
+            '<span>' + label + '</span>' +
+            '<select data-perm="' + key + '" data-origin="' + escapeAttr(origin) + '">' +
+            '<option value="default"' + (val === 'default' ? ' selected' : '') + '>Default</option>' +
+            '<option value="allow"' + (val === 'allow' ? ' selected' : '') + '>Allow</option>' +
+            '<option value="deny"' + (val === 'deny' ? ' selected' : '') + '>Deny</option>' +
+            '</select></div>';
+        }).join('') +
+        '</div>';
+    }
+
+    popup.innerHTML =
+      '<div class="sec-header">' +
+      '<span class="sec-icon">' + (info.secure ? '⬢' : '!') + '</span>' +
+      '<span class="sec-status">' + (info.secure ? 'Connection is secure' : 'Connection is not secure') + '</span>' +
+      '</div>' +
+      '<div class="sec-host">' + esc(info.host || info.url) + '</div>' +
+      certHtml + permsHtml;
+
+    document.body.appendChild(popup);
+
+    popup.querySelectorAll('.sec-perm-row select').forEach((sel) => {
+      sel.addEventListener('change', () => {
+        browser.permissionsSet(sel.dataset.origin, sel.dataset.perm, sel.value);
+      });
+    });
+
+    requestAnimationFrame(() => {
+      document.addEventListener('click', (e) => {
+        if (!popup.contains(e.target) && e.target !== urlScheme) removeSecurityPopup();
+      }, { once: true });
+    });
+  }
+
+  function removeSecurityPopup() {
+    const old = document.querySelector('.security-popup');
+    if (old) old.remove();
+  }
+
+  // ------------------------------------------------------------------
   // Tab context menu (right-click)
   // ------------------------------------------------------------------
 
@@ -847,6 +935,7 @@
     if (id === 'bookmarks') renderBookmarksPanel(overlay);
     else if (id === 'history') renderHistoryPanel(overlay);
     else if (id === 'downloads') renderDownloadsPanel(overlay);
+    else if (id === 'permissions') renderPermissionsPanel(overlay);
   }
 
   function closePanel() {
@@ -1044,6 +1133,48 @@
       if (container.classList.contains('hidden')) { unsub(); obs.disconnect(); }
     });
     obs.observe(container, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  // --- Permissions panel ---
+  function renderPermissionsPanel(container) {
+    container.innerHTML =
+      '<div class="settings-card side-panel">' +
+      '  <header class="settings-head"><h2>Site Permissions</h2>' +
+      '    <button class="settings-close panel-close-btn">&times;</button></header>' +
+      '  <div class="panel-list" id="perms-list"></div>' +
+      '</div>';
+
+    container.querySelector('.panel-close-btn').addEventListener('click', closePanel);
+    container.addEventListener('click', (e) => { if (e.target === container) closePanel(); });
+
+    const listEl = document.getElementById('perms-list');
+    const permLabels = { camera: 'Cam', microphone: 'Mic', geolocation: 'Loc', notifications: 'Notif', media: 'Media' };
+
+    browser.permissionsList().then((all) => {
+      const sites = Object.entries(all);
+      if (sites.length === 0) {
+        listEl.innerHTML = '<div class="panel-empty-msg">No site permissions saved.</div>';
+        return;
+      }
+      listEl.innerHTML = sites.map(([origin, perms]) =>
+        '<div class="panel-row perm-site-row">' +
+        '<span class="row-title">' + esc(origin) + '</span>' +
+        '<div class="perm-badges">' +
+          Object.entries(perms).map(([k, v]) =>
+            '<span class="perm-badge perm-' + v + '" title="' + escapeAttr(k + ': ' + v) + '">' +
+            esc(permLabels[k] || k) + '</span>'
+          ).join('') +
+        '</div>' +
+        '<button class="row-del" data-origin="' + escapeAttr(origin) + '" title="Remove">&times;</button>' +
+        '</div>'
+      ).join('');
+
+      listEl.querySelectorAll('.row-del').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          browser.permissionsRemoveSite(btn.dataset.origin).then(() => renderPermissionsPanel(container));
+        });
+      });
+    });
   }
 
   // ------------------------------------------------------------------

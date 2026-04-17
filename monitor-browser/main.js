@@ -665,6 +665,15 @@ ipcMain.handle('tab:pin', (_e, id) => {
   return false;
 });
 
+ipcMain.handle('tab:reorder', (_e, fromId, toId) => {
+  const fromIdx = tabOrder.indexOf(fromId);
+  const toIdx = tabOrder.indexOf(toId);
+  if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+  tabOrder.splice(fromIdx, 1);
+  tabOrder.splice(toIdx, 0, fromId);
+  broadcastTabs();
+});
+
 ipcMain.handle('tab:mute', (_e, id) => {
   const tab = tabs.get(id ?? activeTabId);
   if (tab) {

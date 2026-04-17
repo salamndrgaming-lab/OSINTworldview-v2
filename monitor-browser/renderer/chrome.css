@@ -830,3 +830,7 @@ input {
 }
 .tab-muted:hover,
 .tab-audible:hover { opacity: 1; }
+
+/* Tab drag reorder */
+.tab.is-dragging { opacity: 0.4; }
+.tab.drag-over { border-left: 2px solid var(--intel-accent); }

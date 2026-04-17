@@ -108,8 +108,35 @@
     });
 
     el.addEventListener('auxclick', (e) => {
-      // Middle-click closes tab.
       if (e.button === 1) browser.closeTab(tab.id);
+    });
+
+    // Drag-to-reorder
+    el.setAttribute('draggable', 'true');
+    el.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', tab.id);
+      el.classList.add('is-dragging');
+    });
+    el.addEventListener('dragend', () => {
+      el.classList.remove('is-dragging');
+      document.querySelectorAll('.tab.drag-over').forEach((t) => t.classList.remove('drag-over'));
+    });
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      el.classList.add('drag-over');
+    });
+    el.addEventListener('dragleave', () => {
+      el.classList.remove('drag-over');
+    });
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.classList.remove('drag-over');
+      const fromId = e.dataTransfer.getData('text/plain');
+      if (fromId && fromId !== tab.id) {
+        browser.reorderTab(fromId, tab.id);
+      }
     });
 
     return el;

@@ -624,6 +624,19 @@ ipcMain.handle('window:maximize-toggle', () => {
 ipcMain.handle('window:close', () => mainWindow?.close());
 ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false);
 
+// Settings overlay: expand the chromeView to full window height so the
+// settings card isn't clipped by the normal 76px chrome height.
+ipcMain.handle('window:settings-expand', () => {
+  if (!mainWindow || !chromeView) return;
+  const { width, height } = mainWindow.getContentBounds();
+  chromeView.setBounds({ x: 0, y: 0, width, height });
+  // Park all tabs so they don't peek through.
+  for (const [, tab] of tabs) {
+    tab.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+  }
+});
+ipcMain.handle('window:settings-collapse', () => layoutViews());
+
 ipcMain.handle('shell:open-external', (_e, url) => {
   try {
     const parsed = new URL(url);
@@ -723,16 +736,35 @@ app.whenReady().then(() => {
   // Ensure settings are loaded so UA can honor showBranding.
   loadSettings();
 
-  // Inject proper Referer for OSM tiles (OSM's tile policy requires a
-  // valid Referer; some upstream CDNs return 403 when it's missing).
+  // Single combined header-injection hook covering:
+  //  - OSM tiles: requires a valid Referer per their tile usage policy.
+  //  - YouTube embeds: Error 153 occurs when Referer/Origin are from
+  //    file:// — YouTube rejects embeds without a web origin.
+  //  - googlevideo (HLS streams): needs same YouTube referer.
   try {
-    const filter = { urls: ['https://*.tile.openstreetmap.org/*', 'https://tile.openstreetmap.org/*'] };
+    const filter = {
+      urls: [
+        'https://*.tile.openstreetmap.org/*',
+        'https://tile.openstreetmap.org/*',
+        'https://*.youtube.com/*',
+        'https://youtube.com/*',
+        'https://*.googlevideo.com/*',
+        'https://*.ytimg.com/*',
+      ],
+    };
     session.defaultSession.webRequest.onBeforeSendHeaders(filter, (details, cb) => {
-      const headers = { ...details.requestHeaders, Referer: 'https://www.openstreetmap.org/' };
+      const headers = { ...details.requestHeaders };
+      const url = details.url || '';
+      if (url.includes('openstreetmap.org')) {
+        headers['Referer'] = 'https://www.openstreetmap.org/';
+      } else if (url.includes('youtube.com') || url.includes('googlevideo.com') || url.includes('ytimg.com')) {
+        headers['Referer'] = 'https://www.youtube.com/';
+        headers['Origin'] = 'https://www.youtube.com';
+      }
       cb({ requestHeaders: headers });
     });
   } catch (err) {
-    console.warn('[monitor] failed to register OSM referer hook', err);
+    console.warn('[monitor] failed to register header injection hook', err);
   }
 
   applyBrandedUA();

@@ -93,10 +93,11 @@
       // Economic
       financial: false,
       minerals: false,
-      trade: false,
-      cities: false,
+      trade: true,
+      cities: true,
       // Live
       quakes: true,
+      flights: false,
     },
     newsSource: 'bbc',
   };
@@ -715,6 +716,9 @@
   // --------------------------------------------------------------------------
   // PANEL: Intel Feed (GDELT doc API)
   // --------------------------------------------------------------------------
+  // Module-level cache so the panel retains data across refreshes.
+  let gdeltCache = null;   // { html, fetchedAt }
+
   PANELS.intel = {
     title: 'Intel Feed',
     icon: '&#9678;',
@@ -723,25 +727,45 @@
     render: (body, panel) => {
       let killed = false;
       let timer = null;
+      let backoffMs = 0; // extra delay after a 429
+
+      function renderCached(label) {
+        if (!gdeltCache) return false;
+        body.innerHTML = gdeltCache.html;
+        const age = Math.floor((Date.now() - gdeltCache.fetchedAt) / 60000);
+        setPanelStatus(panel, 'live', label || (age < 2 ? 'LIVE' : 'CACHED'));
+        return true;
+      }
+
       function load() {
         if (killed) return;
+        // If we're backing off (due to 429), show cached and wait.
+        if (backoffMs > 0) {
+          renderCached('WAIT');
+          timer = setTimeout(() => { backoffMs = 0; load(); }, backoffMs);
+          return;
+        }
         setPanelStatus(panel, 'loading', 'FETCH');
-        body.innerHTML = '<div class="panel-loading">Querying GDELT&hellip;</div>';
-        // GDELT doc API — query for conflict/military/intel keywords.
-        const q = '(conflict OR attack OR "intelligence agency" OR sanctions OR cyberattack)';
+        if (!renderCached('FETCH')) {
+          body.innerHTML = '<div class="panel-loading">Querying GDELT&hellip;</div>';
+        }
+
+        const q = 'conflict OR attack OR sanctions OR cyberattack OR "military operation"';
         const url = 'https://api.gdeltproject.org/api/v2/doc/doc?query=' + encodeURIComponent(q) +
-                    '&mode=artlist&format=json&maxrecords=15&timespan=1d';
+                    '&mode=artlist&format=json&maxrecords=15&timespan=1d&sort=DateDesc';
         fetchIntel(url)
           .then((text) => {
             if (killed) return;
             let data;
-            try { data = JSON.parse(text); } catch (e) {
-              throw new Error('GDELT returned non-JSON');
+            try { data = JSON.parse(text); } catch (_) {
+              throw new Error('GDELT returned non-JSON — API may be down.');
             }
             const items = (data.articles || []).slice(0, 12);
             if (items.length === 0) {
-              body.innerHTML = '<div class="panel-empty">No articles in the last 24h for this query.</div>';
-              setPanelStatus(panel, 'error', 'EMPTY');
+              if (!renderCached('EMPTY')) {
+                body.innerHTML = '<div class="panel-empty">No articles returned.</div>';
+              }
+              setPanelStatus(panel, 'live', 'EMPTY');
               return;
             }
             const list = items.map((it) => {
@@ -752,18 +776,40 @@
                 '<span class="src">' + escapeHtml(it.domain || it.sourcecountry || 'GDELT') + '</span>' +
                 escapeHtml(formatRelTime(d)) + '</span></a></li>';
             }).join('');
-            body.innerHTML = '<ul class="news-list">' + list + '</ul>';
+            const html = '<ul class="news-list">' + list + '</ul>';
+            gdeltCache = { html, fetchedAt: Date.now() };
+            body.innerHTML = html;
             setPanelStatus(panel, 'live', 'LIVE');
           })
           .catch((err) => {
             if (killed) return;
-            renderErrorInto(body, err, load);
-            setPanelStatus(panel, 'error', 'ERR');
+            const msg = (err && err.message) || '';
+            if (msg.includes('429')) {
+              // Rate-limited — back off 10 min, show cache silently.
+              backoffMs = 10 * 60 * 1000;
+              if (!renderCached('LIMIT')) {
+                body.innerHTML = '<div class="panel-empty">Rate limited — retrying in 10 min&hellip;</div>';
+              }
+              setPanelStatus(panel, 'loading', 'WAIT');
+              timer = setTimeout(() => { backoffMs = 0; load(); }, backoffMs);
+            } else {
+              // Non-429 error — show cache if available, else show error.
+              if (!renderCached()) {
+                renderErrorInto(body, err, load);
+                setPanelStatus(panel, 'error', 'ERR');
+              }
+            }
           });
       }
+
       load();
-      timer = setInterval(load, 8 * 60 * 1000);
-      return () => { killed = true; if (timer) clearInterval(timer); };
+      // 15 min base interval + jitter (±2 min) to spread requests.
+      const jitter = Math.floor(Math.random() * 4 - 2) * 60 * 1000;
+      timer = setInterval(load, 15 * 60 * 1000 + jitter);
+      return () => {
+        killed = true;
+        if (timer) { clearInterval(timer); clearTimeout(timer); }
+      };
     },
   };
 
@@ -948,6 +994,7 @@
     { id: 'cities',      label: 'Key cities',       color: '#a0c8ff', group: 'Economic' },
     // Live feeds
     { id: 'quakes',      label: 'Earthquakes (24h)', color: '#f97316', group: 'Live', live: true },
+    { id: 'flights',     label: 'Live flights',      color: '#e0f2fe', group: 'Live', live: true },
   ];
 
   const THREAT_HOTSPOTS = [
@@ -1381,6 +1428,34 @@
       loadQuakes();
       quakesTimer = setInterval(loadQuakes, 10 * 60 * 1000);
 
+      // Live: OpenSky Network — aircraft positions (no auth, public API).
+      // Fetches ~60s. Large payload so we cluster at low zoom.
+      let flightsTimer = null;
+      function loadFlights() {
+        groups.flights.clearLayers();
+        // Bounding box: whole world. Skip if layer is off (saves bandwidth).
+        if (!state.mapLayers.flights) return;
+        fetchIntel('https://opensky-network.org/api/states/all?lamin=-90&lomin=-180&lamax=90&lomax=180')
+          .then((text) => {
+            const data = JSON.parse(text);
+            const states = data.states || [];
+            // Limit to 600 aircraft to keep DOM sane.
+            const sample = states.filter((s) => s[5] != null && s[6] != null).slice(0, 600);
+            for (const s of sample) {
+              const lng = s[5], lat = s[6];
+              const callsign = (s[1] || '').trim() || '?';
+              const alt = s[7] != null ? Math.round(s[7]) + ' m' : '—';
+              const vel = s[9] != null ? Math.round(s[9] * 3.6) + ' km/h' : '—';
+              marker(lat, lng, '#e0f2fe', 2,
+                '<b>' + escapeHtml(callsign) + '</b><br>Alt ' + alt + ' · ' + vel,
+                { fillOpacity: 0.8, weight: 0 }).addTo(groups.flights);
+            }
+          })
+          .catch((err) => console.warn('[map] flights feed failed', err));
+      }
+      loadFlights();
+      flightsTimer = setInterval(loadFlights, 60 * 1000);
+
       // Apply persisted layer state
       for (const def of MAP_LAYERS_DEF) {
         if (state.mapLayers[def.id]) groups[def.id].addTo(map);
@@ -1391,8 +1466,13 @@
         input.addEventListener('change', () => {
           const id = input.dataset.layer;
           state.mapLayers[id] = input.checked;
-          if (input.checked) groups[id].addTo(map);
-          else map.removeLayer(groups[id]);
+          if (input.checked) {
+            groups[id].addTo(map);
+            // Lazy-load live layers when first enabled.
+            if (id === 'flights') loadFlights();
+          } else {
+            map.removeLayer(groups[id]);
+          }
           saveState();
         });
       });
@@ -1404,6 +1484,7 @@
 
       return () => {
         if (quakesTimer) clearInterval(quakesTimer);
+        if (flightsTimer) clearInterval(flightsTimer);
         ro.disconnect();
         map.remove();
       };

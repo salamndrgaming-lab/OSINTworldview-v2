@@ -561,6 +561,9 @@
 
       '    <section class="settings-section">' +
       '      <h3>Privacy &amp; Security</h3>' +
+      '      <label class="toggle-row"><input type="checkbox" id="set-adblock"' +
+             (currentSettings.adBlock !== false ? ' checked' : '') +
+      '       /> Block ads &amp; trackers</label>' +
       '      <label class="toggle-row"><input type="checkbox" id="set-https-only"' +
              (currentSettings.httpsOnly ? ' checked' : '') +
       '       /> HTTPS-only mode</label>' +
@@ -610,6 +613,10 @@
 
     document.getElementById('set-zoom').addEventListener('change', (e) => {
       browser.setSettings({ defaultZoom: parseFloat(e.target.value) });
+    });
+
+    document.getElementById('set-adblock').addEventListener('change', (e) => {
+      browser.setSettings({ adBlock: e.target.checked });
     });
 
     document.getElementById('set-https-only').addEventListener('change', (e) => {

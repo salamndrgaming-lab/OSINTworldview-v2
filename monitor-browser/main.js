@@ -93,6 +93,7 @@ const DEFAULT_SETTINGS = {
   httpsOnly: false,
   defaultZoom: 0,          // Electron zoom level (0 = 100%)
   startupBehavior: 'homepage', // 'homepage' | 'restore' | 'blank'
+  adBlock: true,
 };
 
 let settingsCache = null;
@@ -126,12 +127,8 @@ function saveSettings(patch) {
     console.warn('[monitor] failed to persist settings', err);
   }
   broadcastSettings();
-  // UA depends on showBranding.
-  try {
-    applyBrandedUA();
-  } catch (err) {
-    console.warn('[monitor] failed to reapply UA', err);
-  }
+  try { applyBrandedUA(); } catch (err) { console.warn('[monitor] failed to reapply UA', err); }
+  try { applyRequestFilters(); } catch (err) { console.warn('[monitor] failed to reapply filters', err); }
   return next;
 }
 
@@ -902,18 +899,77 @@ ipcMain.handle('downloads:reveal', (_e, id) => {
 
 // ---------------------------------------------------------------------------
 // Privacy: HTTPS-only mode
-// ---------------------------------------------------------------------------
-function applyHttpsOnlyMode() {
+// ── Request filters: ad blocking + HTTPS-only ─────────────────────
+const AD_DOMAINS = new Set([
+  'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
+  'google-analytics.com', 'googletagmanager.com', 'googletagservices.com',
+  'pagead2.googlesyndication.com', 'adservice.google.com',
+  'facebook.net', 'connect.facebook.net', 'pixel.facebook.com',
+  'analytics.twitter.com', 'ads-twitter.com', 'static.ads-twitter.com',
+  'ad.doubleclick.net', 'stats.g.doubleclick.net',
+  'adnxs.com', 'adsrvr.org', 'adsymptotic.com',
+  'amazon-adsystem.com', 'aax.amazon-adsystem.com',
+  'criteo.com', 'criteo.net', 'static.criteo.net',
+  'outbrain.com', 'taboola.com', 'widgets.outbrain.com',
+  'scorecardresearch.com', 'sb.scorecardresearch.com',
+  'quantserve.com', 'pixel.quantserve.com',
+  'hotjar.com', 'static.hotjar.com', 'script.hotjar.com',
+  'mouseflow.com', 'fullstory.com',
+  'optimizely.com', 'cdn.optimizely.com',
+  'rubiconproject.com', 'fastclick.net',
+  'pubmatic.com', 'openx.net', 'casalemedia.com',
+  'moatads.com', 'serving-sys.com', 'smartadserver.com',
+  'turn.com', 'mathtag.com', 'rlcdn.com', 'bluekai.com',
+  'demdex.net', 'krxd.net', 'exelator.com', 'eyeota.net',
+  'tapad.com', 'agkn.com', 'bidswitch.net',
+  'chartbeat.com', 'chartbeat.net',
+  'mixpanel.com', 'cdn.mxpnl.com',
+  'segment.com', 'cdn.segment.com', 'api.segment.io',
+  'amplitude.com', 'cdn.amplitude.com',
+  'newrelic.com', 'js-agent.newrelic.com', 'bam.nr-data.net',
+  'sentry.io', 'browser.sentry-cdn.com',
+  'intercom.io', 'widget.intercom.io',
+  'drift.com', 'js.driftt.com',
+  'popads.net', 'popcash.net', 'propellerads.com',
+  'revcontent.com', 'mgid.com', 'zergnet.com',
+  'buysellads.com', 'carbonads.com', 'carbonads.net',
+  'adroll.com', 'd.adroll.com',
+  'mediavine.com', 'ads.mediavine.com',
+  'adskeeper.co.uk', 'adsterra.com',
+]);
+
+function applyRequestFilters() {
   const s = loadSettings();
-  if (s.httpsOnly) {
-    session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*'] }, (details, cb) => {
-      if (details.url.startsWith('http://localhost') || details.url.startsWith('http://127.0.0.1')) {
-        cb({});
+  const doBlock = s.adBlock;
+  const doHttps = s.httpsOnly;
+
+  if (!doBlock && !doHttps) {
+    session.defaultSession.webRequest.onBeforeRequest(null);
+    return;
+  }
+
+  session.defaultSession.webRequest.onBeforeRequest((details, cb) => {
+    // Ad / tracker blocking
+    if (doBlock) {
+      try {
+        const host = new URL(details.url).hostname;
+        for (const domain of AD_DOMAINS) {
+          if (host === domain || host.endsWith('.' + domain)) {
+            cb({ cancel: true });
+            return;
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    // HTTPS-only redirect
+    if (doHttps && details.url.startsWith('http://')) {
+      if (!details.url.startsWith('http://localhost') && !details.url.startsWith('http://127.0.0.1')) {
+        cb({ redirectURL: details.url.replace(/^http:/, 'https:') });
         return;
       }
-      cb({ redirectURL: details.url.replace(/^http:/, 'https:') });
-    });
-  }
+    }
+    cb({});
+  });
 }
 
 ipcMain.handle('shell:open-external', (_e, url) => {
@@ -1055,7 +1111,7 @@ app.whenReady().then(() => {
   }
 
   applyBrandedUA();
-  applyHttpsOnlyMode();
+  applyRequestFilters();
   setupDownloadListener();
 
   createWindow();

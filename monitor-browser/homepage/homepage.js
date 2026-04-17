@@ -84,20 +84,24 @@
       cyber: false,
       nuclear: false,
       spaceports: false,
+      gpsjamming: false,
       // Infrastructure
       cables: false,
       pipelines: false,
       chokepoints: true,
       ports: false,
       airports: false,
+      datacenters: false,
       // Economic
       financial: false,
       minerals: false,
       trade: true,
       cities: true,
+      migration: false,
       // Live
       quakes: true,
       flights: false,
+      iss: false,
     },
     newsSource: 'bbc',
   };
@@ -668,16 +672,27 @@
   // PANEL: Live News Streams (YouTube live embeds)
   // --------------------------------------------------------------------------
 
+  // Channel-based embeds auto-track whichever video the channel is currently
+  // streaming live, so they don't rot when YouTube restarts a stream with a
+  // new video ID (which caused frequent "Video unavailable — Error 152" issues).
   const LIVE_STREAMS = [
-    { id: 'aje',      label: 'Al Jazeera',  ytId: 'gCNeDWCI0vo' },
-    { id: 'dw',       label: 'DW News',     ytId: 'GE_SfNVNyqk' },
-    { id: 'france24', label: 'France 24',   ytId: 'h3MuIUNCCzI' },
-    { id: 'sky',      label: 'Sky News',    ytId: 'siyW0GOBtUo' },
-    { id: 'cna',      label: 'CNA',         ytId: 'XWq5kBlakcQ' },
-    { id: 'abc',      label: 'ABC AU',      ytId: 'vOTiJkg1voo' },
-    { id: 'nhk',      label: 'NHK World',   ytId: 'f0lYkMECOBo' },
-    { id: 'euronews', label: 'Euronews',    ytId: 'pykpO5kQJ98' },
+    { id: 'aje',      label: 'Al Jazeera',  channelId: 'UCNye-wNBqNL5ZzHSJj3l8Bg' },
+    { id: 'dw',       label: 'DW News',     channelId: 'UCknLrEdhRCp1aegoMqRaCZg' },
+    { id: 'france24', label: 'France 24',   channelId: 'UCQfwfsi5VrQ8yKZ-UWmAEFg' },
+    { id: 'sky',      label: 'Sky News',    channelId: 'UCoMdktPbSTixAyNGwb-UYkQ' },
+    { id: 'cna',      label: 'CNA',         channelId: 'UCDvg5oPkDc9fyN6CZaORvYw' },
+    { id: 'abc',      label: 'ABC AU',      channelId: 'UCVgO39Bk5sMo66-6o6Aqb5A' },
+    { id: 'nhk',      label: 'NHK World',   channelId: 'UCSPEjw8F2nQDtmUKPFNF7_A' },
+    { id: 'euronews', label: 'Euronews',    channelId: 'UCSrZ3UV4jOidv8ppoVuvW9Q' },
   ];
+
+  function streamEmbedUrl(channelId, autoplay) {
+    return 'https://www.youtube.com/embed/live_stream?channel=' + channelId +
+      '&autoplay=' + (autoplay ? 1 : 0) + '&mute=1&rel=0';
+  }
+  function streamWatchUrl(channelId) {
+    return 'https://www.youtube.com/channel/' + channelId + '/live';
+  }
 
   PANELS.streams = {
     title: 'Live Streams',
@@ -688,26 +703,31 @@
       setPanelStatus(panel, 'live', 'LIVE');
       const activeStream = LIVE_STREAMS[0];
       const tabs = LIVE_STREAMS.map((s) =>
-        '<button data-yt="' + escapeHtml(s.ytId) + '" class="' +
-        (s.ytId === activeStream.ytId ? 'is-active' : '') + '">' +
+        '<button data-ch="' + escapeHtml(s.channelId) + '" class="' +
+        (s.channelId === activeStream.channelId ? 'is-active' : '') + '">' +
         escapeHtml(s.label) + '</button>'
       ).join('');
       body.innerHTML =
         '<div class="news-tabs stream-tabs">' + tabs + '</div>' +
         '<div class="stream-embed">' +
-        '  <iframe src="https://www.youtube.com/embed/' + activeStream.ytId +
-        '?autoplay=0&mute=1&rel=0" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>' +
+        '  <iframe src="' + streamEmbedUrl(activeStream.channelId, false) +
+        '" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>' +
+        '</div>' +
+        '<div class="stream-foot">' +
+        '  <a class="stream-watch" target="_blank" rel="noopener" href="' +
+        streamWatchUrl(activeStream.channelId) + '">Open on YouTube &rarr;</a>' +
+        '  <span class="stream-hint">If a stream shows an error, the channel may be off-air.</span>' +
         '</div>';
 
       body.querySelectorAll('.stream-tabs button').forEach((btn) => {
         btn.addEventListener('click', () => {
           body.querySelectorAll('.stream-tabs button').forEach((b) =>
             b.classList.toggle('is-active', b === btn));
+          const ch = btn.dataset.ch;
           const embed = body.querySelector('.stream-embed iframe');
-          if (embed) {
-            embed.src = 'https://www.youtube.com/embed/' + btn.dataset.yt +
-              '?autoplay=1&mute=1&rel=0';
-          }
+          if (embed) embed.src = streamEmbedUrl(ch, true);
+          const watch = body.querySelector('.stream-watch');
+          if (watch) watch.href = streamWatchUrl(ch);
         });
       });
     },
@@ -756,9 +776,23 @@
         fetchIntel(url)
           .then((text) => {
             if (killed) return;
-            let data;
-            try { data = JSON.parse(text); } catch (_) {
-              throw new Error('GDELT returned non-JSON — API may be down.');
+            // GDELT occasionally returns an HTML rate-limit / maintenance
+            // page with status 200. Treat as soft failure: keep cache,
+            // back off 10 min, and retry quietly.
+            const trimmed = (text || '').trim();
+            const looksLikeHtml = trimmed.startsWith('<') || /<(?:html|!doctype)/i.test(trimmed.slice(0, 200));
+            let data = null;
+            if (!looksLikeHtml) {
+              try { data = JSON.parse(text); } catch (_) { data = null; }
+            }
+            if (!data) {
+              backoffMs = 10 * 60 * 1000;
+              if (!renderCached('WAIT')) {
+                body.innerHTML = '<div class="panel-empty">GDELT temporarily unavailable &mdash; retrying in 10 min&hellip;</div>';
+              }
+              setPanelStatus(panel, 'loading', 'WAIT');
+              timer = setTimeout(() => { backoffMs = 0; load(); }, backoffMs);
+              return;
             }
             const items = (data.articles || []).slice(0, 12);
             if (items.length === 0) {
@@ -981,20 +1015,24 @@
     { id: 'cyber',       label: 'Cyber actors',     color: '#ff66cc', group: 'Security' },
     { id: 'nuclear',     label: 'Nuclear facilities', color: '#7dd3fc', group: 'Security' },
     { id: 'spaceports',  label: 'Spaceports',       color: '#c4b5fd', group: 'Security' },
+    { id: 'gpsjamming',  label: 'GPS jamming zones', color: '#fde047', group: 'Security' },
     // Infrastructure
     { id: 'cables',      label: 'Undersea cables',  color: '#38bdf8', group: 'Infrastructure' },
     { id: 'pipelines',   label: 'Pipelines',        color: '#fb923c', group: 'Infrastructure' },
     { id: 'chokepoints', label: 'Chokepoints',      color: '#d4a843', group: 'Infrastructure' },
     { id: 'ports',       label: 'Commercial ports', color: '#34d399', group: 'Infrastructure' },
     { id: 'airports',    label: 'Major airports',   color: '#e5e7eb', group: 'Infrastructure' },
+    { id: 'datacenters', label: 'Datacenter hubs',  color: '#60a5fa', group: 'Infrastructure' },
     // Economic
     { id: 'financial',   label: 'Financial centers', color: '#a7f3d0', group: 'Economic' },
     { id: 'minerals',    label: 'Critical minerals', color: '#bef264', group: 'Economic' },
     { id: 'trade',       label: 'Trade routes',     color: '#94a3b8', group: 'Economic' },
     { id: 'cities',      label: 'Key cities',       color: '#a0c8ff', group: 'Economic' },
+    { id: 'migration',   label: 'Migration flows',  color: '#c084fc', group: 'Economic' },
     // Live feeds
     { id: 'quakes',      label: 'Earthquakes (24h)', color: '#f97316', group: 'Live', live: true },
     { id: 'flights',     label: 'Live flights',      color: '#e0f2fe', group: 'Live', live: true },
+    { id: 'iss',         label: 'ISS position',      color: '#22d3ee', group: 'Live', live: true },
   ];
 
   const THREAT_HOTSPOTS = [
@@ -1224,6 +1262,61 @@
     { lat: 52.27, lng: -113.81, name: 'Canada — oil sands (Alberta)' },
   ];
 
+  const DATACENTER_HUBS = [
+    { lat: 39.04, lng: -77.49, name: 'Ashburn / Loudoun (US-East)' },
+    { lat: 45.59, lng: -122.60, name: 'Hillsboro (OR)' },
+    { lat: 37.37, lng: -121.97, name: 'Silicon Valley' },
+    { lat: 41.89, lng: -87.63, name: 'Chicago cluster' },
+    { lat: 33.43, lng: -112.07, name: 'Phoenix / Mesa' },
+    { lat: 32.78, lng: -96.80, name: 'Dallas / Fort Worth' },
+    { lat: 51.51, lng: -0.59,  name: 'London (Slough)' },
+    { lat: 52.35, lng: 4.92,   name: 'Amsterdam' },
+    { lat: 50.11, lng: 8.68,   name: 'Frankfurt' },
+    { lat: 48.86, lng: 2.35,   name: 'Paris' },
+    { lat: 53.35, lng: -6.26,  name: 'Dublin' },
+    { lat: 59.33, lng: 18.07,  name: 'Stockholm' },
+    { lat: 35.68, lng: 139.69, name: 'Tokyo (Inzai)' },
+    { lat: 22.31, lng: 114.17, name: 'Hong Kong' },
+    { lat: 1.35,  lng: 103.82, name: 'Singapore' },
+    { lat: 28.61, lng: 77.20,  name: 'Delhi / Noida' },
+    { lat: 19.07, lng: 72.88,  name: 'Mumbai' },
+    { lat: -33.86, lng: 151.21, name: 'Sydney' },
+    { lat: -23.55, lng: -46.63, name: 'São Paulo' },
+  ];
+
+  // Persistent GPS / GNSS interference regions per open reporting
+  // (e.g. GPSJam.org, aviation NOTAMs). Radii are illustrative.
+  const GPS_JAMMING_ZONES = [
+    { lat: 36.19, lng: 37.16, name: 'Northern Syria', radiusKm: 280 },
+    { lat: 34.89, lng: 35.88, name: 'Eastern Mediterranean', radiusKm: 260 },
+    { lat: 32.08, lng: 34.78, name: 'Tel Aviv sector', radiusKm: 140 },
+    { lat: 54.70, lng: 20.51, name: 'Kaliningrad oblast', radiusKm: 220 },
+    { lat: 59.44, lng: 24.75, name: 'Estonia / Gulf of Finland', radiusKm: 200 },
+    { lat: 60.17, lng: 24.94, name: 'Helsinki approach', radiusKm: 160 },
+    { lat: 44.00, lng: 37.70, name: 'Black Sea / Crimea', radiusKm: 260 },
+    { lat: 47.02, lng: 28.84, name: 'Moldova / Odesa approach', radiusKm: 200 },
+    { lat: 36.50, lng: 53.00, name: 'Caspian / N. Iran', radiusKm: 240 },
+    { lat: 24.47, lng: 54.37, name: 'Persian Gulf', radiusKm: 220 },
+    { lat: 36.80, lng: 10.18, name: 'Tunis / Libya approach', radiusKm: 180 },
+    { lat: 35.18, lng: 33.36, name: 'Cyprus', radiusKm: 120 },
+    { lat: 31.77, lng: 35.21, name: 'Jerusalem / Gaza', radiusKm: 120 },
+    { lat: 47.22, lng: 39.72, name: 'Rostov-on-Don', radiusKm: 180 },
+  ];
+
+  // Major migration corridors (origin → transit → destination).
+  const MIGRATION_FLOWS = [
+    { name: 'Central Mediterranean',  path: [[14.00, 13.20], [32.89, 13.18], [36.85, 14.30]] },
+    { name: 'Western Mediterranean',  path: [[10.20, -7.98], [33.57, -7.61], [36.13, -5.45]] },
+    { name: 'Eastern Mediterranean',  path: [[33.51, 36.29], [36.20, 36.20], [38.25, 26.30]] },
+    { name: 'Balkan Route',           path: [[41.00, 28.98], [42.00, 21.75], [45.25, 19.83], [48.21, 16.37]] },
+    { name: 'Darién Gap',             path: [[4.60, -74.08], [8.00, -77.50], [9.08, -79.68], [15.78, -86.79], [19.43, -99.13]] },
+    { name: 'US Southwest border',    path: [[14.63, -90.51], [19.43, -99.13], [31.75, -106.49], [32.54, -117.04]] },
+    { name: 'Horn of Africa → Gulf',  path: [[9.15, 40.49], [11.59, 43.15], [15.35, 44.21], [24.47, 39.61]] },
+    { name: 'Afghanistan → Europe',   path: [[34.53, 69.17], [35.69, 51.39], [39.92, 32.85], [41.00, 28.98]] },
+    { name: 'Rohingya (MM → BD)',     path: [[20.15, 92.90], [21.20, 92.18]] },
+    { name: 'Venezuela diaspora',     path: [[10.48, -66.90], [4.71, -74.07], [-12.04, -77.03], [-33.45, -70.67]] },
+  ];
+
   // Great-circle paths between major ports/chokepoints to illustrate trade.
   const TRADE_ROUTES = [
     { name: 'Asia–Europe (Suez)',     path: [[31.22, 121.47], [1.35, 103.82], [11.59, 43.15], [30.00, 32.58], [45.46, 12.33], [51.95, 4.14]] },
@@ -1401,6 +1494,27 @@
           '<b>' + escapeHtml(tr.name) + '</b><br>trade route', 1.5)
           .addTo(groups.trade);
       }
+      for (const d of DATACENTER_HUBS) {
+        marker(d.lat, d.lng, '#60a5fa', 5,
+          '<b>' + escapeHtml(d.name) + '</b><br>datacenter cluster',
+          { fillOpacity: 0.5 }).addTo(groups.datacenters);
+      }
+      for (const z of GPS_JAMMING_ZONES) {
+        // Radius circle (in meters) to communicate the affected area.
+        L.circle([z.lat, z.lng], {
+          radius: z.radiusKm * 1000,
+          color: '#fde047',
+          weight: 1,
+          opacity: 0.7,
+          fillColor: '#fde047',
+          fillOpacity: 0.12,
+        }).bindPopup('<b>' + escapeHtml(z.name) + '</b><br>GPS/GNSS interference').addTo(groups.gpsjamming);
+      }
+      for (const mf of MIGRATION_FLOWS) {
+        line(mf.path, '#c084fc',
+          '<b>' + escapeHtml(mf.name) + '</b><br>migration corridor', 2)
+          .addTo(groups.migration);
+      }
 
       // Live: USGS earthquakes (past 24h, M2.5+). Fetched through
       // the origin-gated intel proxy; re-fetches every 10 min.
@@ -1456,6 +1570,52 @@
       loadFlights();
       flightsTimer = setInterval(loadFlights, 60 * 1000);
 
+      // Live: International Space Station position via wheretheiss.at
+      // (no auth, permissive CORS). Refreshes every 10s for a smooth track.
+      let issTimer = null;
+      let issMarker = null;
+      let issTrail = [];
+      function loadIss() {
+        if (!state.mapLayers.iss) return;
+        fetchIntel('https://api.wheretheiss.at/v1/satellites/25544')
+          .then((text) => {
+            const d = JSON.parse(text);
+            const lat = Number(d.latitude);
+            const lng = Number(d.longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+            const alt = d.altitude != null ? Math.round(d.altitude) + ' km' : '—';
+            const vel = d.velocity != null ? Math.round(d.velocity) + ' km/h' : '—';
+            const popup = '<b>ISS (ZARYA)</b><br>Alt ' + alt + ' · ' + vel +
+              '<br><small>' + lat.toFixed(2) + ', ' + lng.toFixed(2) + '</small>';
+            if (!issMarker) {
+              issMarker = L.circleMarker([lat, lng], {
+                radius: 7, color: '#22d3ee', fillColor: '#22d3ee',
+                fillOpacity: 0.85, weight: 2,
+              }).bindPopup(popup);
+              issMarker.addTo(groups.iss);
+            } else {
+              issMarker.setLatLng([lat, lng]);
+              issMarker.setPopupContent(popup);
+            }
+            issTrail.push([lat, lng]);
+            if (issTrail.length > 60) issTrail.shift();
+            // Redraw trail as a polyline, skipping antimeridian jumps.
+            groups.iss.eachLayer((ly) => {
+              if (ly !== issMarker) groups.iss.removeLayer(ly);
+            });
+            for (let i = 1; i < issTrail.length; i++) {
+              const a = issTrail[i - 1], b = issTrail[i];
+              if (Math.abs(a[1] - b[1]) > 180) continue;
+              L.polyline([a, b], {
+                color: '#22d3ee', weight: 1.5, opacity: 0.35,
+              }).addTo(groups.iss);
+            }
+          })
+          .catch((err) => console.warn('[map] ISS feed failed', err));
+      }
+      loadIss();
+      issTimer = setInterval(loadIss, 10 * 1000);
+
       // Apply persisted layer state
       for (const def of MAP_LAYERS_DEF) {
         if (state.mapLayers[def.id]) groups[def.id].addTo(map);
@@ -1470,6 +1630,7 @@
             groups[id].addTo(map);
             // Lazy-load live layers when first enabled.
             if (id === 'flights') loadFlights();
+            if (id === 'iss') loadIss();
           } else {
             map.removeLayer(groups[id]);
           }
@@ -1485,6 +1646,7 @@
       return () => {
         if (quakesTimer) clearInterval(quakesTimer);
         if (flightsTimer) clearInterval(flightsTimer);
+        if (issTimer) clearInterval(issTimer);
         ro.disconnect();
         map.remove();
       };

@@ -508,6 +508,26 @@ html, body {
   height: 100%;
   border: none;
 }
+.stream-foot {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+}
+.stream-watch {
+  color: var(--intel-accent);
+  text-decoration: none;
+  font-family: var(--font-data);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.stream-watch:hover { text-decoration: underline; }
+.stream-hint {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
 
 /* -------------- Markets / Crypto -------------- */
 .markets-grid {

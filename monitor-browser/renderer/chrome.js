@@ -205,6 +205,11 @@
   homeBtn.addEventListener('click', () => browser.home());
   devtoolsBtn.addEventListener('click', () => browser.devtools());
 
+  const readerBtn = document.getElementById('action-reader');
+  const pipBtn = document.getElementById('action-pip');
+  readerBtn.addEventListener('click', () => openReaderMode());
+  pipBtn.addEventListener('click', () => browser.pip());
+
   wbMin.addEventListener('click', () => browser.minimize());
   wbMax.addEventListener('click', () => browser.maximizeToggle());
   wbClose.addEventListener('click', () => browser.closeWindow());
@@ -403,11 +408,15 @@
         break;
       case 'p':
         e.preventDefault();
-        browser.print();
+        if (e.shiftKey) browser.savePdf();
+        else browser.print();
         break;
       case 'd':
         e.preventDefault();
         bookmarkCurrentPage();
+        break;
+      case 'e':
+        if (e.shiftKey) { e.preventDefault(); openReaderMode(); }
         break;
       case 'h':
         if (e.shiftKey) { e.preventDefault(); togglePanel('history'); }
@@ -672,6 +681,7 @@
 
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if (readerOverlay && !readerOverlay.classList.contains('hidden')) { closeReaderMode(); return; }
       if (!settingsOverlay.classList.contains('hidden')) { closeSettings(); return; }
       if (findBarEl && !findBarEl.classList.contains('hidden')) { closeFindBar(); return; }
       if (activePanelId) { closePanel(); return; }
@@ -722,6 +732,44 @@
   function closeFindBar() {
     if (findBarEl) findBarEl.classList.add('hidden');
     browser.findStop();
+  }
+
+  // ------------------------------------------------------------------
+  // Reader mode overlay
+  // ------------------------------------------------------------------
+
+  let readerOverlay = null;
+
+  async function openReaderMode() {
+    const data = await browser.reader();
+    if (!data) return;
+
+    if (!readerOverlay) {
+      readerOverlay = document.createElement('div');
+      readerOverlay.id = 'reader-overlay';
+      readerOverlay.className = 'reader-overlay hidden';
+      document.body.appendChild(readerOverlay);
+    }
+
+    readerOverlay.classList.remove('hidden');
+    readerOverlay.innerHTML =
+      '<div class="reader-card">' +
+      '  <header class="reader-head">' +
+      '    <h1 class="reader-title">' + esc(data.title) + '</h1>' +
+      '    <div class="reader-meta">' + esc(shortUrl(data.url)) + '</div>' +
+      '    <button class="settings-close reader-close" id="reader-close">&times;</button>' +
+      '  </header>' +
+      '  <article class="reader-body">' + data.content + '</article>' +
+      '</div>';
+
+    document.getElementById('reader-close').addEventListener('click', closeReaderMode);
+    readerOverlay.addEventListener('click', (e) => {
+      if (e.target === readerOverlay) closeReaderMode();
+    });
+  }
+
+  function closeReaderMode() {
+    if (readerOverlay) readerOverlay.classList.add('hidden');
   }
 
   // ------------------------------------------------------------------

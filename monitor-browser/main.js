@@ -911,6 +911,75 @@ ipcMain.handle('window:fullscreen', () => {
   return fs;
 });
 
+// Save as PDF
+ipcMain.handle('page:save-pdf', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab || !mainWindow) return false;
+  const { dialog } = require('electron');
+  const { filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save as PDF',
+    defaultPath: (tab.title || 'page').replace(/[/\\?%*:|"<>]/g, '_') + '.pdf',
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  });
+  if (!filePath) return false;
+  try {
+    const data = await tab.view.webContents.printToPDF({
+      printBackground: true,
+      landscape: false,
+    });
+    fs.writeFileSync(filePath, data);
+    return true;
+  } catch (err) {
+    console.warn('[monitor] save-pdf failed', err);
+    return false;
+  }
+});
+
+// Picture-in-Picture (inject JS into page to trigger PiP on first playing video)
+ipcMain.handle('page:pip', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return false;
+  try {
+    await tab.view.webContents.executeJavaScript(`
+      (function() {
+        const v = document.querySelector('video');
+        if (!v) return false;
+        if (document.pictureInPictureElement) {
+          document.exitPictureInPicture();
+          return true;
+        }
+        v.requestPictureInPicture().catch(() => {});
+        return true;
+      })()
+    `);
+    return true;
+  } catch { return false; }
+});
+
+// Reader mode — extract main content and render in a clean overlay
+ipcMain.handle('page:reader', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return null;
+  try {
+    const result = await tab.view.webContents.executeJavaScript(`
+      (function() {
+        // Heuristic: grab article or main or largest text container
+        const article = document.querySelector('article')
+          || document.querySelector('[role="main"]')
+          || document.querySelector('main')
+          || document.querySelector('.post-content, .entry-content, .article-body');
+        if (!article) return null;
+        return {
+          title: document.title,
+          content: article.innerHTML,
+          url: location.href,
+        };
+      })()
+    `);
+    return result;
+  } catch { return null; }
+});
+
 // ---------------------------------------------------------------------------
 // Bookmarks store
 // ---------------------------------------------------------------------------

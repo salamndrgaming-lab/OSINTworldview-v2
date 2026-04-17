@@ -33,8 +33,11 @@ contextBridge.exposeInMainWorld('browser', {
   zoomOut: () => ipcRenderer.invoke('zoom:out'),
   zoomReset: () => ipcRenderer.invoke('zoom:reset'),
 
-  // Print / fullscreen
+  // Print / fullscreen / PDF / PiP / Reader
   print: () => ipcRenderer.invoke('page:print'),
+  savePdf: () => ipcRenderer.invoke('page:save-pdf'),
+  pip: () => ipcRenderer.invoke('page:pip'),
+  reader: () => ipcRenderer.invoke('page:reader'),
   fullscreen: () => ipcRenderer.invoke('window:fullscreen'),
 
   // Window controls (custom titlebar)

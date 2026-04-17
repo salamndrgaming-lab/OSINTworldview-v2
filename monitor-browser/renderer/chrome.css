@@ -397,6 +397,98 @@ input {
   color: var(--surface-base);
 }
 
+/* ---------------- Reader mode overlay ---------------- */
+
+.reader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(6, 6, 8, 0.95);
+  backdrop-filter: blur(6px);
+  display: flex;
+  justify-content: center;
+  padding: 40px 24px;
+  overflow-y: auto;
+}
+.reader-overlay.hidden { display: none; }
+
+.reader-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  width: 680px;
+  max-width: 100%;
+  padding: 0;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.reader-head {
+  position: relative;
+  padding: 24px 28px 16px;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.reader-title {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text-primary);
+  padding-right: 32px;
+}
+
+.reader-meta {
+  font-size: 12px;
+  font-family: var(--font-data);
+  color: var(--intel-accent);
+}
+
+.reader-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}
+
+.reader-body {
+  padding: 24px 28px 32px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  font-family: 'Geist', Georgia, serif;
+  overflow-wrap: break-word;
+}
+.reader-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 12px 0;
+}
+.reader-body a { color: var(--intel-accent); }
+.reader-body h1, .reader-body h2, .reader-body h3 {
+  color: var(--text-primary);
+  margin: 20px 0 8px;
+  font-weight: 500;
+}
+.reader-body p { margin: 0 0 12px; }
+.reader-body pre, .reader-body code {
+  font-family: var(--font-data);
+  font-size: 13px;
+  background: var(--surface-panel);
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+.reader-body pre {
+  padding: 12px;
+  overflow-x: auto;
+}
+.reader-body blockquote {
+  margin: 12px 0;
+  padding: 8px 16px;
+  border-left: 3px solid var(--intel-accent-dim);
+  color: var(--text-secondary);
+}
+
 /* ---------------- Incognito / Private mode ---------------- */
 
 body.is-incognito .titlebar { background: #0c0c14; }

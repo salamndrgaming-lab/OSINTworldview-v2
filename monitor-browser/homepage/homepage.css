@@ -508,6 +508,26 @@ html, body {
   height: 100%;
   border: none;
 }
+.stream-loading, .stream-offline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  position: absolute;
+  inset: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-data);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.stream-offline a {
+  color: var(--intel-accent);
+  text-decoration: none;
+  font-size: 11px;
+}
+.stream-offline a:hover { text-decoration: underline; }
 .stream-foot {
   margin-top: 8px;
   display: flex;
@@ -697,6 +717,75 @@ html, body {
 }
 .leaflet-popup-content { font-family: var(--font-ui); font-size: 12px; }
 .leaflet-popup-content b { color: var(--intel-accent); }
+
+/* ---- OSINT Div-Icon markers ---- */
+.osint-marker {
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  z-index: 50;
+}
+.osint-marker:hover { transform: scale(1.4); z-index: 999 !important; }
+.osint-marker.conflict { background: #ff4e4e; box-shadow: 0 0 10px #ff4e4e, 0 0 20px rgba(255,78,78,0.3); }
+.osint-marker.conflict.crit { animation: pulse-crit 1s infinite; }
+.osint-marker.conflict.high { animation: pulse-high 1.4s infinite; }
+.osint-marker.threat  { background: #e8a23a; box-shadow: 0 0 8px #e8a23a; }
+.osint-marker.base    { background: #3aa9d8; box-shadow: 0 0 6px #3aa9d8; }
+.osint-marker.base.us-nato { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+.osint-marker.base.china   { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+.osint-marker.base.russia  { background: #f97316; box-shadow: 0 0 6px #f97316; }
+.osint-marker.nuclear { background: #7dd3fc; box-shadow: 0 0 8px #7dd3fc, 0 0 16px rgba(125,211,252,0.3); }
+.osint-marker.nuclear.contested { background: #ef4444; box-shadow: 0 0 10px #ef4444; animation: pulse-crit 0.8s infinite; }
+.osint-marker.nuclear.inactive { background: #6b7280; box-shadow: 0 0 4px #6b7280; }
+.osint-marker.spaceport { background: #c4b5fd; box-shadow: 0 0 8px #c4b5fd; }
+.osint-marker.cyber   { background: #ff66cc; box-shadow: 0 0 8px #ff66cc; }
+.osint-marker.chokepoint { background: #d4a843; box-shadow: 0 0 8px #d4a843; }
+.osint-marker.port    { background: #34d399; box-shadow: 0 0 6px #34d399; }
+.osint-marker.airport { background: #e5e7eb; box-shadow: 0 0 4px rgba(229,231,235,0.5); }
+.osint-marker.datacenter { background: #60a5fa; box-shadow: 0 0 8px #60a5fa; }
+.osint-marker.financial { background: #a7f3d0; box-shadow: 0 0 6px #a7f3d0; }
+.osint-marker.mineral { background: #bef264; box-shadow: 0 0 6px #bef264; }
+.osint-marker.city    { background: #a0c8ff; box-shadow: 0 0 4px #a0c8ff; }
+.osint-marker.quake   { background: rgba(255,165,0,0.6); border: 2px solid #f97316; box-shadow: 0 0 10px rgba(255,165,0,0.8); animation: pulse-quake 1.5s infinite; }
+.osint-marker.flight  { background: #e0f2fe; box-shadow: 0 0 3px #e0f2fe; }
+.osint-marker.iss     { background: #22d3ee; box-shadow: 0 0 12px #22d3ee, 0 0 24px rgba(34,211,238,0.4); animation: pulse-iss 2s infinite; }
+/* GPS jamming zones use L.circle — style the SVG path */
+.leaflet-interactive.gps-jamming { stroke: #fde047; fill: #fde047; }
+
+.osint-marker-label {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: var(--font-data);
+  font-size: 7px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-shadow: 0 0 4px var(--surface-base), 0 0 8px var(--surface-base);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.osint-marker:hover .osint-marker-label { opacity: 1; }
+
+@keyframes pulse-crit {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+@keyframes pulse-high {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+@keyframes pulse-quake {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+@keyframes pulse-iss {
+  0%, 100% { opacity: 0.8; box-shadow: 0 0 12px #22d3ee, 0 0 24px rgba(34,211,238,0.3); }
+  50% { opacity: 1; box-shadow: 0 0 18px #22d3ee, 0 0 36px rgba(34,211,238,0.5); }
+}
 
 /* -------------- OSINT sources -------------- */
 .source-grid {

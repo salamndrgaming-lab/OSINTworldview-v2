@@ -90,6 +90,9 @@ const DEFAULT_SETTINGS = {
   customHomepage: '',      // empty -> built-in Monitor Home
   useCustomHomepage: false,
   showBranding: true,      // false -> pure Chrome UA, no MonitorBrowser token
+  httpsOnly: false,
+  defaultZoom: 0,          // Electron zoom level (0 = 100%)
+  startupBehavior: 'homepage', // 'homepage' | 'restore' | 'blank'
 };
 
 let settingsCache = null;
@@ -288,6 +291,8 @@ function newTab(rawUrl) {
     isLoading: true,
     canGoBack: false,
     canGoForward: false,
+    pinned: false,
+    muted: false,
   };
   tabs.set(id, tab);
   tabOrder.push(id);
@@ -337,6 +342,7 @@ function wireTabEvents(id, tab) {
     tab.url = navUrl;
     updateNav();
     broadcastTabs();
+    addToHistory(navUrl, tab.title);
   });
 
   // Fire initial settings push once the tab finishes loading.
@@ -532,6 +538,9 @@ function broadcastTabs() {
         canGoBack: t.canGoBack,
         canGoForward: t.canGoForward,
         isHomepage: isHomepageUrl(t.url),
+        pinned: !!t.pinned,
+        muted: !!t.muted,
+        audible: t.view.webContents.isCurrentlyAudible?.() ?? false,
       };
     })
     .filter(Boolean);
@@ -637,6 +646,267 @@ ipcMain.handle('window:settings-expand', () => {
 });
 ipcMain.handle('window:settings-collapse', () => layoutViews());
 
+// ---------------------------------------------------------------------------
+// Tab: duplicate, pin, mute
+// ---------------------------------------------------------------------------
+ipcMain.handle('tab:duplicate', (_e, id) => {
+  const tab = tabs.get(id ?? activeTabId);
+  if (tab) return newTab(tab.url);
+  return null;
+});
+
+ipcMain.handle('tab:pin', (_e, id) => {
+  const tab = tabs.get(id ?? activeTabId);
+  if (tab) {
+    tab.pinned = !tab.pinned;
+    broadcastTabs();
+    return tab.pinned;
+  }
+  return false;
+});
+
+ipcMain.handle('tab:mute', (_e, id) => {
+  const tab = tabs.get(id ?? activeTabId);
+  if (tab) {
+    const wc = tab.view.webContents;
+    const muted = !wc.isAudioMuted();
+    wc.setAudioMuted(muted);
+    tab.muted = muted;
+    broadcastTabs();
+    return muted;
+  }
+  return false;
+});
+
+// ---------------------------------------------------------------------------
+// Find in page
+// ---------------------------------------------------------------------------
+ipcMain.handle('find:start', (_e, text, opts) => {
+  const tab = tabs.get(activeTabId);
+  if (!tab || !text) return;
+  tab.view.webContents.findInPage(text, opts || {});
+});
+
+ipcMain.handle('find:next', (_e, text, forward) => {
+  const tab = tabs.get(activeTabId);
+  if (!tab || !text) return;
+  tab.view.webContents.findInPage(text, { forward: forward !== false, findNext: true });
+});
+
+ipcMain.handle('find:stop', () => {
+  const tab = tabs.get(activeTabId);
+  if (tab) tab.view.webContents.stopFindInPage('clearSelection');
+});
+
+// ---------------------------------------------------------------------------
+// Zoom
+// ---------------------------------------------------------------------------
+ipcMain.handle('zoom:in', () => {
+  const tab = tabs.get(activeTabId);
+  if (tab) {
+    const wc = tab.view.webContents;
+    wc.setZoomLevel(Math.min(wc.getZoomLevel() + 0.5, 5));
+    return wc.getZoomLevel();
+  }
+});
+ipcMain.handle('zoom:out', () => {
+  const tab = tabs.get(activeTabId);
+  if (tab) {
+    const wc = tab.view.webContents;
+    wc.setZoomLevel(Math.max(wc.getZoomLevel() - 0.5, -3));
+    return wc.getZoomLevel();
+  }
+});
+ipcMain.handle('zoom:reset', () => {
+  const tab = tabs.get(activeTabId);
+  if (tab) tab.view.webContents.setZoomLevel(0);
+});
+
+// ---------------------------------------------------------------------------
+// Print / Fullscreen
+// ---------------------------------------------------------------------------
+ipcMain.handle('page:print', () => {
+  const tab = tabs.get(activeTabId);
+  if (tab) tab.view.webContents.print();
+});
+
+ipcMain.handle('window:fullscreen', () => {
+  if (!mainWindow) return false;
+  const fs = !mainWindow.isFullScreen();
+  mainWindow.setFullScreen(fs);
+  return fs;
+});
+
+// ---------------------------------------------------------------------------
+// Bookmarks store
+// ---------------------------------------------------------------------------
+function bookmarksPath() {
+  return path.join(app.getPath('userData'), 'bookmarks.json');
+}
+function loadBookmarks() {
+  try {
+    return JSON.parse(fs.readFileSync(bookmarksPath(), 'utf8'));
+  } catch { return []; }
+}
+function saveBookmarks(bm) {
+  try {
+    fs.mkdirSync(path.dirname(bookmarksPath()), { recursive: true });
+    fs.writeFileSync(bookmarksPath(), JSON.stringify(bm, null, 2));
+  } catch (err) { console.warn('[monitor] bookmarks save failed', err); }
+}
+
+ipcMain.handle('bookmarks:list', () => loadBookmarks());
+ipcMain.handle('bookmarks:add', (_e, entry) => {
+  const bm = loadBookmarks();
+  const existing = bm.find((b) => b.url === entry.url);
+  if (existing) {
+    Object.assign(existing, entry);
+  } else {
+    bm.push({ ...entry, id: randomUUID(), createdAt: Date.now() });
+  }
+  saveBookmarks(bm);
+  return bm;
+});
+ipcMain.handle('bookmarks:remove', (_e, url) => {
+  const bm = loadBookmarks().filter((b) => b.url !== url);
+  saveBookmarks(bm);
+  return bm;
+});
+ipcMain.handle('bookmarks:move', (_e, url, folder) => {
+  const bm = loadBookmarks();
+  const entry = bm.find((b) => b.url === url);
+  if (entry) entry.folder = folder || '';
+  saveBookmarks(bm);
+  return bm;
+});
+
+// ---------------------------------------------------------------------------
+// History store
+// ---------------------------------------------------------------------------
+function historyPath() {
+  return path.join(app.getPath('userData'), 'history.json');
+}
+let historyCache = null;
+function loadHistory() {
+  if (historyCache) return historyCache;
+  try {
+    historyCache = JSON.parse(fs.readFileSync(historyPath(), 'utf8'));
+  } catch { historyCache = []; }
+  return historyCache;
+}
+function addToHistory(url, title) {
+  if (!url || url.startsWith('file://') || url.startsWith('data:')) return;
+  const hist = loadHistory();
+  hist.unshift({ url, title, visitedAt: Date.now() });
+  if (hist.length > 5000) hist.length = 5000;
+  historyCache = hist;
+  try {
+    fs.mkdirSync(path.dirname(historyPath()), { recursive: true });
+    fs.writeFileSync(historyPath(), JSON.stringify(hist));
+  } catch (err) { console.warn('[monitor] history write failed', err); }
+}
+
+ipcMain.handle('history:list', (_e, query, limit) => {
+  let hist = loadHistory();
+  if (query) {
+    const q = String(query).toLowerCase();
+    hist = hist.filter((h) => (h.url + ' ' + (h.title || '')).toLowerCase().includes(q));
+  }
+  return hist.slice(0, limit || 200);
+});
+ipcMain.handle('history:clear', (_e, since) => {
+  if (since) {
+    historyCache = loadHistory().filter((h) => h.visitedAt < since);
+  } else {
+    historyCache = [];
+  }
+  try {
+    fs.writeFileSync(historyPath(), JSON.stringify(historyCache));
+  } catch (err) { console.warn('[monitor] history clear failed', err); }
+  return true;
+});
+
+// ---------------------------------------------------------------------------
+// Downloads
+// ---------------------------------------------------------------------------
+const activeDownloads = new Map();
+
+function setupDownloadListener() {
+  session.defaultSession.on('will-download', (_e, item) => {
+    const id = randomUUID();
+    const entry = {
+      id,
+      filename: item.getFilename(),
+      url: item.getURL(),
+      totalBytes: item.getTotalBytes(),
+      receivedBytes: 0,
+      state: 'progressing',
+      savePath: item.getSavePath(),
+      startedAt: Date.now(),
+    };
+    activeDownloads.set(id, { item, entry });
+    broadcastDownloads();
+
+    item.on('updated', (_ev, state) => {
+      entry.receivedBytes = item.getReceivedBytes();
+      entry.totalBytes = item.getTotalBytes();
+      entry.state = state;
+      entry.savePath = item.getSavePath();
+      broadcastDownloads();
+    });
+
+    item.once('done', (_ev, state) => {
+      entry.state = state;
+      entry.receivedBytes = item.getReceivedBytes();
+      broadcastDownloads();
+    });
+  });
+}
+
+function broadcastDownloads() {
+  const list = [];
+  for (const [, { entry }] of activeDownloads) list.push(entry);
+  if (chromeView && !chromeView.webContents.isDestroyed()) {
+    chromeView.webContents.send('downloads:updated', list);
+  }
+}
+
+ipcMain.handle('downloads:list', () => {
+  const list = [];
+  for (const [, { entry }] of activeDownloads) list.push(entry);
+  return list;
+});
+
+ipcMain.handle('downloads:cancel', (_e, id) => {
+  const dl = activeDownloads.get(id);
+  if (dl && dl.item && dl.item.getState() === 'progressing') {
+    dl.item.cancel();
+  }
+});
+
+ipcMain.handle('downloads:reveal', (_e, id) => {
+  const dl = activeDownloads.get(id);
+  if (dl && dl.entry.savePath) {
+    shell.showItemInFolder(dl.entry.savePath);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Privacy: HTTPS-only mode
+// ---------------------------------------------------------------------------
+function applyHttpsOnlyMode() {
+  const s = loadSettings();
+  if (s.httpsOnly) {
+    session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*'] }, (details, cb) => {
+      if (details.url.startsWith('http://localhost') || details.url.startsWith('http://127.0.0.1')) {
+        cb({});
+        return;
+      }
+      cb({ redirectURL: details.url.replace(/^http:/, 'https:') });
+    });
+  }
+}
+
 ipcMain.handle('shell:open-external', (_e, url) => {
   try {
     const parsed = new URL(url);
@@ -671,15 +941,23 @@ ipcMain.handle('intel:fetch', async (event, url) => {
     throw new Error(`unsupported scheme: ${parsed.protocol}`);
   }
 
+  // YouTube and some APIs block generic bots — send a browser-like UA for
+  // those domains, and a standard accept header.
+  const isYouTube = parsed.hostname.endsWith('youtube.com') || parsed.hostname.endsWith('googlevideo.com');
+  const userAgent = isYouTube
+    ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+    : 'MonitorBrowser/1.0 (+https://osint-worldview.vercel.app)';
+  const accept = isYouTube
+    ? 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    : 'application/json, text/plain, */*';
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20_000);
   try {
     const res = await fetch(parsed.toString(), {
-      headers: {
-        accept: 'application/json, text/plain, */*',
-        'user-agent': 'MonitorBrowser/1.0 (+https://osint-worldview.vercel.app)',
-      },
+      headers: { accept, 'user-agent': userAgent },
       signal: controller.signal,
+      redirect: 'follow',
     });
     const body = await res.text();
     if (!res.ok) {
@@ -768,6 +1046,8 @@ app.whenReady().then(() => {
   }
 
   applyBrandedUA();
+  applyHttpsOnlyMode();
+  setupDownloadListener();
 
   createWindow();
   app.on('activate', () => {

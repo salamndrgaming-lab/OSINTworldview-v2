@@ -20,6 +20,36 @@
   --easing-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* ---------- Theme overrides ---------- */
+/* Amber is `:root` default. Each data-theme overrides the accent palette. */
+:root[data-theme='cyber'] {
+  --intel-accent: #3aff8a;
+  --intel-accent-dim: #1a9950;
+  --intel-accent-glow: rgba(58, 255, 138, 0.15);
+  --surface-hover: rgba(58, 255, 138, 0.08);
+  --text-success: #3aff8a;
+}
+:root[data-theme='palantir'] {
+  --intel-accent: #4a90e2;
+  --intel-accent-dim: #2b6cb5;
+  --intel-accent-glow: rgba(74, 144, 226, 0.15);
+  --surface-hover: rgba(74, 144, 226, 0.08);
+  --text-data: #93c5fd;
+}
+:root[data-theme='crimson'] {
+  --intel-accent: #ff4e4e;
+  --intel-accent-dim: #b33636;
+  --intel-accent-glow: rgba(255, 78, 78, 0.15);
+  --surface-hover: rgba(255, 78, 78, 0.08);
+}
+:root[data-theme='mono'] {
+  --intel-accent: #e8e8f0;
+  --intel-accent-dim: #a0a0b0;
+  --intel-accent-glow: rgba(232, 232, 240, 0.1);
+  --surface-hover: rgba(232, 232, 240, 0.06);
+  --text-data: #c0c0d0;
+}
+
 *,
 *::before,
 *::after {
@@ -366,3 +396,135 @@ input {
   background: var(--intel-accent-dim);
   color: var(--surface-base);
 }
+
+/* ---------------- Settings overlay ---------------- */
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(6, 6, 8, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.settings-overlay.hidden { display: none; }
+
+.settings-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  width: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--surface-border);
+}
+.settings-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+.settings-close {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  font-size: 18px;
+  color: var(--text-secondary);
+}
+.settings-close:hover { background: var(--surface-hover); color: var(--text-primary); }
+
+.settings-body {
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+.settings-section {
+  margin-bottom: 18px;
+}
+.settings-section:last-child { margin-bottom: 0; }
+.settings-section h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--intel-accent);
+}
+.settings-section select {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-border);
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-family: var(--font-data);
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+.settings-section select:focus { border-color: var(--intel-accent-dim); }
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.theme-swatch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-border);
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.theme-swatch:hover { border-color: var(--intel-accent-dim); }
+.theme-swatch.is-active { border-color: var(--swatch, var(--intel-accent)); background: rgba(255,255,255,0.04); color: var(--text-primary); }
+.swatch-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--swatch, var(--intel-accent));
+  flex-shrink: 0;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.toggle-row input { accent-color: var(--intel-accent); cursor: pointer; }
+
+.settings-btn {
+  display: inline-block;
+  padding: 6px 14px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  background: transparent;
+  border: 1px solid var(--surface-border);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-right: 6px;
+  transition: all 120ms ease;
+}
+.settings-btn:hover { border-color: var(--intel-accent-dim); color: var(--text-primary); }

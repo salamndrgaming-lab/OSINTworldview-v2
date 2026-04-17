@@ -71,7 +71,7 @@
   const STORAGE_KEY = 'monitor:dashboard:v2';
 
   const DEFAULT_PANELS = [
-    'map', 'news', 'threat', 'intel', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit',
+    'map', 'news', 'streams', 'threat', 'intel', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit',
   ];
 
   const DEFAULT_STATE = {
@@ -381,13 +381,13 @@
       id: 'full',
       name: 'Full OSINT',
       desc: 'All panels. Maximum awareness.',
-      panels: ['map', 'threat', 'news', 'intel', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit'],
+      panels: ['map', 'threat', 'news', 'streams', 'intel', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit'],
     },
     {
       id: 'geo',
       name: 'Geopolitical',
-      desc: 'Map, conflicts, intel feed, news.',
-      panels: ['map', 'threat', 'conflicts', 'intel', 'news'],
+      desc: 'Map, conflicts, intel feed, live streams.',
+      panels: ['map', 'threat', 'conflicts', 'intel', 'news', 'streams'],
     },
     {
       id: 'market',
@@ -400,6 +400,12 @@
       name: 'Minimal',
       desc: 'Threat level + news.',
       panels: ['threat', 'news'],
+    },
+    {
+      id: 'media',
+      name: 'Media watch',
+      desc: 'News feeds + live video streams.',
+      panels: ['streams', 'news', 'intel'],
     },
     {
       id: 'toolkit',
@@ -656,6 +662,55 @@
     if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
     return Math.floor(diff / 86400) + 'd ago';
   }
+
+  // --------------------------------------------------------------------------
+  // PANEL: Live News Streams (YouTube live embeds)
+  // --------------------------------------------------------------------------
+
+  const LIVE_STREAMS = [
+    { id: 'aje',      label: 'Al Jazeera',  ytId: 'gCNeDWCI0vo' },
+    { id: 'dw',       label: 'DW News',     ytId: 'GE_SfNVNyqk' },
+    { id: 'france24', label: 'France 24',   ytId: 'h3MuIUNCCzI' },
+    { id: 'sky',      label: 'Sky News',    ytId: 'siyW0GOBtUo' },
+    { id: 'cna',      label: 'CNA',         ytId: 'XWq5kBlakcQ' },
+    { id: 'abc',      label: 'ABC AU',      ytId: 'vOTiJkg1voo' },
+    { id: 'nhk',      label: 'NHK World',   ytId: 'f0lYkMECOBo' },
+    { id: 'euronews', label: 'Euronews',    ytId: 'pykpO5kQJ98' },
+  ];
+
+  PANELS.streams = {
+    title: 'Live Streams',
+    icon: '&#9654;',
+    size: 'lg',
+    desc: 'Live 24/7 news channels via YouTube.',
+    render: (body, panel) => {
+      setPanelStatus(panel, 'live', 'LIVE');
+      const activeStream = LIVE_STREAMS[0];
+      const tabs = LIVE_STREAMS.map((s) =>
+        '<button data-yt="' + escapeHtml(s.ytId) + '" class="' +
+        (s.ytId === activeStream.ytId ? 'is-active' : '') + '">' +
+        escapeHtml(s.label) + '</button>'
+      ).join('');
+      body.innerHTML =
+        '<div class="news-tabs stream-tabs">' + tabs + '</div>' +
+        '<div class="stream-embed">' +
+        '  <iframe src="https://www.youtube.com/embed/' + activeStream.ytId +
+        '?autoplay=0&mute=1&rel=0" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>' +
+        '</div>';
+
+      body.querySelectorAll('.stream-tabs button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          body.querySelectorAll('.stream-tabs button').forEach((b) =>
+            b.classList.toggle('is-active', b === btn));
+          const embed = body.querySelector('.stream-embed iframe');
+          if (embed) {
+            embed.src = 'https://www.youtube.com/embed/' + btn.dataset.yt +
+              '?autoplay=1&mute=1&rel=0';
+          }
+        });
+      });
+    },
+  };
 
   // --------------------------------------------------------------------------
   // PANEL: Intel Feed (GDELT doc API)

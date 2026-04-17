@@ -281,4 +281,115 @@
     activeId = payload.activeId ?? null;
     render();
   });
+
+  // ------------------------------------------------------------------
+  // Settings + Theme
+  // ------------------------------------------------------------------
+
+  const settingsBtn = document.getElementById('action-settings');
+  const settingsOverlay = document.getElementById('settings-overlay');
+
+  let currentSettings = {};
+  let settingsMeta = { searchEngines: {}, themes: {} };
+
+  function applyThemeToChrome(name) {
+    document.documentElement.dataset.theme = name || 'amber';
+  }
+
+  // Load initial settings.
+  browser.getSettings().then((res) => {
+    currentSettings = res.settings || {};
+    settingsMeta = { searchEngines: res.searchEngines || {}, themes: res.themes || {} };
+    applyThemeToChrome(currentSettings.theme);
+  }).catch(() => {});
+
+  browser.onSettingsChanged((s) => {
+    currentSettings = s || currentSettings;
+    applyThemeToChrome(currentSettings.theme);
+  });
+
+  settingsBtn.addEventListener('click', () => openSettings());
+
+  function openSettings() {
+    settingsOverlay.classList.remove('hidden');
+
+    const engines = Object.entries(settingsMeta.searchEngines);
+    const themes = Object.entries(settingsMeta.themes);
+
+    settingsOverlay.innerHTML =
+      '<div class="settings-card">' +
+      '  <header class="settings-head">' +
+      '    <h2>Settings</h2>' +
+      '    <button class="settings-close" id="settings-close" title="Close">&times;</button>' +
+      '  </header>' +
+      '  <div class="settings-body">' +
+      '    <section class="settings-section">' +
+      '      <h3>Search engine</h3>' +
+      '      <select id="set-engine">' +
+             engines.map(([k, v]) =>
+               '<option value="' + k + '"' + (currentSettings.searchEngine === k ? ' selected' : '') + '>' +
+               v.label + '</option>'
+             ).join('') +
+      '      </select>' +
+      '    </section>' +
+      '    <section class="settings-section">' +
+      '      <h3>Theme</h3>' +
+      '      <div class="theme-grid" id="theme-grid">' +
+             themes.map(([k, v]) =>
+               '<button class="theme-swatch' + (currentSettings.theme === k ? ' is-active' : '') +
+               '" data-theme="' + k + '" style="--swatch:' + v.accent + '">' +
+               '<span class="swatch-dot"></span>' + v.label + '</button>'
+             ).join('') +
+      '      </div>' +
+      '    </section>' +
+      '    <section class="settings-section">' +
+      '      <h3>Browser branding</h3>' +
+      '      <label class="toggle-row"><input type="checkbox" id="set-branding"' +
+             (currentSettings.showBranding !== false ? ' checked' : '') +
+      '       /> Show MonitorBrowser/1.0 in user-agent</label>' +
+      '    </section>' +
+      '    <section class="settings-section">' +
+      '      <h3>Data</h3>' +
+      '      <button class="settings-btn" id="clear-data">Clear browsing data</button>' +
+      '      <button class="settings-btn" id="reset-settings">Reset all settings</button>' +
+      '    </section>' +
+      '  </div>' +
+      '</div>';
+
+    document.getElementById('settings-close').addEventListener('click', closeSettings);
+    settingsOverlay.addEventListener('click', (e) => {
+      if (e.target === settingsOverlay) closeSettings();
+    });
+
+    document.getElementById('set-engine').addEventListener('change', (e) => {
+      browser.setSettings({ searchEngine: e.target.value });
+    });
+
+    document.querySelectorAll('#theme-grid .theme-swatch').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#theme-grid .theme-swatch').forEach((b) => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+        browser.setSettings({ theme: btn.dataset.theme });
+      });
+    });
+
+    document.getElementById('set-branding').addEventListener('change', (e) => {
+      browser.setSettings({ showBranding: e.target.checked });
+    });
+
+    document.getElementById('clear-data').addEventListener('click', () => {
+      browser.clearBrowsingData().then((ok) => {
+        document.getElementById('clear-data').textContent = ok ? 'Done!' : 'Failed';
+      });
+    });
+
+    document.getElementById('reset-settings').addEventListener('click', () => {
+      browser.resetSettings().then(() => closeSettings());
+    });
+  }
+
+  function closeSettings() {
+    settingsOverlay.classList.add('hidden');
+    settingsOverlay.innerHTML = '';
+  }
 })();

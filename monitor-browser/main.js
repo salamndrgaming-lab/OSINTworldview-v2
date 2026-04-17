@@ -671,15 +671,23 @@ ipcMain.handle('intel:fetch', async (event, url) => {
     throw new Error(`unsupported scheme: ${parsed.protocol}`);
   }
 
+  // YouTube and some APIs block generic bots — send a browser-like UA for
+  // those domains, and a standard accept header.
+  const isYouTube = parsed.hostname.endsWith('youtube.com') || parsed.hostname.endsWith('googlevideo.com');
+  const userAgent = isYouTube
+    ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+    : 'MonitorBrowser/1.0 (+https://osint-worldview.vercel.app)';
+  const accept = isYouTube
+    ? 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    : 'application/json, text/plain, */*';
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20_000);
   try {
     const res = await fetch(parsed.toString(), {
-      headers: {
-        accept: 'application/json, text/plain, */*',
-        'user-agent': 'MonitorBrowser/1.0 (+https://osint-worldview.vercel.app)',
-      },
+      headers: { accept, 'user-agent': userAgent },
       signal: controller.signal,
+      redirect: 'follow',
     });
     const body = await res.text();
     if (!res.ok) {

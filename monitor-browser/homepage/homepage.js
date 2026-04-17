@@ -496,27 +496,53 @@
   // PANEL: Active Conflicts (hardcoded, curated)
   // --------------------------------------------------------------------------
   const CONFLICTS = [
-    { region: 'MidEast',  name: 'Gaza — Israel/Hamas',       sev: 'crit', lat: 31.5, lng: 34.5 },
-    { region: 'MidEast',  name: 'West Bank unrest',          sev: 'high', lat: 32.0, lng: 35.3 },
-    { region: 'MidEast',  name: 'Lebanon — southern border', sev: 'high', lat: 33.3, lng: 35.5 },
-    { region: 'MidEast',  name: 'Yemen — Houthi Red Sea',    sev: 'high', lat: 15.5, lng: 42.7 },
-    { region: 'MidEast',  name: 'Syria — northwest',         sev: 'med',  lat: 35.8, lng: 36.7 },
-    { region: 'MidEast',  name: 'Iran — internal unrest',    sev: 'med',  lat: 35.7, lng: 51.4 },
-    { region: 'Europe',   name: 'Ukraine — Donbas front',    sev: 'crit', lat: 48.9, lng: 37.8 },
-    { region: 'Europe',   name: 'Ukraine — Kharkiv axis',    sev: 'high', lat: 50.0, lng: 36.3 },
-    { region: 'Europe',   name: 'Moldova — Transnistria',    sev: 'med',  lat: 46.8, lng: 29.6 },
-    { region: 'Europe',   name: 'Kosovo — northern flashpts', sev: 'low', lat: 42.9, lng: 20.9 },
-    { region: 'Africa',   name: 'Sudan — civil war',         sev: 'crit', lat: 15.5, lng: 32.5 },
+    // Middle East / North Africa
+    { region: 'MidEast',  name: 'Gaza — Israel/Hamas',        sev: 'crit', lat: 31.5,  lng: 34.5 },
+    { region: 'MidEast',  name: 'West Bank unrest',           sev: 'high', lat: 32.0,  lng: 35.3 },
+    { region: 'MidEast',  name: 'Lebanon — southern border',  sev: 'high', lat: 33.3,  lng: 35.5 },
+    { region: 'MidEast',  name: 'Yemen — Houthi Red Sea ops', sev: 'high', lat: 15.5,  lng: 42.7 },
+    { region: 'MidEast',  name: 'Syria — northwest',          sev: 'med',  lat: 35.8,  lng: 36.7 },
+    { region: 'MidEast',  name: 'Syria — northeast (SDF)',    sev: 'med',  lat: 36.5,  lng: 40.5 },
+    { region: 'MidEast',  name: 'Iran — US/Israel strikes',   sev: 'crit', lat: 32.7,  lng: 51.7 },
+    { region: 'MidEast',  name: 'Strait of Hormuz',           sev: 'high', lat: 26.6,  lng: 56.3 },
+    { region: 'MidEast',  name: 'Iraq — ISIS remnants',       sev: 'med',  lat: 34.5,  lng: 43.3 },
+    { region: 'MidEast',  name: 'Libya — warlord factions',   sev: 'med',  lat: 32.9,  lng: 13.2 },
+    // Europe
+    { region: 'Europe',   name: 'Ukraine — Donbas front',     sev: 'crit', lat: 48.9,  lng: 37.8 },
+    { region: 'Europe',   name: 'Ukraine — Kharkiv axis',     sev: 'high', lat: 50.0,  lng: 36.3 },
+    { region: 'Europe',   name: 'Ukraine — Zaporizhzhia',     sev: 'high', lat: 47.5,  lng: 35.2 },
+    { region: 'Europe',   name: 'Ukraine — Kherson front',    sev: 'high', lat: 46.6,  lng: 33.0 },
+    { region: 'Europe',   name: 'Russia — Kursk incursion',   sev: 'high', lat: 51.7,  lng: 35.6 },
+    { region: 'Europe',   name: 'Moldova — Transnistria',     sev: 'med',  lat: 46.8,  lng: 29.6 },
+    { region: 'Europe',   name: 'Kosovo — northern flashpts', sev: 'low',  lat: 42.9,  lng: 20.9 },
+    { region: 'Europe',   name: 'Serbia-Kosovo border',       sev: 'low',  lat: 43.1,  lng: 21.0 },
+    // Africa
+    { region: 'Africa',   name: 'Sudan — civil war',          sev: 'crit', lat: 15.5,  lng: 32.5 },
     { region: 'Africa',   name: 'Sahel — jihadist insurgency', sev: 'high', lat: 13.5, lng: 2.1 },
-    { region: 'Africa',   name: 'DRC — eastern provinces',   sev: 'high', lat: -1.7, lng: 29.2 },
-    { region: 'Africa',   name: 'Ethiopia — Amhara',         sev: 'med',  lat: 11.6, lng: 37.4 },
-    { region: 'Asia',     name: 'Myanmar — civil war',       sev: 'high', lat: 19.7, lng: 96.1 },
-    { region: 'Asia',     name: 'Taiwan Strait — pressure',  sev: 'med',  lat: 24.0, lng: 120.9 },
-    { region: 'Asia',     name: 'Kashmir — LoC',             sev: 'med',  lat: 34.1, lng: 74.8 },
-    { region: 'Asia',     name: 'Korea — DPRK posture',      sev: 'med',  lat: 38.3, lng: 127.5 },
-    { region: 'Americas', name: 'Haiti — gang collapse',     sev: 'high', lat: 18.6, lng: -72.3 },
-    { region: 'Americas', name: 'Ecuador — cartel violence', sev: 'med',  lat: -2.2, lng: -79.9 },
-    { region: 'Americas', name: 'Venezuela — Guyana dispute', sev: 'med', lat: 6.8,  lng: -58.9 },
+    { region: 'Africa',   name: 'DRC — eastern provinces',    sev: 'high', lat: -1.7,  lng: 29.2 },
+    { region: 'Africa',   name: 'Ethiopia — Amhara',          sev: 'med',  lat: 11.6,  lng: 37.4 },
+    { region: 'Africa',   name: 'Somalia — al-Shabaab',       sev: 'high', lat: 2.0,   lng: 45.3 },
+    { region: 'Africa',   name: 'Mozambique — Cabo Delgado',  sev: 'med',  lat: -12.3, lng: 40.5 },
+    { region: 'Africa',   name: 'Nigeria — Boko Haram/ISWAP', sev: 'high', lat: 11.5,  lng: 13.1 },
+    { region: 'Africa',   name: 'Cameroon — Anglophone crisis', sev: 'med', lat: 5.9,  lng: 10.1 },
+    { region: 'Africa',   name: 'CAR — armed groups',         sev: 'med',  lat: 4.4,   lng: 18.5 },
+    { region: 'Africa',   name: 'Burkina Faso — JNIM',        sev: 'high', lat: 12.4,  lng: -1.5 },
+    { region: 'Africa',   name: 'Mali — JNIM / Wagner',       sev: 'high', lat: 14.0,  lng: -3.0 },
+    // Asia-Pacific
+    { region: 'Asia',     name: 'Myanmar — civil war',        sev: 'high', lat: 19.7,  lng: 96.1 },
+    { region: 'Asia',     name: 'Taiwan Strait — pressure',   sev: 'med',  lat: 24.0,  lng: 120.9 },
+    { region: 'Asia',     name: 'Kashmir — LoC',              sev: 'med',  lat: 34.1,  lng: 74.8 },
+    { region: 'Asia',     name: 'Korea — DPRK posture',       sev: 'med',  lat: 38.3,  lng: 127.5 },
+    { region: 'Asia',     name: 'South China Sea — Spratlys',  sev: 'med',  lat: 10.0,  lng: 114.0 },
+    { region: 'Asia',     name: 'Philippines — Mindanao',     sev: 'low',  lat: 7.1,   lng: 125.6 },
+    { region: 'Asia',     name: 'Afghanistan — TTP/ISIS-K',   sev: 'high', lat: 34.5,  lng: 69.2 },
+    { region: 'Asia',     name: 'Pakistan — Balochistan',     sev: 'med',  lat: 28.5,  lng: 66.5 },
+    // Americas
+    { region: 'Americas', name: 'Haiti — gang collapse',      sev: 'high', lat: 18.6,  lng: -72.3 },
+    { region: 'Americas', name: 'Ecuador — cartel violence',  sev: 'med',  lat: -2.2,  lng: -79.9 },
+    { region: 'Americas', name: 'Colombia — ELN / FARC remnants', sev: 'med', lat: 4.6, lng: -74.1 },
+    { region: 'Americas', name: 'Mexico — cartel wars',       sev: 'high', lat: 23.6,  lng: -102.6 },
+    { region: 'Americas', name: 'Venezuela — Guyana dispute', sev: 'med',  lat: 6.8,   lng: -58.9 },
   ];
 
   PANELS.conflicts = {
@@ -672,9 +698,10 @@
   // PANEL: Live News Streams (YouTube live embeds)
   // --------------------------------------------------------------------------
 
-  // Channel-based embeds auto-track whichever video the channel is currently
-  // streaming live, so they don't rot when YouTube restarts a stream with a
-  // new video ID (which caused frequent "Video unavailable — Error 152" issues).
+  // We resolve each channel's current live video ID on demand via the intel
+  // proxy (fetches the channel page HTML). This avoids: (a) hardcoded IDs
+  // that rot when YouTube restarts a stream, and (b) the deprecated
+  // `live_stream?channel=` embed path that returns Error 152.
   const LIVE_STREAMS = [
     { id: 'aje',      label: 'Al Jazeera',  channelId: 'UCNye-wNBqNL5ZzHSJj3l8Bg' },
     { id: 'dw',       label: 'DW News',     channelId: 'UCknLrEdhRCp1aegoMqRaCZg' },
@@ -686,12 +713,67 @@
     { id: 'euronews', label: 'Euronews',    channelId: 'UCSrZ3UV4jOidv8ppoVuvW9Q' },
   ];
 
-  function streamEmbedUrl(channelId, autoplay) {
-    return 'https://www.youtube.com/embed/live_stream?channel=' + channelId +
-      '&autoplay=' + (autoplay ? 1 : 0) + '&mute=1&rel=0';
+  // Cache resolved video IDs so we don't scrape on every tab click.
+  // { channelId → { videoId, resolvedAt } }
+  const ytVideoIdCache = {};
+  const YT_CACHE_TTL = 10 * 60 * 1000; // 10 min
+
+  function resolveYtLiveId(channelId) {
+    const cached = ytVideoIdCache[channelId];
+    if (cached && Date.now() - cached.resolvedAt < YT_CACHE_TTL) {
+      return Promise.resolve(cached.videoId);
+    }
+    // Fetch the channel's /live page via the intel proxy, then extract the
+    // video ID from the `videoDetails` blob YouTube embeds in the HTML.
+    return fetchIntel('https://www.youtube.com/channel/' + channelId + '/live')
+      .then(function (html) {
+        let videoId = null;
+        // Primary: look for videoDetails.videoId where isLive is true.
+        var detailsIdx = html.indexOf('"videoDetails"');
+        if (detailsIdx !== -1) {
+          var block = html.substring(detailsIdx, detailsIdx + 5000);
+          var vidMatch = block.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/);
+          var liveMatch = block.match(/"isLive"\s*:\s*true/);
+          if (vidMatch && liveMatch) videoId = vidMatch[1];
+        }
+        // Fallback: og:url meta.
+        if (!videoId) {
+          var ogMatch = html.match(/property="og:url"\s+content="[^"]*\/watch\?v=([a-zA-Z0-9_-]{11})"/);
+          if (ogMatch) videoId = ogMatch[1];
+        }
+        if (videoId) {
+          ytVideoIdCache[channelId] = { videoId: videoId, resolvedAt: Date.now() };
+        }
+        return videoId;
+      })
+      .catch(function () { return null; });
+  }
+
+  function streamEmbedUrl(videoId, autoplay) {
+    return 'https://www.youtube.com/embed/' + videoId +
+      '?autoplay=' + (autoplay ? 1 : 0) + '&mute=1&rel=0&modestbranding=1';
   }
   function streamWatchUrl(channelId) {
     return 'https://www.youtube.com/channel/' + channelId + '/live';
+  }
+
+  function renderStreamEmbed(body, channelId, autoplay) {
+    var embed = body.querySelector('.stream-embed');
+    if (!embed) return;
+    embed.innerHTML = '<div class="stream-loading">Resolving live stream&hellip;</div>';
+    resolveYtLiveId(channelId).then(function (videoId) {
+      if (!videoId) {
+        embed.innerHTML =
+          '<div class="stream-offline">' +
+          '<span>Stream not currently live</span>' +
+          '<a href="' + streamWatchUrl(channelId) + '" target="_blank" rel="noopener">Try on YouTube &rarr;</a>' +
+          '</div>';
+        return;
+      }
+      embed.innerHTML =
+        '<iframe src="' + streamEmbedUrl(videoId, autoplay) +
+        '" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>';
+    });
   }
 
   PANELS.streams = {
@@ -709,23 +791,22 @@
       ).join('');
       body.innerHTML =
         '<div class="news-tabs stream-tabs">' + tabs + '</div>' +
-        '<div class="stream-embed">' +
-        '  <iframe src="' + streamEmbedUrl(activeStream.channelId, false) +
-        '" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>' +
-        '</div>' +
+        '<div class="stream-embed"></div>' +
         '<div class="stream-foot">' +
         '  <a class="stream-watch" target="_blank" rel="noopener" href="' +
         streamWatchUrl(activeStream.channelId) + '">Open on YouTube &rarr;</a>' +
         '  <span class="stream-hint">If a stream shows an error, the channel may be off-air.</span>' +
         '</div>';
 
+      // Load the first stream.
+      renderStreamEmbed(body, activeStream.channelId, false);
+
       body.querySelectorAll('.stream-tabs button').forEach((btn) => {
         btn.addEventListener('click', () => {
           body.querySelectorAll('.stream-tabs button').forEach((b) =>
             b.classList.toggle('is-active', b === btn));
           const ch = btn.dataset.ch;
-          const embed = body.querySelector('.stream-embed iframe');
-          if (embed) embed.src = streamEmbedUrl(ch, true);
+          renderStreamEmbed(body, ch, true);
           const watch = body.querySelector('.stream-watch');
           if (watch) watch.href = streamWatchUrl(ch);
         });
@@ -1049,18 +1130,84 @@
   ];
 
   const MILITARY_BASES = [
-    { lat: 36.94, lng: 139.17, name: 'Yokota AB (JP)' },
-    { lat: 13.58, lng: 144.92, name: 'Andersen AFB (Guam)' },
-    { lat: 50.09, lng: 8.60, name: 'Ramstein (DE)' },
-    { lat: 25.47, lng: 51.31, name: 'Al-Udeid (QA)' },
-    { lat: 37.08, lng: -76.61, name: 'Langley AFB (US)' },
-    { lat: 21.35, lng: -157.95, name: 'Pearl Harbor (US)' },
-    { lat: 32.69, lng: -117.21, name: 'NAS North Island' },
-    { lat: 50.33, lng: 3.50, name: 'SHAPE / NATO (BE)' },
-    { lat: 55.95, lng: 23.31, name: 'Šiauliai AB (LT)' },
-    { lat: 39.81, lng: 39.93, name: 'Incirlik (TR)' },
-    { lat: 1.35, lng: 103.99, name: 'Changi Naval (SG)' },
-    { lat: -25.40, lng: 131.04, name: 'Pine Gap (AU)' },
+    // US / NATO — Pacific
+    { lat: 36.94, lng: 139.17, name: 'Yokota AB (JP)', type: 'us-nato' },
+    { lat: 35.45, lng: 139.35, name: 'Yokosuka Naval (JP)', type: 'us-nato' },
+    { lat: 26.35, lng: 127.77, name: 'Kadena AB — Okinawa', type: 'us-nato' },
+    { lat: 13.58, lng: 144.92, name: 'Andersen AFB (Guam)', type: 'us-nato' },
+    { lat: 21.35, lng: -157.95, name: 'Pearl Harbor (HI)', type: 'us-nato' },
+    { lat: 32.69, lng: -117.21, name: 'NAS North Island', type: 'us-nato' },
+    { lat: 34.76, lng: -120.50, name: 'Vandenberg SFB', type: 'us-nato' },
+    { lat: 37.08, lng: -76.61, name: 'Langley AFB', type: 'us-nato' },
+    { lat: 33.64, lng: -84.43, name: 'Fort Liberty (NC)', type: 'us-nato' },
+    { lat: 35.24, lng: 128.86, name: 'Camp Humphreys (KR)', type: 'us-nato' },
+    { lat: 7.27, lng: 134.56, name: 'Camp Courtney (Palau)', type: 'us-nato' },
+    { lat: -25.40, lng: 131.04, name: 'Pine Gap (AU)', type: 'us-nato' },
+    { lat: -12.43, lng: 130.87, name: 'Robertson Barracks (AU)', type: 'us-nato' },
+    // US / NATO — Europe
+    { lat: 50.09, lng: 8.60, name: 'Ramstein AB (DE)', type: 'us-nato' },
+    { lat: 50.33, lng: 3.50, name: 'SHAPE / NATO HQ (BE)', type: 'us-nato' },
+    { lat: 49.06, lng: -2.55, name: 'RAF Mildenhall (UK)', type: 'us-nato' },
+    { lat: 52.36, lng: 0.49, name: 'RAF Lakenheath (UK)', type: 'us-nato' },
+    { lat: 41.65, lng: 12.73, name: 'NAS Sigonella (IT)', type: 'us-nato' },
+    { lat: 40.84, lng: 14.29, name: 'Naples (6th Fleet)', type: 'us-nato' },
+    { lat: 55.95, lng: 23.31, name: 'Šiauliai AB (LT)', type: 'us-nato' },
+    { lat: 57.66, lng: 24.66, name: 'Ādaži (LV)', type: 'us-nato' },
+    { lat: 54.18, lng: 22.06, name: 'Bemowo Piskie (PL)', type: 'us-nato' },
+    { lat: 41.24, lng: -8.68, name: 'Lajes (Azores)', type: 'us-nato' },
+    { lat: 36.65, lng: -6.34, name: 'Rota Naval (ES)', type: 'us-nato' },
+    { lat: 44.08, lng: 28.35, name: 'Deveselu BMD (RO)', type: 'us-nato' },
+    { lat: 42.33, lng: 25.48, name: 'Novo Selo (BG)', type: 'us-nato' },
+    { lat: 64.15, lng: -21.94, name: 'Keflavík (IS)', type: 'us-nato' },
+    { lat: 69.97, lng: 23.37, name: 'Vardø radar (NO)', type: 'us-nato' },
+    // US / NATO — MidEast & Africa
+    { lat: 39.81, lng: 39.93, name: 'Incirlik AB (TR)', type: 'us-nato' },
+    { lat: 25.47, lng: 51.31, name: 'Al-Udeid (QA)', type: 'us-nato' },
+    { lat: 11.55, lng: 43.15, name: 'Camp Lemonnier (DJ)', type: 'us-nato' },
+    { lat: 28.38, lng: 36.58, name: 'NEOM Airbase (SA)', type: 'us-nato' },
+    { lat: 24.43, lng: 54.65, name: 'Al-Dhafra (UAE)', type: 'us-nato' },
+    { lat: 26.21, lng: 50.18, name: 'NSA Bahrain', type: 'us-nato' },
+    { lat: 0.06, lng: 37.06, name: 'Camp Simba (KE)', type: 'us-nato' },
+    { lat: 2.06, lng: 45.35, name: 'Mogadishu (SO)', type: 'us-nato' },
+    { lat: 13.48, lng: 15.33, name: 'Agadez drone (NE)', type: 'us-nato' },
+    // Russia
+    { lat: 55.75, lng: 37.62, name: 'Moscow HQ', type: 'russia' },
+    { lat: 59.98, lng: 30.70, name: 'Kronstadt Naval (RU)', type: 'russia' },
+    { lat: 69.07, lng: 33.07, name: 'Severomorsk (Northern Fleet)', type: 'russia' },
+    { lat: 44.63, lng: 33.53, name: 'Sevastopol (Crimea)', type: 'russia' },
+    { lat: 53.21, lng: 158.65, name: 'Petropavlovsk-Kamchatsky', type: 'russia' },
+    { lat: 43.10, lng: 131.90, name: 'Vladivostok (Pacific Fleet)', type: 'russia' },
+    { lat: 54.56, lng: 20.55, name: 'Kaliningrad (exclave)', type: 'russia' },
+    { lat: 35.50, lng: 35.98, name: 'Khmeimim AB (Syria)', type: 'russia' },
+    { lat: 34.88, lng: 35.77, name: 'Tartus Naval (Syria)', type: 'russia' },
+    { lat: 48.40, lng: 45.70, name: 'Engels bomber base', type: 'russia' },
+    // China
+    { lat: 18.27, lng: 109.65, name: 'Yulin Naval (Hainan)', type: 'china' },
+    { lat: 39.91, lng: 116.40, name: 'PLA HQ (Beijing)', type: 'china' },
+    { lat: 31.23, lng: 121.47, name: 'East Sea Fleet (Shanghai)', type: 'china' },
+    { lat: 36.06, lng: 120.40, name: 'Qingdao Naval', type: 'china' },
+    { lat: 10.50, lng: 113.80, name: 'Fiery Cross Reef (SCS)', type: 'china' },
+    { lat: 11.58, lng: 114.32, name: 'Subi Reef (SCS)', type: 'china' },
+    { lat: 9.71, lng: 112.86, name: 'Mischief Reef (SCS)', type: 'china' },
+    { lat: 11.35, lng: 43.07, name: 'Djibouti (CN support base)', type: 'china' },
+    { lat: 25.07, lng: 121.52, name: 'PLA Eastern Theater (vs Taiwan)', type: 'china' },
+    // UK
+    { lat: 51.15, lng: -1.75, name: 'HMNB Portsmouth', type: 'uk' },
+    { lat: 55.98, lng: -4.79, name: 'HMNB Clyde (Trident)', type: 'uk' },
+    { lat: 35.18, lng: -5.35, name: 'Gibraltar (UK)', type: 'uk' },
+    { lat: 34.73, lng: 32.94, name: 'Akrotiri (Cyprus)', type: 'uk' },
+    { lat: -51.82, lng: -59.00, name: 'MPA Falklands', type: 'uk' },
+    { lat: -7.31, lng: 72.41, name: 'Diego Garcia', type: 'uk' },
+    // France
+    { lat: 11.55, lng: 43.15, name: 'FFDj (Djibouti)', type: 'france' },
+    { lat: -12.78, lng: 45.28, name: 'Mayotte detachment', type: 'france' },
+    { lat: -21.34, lng: 55.48, name: 'La Réunion (FR)', type: 'france' },
+    { lat: 25.26, lng: 54.55, name: 'Al-Dhafra (FR det., UAE)', type: 'france' },
+    // India
+    { lat: 17.44, lng: 78.35, name: 'INS Rajali (Arakkonam)', type: 'india' },
+    { lat: 8.48, lng: 76.96, name: 'INS Garuda (Kochi)', type: 'india' },
+    { lat: 11.77, lng: 92.72, name: 'INS Baaz (Andamans)', type: 'india' },
+    { lat: 15.49, lng: 73.82, name: 'INS Hansa (Goa)', type: 'india' },
   ];
 
   const CHOKEPOINTS = [
@@ -1094,21 +1241,49 @@
   ];
 
   const NUCLEAR_FACILITIES = [
-    { lat: 51.38, lng: 30.10, name: 'Chernobyl (decommissioned)' },
-    { lat: 37.42, lng: 141.03, name: 'Fukushima Daiichi' },
-    { lat: 47.82, lng: 35.56, name: 'Zaporizhzhia NPP (UA)' },
-    { lat: 35.14, lng: 129.29, name: 'Kori (KR)' },
-    { lat: 33.24, lng: -81.67, name: 'Savannah River (US)' },
-    { lat: 31.92, lng: 34.80, name: 'Soreq (IL)' },
-    { lat: 32.59, lng: 51.57, name: 'Natanz (IR)' },
-    { lat: 34.38, lng: 50.88, name: 'Fordow (IR)' },
-    { lat: 29.56, lng: 52.51, name: 'Bushehr (IR)' },
-    { lat: 40.43, lng: 124.75, name: 'Yongbyon (DPRK)' },
-    { lat: 33.67, lng: 73.35, name: 'Kahuta (PK)' },
-    { lat: 21.23, lng: 81.38, name: 'Kudankulam (IN)' },
-    { lat: 43.49, lng: 84.93, name: 'Lop Nur test site (CN)' },
-    { lat: 48.46, lng: 30.55, name: 'Yuzhnoukrayinsk (UA)' },
-    { lat: 51.27, lng: 30.22, name: 'Rivne NPP (UA)' },
+    // Weapons / enrichment
+    { lat: 35.88, lng: -106.31, name: 'Los Alamos (US)', status: 'active' },
+    { lat: 35.04, lng: -106.54, name: 'Sandia Labs (US)', status: 'active' },
+    { lat: 37.69, lng: -121.70, name: 'LLNL (US)', status: 'active' },
+    { lat: 35.93, lng: -84.31, name: 'Oak Ridge (US)', status: 'active' },
+    { lat: 33.24, lng: -81.67, name: 'Savannah River (US)', status: 'active' },
+    { lat: 35.32, lng: -101.55, name: 'Pantex (US)', status: 'active' },
+    { lat: 55.71, lng: 60.80, name: 'Mayak (RU)', status: 'active' },
+    { lat: 40.96, lng: 141.33, name: 'Rokkasho (JP)', status: 'active' },
+    { lat: 49.68, lng: -1.88, name: 'La Hague (FR)', status: 'active' },
+    { lat: 54.42, lng: -3.50, name: 'Sellafield (UK)', status: 'active' },
+    // Proliferation concerns
+    { lat: 32.59, lng: 51.57, name: 'Natanz (IR)', status: 'contested' },
+    { lat: 34.38, lng: 50.88, name: 'Fordow (IR)', status: 'contested' },
+    { lat: 29.56, lng: 52.51, name: 'Bushehr (IR)', status: 'active' },
+    { lat: 32.33, lng: 48.88, name: 'Isfahan UCF (IR)', status: 'contested' },
+    { lat: 40.43, lng: 124.75, name: 'Yongbyon (DPRK)', status: 'contested' },
+    { lat: 33.67, lng: 73.35, name: 'Kahuta (PK)', status: 'active' },
+    { lat: 31.92, lng: 34.80, name: 'Soreq (IL)', status: 'active' },
+    { lat: 31.30, lng: 35.22, name: 'Dimona (IL)', status: 'active' },
+    { lat: 43.49, lng: 84.93, name: 'Lop Nur test site (CN)', status: 'inactive' },
+    // Key power plants
+    { lat: 47.51, lng: 34.58, name: 'Zaporizhzhia NPP (UA)', status: 'contested' },
+    { lat: 51.33, lng: 25.88, name: 'Rivne NPP (UA)', status: 'active' },
+    { lat: 47.81, lng: 31.22, name: 'South Ukraine NPP', status: 'active' },
+    { lat: 50.30, lng: 26.65, name: 'Khmelnytskyi NPP (UA)', status: 'active' },
+    { lat: 51.39, lng: 30.10, name: 'Chernobyl (UA)', status: 'inactive' },
+    { lat: 37.42, lng: 141.03, name: 'Fukushima Daiichi', status: 'inactive' },
+    { lat: 33.39, lng: -112.86, name: 'Palo Verde (US)', status: 'active' },
+    { lat: 35.21, lng: -120.85, name: 'Diablo Canyon (US)', status: 'active' },
+    { lat: 33.14, lng: -81.76, name: 'Vogtle (US)', status: 'active' },
+    { lat: 51.21, lng: -3.13, name: 'Hinkley Point (UK)', status: 'active' },
+    { lat: 49.54, lng: -1.88, name: 'Flamanville (FR)', status: 'active' },
+    { lat: 51.01, lng: 2.14, name: 'Gravelines (FR)', status: 'active' },
+    { lat: 59.83, lng: 29.03, name: 'Leningrad NPP (RU)', status: 'active' },
+    { lat: 51.67, lng: 35.61, name: 'Kursk NPP (RU)', status: 'active' },
+    { lat: 67.46, lng: 32.47, name: 'Kola NPP (RU)', status: 'active' },
+    { lat: 35.32, lng: 129.29, name: 'Kori (KR)', status: 'active' },
+    { lat: 37.43, lng: 138.60, name: 'Kashiwazaki-Kariwa (JP)', status: 'inactive' },
+    { lat: 22.60, lng: 114.54, name: 'Daya Bay (CN)', status: 'active' },
+    { lat: 39.79, lng: 121.48, name: 'Hongyanhe (CN)', status: 'active' },
+    { lat: 8.17, lng: 77.71, name: 'Kudankulam (IN)', status: 'active' },
+    { lat: 19.83, lng: 72.65, name: 'Tarapur (IN)', status: 'active' },
   ];
 
   const SPACEPORTS = [
@@ -1263,25 +1438,56 @@
   ];
 
   const DATACENTER_HUBS = [
-    { lat: 39.04, lng: -77.49, name: 'Ashburn / Loudoun (US-East)' },
-    { lat: 45.59, lng: -122.60, name: 'Hillsboro (OR)' },
-    { lat: 37.37, lng: -121.97, name: 'Silicon Valley' },
+    // Major US clusters
+    { lat: 39.04, lng: -77.49, name: 'Ashburn / Data Center Alley (US)' },
+    { lat: 45.59, lng: -122.60, name: 'Hillsboro / The Dalles (OR)' },
+    { lat: 37.37, lng: -121.97, name: 'Silicon Valley / Santa Clara' },
     { lat: 41.89, lng: -87.63, name: 'Chicago cluster' },
     { lat: 33.43, lng: -112.07, name: 'Phoenix / Mesa' },
     { lat: 32.78, lng: -96.80, name: 'Dallas / Fort Worth' },
-    { lat: 51.51, lng: -0.59,  name: 'London (Slough)' },
-    { lat: 52.35, lng: 4.92,   name: 'Amsterdam' },
-    { lat: 50.11, lng: 8.68,   name: 'Frankfurt' },
+    { lat: 36.17, lng: -115.14, name: 'Las Vegas / Henderson' },
+    { lat: 47.61, lng: -122.33, name: 'Seattle / Quincy (WA)' },
+    { lat: 33.75, lng: -84.39, name: 'Atlanta cluster' },
+    { lat: 35.12, lng: -89.74, name: 'Memphis — xAI Colossus' },
+    { lat: 40.08, lng: -82.81, name: 'New Albany — Meta Prometheus' },
+    { lat: 42.70, lng: -87.89, name: 'Mt Pleasant — OpenAI/MSFT' },
+    { lat: 32.48, lng: -99.67, name: 'Abilene — Stargate (Oracle)' },
+    // Europe
+    { lat: 51.51, lng: -0.59,  name: 'London (Slough/LHR)' },
+    { lat: 52.35, lng: 4.92,   name: 'Amsterdam (NIKHEF)' },
+    { lat: 50.11, lng: 8.68,   name: 'Frankfurt — DE-CIX hub' },
     { lat: 48.86, lng: 2.35,   name: 'Paris' },
-    { lat: 53.35, lng: -6.26,  name: 'Dublin' },
-    { lat: 59.33, lng: 18.07,  name: 'Stockholm' },
-    { lat: 35.68, lng: 139.69, name: 'Tokyo (Inzai)' },
+    { lat: 53.35, lng: -6.26,  name: 'Dublin (Ireland)' },
+    { lat: 59.33, lng: 18.07,  name: 'Stockholm / Luleå' },
+    { lat: 55.68, lng: 12.57,  name: 'Copenhagen' },
+    { lat: 60.17, lng: 24.94,  name: 'Helsinki (Hamina — Google)' },
+    { lat: 47.37, lng: 8.54,   name: 'Zurich cluster' },
+    { lat: 40.42, lng: -3.70,  name: 'Madrid' },
+    { lat: 45.46, lng: 9.19,   name: 'Milan' },
+    { lat: 51.95, lng: 7.63,   name: 'Münster / NRW region' },
+    { lat: 52.52, lng: 13.40,  name: 'Berlin' },
+    // Asia-Pacific
+    { lat: 35.68, lng: 139.69, name: 'Tokyo (Inzai/Mitaka)' },
     { lat: 22.31, lng: 114.17, name: 'Hong Kong' },
-    { lat: 1.35,  lng: 103.82, name: 'Singapore' },
-    { lat: 28.61, lng: 77.20,  name: 'Delhi / Noida' },
-    { lat: 19.07, lng: 72.88,  name: 'Mumbai' },
+    { lat: 1.35,  lng: 103.82, name: 'Singapore — Tuas' },
+    { lat: 28.61, lng: 77.20,  name: 'Delhi / Noida (India)' },
+    { lat: 19.07, lng: 72.88,  name: 'Mumbai (India)' },
+    { lat: 12.97, lng: 77.59,  name: 'Bangalore (India)' },
+    { lat: 37.57, lng: 126.98, name: 'Seoul / Pangyo' },
+    { lat: 31.23, lng: 121.47, name: 'Shanghai' },
+    { lat: 39.91, lng: 116.40, name: 'Beijing / Zhangbei' },
+    { lat: 22.55, lng: 113.95, name: 'Shenzhen (Guiyang link)' },
     { lat: -33.86, lng: 151.21, name: 'Sydney' },
+    { lat: -37.81, lng: 144.96, name: 'Melbourne' },
+    // Other
     { lat: -23.55, lng: -46.63, name: 'São Paulo' },
+    { lat: 43.65, lng: -79.38, name: 'Toronto (Canada)' },
+    { lat: 25.20, lng: 55.27,  name: 'Dubai (UAE)' },
+    { lat: 24.47, lng: 54.37,  name: 'Abu Dhabi — G42' },
+    { lat: -1.29, lng: 36.82,  name: 'Nairobi (Africa hub)' },
+    { lat: -33.92, lng: 18.42, name: 'Cape Town' },
+    { lat: 46.23, lng: 2.71,   name: 'France — FluidStack GW campus' },
+    { lat: 20.59, lng: 79.46,  name: 'India — Reliance AI cluster' },
   ];
 
   // Persistent GPS / GNSS interference regions per open reporting
@@ -1409,11 +1615,14 @@
       const groups = {};
       for (const def of MAP_LAYERS_DEF) groups[def.id] = L.layerGroup();
 
-      const marker = (lat, lng, color, radius, popup, opts) => {
-        return L.circleMarker([lat, lng], Object.assign({
-          radius, color, fillColor: color, fillOpacity: 0.45, weight: 1.5,
-        }, opts || {})).bindPopup(popup);
-      };
+      // DivIcon markers with OSINT-dashboard-style glow and pulse.
+      function dot(lat, lng, size, cssClass, popup, label) {
+        var html = '<div class="osint-marker ' + cssClass + '" style="width:' + size + 'px;height:' + size + 'px">' +
+          (label ? '<span class="osint-marker-label">' + escapeHtml(label) + '</span>' : '') + '</div>';
+        return L.marker([lat, lng], {
+          icon: L.divIcon({ className: '', html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }),
+        }).bindPopup(popup);
+      }
       const line = (coords, color, popup, weight) => {
         return L.polyline(coords, {
           color, weight: weight || 2, opacity: 0.7, smoothFactor: 1.5,
@@ -1421,62 +1630,54 @@
       };
 
       for (const c of CONFLICTS) {
-        const radius = c.sev === 'crit' ? 10 : c.sev === 'high' ? 8 : c.sev === 'med' ? 6 : 4;
-        marker(c.lat, c.lng, '#ff4e4e', radius,
+        const sz = c.sev === 'crit' ? 14 : c.sev === 'high' ? 11 : c.sev === 'med' ? 9 : 7;
+        dot(c.lat, c.lng, sz, 'conflict ' + c.sev,
           '<b>' + escapeHtml(c.name) + '</b><br>' + escapeHtml(c.region) +
-          ' &middot; severity ' + c.sev.toUpperCase()).addTo(groups.conflicts);
+          ' &middot; severity ' + c.sev.toUpperCase(), c.name).addTo(groups.conflicts);
       }
       for (const t of THREAT_HOTSPOTS) {
-        marker(t.lat, t.lng, '#e8a23a', 6, '<b>' + escapeHtml(t.name) + '</b>',
-          { fillOpacity: 0.35 }).addTo(groups.threats);
+        dot(t.lat, t.lng, 10, 'threat',
+          '<b>' + escapeHtml(t.name) + '</b>', t.name).addTo(groups.threats);
       }
       for (const b of MILITARY_BASES) {
-        marker(b.lat, b.lng, '#3aa9d8', 5, '<b>' + escapeHtml(b.name) + '</b>',
-          { fillOpacity: 0.35 }).addTo(groups.bases);
+        dot(b.lat, b.lng, 8, 'base ' + (b.type || ''),
+          '<b>' + escapeHtml(b.name) + '</b><br>military installation (' + (b.type || '').replace('-', '/') + ')', b.name).addTo(groups.bases);
       }
       for (const n of NUCLEAR_FACILITIES) {
-        marker(n.lat, n.lng, '#7dd3fc', 6,
-          '<b>' + escapeHtml(n.name) + '</b><br>nuclear facility',
-          { fillOpacity: 0.5 }).addTo(groups.nuclear);
+        dot(n.lat, n.lng, 10, 'nuclear ' + (n.status || 'active'),
+          '<b>' + escapeHtml(n.name) + '</b><br>nuclear facility — ' + (n.status || 'active'), n.name).addTo(groups.nuclear);
       }
       for (const s of SPACEPORTS) {
-        marker(s.lat, s.lng, '#c4b5fd', 6,
-          '<b>' + escapeHtml(s.name) + '</b><br>spaceport',
-          { fillOpacity: 0.5 }).addTo(groups.spaceports);
+        dot(s.lat, s.lng, 10, 'spaceport',
+          '<b>' + escapeHtml(s.name) + '</b><br>spaceport', s.name).addTo(groups.spaceports);
       }
       for (const c of CYBER_HUBS) {
-        marker(c.lat, c.lng, '#ff66cc', 5,
-          '<b>' + escapeHtml(c.name) + '</b><br>cyber threat actor',
-          { fillOpacity: 0.35 }).addTo(groups.cyber);
+        dot(c.lat, c.lng, 8, 'cyber',
+          '<b>' + escapeHtml(c.name) + '</b><br>cyber threat actor', c.name).addTo(groups.cyber);
       }
       for (const cp of CHOKEPOINTS) {
-        marker(cp.lat, cp.lng, '#d4a843', 7,
-          '<b>' + escapeHtml(cp.name) + '</b><br>maritime chokepoint').addTo(groups.chokepoints);
+        dot(cp.lat, cp.lng, 12, 'chokepoint',
+          '<b>' + escapeHtml(cp.name) + '</b><br>maritime chokepoint', cp.name).addTo(groups.chokepoints);
       }
       for (const p of COMMERCIAL_PORTS) {
-        marker(p.lat, p.lng, '#34d399', 4,
-          '<b>' + escapeHtml(p.name) + '</b><br>commercial port',
-          { fillOpacity: 0.5 }).addTo(groups.ports);
+        dot(p.lat, p.lng, 8, 'port',
+          '<b>' + escapeHtml(p.name) + '</b><br>commercial port', p.name).addTo(groups.ports);
       }
       for (const a of MAJOR_AIRPORTS) {
-        marker(a.lat, a.lng, '#e5e7eb', 3,
-          '<b>' + escapeHtml(a.name) + '</b>',
-          { fillOpacity: 0.7 }).addTo(groups.airports);
+        dot(a.lat, a.lng, 6, 'airport',
+          '<b>' + escapeHtml(a.name) + '</b>').addTo(groups.airports);
       }
       for (const f of FINANCIAL_CENTERS) {
-        marker(f.lat, f.lng, '#a7f3d0', 5,
-          '<b>' + escapeHtml(f.name) + '</b><br>financial hub',
-          { fillOpacity: 0.45 }).addTo(groups.financial);
+        dot(f.lat, f.lng, 8, 'financial',
+          '<b>' + escapeHtml(f.name) + '</b><br>financial hub', f.name).addTo(groups.financial);
       }
       for (const m of CRITICAL_MINERALS) {
-        marker(m.lat, m.lng, '#bef264', 5,
-          '<b>' + escapeHtml(m.name) + '</b>',
-          { fillOpacity: 0.45 }).addTo(groups.minerals);
+        dot(m.lat, m.lng, 8, 'mineral',
+          '<b>' + escapeHtml(m.name) + '</b>').addTo(groups.minerals);
       }
       for (const city of KEY_CITIES) {
-        marker(city.lat, city.lng, '#a0c8ff', 3,
-          '<b>' + escapeHtml(city.name) + '</b>',
-          { fillOpacity: 0.6 }).addTo(groups.cities);
+        dot(city.lat, city.lng, 6, 'city',
+          '<b>' + escapeHtml(city.name) + '</b>').addTo(groups.cities);
       }
 
       for (const cable of UNDERSEA_CABLES) {
@@ -1495,20 +1696,16 @@
           .addTo(groups.trade);
       }
       for (const d of DATACENTER_HUBS) {
-        marker(d.lat, d.lng, '#60a5fa', 5,
-          '<b>' + escapeHtml(d.name) + '</b><br>datacenter cluster',
-          { fillOpacity: 0.5 }).addTo(groups.datacenters);
+        dot(d.lat, d.lng, 8, 'datacenter',
+          '<b>' + escapeHtml(d.name) + '</b><br>datacenter cluster', d.name).addTo(groups.datacenters);
       }
       for (const z of GPS_JAMMING_ZONES) {
-        // Radius circle (in meters) to communicate the affected area.
         L.circle([z.lat, z.lng], {
           radius: z.radiusKm * 1000,
-          color: '#fde047',
-          weight: 1,
-          opacity: 0.7,
-          fillColor: '#fde047',
-          fillOpacity: 0.12,
-        }).bindPopup('<b>' + escapeHtml(z.name) + '</b><br>GPS/GNSS interference').addTo(groups.gpsjamming);
+          color: '#fde047', weight: 1.5, opacity: 0.6,
+          fillColor: '#fde047', fillOpacity: 0.10,
+          className: 'gps-jamming',
+        }).bindPopup('<b>' + escapeHtml(z.name) + '</b><br>GPS/GNSS interference zone').addTo(groups.gpsjamming);
       }
       for (const mf of MIGRATION_FLOWS) {
         line(mf.path, '#c084fc',
@@ -1516,8 +1713,7 @@
           .addTo(groups.migration);
       }
 
-      // Live: USGS earthquakes (past 24h, M2.5+). Fetched through
-      // the origin-gated intel proxy; re-fetches every 10 min.
+      // Live: USGS earthquakes (past 24h, M2.5+).
       let quakesTimer = null;
       function loadQuakes() {
         groups.quakes.clearLayers();
@@ -1528,11 +1724,11 @@
               const [lng, lat] = f.geometry?.coordinates || [];
               if (typeof lat !== 'number' || typeof lng !== 'number') continue;
               const mag = f.properties?.mag ?? 0;
-              const r = Math.max(4, Math.min(14, mag * 2.2));
-              marker(lat, lng, '#f97316', r,
+              const sz = Math.max(8, Math.min(22, mag * 3.2));
+              dot(lat, lng, sz, 'quake',
                 '<b>M' + mag.toFixed(1) + '</b><br>' + escapeHtml(f.properties?.place || '') +
-                '<br><small>' + new Date(f.properties?.time || 0).toISOString().slice(0, 16).replace('T', ' ') + ' UTC</small>',
-                { fillOpacity: 0.3 }).addTo(groups.quakes);
+                '<br><small>' + new Date(f.properties?.time || 0).toISOString().slice(0, 16).replace('T', ' ') + ' UTC</small>')
+                .addTo(groups.quakes);
             }
           })
           .catch((err) => {
@@ -1560,9 +1756,9 @@
               const callsign = (s[1] || '').trim() || '?';
               const alt = s[7] != null ? Math.round(s[7]) + ' m' : '—';
               const vel = s[9] != null ? Math.round(s[9] * 3.6) + ' km/h' : '—';
-              marker(lat, lng, '#e0f2fe', 2,
-                '<b>' + escapeHtml(callsign) + '</b><br>Alt ' + alt + ' · ' + vel,
-                { fillOpacity: 0.8, weight: 0 }).addTo(groups.flights);
+              dot(lat, lng, 4, 'flight',
+                '<b>' + escapeHtml(callsign) + '</b><br>Alt ' + alt + ' · ' + vel)
+                .addTo(groups.flights);
             }
           })
           .catch((err) => console.warn('[map] flights feed failed', err));
@@ -1588,9 +1784,13 @@
             const popup = '<b>ISS (ZARYA)</b><br>Alt ' + alt + ' · ' + vel +
               '<br><small>' + lat.toFixed(2) + ', ' + lng.toFixed(2) + '</small>';
             if (!issMarker) {
-              issMarker = L.circleMarker([lat, lng], {
-                radius: 7, color: '#22d3ee', fillColor: '#22d3ee',
-                fillOpacity: 0.85, weight: 2,
+              issMarker = L.marker([lat, lng], {
+                icon: L.divIcon({
+                  className: '',
+                  html: '<div class="osint-marker iss" style="width:14px;height:14px"><span class="osint-marker-label">ISS</span></div>',
+                  iconSize: [14, 14],
+                  iconAnchor: [7, 7],
+                }),
               }).bindPopup(popup);
               issMarker.addTo(groups.iss);
             } else {

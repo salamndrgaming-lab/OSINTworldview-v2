@@ -197,21 +197,129 @@
 
   urlInput.addEventListener('input', () => {
     urlBarDirty = true;
+    showAutocompleteSuggestions(urlInput.value.trim());
   });
 
   urlInput.addEventListener('blur', () => {
+    setTimeout(() => { hideAutocomplete(); }, 150);
     urlBarDirty = false;
-    // Restore displayed URL to canonical form.
     renderUrlBar();
   });
 
   urlInput.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if (acDropdown && !acDropdown.classList.contains('hidden')) {
+        hideAutocomplete();
+        return;
+      }
       urlBarDirty = false;
       urlInput.blur();
       renderUrlBar();
+      return;
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); acMove(1); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); acMove(-1); return; }
+    if (e.key === 'Enter' && acSelectedIdx >= 0) {
+      e.preventDefault();
+      acCommit();
+      return;
     }
   });
+
+  // ------------------------------------------------------------------
+  // URL autocomplete
+  // ------------------------------------------------------------------
+
+  let acDropdown = null;
+  let acItems = [];
+  let acSelectedIdx = -1;
+  let acDebounce = null;
+
+  function ensureAcDropdown() {
+    if (acDropdown) return;
+    acDropdown = document.createElement('div');
+    acDropdown.className = 'ac-dropdown hidden';
+    urlWrap.parentElement.appendChild(acDropdown);
+  }
+
+  function hideAutocomplete() {
+    if (acDropdown) acDropdown.classList.add('hidden');
+    acItems = [];
+    acSelectedIdx = -1;
+  }
+
+  function showAutocompleteSuggestions(query) {
+    if (!query || query.length < 2) { hideAutocomplete(); return; }
+    clearTimeout(acDebounce);
+    acDebounce = setTimeout(() => fetchSuggestions(query), 120);
+  }
+
+  async function fetchSuggestions(query) {
+    const [bookmarks, history] = await Promise.all([
+      browser.bookmarksList().catch(() => []),
+      browser.historyList(query, 20).catch(() => []),
+    ]);
+
+    const q = query.toLowerCase();
+    const bmMatches = bookmarks
+      .filter((b) => ((b.title || '') + ' ' + b.url).toLowerCase().includes(q))
+      .slice(0, 5)
+      .map((b) => ({ title: b.title || b.url, url: b.url, type: 'bookmark' }));
+
+    const histMatches = history
+      .slice(0, 10)
+      .map((h) => ({ title: h.title || h.url, url: h.url, type: 'history' }));
+
+    const seen = new Set();
+    const merged = [];
+    for (const item of bmMatches.concat(histMatches)) {
+      if (seen.has(item.url)) continue;
+      seen.add(item.url);
+      merged.push(item);
+      if (merged.length >= 8) break;
+    }
+
+    if (merged.length === 0) { hideAutocomplete(); return; }
+
+    ensureAcDropdown();
+    acItems = merged;
+    acSelectedIdx = -1;
+    acDropdown.classList.remove('hidden');
+    acDropdown.innerHTML = merged.map((item, i) =>
+      '<div class="ac-item" data-idx="' + i + '">' +
+      '<span class="ac-icon">' + (item.type === 'bookmark' ? '★' : '↻') + '</span>' +
+      '<span class="ac-title">' + esc(item.title) + '</span>' +
+      '<span class="ac-url">' + esc(shortUrl(item.url)) + '</span>' +
+      '</div>'
+    ).join('');
+
+    acDropdown.querySelectorAll('.ac-item').forEach((el) => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        acSelectedIdx = parseInt(el.dataset.idx, 10);
+        acCommit();
+      });
+    });
+  }
+
+  function acMove(dir) {
+    if (!acDropdown || acItems.length === 0) return;
+    acSelectedIdx = (acSelectedIdx + dir + acItems.length) % acItems.length;
+    acDropdown.querySelectorAll('.ac-item').forEach((el, i) => {
+      el.classList.toggle('is-selected', i === acSelectedIdx);
+    });
+    urlInput.value = acItems[acSelectedIdx].url;
+  }
+
+  function acCommit() {
+    if (acSelectedIdx < 0 || acSelectedIdx >= acItems.length) return;
+    const url = acItems[acSelectedIdx].url;
+    hideAutocomplete();
+    urlBarDirty = false;
+    urlInput.value = url;
+    urlInput.blur();
+    browser.navigate(null, url);
+  }
 
   // ------------------------------------------------------------------
   // Global keyboard shortcuts

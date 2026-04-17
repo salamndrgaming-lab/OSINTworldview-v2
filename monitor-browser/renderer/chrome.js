@@ -362,6 +362,9 @@
     const engines = Object.entries(settingsMeta.searchEngines);
     const themes = Object.entries(settingsMeta.themes);
 
+    const zoomLabels = { '-3': '50%', '-2': '67%', '-1': '80%', '0': '100%', '1': '125%', '2': '150%', '3': '175%', '4': '200%' };
+    const startupOpts = { homepage: 'Open Monitor Home', blank: 'Open blank tab', restore: 'Restore last session' };
+
     settingsOverlay.innerHTML =
       '<div class="settings-card">' +
       '  <header class="settings-head">' +
@@ -369,6 +372,27 @@
       '    <button class="settings-close" id="settings-close" title="Close">&times;</button>' +
       '  </header>' +
       '  <div class="settings-body">' +
+
+      '    <section class="settings-section">' +
+      '      <h3>On startup</h3>' +
+      '      <select id="set-startup">' +
+             Object.entries(startupOpts).map(([k, label]) =>
+               '<option value="' + k + '"' + ((currentSettings.startupBehavior || 'homepage') === k ? ' selected' : '') + '>' +
+               label + '</option>'
+             ).join('') +
+      '      </select>' +
+      '    </section>' +
+
+      '    <section class="settings-section">' +
+      '      <h3>Homepage</h3>' +
+      '      <label class="toggle-row"><input type="checkbox" id="set-use-custom-home"' +
+             (currentSettings.useCustomHomepage ? ' checked' : '') +
+      '       /> Use custom homepage URL</label>' +
+      '      <input type="text" class="settings-input" id="set-custom-home" placeholder="https://example.com"' +
+      '        value="' + escapeAttr(currentSettings.customHomepage || '') + '"' +
+             (!currentSettings.useCustomHomepage ? ' disabled' : '') + ' />' +
+      '    </section>' +
+
       '    <section class="settings-section">' +
       '      <h3>Search engine</h3>' +
       '      <select id="set-engine">' +
@@ -378,6 +402,7 @@
              ).join('') +
       '      </select>' +
       '    </section>' +
+
       '    <section class="settings-section">' +
       '      <h3>Theme</h3>' +
       '      <div class="theme-grid" id="theme-grid">' +
@@ -388,12 +413,27 @@
              ).join('') +
       '      </div>' +
       '    </section>' +
+
       '    <section class="settings-section">' +
-      '      <h3>Browser branding</h3>' +
+      '      <h3>Default zoom</h3>' +
+      '      <select id="set-zoom">' +
+             Object.entries(zoomLabels).map(([val, label]) =>
+               '<option value="' + val + '"' + (String(currentSettings.defaultZoom || 0) === val ? ' selected' : '') + '>' +
+               label + '</option>'
+             ).join('') +
+      '      </select>' +
+      '    </section>' +
+
+      '    <section class="settings-section">' +
+      '      <h3>Privacy &amp; Security</h3>' +
+      '      <label class="toggle-row"><input type="checkbox" id="set-https-only"' +
+             (currentSettings.httpsOnly ? ' checked' : '') +
+      '       /> HTTPS-only mode</label>' +
       '      <label class="toggle-row"><input type="checkbox" id="set-branding"' +
              (currentSettings.showBranding !== false ? ' checked' : '') +
       '       /> Show MonitorBrowser/1.0 in user-agent</label>' +
       '    </section>' +
+
       '    <section class="settings-section">' +
       '      <h3>Data</h3>' +
       '      <button class="settings-btn" id="clear-data">Clear browsing data</button>' +
@@ -407,6 +447,20 @@
       if (e.target === settingsOverlay) closeSettings();
     });
 
+    document.getElementById('set-startup').addEventListener('change', (e) => {
+      browser.setSettings({ startupBehavior: e.target.value });
+    });
+
+    const customHomeCheck = document.getElementById('set-use-custom-home');
+    const customHomeInput = document.getElementById('set-custom-home');
+    customHomeCheck.addEventListener('change', (e) => {
+      customHomeInput.disabled = !e.target.checked;
+      browser.setSettings({ useCustomHomepage: e.target.checked });
+    });
+    customHomeInput.addEventListener('change', (e) => {
+      browser.setSettings({ customHomepage: e.target.value.trim() });
+    });
+
     document.getElementById('set-engine').addEventListener('change', (e) => {
       browser.setSettings({ searchEngine: e.target.value });
     });
@@ -417,6 +471,14 @@
         btn.classList.add('is-active');
         browser.setSettings({ theme: btn.dataset.theme });
       });
+    });
+
+    document.getElementById('set-zoom').addEventListener('change', (e) => {
+      browser.setSettings({ defaultZoom: parseFloat(e.target.value) });
+    });
+
+    document.getElementById('set-https-only').addEventListener('change', (e) => {
+      browser.setSettings({ httpsOnly: e.target.checked });
     });
 
     document.getElementById('set-branding').addEventListener('change', (e) => {

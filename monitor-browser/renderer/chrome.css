@@ -531,6 +531,22 @@ input {
 }
 .settings-btn:hover { border-color: var(--intel-accent-dim); color: var(--text-primary); }
 
+.settings-input {
+  width: 100%;
+  padding: 6px 10px;
+  margin-top: 6px;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-border);
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-family: var(--font-data);
+  font-size: 12px;
+  outline: none;
+}
+.settings-input:focus { border-color: var(--intel-accent-dim); }
+.settings-input:disabled { opacity: 0.4; cursor: not-allowed; }
+.settings-input::placeholder { color: var(--text-tertiary); }
+
 /* ---------------- Find bar ---------------- */
 
 .find-bar {

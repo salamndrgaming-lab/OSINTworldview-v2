@@ -397,6 +397,12 @@ input {
   color: var(--surface-base);
 }
 
+/* ---------------- Incognito / Private mode ---------------- */
+
+body.is-incognito .titlebar { background: #0c0c14; }
+body.is-incognito .toolbar { background: #10101a; }
+body.is-incognito .wordmark { color: #a0a0c0; }
+
 /* ---------------- Bookmarks bar ---------------- */
 
 .bookmarks-bar {

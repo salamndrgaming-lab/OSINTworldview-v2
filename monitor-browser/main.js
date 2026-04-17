@@ -631,6 +631,173 @@ ipcMain.handle('window:maximize-toggle', () => {
 ipcMain.handle('window:close', () => mainWindow?.close());
 ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false);
 
+// ---------------------------------------------------------------------------
+// Incognito / Private window
+// ---------------------------------------------------------------------------
+let incognitoCounter = 0;
+
+ipcMain.handle('window:incognito', () => {
+  createIncognitoWindow();
+});
+
+function createIncognitoWindow() {
+  incognitoCounter++;
+  const partitionName = 'incognito-' + incognitoCounter + '-' + Date.now();
+
+  const win = new BaseWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 800,
+    minHeight: 500,
+    frame: false,
+    backgroundColor: '#0a0a10',
+    title: 'Monitor Browser — Private',
+  });
+
+  const chrome = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, 'preload-chrome.js'),
+      contextIsolation: true,
+      sandbox: false,
+      nodeIntegration: false,
+      partition: partitionName,
+    },
+  });
+  win.contentView.addChildView(chrome);
+  chrome.webContents.loadFile(CHROME_HTML);
+
+  const incTabs = new Map();
+  const incOrder = [];
+  let incActiveId = null;
+
+  function incLayoutViews() {
+    const { width, height } = win.getContentBounds();
+    chrome.setBounds({ x: 0, y: 0, width, height: CHROME_HEIGHT });
+    for (const [id, tab] of incTabs) {
+      if (id === incActiveId) {
+        tab.view.setBounds({ x: 0, y: CHROME_HEIGHT, width, height: Math.max(0, height - CHROME_HEIGHT) });
+      } else {
+        tab.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+      }
+    }
+  }
+
+  function incBroadcastTabs() {
+    const payload = incOrder.filter((id) => incTabs.has(id)).map((id) => {
+      const t = incTabs.get(id);
+      const wc = t.view.webContents;
+      return {
+        id, url: t.url, title: t.title, favicon: t.favicon,
+        isLoading: t.isLoading, canGoBack: wc.canGoBack(), canGoForward: wc.canGoForward(),
+        isHomepage: t.url.startsWith('file://') && t.url.includes('homepage'),
+        pinned: t.pinned || false, muted: t.muted || false, audible: wc.isCurrentlyAudible(),
+      };
+    });
+    try { chrome.webContents.send('tabs:updated', { tabs: payload, activeId: incActiveId, incognito: true }); } catch {}
+  }
+
+  function incNewTab(rawUrl) {
+    const url = normalizeUrl(rawUrl || resolveHomepageUrl());
+    const id = randomUUID();
+    const view = new WebContentsView({
+      webPreferences: {
+        preload: path.join(__dirname, 'preload-content.js'),
+        contextIsolation: true, sandbox: true, nodeIntegration: false,
+        partition: partitionName,
+      },
+    });
+    const tab = { view, url, title: 'New Tab', favicon: null, isLoading: true, canGoBack: false, canGoForward: false, pinned: false, muted: false };
+    incTabs.set(id, tab);
+    incOrder.push(id);
+
+    const wc = view.webContents;
+    wc.on('did-start-navigation', () => { tab.isLoading = true; incBroadcastTabs(); });
+    wc.on('did-navigate', (_e, navUrl) => { tab.url = navUrl; tab.isLoading = false; incBroadcastTabs(); });
+    wc.on('did-navigate-in-page', (_e, navUrl) => { tab.url = navUrl; incBroadcastTabs(); });
+    wc.on('page-title-updated', (_e, title) => { tab.title = title; incBroadcastTabs(); });
+    wc.on('page-favicon-updated', (_e, favicons) => { tab.favicon = favicons[0] || null; incBroadcastTabs(); });
+    wc.on('did-fail-load', () => { tab.isLoading = false; incBroadcastTabs(); });
+    wc.on('did-finish-load', () => { tab.isLoading = false; incBroadcastTabs(); });
+
+    win.contentView.addChildView(view);
+    wc.loadURL(url);
+    incActiveId = id;
+    incLayoutViews();
+    incBroadcastTabs();
+    return id;
+  }
+
+  function incSwitchTab(id) {
+    if (!incTabs.has(id)) return;
+    incActiveId = id;
+    incLayoutViews();
+    incBroadcastTabs();
+  }
+
+  function incCloseTab(id) {
+    const tab = incTabs.get(id);
+    if (!tab) return;
+    win.contentView.removeChildView(tab.view);
+    tab.view.webContents.close();
+    incTabs.delete(id);
+    const idx = incOrder.indexOf(id);
+    if (idx >= 0) incOrder.splice(idx, 1);
+    if (incActiveId === id) {
+      if (incOrder.length > 0) {
+        incSwitchTab(incOrder[Math.min(idx, incOrder.length - 1)]);
+      } else {
+        win.close();
+        return;
+      }
+    }
+    incBroadcastTabs();
+  }
+
+  // Route IPC from this incognito chrome to local tab management
+  const wcId = chrome.webContents.id;
+  const incIpc = {
+    'tab:new': (_e, url) => incNewTab(url),
+    'tab:close': (_e, id) => incCloseTab(id ?? incActiveId),
+    'tab:switch': (_e, id) => incSwitchTab(id),
+    'tab:navigate': (_e, _id, url) => {
+      const t = incTabs.get(incActiveId);
+      if (t) t.view.webContents.loadURL(normalizeUrl(url));
+    },
+    'tab:back': () => { const t = incTabs.get(incActiveId); if (t) t.view.webContents.goBack(); },
+    'tab:forward': () => { const t = incTabs.get(incActiveId); if (t) t.view.webContents.goForward(); },
+    'tab:reload': () => { const t = incTabs.get(incActiveId); if (t) t.view.webContents.reload(); },
+    'tab:home': () => { const t = incTabs.get(incActiveId); if (t) t.view.webContents.loadURL(resolveHomepageUrl()); },
+    'window:minimize': () => win.minimize(),
+    'window:maximize-toggle': () => { if (win.isMaximized()) win.unmaximize(); else win.maximize(); },
+    'window:close': () => win.close(),
+    'window:is-maximized': () => win.isMaximized(),
+  };
+
+  // Intercept IPC from this window's chrome
+  chrome.webContents.ipc.handle = chrome.webContents.ipc.handle || (() => {});
+  for (const [channel, handler] of Object.entries(incIpc)) {
+    chrome.webContents.ipc.handle(channel, handler);
+  }
+
+  win.on('resize', incLayoutViews);
+  win.on('maximize', incLayoutViews);
+  win.on('unmaximize', incLayoutViews);
+
+  win.on('closed', () => {
+    for (const [, tab] of incTabs) {
+      try { tab.view.webContents.close(); } catch {}
+    }
+    incTabs.clear();
+    incOrder.length = 0;
+  });
+
+  chrome.webContents.once('did-finish-load', () => {
+    win.show();
+    incNewTab(resolveHomepageUrl());
+    try { chrome.webContents.send('settings:changed', { ...loadSettings(), incognito: true }); } catch {}
+  });
+}
+
 // Settings overlay: expand the chromeView to full window height so the
 // settings card isn't clipped by the normal 76px chrome height.
 ipcMain.handle('window:settings-expand', () => {

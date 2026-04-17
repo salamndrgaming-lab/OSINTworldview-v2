@@ -381,6 +381,9 @@
         e.preventDefault();
         browser.newTab();
         break;
+      case 'n':
+        if (e.shiftKey) { e.preventDefault(); browser.incognito(); }
+        break;
       case 'w':
         e.preventDefault();
         if (activeId) browser.closeTab(activeId);
@@ -476,16 +479,27 @@
     document.documentElement.dataset.theme = name || 'amber';
   }
 
+  const wordmarkEl = document.querySelector('.wordmark');
+
+  function applyIncognitoMode(isIncognito) {
+    if (isIncognito) {
+      document.body.classList.add('is-incognito');
+      if (wordmarkEl) wordmarkEl.textContent = 'PRIVATE';
+    }
+  }
+
   // Load initial settings.
   browser.getSettings().then((res) => {
     currentSettings = res.settings || {};
     settingsMeta = { searchEngines: res.searchEngines || {}, themes: res.themes || {} };
     applyThemeToChrome(currentSettings.theme);
+    applyIncognitoMode(currentSettings.incognito);
   }).catch(() => {});
 
   browser.onSettingsChanged((s) => {
     currentSettings = s || currentSettings;
     applyThemeToChrome(currentSettings.theme);
+    applyIncognitoMode(currentSettings.incognito);
     if (typeof refreshBookmarksBar === 'function') refreshBookmarksBar();
   });
 

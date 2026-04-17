@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('browser', {
   closeWindow: () => ipcRenderer.invoke('window:close'),
   isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
 
+  incognito: () => ipcRenderer.invoke('window:incognito'),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
 
   // Bookmarks

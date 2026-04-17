@@ -18,6 +18,23 @@ contextBridge.exposeInMainWorld('browser', {
   stop: (id) => ipcRenderer.invoke('tab:stop', id),
   home: (id) => ipcRenderer.invoke('tab:home', id),
   devtools: (id) => ipcRenderer.invoke('tab:devtools', id),
+  duplicateTab: (id) => ipcRenderer.invoke('tab:duplicate', id),
+  pinTab: (id) => ipcRenderer.invoke('tab:pin', id),
+  muteTab: (id) => ipcRenderer.invoke('tab:mute', id),
+
+  // Find in page
+  findStart: (text, opts) => ipcRenderer.invoke('find:start', text, opts),
+  findNext: (text, forward) => ipcRenderer.invoke('find:next', text, forward),
+  findStop: () => ipcRenderer.invoke('find:stop'),
+
+  // Zoom
+  zoomIn: () => ipcRenderer.invoke('zoom:in'),
+  zoomOut: () => ipcRenderer.invoke('zoom:out'),
+  zoomReset: () => ipcRenderer.invoke('zoom:reset'),
+
+  // Print / fullscreen
+  print: () => ipcRenderer.invoke('page:print'),
+  fullscreen: () => ipcRenderer.invoke('window:fullscreen'),
 
   // Window controls (custom titlebar)
   minimize: () => ipcRenderer.invoke('window:minimize'),
@@ -26,6 +43,26 @@ contextBridge.exposeInMainWorld('browser', {
   isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
 
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+
+  // Bookmarks
+  bookmarksList: () => ipcRenderer.invoke('bookmarks:list'),
+  bookmarksAdd: (entry) => ipcRenderer.invoke('bookmarks:add', entry),
+  bookmarksRemove: (url) => ipcRenderer.invoke('bookmarks:remove', url),
+  bookmarksMove: (url, folder) => ipcRenderer.invoke('bookmarks:move', url, folder),
+
+  // History
+  historyList: (query, limit) => ipcRenderer.invoke('history:list', query, limit),
+  historyClear: (since) => ipcRenderer.invoke('history:clear', since),
+
+  // Downloads
+  downloadsList: () => ipcRenderer.invoke('downloads:list'),
+  downloadsCancel: (id) => ipcRenderer.invoke('downloads:cancel', id),
+  downloadsReveal: (id) => ipcRenderer.invoke('downloads:reveal', id),
+  onDownloadsUpdated: (handler) => {
+    const listener = (_e, payload) => { try { handler(payload); } catch (err) { console.error('[chrome] downloads handler threw', err); } };
+    ipcRenderer.on('downloads:updated', listener);
+    return () => ipcRenderer.off('downloads:updated', listener);
+  },
 
   // Settings
   getSettings: () => ipcRenderer.invoke('settings:get'),
@@ -46,7 +83,6 @@ contextBridge.exposeInMainWorld('browser', {
       try {
         handler(payload);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[chrome] tabs handler threw', err);
       }
     };

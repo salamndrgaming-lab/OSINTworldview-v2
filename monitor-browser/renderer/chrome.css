@@ -397,6 +397,55 @@ input {
   color: var(--surface-base);
 }
 
+/* ---------------- Bookmarks bar ---------------- */
+
+.bookmarks-bar {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 10px;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--surface-border);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.bookmarks-bar::-webkit-scrollbar { display: none; }
+.bookmarks-bar.hidden { display: none; }
+
+.bm-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  max-width: 160px;
+  transition: background var(--dur-fast) var(--easing-out), color var(--dur-fast) var(--easing-out);
+}
+.bm-bar-item:hover { background: var(--surface-hover); color: var(--text-primary); }
+.bm-bar-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bm-bar-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  object-fit: contain;
+}
+
+.bm-bar-empty {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 0 4px;
+}
+
 /* ---------------- URL autocomplete dropdown ---------------- */
 
 .url-form { position: relative; }

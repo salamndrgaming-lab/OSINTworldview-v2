@@ -94,6 +94,7 @@ const DEFAULT_SETTINGS = {
   defaultZoom: 0,          // Electron zoom level (0 = 100%)
   startupBehavior: 'homepage', // 'homepage' | 'restore' | 'blank'
   adBlock: true,
+  showBookmarksBar: false,
 };
 
 let settingsCache = null;

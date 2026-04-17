@@ -486,6 +486,7 @@
   browser.onSettingsChanged((s) => {
     currentSettings = s || currentSettings;
     applyThemeToChrome(currentSettings.theme);
+    if (typeof refreshBookmarksBar === 'function') refreshBookmarksBar();
   });
 
   settingsBtn.addEventListener('click', () => openSettings());
@@ -573,6 +574,13 @@
       '    </section>' +
 
       '    <section class="settings-section">' +
+      '      <h3>Toolbar</h3>' +
+      '      <label class="toggle-row"><input type="checkbox" id="set-bm-bar"' +
+             (currentSettings.showBookmarksBar ? ' checked' : '') +
+      '       /> Show bookmarks bar</label>' +
+      '    </section>' +
+
+      '    <section class="settings-section">' +
       '      <h3>Data</h3>' +
       '      <button class="settings-btn" id="clear-data">Clear browsing data</button>' +
       '      <button class="settings-btn" id="reset-settings">Reset all settings</button>' +
@@ -613,6 +621,10 @@
 
     document.getElementById('set-zoom').addEventListener('change', (e) => {
       browser.setSettings({ defaultZoom: parseFloat(e.target.value) });
+    });
+
+    document.getElementById('set-bm-bar').addEventListener('change', (e) => {
+      browser.setSettings({ showBookmarksBar: e.target.checked });
     });
 
     document.getElementById('set-adblock').addEventListener('change', (e) => {
@@ -785,8 +797,37 @@
   function bookmarkCurrentPage() {
     const tab = tabs.find((t) => t.id === activeId);
     if (!tab || tab.isHomepage) return;
-    browser.bookmarksAdd({ url: tab.url, title: tab.title, favicon: tab.favicon });
+    browser.bookmarksAdd({ url: tab.url, title: tab.title, favicon: tab.favicon }).then(() => {
+      refreshBookmarksBar();
+    });
   }
+
+  // --- Bookmarks bar ---
+  const bmBar = document.getElementById('bookmarks-bar');
+
+  function refreshBookmarksBar() {
+    if (!currentSettings.showBookmarksBar) {
+      bmBar.classList.add('hidden');
+      return;
+    }
+    bmBar.classList.remove('hidden');
+    browser.bookmarksList().then((bm) => {
+      if (!bm || bm.length === 0) {
+        bmBar.innerHTML = '<span class="bm-bar-empty">No bookmarks yet — press Ctrl+D to add one</span>';
+        return;
+      }
+      bmBar.innerHTML = bm.slice(0, 20).map((b) =>
+        '<button class="bm-bar-item" data-url="' + escapeAttr(b.url) + '" title="' + escapeAttr(b.url) + '">' +
+        (b.favicon ? '<img class="bm-bar-icon" src="' + escapeAttr(b.favicon) + '" onerror="this.style.display=\'none\'" />' : '') +
+        '<span>' + esc(b.title || shortUrl(b.url)) + '</span></button>'
+      ).join('');
+      bmBar.querySelectorAll('.bm-bar-item').forEach((btn) => {
+        btn.addEventListener('click', () => browser.navigate(null, btn.dataset.url));
+      });
+    }).catch(() => {});
+  }
+
+  refreshBookmarksBar();
 
   // --- Bookmarks panel ---
   function renderBookmarksPanel(container) {

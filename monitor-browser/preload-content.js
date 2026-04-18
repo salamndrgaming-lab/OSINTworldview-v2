@@ -11,6 +11,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('monitorApi', {
   fetchIntel: (url) => ipcRenderer.invoke('intel:fetch', url),
+  getYtEmbedPort: () => ipcRenderer.invoke('yt:embed-port'),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
   onSettingsChanged: (handler) => {

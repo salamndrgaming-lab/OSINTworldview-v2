@@ -756,10 +756,10 @@
   // PANEL: Live News Streams (YouTube live embeds)
   // --------------------------------------------------------------------------
 
-  // We resolve each channel's current live video ID on demand via the intel
-  // proxy (fetches the channel page HTML). This avoids: (a) hardcoded IDs
-  // that rot when YouTube restarts a stream, and (b) the deprecated
-  // `live_stream?channel=` embed path that returns Error 152.
+  // Channels with 24/7 live streams. We embed directly via the local embed
+  // server's /youtube-live endpoint using the channel ID — no video ID
+  // scraping needed. The embed server serves from http://127.0.0.1:{port}
+  // which YouTube accepts as a valid origin (avoids Error 152).
   const LIVE_STREAMS = [
     { id: 'aje',      label: 'Al Jazeera',  channelId: 'UCNye-wNBqNL5ZzHSJj3l8Bg' },
     { id: 'dw',       label: 'DW News',     channelId: 'UCknLrEdhRCp1aegoMqRaCZg' },
@@ -771,86 +771,52 @@
     { id: 'euronews', label: 'Euronews',    channelId: 'UCSrZ3UV4jOidv8ppoVuvW9Q' },
   ];
 
-  // Cache resolved video IDs so we don't scrape on every tab click.
-  // { channelId → { videoId, resolvedAt } }
-  const ytVideoIdCache = {};
-  const YT_CACHE_TTL = 10 * 60 * 1000; // 10 min
-
-  function resolveYtLiveId(channelId) {
-    const cached = ytVideoIdCache[channelId];
-    if (cached && Date.now() - cached.resolvedAt < YT_CACHE_TTL) {
-      return Promise.resolve(cached.videoId);
-    }
-    // Fetch the channel's /live page via the intel proxy, then extract the
-    // video ID from the `videoDetails` blob YouTube embeds in the HTML.
-    return fetchIntel('https://www.youtube.com/channel/' + channelId + '/live')
-      .then(function (html) {
-        let videoId = null;
-        // Primary: look for videoDetails.videoId where isLive is true.
-        var detailsIdx = html.indexOf('"videoDetails"');
-        if (detailsIdx !== -1) {
-          var block = html.substring(detailsIdx, detailsIdx + 5000);
-          var vidMatch = block.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/);
-          var liveMatch = block.match(/"isLive"\s*:\s*true/);
-          if (vidMatch && liveMatch) videoId = vidMatch[1];
-        }
-        // Fallback: og:url meta.
-        if (!videoId) {
-          var ogMatch = html.match(/property="og:url"\s+content="[^"]*\/watch\?v=([a-zA-Z0-9_-]{11})"/);
-          if (ogMatch) videoId = ogMatch[1];
-        }
-        if (videoId) {
-          ytVideoIdCache[channelId] = { videoId: videoId, resolvedAt: Date.now() };
-        }
-        return videoId;
-      })
-      .catch(function () { return null; });
-  }
-
   // Port for local YouTube embed server (avoids Error 152 from file:// origin)
   let ytEmbedPort = 0;
   const ytPortReady = (window.monitorApi && window.monitorApi.getYtEmbedPort)
     ? window.monitorApi.getYtEmbedPort().then(function (p) { ytEmbedPort = p || 0; return p; }).catch(function () { return 0; })
     : Promise.resolve(0);
 
+  function streamLiveUrl(channelId, autoplay) {
+    if (ytEmbedPort) {
+      return 'http://127.0.0.1:' + ytEmbedPort + '/youtube-live?channelId=' + channelId +
+        '&autoplay=' + (autoplay ? 1 : 0) + '&mute=1';
+    }
+    // Fallback: direct YouTube embed (may fail from file:// origin)
+    return 'https://www.youtube.com/embed/live_stream?channel=' + channelId +
+      '&autoplay=' + (autoplay ? 1 : 0) + '&mute=1&rel=0&modestbranding=1';
+  }
   function streamEmbedUrl(videoId, autoplay) {
     if (ytEmbedPort) {
       return 'http://127.0.0.1:' + ytEmbedPort + '/youtube-embed?videoId=' + videoId +
         '&autoplay=' + (autoplay ? 1 : 0) + '&mute=1';
     }
-    // Fallback if embed server not available
     return 'https://www.youtube-nocookie.com/embed/' + videoId +
       '?autoplay=' + (autoplay ? 1 : 0) + '&mute=1&rel=0&modestbranding=1';
   }
   function streamWatchUrl(channelId) {
     return 'https://www.youtube.com/channel/' + channelId + '/live';
   }
-  function streamVideoUrl(videoId) {
-    return 'https://www.youtube.com/watch?v=' + videoId;
-  }
 
   function renderStreamEmbed(body, channelId, autoplay) {
     var embed = body.querySelector('.stream-embed');
     if (!embed) return;
-    embed.innerHTML = '<div class="stream-loading">Resolving live stream&hellip;</div>';
+    embed.innerHTML = '<div class="stream-loading">Loading live stream&hellip;</div>';
 
-    // Wait for embed port, then resolve video ID
     ytPortReady.then(function () {
-      return resolveYtLiveId(channelId);
-    }).then(function (videoId) {
-      if (!videoId) {
+      if (!ytEmbedPort) {
         embed.innerHTML =
           '<div class="stream-offline">' +
-          '<span>Stream not currently live</span>' +
-          '<a href="' + streamWatchUrl(channelId) + '" target="_blank" rel="noopener">Try on YouTube &rarr;</a>' +
+          '<span>Embed server not available</span>' +
+          '<a href="' + streamWatchUrl(channelId) + '" target="_blank" rel="noopener">Watch on YouTube &rarr;</a>' +
           '</div>';
         return;
       }
       embed.innerHTML =
-        '<iframe src="' + streamEmbedUrl(videoId, autoplay) +
+        '<iframe src="' + streamLiveUrl(channelId, autoplay) +
         '" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture; fullscreen; storage-access" allowfullscreen></iframe>' +
         '<div class="stream-embed-foot">' +
-        '<a href="' + streamVideoUrl(videoId) + '" target="_blank" rel="noopener">Open on YouTube &rarr;</a>' +
+        '<a href="' + streamWatchUrl(channelId) + '" target="_blank" rel="noopener">Open on YouTube &rarr;</a>' +
         '</div>';
     });
   }
@@ -877,7 +843,6 @@
         '  <span class="stream-hint">If a stream shows an error, the channel may be off-air.</span>' +
         '</div>';
 
-      // Load the first stream.
       renderStreamEmbed(body, activeStream.channelId, false);
 
       body.querySelectorAll('.stream-tabs button').forEach((btn) => {

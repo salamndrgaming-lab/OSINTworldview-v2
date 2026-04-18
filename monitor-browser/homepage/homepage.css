@@ -637,6 +637,84 @@ html, body {
   color: var(--text-tertiary);
   font-size: 10px;
 }
+.stream-add-btn {
+  min-width: 32px;
+  font-size: 16px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--intel-accent);
+  border: 1px dashed var(--surface-border);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 2px 8px;
+}
+.stream-add-btn:hover { background: rgba(255,255,255,0.05); }
+.stream-remove {
+  margin-left: 6px;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+.stream-tabs button:hover .stream-remove { opacity: 0.8; }
+.stream-remove:hover { color: #ff4e4e !important; opacity: 1 !important; }
+.stream-add-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 200px;
+  padding: 24px;
+}
+.stream-add-title {
+  font-family: var(--font-data);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+}
+.stream-url-input, .stream-label-input {
+  width: 100%;
+  max-width: 420px;
+  padding: 8px 12px;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font: 13px var(--font-body);
+  outline: none;
+}
+.stream-url-input:focus, .stream-label-input:focus {
+  border-color: var(--intel-accent);
+}
+.stream-add-actions {
+  display: flex;
+  gap: 8px;
+}
+.stream-add-actions button {
+  padding: 6px 18px;
+  border-radius: 4px;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+}
+.stream-add-confirm {
+  background: var(--intel-accent) !important;
+  color: #111 !important;
+  border-color: var(--intel-accent) !important;
+  font-weight: 600;
+}
+.stream-add-confirm:hover { opacity: 0.9; }
+.stream-add-cancel:hover { background: rgba(255,255,255,0.05); }
+.stream-add-error {
+  color: #ff4e4e;
+  font-size: 11px;
+  min-height: 16px;
+}
 
 /* -------------- Markets / Crypto -------------- */
 .markets-grid {

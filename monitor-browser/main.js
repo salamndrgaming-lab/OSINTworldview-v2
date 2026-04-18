@@ -1422,27 +1422,29 @@ ipcMain.handle('shell:open-external', (_e, url) => {
 ipcMain.handle('yt:embed-port', () => ytEmbedPort);
 
 // ---------------------------------------------------------------------------
-// intel:fetch — per-domain rate limiter + response cache
+// intel:fetch — per-domain rate limiter + response cache + retry
 // ---------------------------------------------------------------------------
 // OSINT dashboards fan out many concurrent requests at startup. Without
 // throttling, APIs like GDELT return 429s and flood the console. We keep a
-// small per-domain queue that serialises requests and holds a short-lived
-// cache to deduplicate identical URLs within a 60-second window.
+// small per-domain queue that serialises requests and holds a response cache
+// to deduplicate identical URLs.
 
 const _intelQueue = new Map();   // domain -> Promise chain
 const _intelCache = new Map();   // url -> { ts, body }
-const INTEL_CACHE_TTL = 60_000;  // 60 s
-const INTEL_DOMAIN_DELAY = 350;  // ms between requests to the same domain
+const INTEL_CACHE_TTL = 5 * 60_000;  // 5 min — serve fresh
+const INTEL_STALE_TTL = 30 * 60_000; // 30 min — serve stale on error
+const INTEL_DOMAIN_DELAY = 400;  // ms between requests to the same domain
 
 function _enqueueIntelFetch(domain, fn) {
   const prev = _intelQueue.get(domain) || Promise.resolve();
   const next = prev
-    .then(() => new Promise((r) => setTimeout(r, INTEL_DOMAIN_DELAY)))
     .then(fn)
-    .catch((err) => { throw err; });
+    .finally(() => new Promise((r) => setTimeout(r, INTEL_DOMAIN_DELAY)));
   _intelQueue.set(domain, next.catch(() => {}));
   return next;
 }
+
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
 ipcMain.handle('intel:fetch', async (event, url) => {
   const senderUrl = event.sender.getURL();
@@ -1460,40 +1462,63 @@ ipcMain.handle('intel:fetch', async (event, url) => {
     throw new Error(`unsupported scheme: ${parsed.protocol}`);
   }
 
+  // Return fresh cache hit immediately
   const cached = _intelCache.get(url);
   if (cached && Date.now() - cached.ts < INTEL_CACHE_TTL) {
     return cached.body;
   }
 
-  const isYouTube = parsed.hostname.endsWith('youtube.com') || parsed.hostname.endsWith('googlevideo.com');
-  const userAgent = isYouTube
-    ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
-    : 'MonitorBrowser/1.0 (+https://osint-worldview.vercel.app)';
-  const accept = isYouTube
-    ? 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-    : 'application/json, text/plain, */*';
+  const isRss = url.includes('/rss') || url.includes('/feed') || url.includes('/xml') ||
+                url.includes('.xml') || url.includes('rdf/rss');
+  const accept = isRss
+    ? 'application/rss+xml, application/xml, text/xml, */*'
+    : 'application/json, text/html, text/plain, */*';
 
   return _enqueueIntelFetch(parsed.hostname, async () => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20_000);
-    try {
-      const res = await fetch(parsed.toString(), {
-        headers: { accept, 'user-agent': userAgent },
-        signal: controller.signal,
-        redirect: 'follow',
-      });
-      const body = await res.text();
-      if (!res.ok) {
-        if (res.status === 429) {
-          console.warn(`[intel] 429 rate-limited by ${parsed.hostname} — will retry on next panel refresh`);
+    let lastErr = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15_000);
+      try {
+        const res = await fetch(parsed.toString(), {
+          headers: {
+            'Accept': accept,
+            'User-Agent': BROWSER_UA,
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          signal: controller.signal,
+          redirect: 'follow',
+        });
+        const body = await res.text();
+        if (!res.ok) {
+          if (res.status === 429) {
+            console.warn(`[intel] 429 from ${parsed.hostname}`);
+            // On 429, return stale cache if available
+            if (cached && Date.now() - cached.ts < INTEL_STALE_TTL) {
+              return cached.body;
+            }
+          }
+          lastErr = new Error(`HTTP ${res.status}`);
+          continue;
         }
-        throw new Error(`HTTP ${res.status}`);
+        _intelCache.set(url, { ts: Date.now(), body });
+        return body;
+      } catch (err) {
+        lastErr = err;
+        if (err.name === 'AbortError') {
+          lastErr = new Error(`Timeout fetching ${parsed.hostname}`);
+          break;
+        }
+      } finally {
+        clearTimeout(timer);
       }
-      _intelCache.set(url, { ts: Date.now(), body });
-      return body;
-    } finally {
-      clearTimeout(timer);
     }
+    // All retries failed — return stale cache if available
+    if (cached && Date.now() - cached.ts < INTEL_STALE_TTL) {
+      return cached.body;
+    }
+    throw lastErr || new Error('Fetch failed');
   });
 });
 

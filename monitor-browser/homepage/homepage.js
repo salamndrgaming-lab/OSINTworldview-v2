@@ -14,9 +14,49 @@
   // --------------------------------------------------------------------------
 
   const hasApi = !!(window.monitorApi && typeof window.monitorApi.fetchIntel === 'function');
-  const fetchIntel = hasApi
+  const _rawFetchIntel = hasApi
     ? (url) => window.monitorApi.fetchIntel(url)
     : () => Promise.reject(new Error('Intel proxy unavailable (preload missing)'));
+
+  // Persistent response cache in localStorage — panels show last-known-good
+  // data immediately while refreshing in the background.
+  const RESP_CACHE_KEY = 'monitor:resp-cache:v1';
+  const RESP_CACHE_MAX_AGE = 60 * 60 * 1000; // 1 hour
+  let _respCache = {};
+  try { _respCache = JSON.parse(localStorage.getItem(RESP_CACHE_KEY) || '{}'); } catch (_) { _respCache = {}; }
+  function _saveRespCache() {
+    try {
+      // Prune old entries to keep localStorage bounded
+      const now = Date.now();
+      for (const k of Object.keys(_respCache)) {
+        if (now - (_respCache[k].ts || 0) > RESP_CACHE_MAX_AGE) delete _respCache[k];
+      }
+      localStorage.setItem(RESP_CACHE_KEY, JSON.stringify(_respCache));
+    } catch (_) { /* storage full — ignore */ }
+  }
+
+  function fetchIntel(url) {
+    return _rawFetchIntel(url).then(function (body) {
+      // Cache successful responses persistently
+      _respCache[url] = { body: body.slice(0, 50000), ts: Date.now() };
+      _saveRespCache();
+      return body;
+    }).catch(function (err) {
+      // On failure, return stale persistent cache if available
+      var cached = _respCache[url];
+      if (cached && cached.body) {
+        console.warn('[dashboard] serving stale cache for', url, '—', err.message);
+        return cached.body;
+      }
+      throw err;
+    });
+  }
+
+  function getCachedResponse(url) {
+    var cached = _respCache[url];
+    return cached ? cached.body : null;
+  }
+
   const settingsApi = window.monitorApi && typeof window.monitorApi.getSettings === 'function'
     ? window.monitorApi
     : null;
@@ -610,40 +650,58 @@
 
       let killed = false;
       let timer = null;
+
+      function renderNewsList(text, src, out) {
+        var items = parseRss(text).slice(0, 14);
+        if (items.length === 0) return false;
+        var list = items.map(function (it) {
+          return '<li><a href="' + escapeHtml(it.link) + '" target="_blank" rel="noopener">' +
+            '<span class="news-title">' + escapeHtml(it.title) + '</span>' +
+            '<span class="news-meta"><span class="src">' + escapeHtml(src.label) + '</span>' +
+            escapeHtml(formatRelTime(it.date)) + '</span></a></li>';
+        }).join('');
+        out.innerHTML = '<ul class="news-list">' + list + '</ul>';
+        return true;
+      }
+
       function loadNews() {
         if (killed) return;
-        setPanelStatus(panel, 'loading', 'FETCH');
-        const src = NEWS_SOURCES.find((s) => s.id === state.newsSource) || NEWS_SOURCES[0];
-        const out = body.querySelector('.news-body');
-        out.innerHTML = '<div class="panel-loading">Fetching headlines&hellip;</div>';
+        var src = NEWS_SOURCES.find(function (s) { return s.id === state.newsSource; }) || NEWS_SOURCES[0];
+        var out = body.querySelector('.news-body');
+
+        // Show cached data immediately while fetching
+        var cachedText = getCachedResponse(src.url);
+        if (cachedText && renderNewsList(cachedText, src, out)) {
+          setPanelStatus(panel, 'loading', 'UPDATING');
+        } else {
+          out.innerHTML = '<div class="panel-loading">Fetching headlines&hellip;</div>';
+          setPanelStatus(panel, 'loading', 'FETCH');
+        }
 
         fetchIntel(src.url)
-          .then((text) => {
+          .then(function (text) {
             if (killed) return;
-            const items = parseRss(text).slice(0, 14);
-            if (items.length === 0) {
+            if (!renderNewsList(text, src, out)) {
               out.innerHTML = '<div class="panel-empty">No items returned.</div>';
               setPanelStatus(panel, 'error', 'EMPTY');
               return;
             }
-            const list = items.map((it) =>
-              '<li><a href="' + escapeHtml(it.link) + '" target="_blank" rel="noopener">' +
-              '<span class="news-title">' + escapeHtml(it.title) + '</span>' +
-              '<span class="news-meta"><span class="src">' + escapeHtml(src.label) + '</span>' +
-              escapeHtml(formatRelTime(it.date)) + '</span></a></li>'
-            ).join('');
-            out.innerHTML = '<ul class="news-list">' + list + '</ul>';
             setPanelStatus(panel, 'live', 'LIVE');
           })
-          .catch((err) => {
+          .catch(function (err) {
             if (killed) return;
-            renderErrorInto(out, err, loadNews);
-            setPanelStatus(panel, 'error', 'ERR');
+            // If we already showed cached data, keep it and just update status
+            if (cachedText) {
+              setPanelStatus(panel, 'live', 'CACHED');
+            } else {
+              renderErrorInto(out, err, loadNews);
+              setPanelStatus(panel, 'error', 'ERR');
+            }
           });
       }
 
       loadNews();
-      timer = setInterval(loadNews, 5 * 60 * 1000);
+      timer = setInterval(loadNews, 10 * 60 * 1000);
       return () => { killed = true; if (timer) clearInterval(timer); };
     },
   };
@@ -872,9 +930,9 @@
           body.innerHTML = '<div class="panel-loading">Querying GDELT&hellip;</div>';
         }
 
-        const q = 'conflict OR attack OR sanctions OR cyberattack OR "military operation"';
+        const q = 'conflict OR sanctions OR "military operation"';
         const url = 'https://api.gdeltproject.org/api/v2/doc/doc?query=' + encodeURIComponent(q) +
-                    '&mode=artlist&format=json&maxrecords=15&timespan=1d&sort=DateDesc';
+                    '&mode=artlist&format=json&maxrecords=12&timespan=1d&sort=DateDesc';
         fetchIntel(url)
           .then((text) => {
             if (killed) return;
@@ -982,46 +1040,63 @@
     render: (body, panel) => {
       let killed = false;
       let timer = null;
+      const marketsUrl = 'https://stooq.com/q/l/?s=' + encodeURIComponent(MARKET_TICKERS.map((t) => t.sym).join(',')) + '&i=d&f=sd2t2ohlcv';
+
+      function renderMarkets(csv) {
+        var rows = parseCsv(csv);
+        var head = rows.shift();
+        if (!head) return false;
+        var idx = {
+          sym: head.indexOf('Symbol'),
+          close: head.indexOf('Close'),
+          open: head.indexOf('Open'),
+        };
+        if (idx.sym === -1 || idx.close === -1) return false;
+        var html = MARKET_TICKERS.map(function (t) {
+          var row = rows.find(function (r) { return (r[idx.sym] || '').toLowerCase() === t.sym.toLowerCase(); });
+          if (!row) return tickerCard(t.label, '—', null);
+          var close = parseFloat(row[idx.close]);
+          var open = parseFloat(row[idx.open]);
+          var delta = !isNaN(close) && !isNaN(open) && open !== 0
+            ? ((close - open) / open) * 100
+            : null;
+          return tickerCard(t.label, isNaN(close) ? '—' : formatPrice(close), delta);
+        }).join('');
+        body.innerHTML = '<div class="markets-grid">' + html + '</div>';
+        return true;
+      }
+
       function load() {
         if (killed) return;
-        setPanelStatus(panel, 'loading', 'FETCH');
-        body.innerHTML = '<div class="panel-loading">Fetching quotes&hellip;</div>';
-        const syms = MARKET_TICKERS.map((t) => t.sym).join(',');
-        const url = 'https://stooq.com/q/l/?s=' + encodeURIComponent(syms) + '&i=d&f=sd2t2ohlcv';
-        fetchIntel(url)
-          .then((csv) => {
+        var cachedCsv = getCachedResponse(marketsUrl);
+        if (cachedCsv && renderMarkets(cachedCsv)) {
+          setPanelStatus(panel, 'loading', 'UPDATING');
+        } else {
+          setPanelStatus(panel, 'loading', 'FETCH');
+          body.innerHTML = '<div class="panel-loading">Fetching quotes&hellip;</div>';
+        }
+        fetchIntel(marketsUrl)
+          .then(function (csv) {
             if (killed) return;
-            const rows = parseCsv(csv);
-            const head = rows.shift();
-            if (!head) throw new Error('Stooq returned empty CSV');
-            const idx = {
-              sym: head.indexOf('Symbol'),
-              close: head.indexOf('Close'),
-              open: head.indexOf('Open'),
-            };
-            const html = MARKET_TICKERS.map((t) => {
-              const row = rows.find((r) => (r[idx.sym] || '').toLowerCase() === t.sym.toLowerCase());
-              if (!row) {
-                return tickerCard(t.label, '—', null);
-              }
-              const close = parseFloat(row[idx.close]);
-              const open = parseFloat(row[idx.open]);
-              const delta = !isNaN(close) && !isNaN(open) && open !== 0
-                ? ((close - open) / open) * 100
-                : null;
-              return tickerCard(t.label, isNaN(close) ? '—' : formatPrice(close), delta);
-            }).join('');
-            body.innerHTML = '<div class="markets-grid">' + html + '</div>';
+            if (!renderMarkets(csv)) {
+              body.innerHTML = '<div class="panel-empty">Stooq returned unexpected data.</div>';
+              setPanelStatus(panel, 'error', 'ERR');
+              return;
+            }
             setPanelStatus(panel, 'live', 'LIVE');
           })
-          .catch((err) => {
+          .catch(function (err) {
             if (killed) return;
-            renderErrorInto(body, err, load);
-            setPanelStatus(panel, 'error', 'ERR');
+            if (cachedCsv) {
+              setPanelStatus(panel, 'live', 'CACHED');
+            } else {
+              renderErrorInto(body, err, load);
+              setPanelStatus(panel, 'error', 'ERR');
+            }
           });
       }
       load();
-      timer = setInterval(load, 3 * 60 * 1000);
+      timer = setInterval(load, 5 * 60 * 1000);
       return () => { killed = true; if (timer) clearInterval(timer); };
     },
   };
@@ -1072,35 +1147,56 @@
     render: (body, panel) => {
       let killed = false;
       let timer = null;
+      const ids = CRYPTO_COINS.map((c) => c.id).join(',');
+      const cryptoUrl = 'https://api.coingecko.com/api/v3/simple/price?ids=' +
+                  encodeURIComponent(ids) +
+                  '&vs_currencies=usd&include_24hr_change=true';
+
+      function renderCrypto(text) {
+        try {
+          var data = JSON.parse(text);
+          var html = CRYPTO_COINS.map(function (c) {
+            var row = data[c.id];
+            if (!row || typeof row.usd !== 'number') return tickerCard(c.label, '—', null);
+            return tickerCard(c.label, '$' + formatPrice(row.usd),
+              typeof row.usd_24h_change === 'number' ? row.usd_24h_change : null);
+          }).join('');
+          body.innerHTML = '<div class="markets-grid">' + html + '</div>';
+          return true;
+        } catch (_) { return false; }
+      }
+
       function load() {
         if (killed) return;
-        setPanelStatus(panel, 'loading', 'FETCH');
-        body.innerHTML = '<div class="panel-loading">Loading coins&hellip;</div>';
-        const ids = CRYPTO_COINS.map((c) => c.id).join(',');
-        const url = 'https://api.coingecko.com/api/v3/simple/price?ids=' +
-                    encodeURIComponent(ids) +
-                    '&vs_currencies=usd&include_24hr_change=true';
-        fetchIntel(url)
-          .then((text) => {
+        var cachedText = getCachedResponse(cryptoUrl);
+        if (cachedText && renderCrypto(cachedText)) {
+          setPanelStatus(panel, 'loading', 'UPDATING');
+        } else {
+          setPanelStatus(panel, 'loading', 'FETCH');
+          body.innerHTML = '<div class="panel-loading">Loading coins&hellip;</div>';
+        }
+        fetchIntel(cryptoUrl)
+          .then(function (text) {
             if (killed) return;
-            const data = JSON.parse(text);
-            const html = CRYPTO_COINS.map((c) => {
-              const row = data[c.id];
-              if (!row || typeof row.usd !== 'number') return tickerCard(c.label, '—', null);
-              return tickerCard(c.label, '$' + formatPrice(row.usd),
-                typeof row.usd_24h_change === 'number' ? row.usd_24h_change : null);
-            }).join('');
-            body.innerHTML = '<div class="markets-grid">' + html + '</div>';
+            if (!renderCrypto(text)) {
+              body.innerHTML = '<div class="panel-empty">Unexpected data from CoinGecko.</div>';
+              setPanelStatus(panel, 'error', 'ERR');
+              return;
+            }
             setPanelStatus(panel, 'live', 'LIVE');
           })
-          .catch((err) => {
+          .catch(function (err) {
             if (killed) return;
-            renderErrorInto(body, err, load);
-            setPanelStatus(panel, 'error', 'ERR');
+            if (cachedText) {
+              setPanelStatus(panel, 'live', 'CACHED');
+            } else {
+              renderErrorInto(body, err, load);
+              setPanelStatus(panel, 'error', 'ERR');
+            }
           });
       }
       load();
-      timer = setInterval(load, 2 * 60 * 1000);
+      timer = setInterval(load, 3 * 60 * 1000);
       return () => { killed = true; if (timer) clearInterval(timer); };
     },
   };

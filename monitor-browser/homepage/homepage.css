@@ -528,6 +528,80 @@ html, body {
   font-size: 11px;
 }
 .stream-offline a:hover { text-decoration: underline; }
+
+.stream-player {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.stream-player iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+.stream-thumb-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.stream-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.stream-play-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  color: #fff;
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 150ms ease, transform 150ms ease;
+  padding-left: 4px;
+}
+.stream-play-btn:hover {
+  background: rgba(212, 168, 67, 0.85);
+  transform: translate(-50%, -50%) scale(1.08);
+  border-color: var(--intel-accent);
+}
+.stream-open-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 4px;
+  color: var(--intel-accent);
+  font-size: 11px;
+  font-family: var(--font-data);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+}
+.stream-open-btn:hover { background: rgba(0, 0, 0, 0.9); text-decoration: underline; }
+.stream-embed-fallback {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.8);
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.stream-embed-fallback a { color: var(--intel-accent); text-decoration: none; }
+.stream-embed-fallback a:hover { text-decoration: underline; }
 .stream-foot {
   margin-top: 8px;
   display: flex;

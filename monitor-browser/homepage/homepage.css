@@ -1327,11 +1327,10 @@ html, body {
 
 /* -------------- Conflict zone polygons -------------- */
 .conflict-zone {
-  animation: conflict-pulse 3s ease-in-out infinite;
+  transition: opacity 0.2s;
 }
-@keyframes conflict-pulse {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 0.4; }
+.conflict-zone:hover {
+  opacity: 1 !important;
 }
 
 .modal-root:empty { display: none; }

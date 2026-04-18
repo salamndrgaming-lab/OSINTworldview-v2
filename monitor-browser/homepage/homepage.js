@@ -155,8 +155,13 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
+        let panels = Array.isArray(parsed.panels) ? parsed.panels : DEFAULT_PANELS.slice();
+        // Auto-add new default panels that didn't exist before
+        for (const dp of DEFAULT_PANELS) {
+          if (!panels.includes(dp)) panels.push(dp);
+        }
         return {
-          panels: Array.isArray(parsed.panels) ? parsed.panels : DEFAULT_PANELS.slice(),
+          panels: panels,
           panelSizes: parsed.panelSizes || {},
           mapLayers: Object.assign({}, DEFAULT_STATE.mapLayers, parsed.mapLayers || {}),
           newsSource: parsed.newsSource || 'bbc',
@@ -276,7 +281,7 @@
   }
 
   function buildPanel(id, def) {
-    const currentSize = state.panelSizes[id] || def.size || 'md';
+    let currentSize = state.panelSizes[id] || def.size || 'md';
     const el = document.createElement('article');
     el.className = 'panel panel-' + currentSize;
     el.dataset.panelId = id;
@@ -297,7 +302,6 @@
     statusEl.textContent = '—';
     actions.appendChild(statusEl);
 
-    // Size toggle button — cycles through sm → md → lg → xl
     const sizeBtn = document.createElement('button');
     sizeBtn.className = 'panel-btn panel-size-btn';
     sizeBtn.type = 'button';
@@ -306,11 +310,11 @@
     sizeBtn.addEventListener('click', () => {
       const curIdx = PANEL_SIZE_OPTIONS.indexOf(currentSize);
       const nextSize = PANEL_SIZE_OPTIONS[(curIdx + 1) % PANEL_SIZE_OPTIONS.length];
+      currentSize = nextSize;
       state.panelSizes[id] = nextSize;
       saveState();
       el.className = 'panel panel-' + nextSize;
       sizeBtn.title = 'Resize panel (current: ' + nextSize.toUpperCase() + ')';
-      // Re-trigger layout for map panels
       const mapCanvas = el.querySelector('.map-canvas');
       if (mapCanvas) {
         setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 100);
@@ -1958,14 +1962,16 @@
           .then((text) => {
             const data = JSON.parse(text);
             const states = data.states || [];
-            const sample = states.filter((s) => s[5] != null && s[6] != null).slice(0, 2000);
+            const sample = states.filter((s) => s[5] != null && s[6] != null).slice(0, 1200);
             for (const s of sample) {
               const lng = s[5], lat = s[6];
               const callsign = (s[1] || '').trim() || '?';
               const alt = s[7] != null ? Math.round(s[7]) + ' m' : '—';
               const vel = s[9] != null ? Math.round(s[9] * 3.6) + ' km/h' : '—';
-              dot(lat, lng, 4, 'flight',
-                '<b>' + escapeHtml(callsign) + '</b><br>Alt ' + alt + ' · ' + vel)
+              L.circleMarker([lat, lng], {
+                radius: 2, color: '#e0f2fe', weight: 1, opacity: 0.8,
+                fillColor: '#e0f2fe', fillOpacity: 0.5,
+              }).bindPopup('<b>' + escapeHtml(callsign) + '</b><br>Alt ' + alt + ' · ' + vel)
                 .addTo(groups.flights);
             }
           })
@@ -2055,39 +2061,24 @@
         groups.vessels.clearLayers();
         if (!state.mapLayers.vessels) return;
         for (const v of VESSEL_LANES) {
-          dot(v.lat, v.lng, 7, 'vessel',
-            '<b>' + escapeHtml(v.name) + '</b><br>Major shipping zone')
+          L.circleMarker([v.lat, v.lng], {
+            radius: 5, color: '#38bdf8', weight: 1, opacity: 0.8,
+            fillColor: '#38bdf8', fillOpacity: 0.4,
+          }).bindPopup('<b>' + escapeHtml(v.name) + '</b><br>Major shipping zone')
             .addTo(groups.vessels);
         }
-        // Fetch live vessel positions from a free AIS proxy if available
         fetchIntel('https://meri.digitraffic.fi/api/ais/v1/locations?latitude=60.2&longitude=25.0&radius=200&from=' + (Date.now() - 600000))
           .then((text) => {
             const data = JSON.parse(text);
             const features = data.features || [];
-            for (const f of features.slice(0, 300)) {
+            for (const f of features.slice(0, 200)) {
               const props = f.properties || {};
               const coords = (f.geometry && f.geometry.coordinates) || [];
               if (coords.length < 2) continue;
-              const lng = coords[0], lat = coords[1];
-              const mmsi = props.mmsi || '?';
-              const sog = props.sog != null ? (props.sog / 10).toFixed(1) + ' kn' : '—';
-              dot(lat, lng, 5, 'vessel',
-                '<b>MMSI ' + escapeHtml(String(mmsi)) + '</b><br>SOG ' + sog)
-                .addTo(groups.vessels);
-            }
-          })
-          .catch(() => {});
-        // Additional: US coastal AIS from marinecadastre or similar public feed
-        fetchIntel('https://meri.digitraffic.fi/api/ais/v1/locations?latitude=35.0&longitude=-5.0&radius=500&from=' + (Date.now() - 600000))
-          .then((text) => {
-            const data = JSON.parse(text);
-            const features = data.features || [];
-            for (const f of features.slice(0, 300)) {
-              const props = f.properties || {};
-              const coords = (f.geometry && f.geometry.coordinates) || [];
-              if (coords.length < 2) continue;
-              dot(coords[1], coords[0], 5, 'vessel',
-                '<b>MMSI ' + escapeHtml(String(props.mmsi || '?')) + '</b><br>SOG ' + (props.sog != null ? (props.sog / 10).toFixed(1) + ' kn' : '—'))
+              L.circleMarker([coords[1], coords[0]], {
+                radius: 3, color: '#38bdf8', weight: 1, opacity: 0.7,
+                fillColor: '#38bdf8', fillOpacity: 0.3,
+              }).bindPopup('<b>MMSI ' + escapeHtml(String(props.mmsi || '?')) + '</b><br>SOG ' + (props.sog != null ? (props.sog / 10).toFixed(1) + ' kn' : '—'))
                 .addTo(groups.vessels);
             }
           })

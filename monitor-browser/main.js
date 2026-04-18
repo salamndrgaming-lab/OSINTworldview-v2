@@ -1145,16 +1145,17 @@ ipcMain.handle('permissions:remove-site', (_e, origin) => {
   savePermissions(all);
 });
 
+const ALWAYS_ALLOW_PERMISSIONS = new Set(['media', 'fullscreen', 'pointerLock', 'display-capture']);
+
 function setupPermissionHandlers() {
   session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
     try {
+      if (ALWAYS_ALLOW_PERMISSIONS.has(permission)) { callback(true); return; }
       const url = wc.getURL();
       const origin = new URL(url).origin;
       const perms = getOriginPerms(origin);
       if (perms[permission] === 'allow') { callback(true); return; }
       if (perms[permission] === 'deny') { callback(false); return; }
-      // Default: allow media, deny others until user grants
-      if (permission === 'media') { callback(true); return; }
       callback(false);
     } catch {
       callback(false);
@@ -1162,7 +1163,7 @@ function setupPermissionHandlers() {
   });
 
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
-    if (permission === 'media') return true;
+    if (ALWAYS_ALLOW_PERMISSIONS.has(permission)) return true;
     return false;
   });
 }

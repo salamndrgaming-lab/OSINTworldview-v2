@@ -210,6 +210,10 @@
   readerBtn.addEventListener('click', () => openReaderMode());
   pipBtn.addEventListener('click', () => browser.pip());
 
+  document.getElementById('action-bookmarks').addEventListener('click', () => togglePanel('bookmarks'));
+  document.getElementById('action-history').addEventListener('click', () => togglePanel('history'));
+  document.getElementById('action-downloads').addEventListener('click', () => togglePanel('downloads'));
+
   urlScheme.addEventListener('click', () => showSecurityPopup());
   urlScheme.style.cursor = 'pointer';
 

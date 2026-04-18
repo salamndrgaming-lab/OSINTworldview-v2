@@ -1145,16 +1145,17 @@ ipcMain.handle('permissions:remove-site', (_e, origin) => {
   savePermissions(all);
 });
 
+const ALWAYS_ALLOW_PERMISSIONS = new Set(['media', 'fullscreen', 'pointerLock', 'display-capture']);
+
 function setupPermissionHandlers() {
   session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
     try {
+      if (ALWAYS_ALLOW_PERMISSIONS.has(permission)) { callback(true); return; }
       const url = wc.getURL();
       const origin = new URL(url).origin;
       const perms = getOriginPerms(origin);
       if (perms[permission] === 'allow') { callback(true); return; }
       if (perms[permission] === 'deny') { callback(false); return; }
-      // Default: allow media, deny others until user grants
-      if (permission === 'media') { callback(true); return; }
       callback(false);
     } catch {
       callback(false);
@@ -1162,7 +1163,7 @@ function setupPermissionHandlers() {
   });
 
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
-    if (permission === 'media') return true;
+    if (ALWAYS_ALLOW_PERMISSIONS.has(permission)) return true;
     return false;
   });
 }
@@ -1420,9 +1421,30 @@ ipcMain.handle('shell:open-external', (_e, url) => {
 
 ipcMain.handle('yt:embed-port', () => ytEmbedPort);
 
+// ---------------------------------------------------------------------------
+// intel:fetch — per-domain rate limiter + response cache
+// ---------------------------------------------------------------------------
+// OSINT dashboards fan out many concurrent requests at startup. Without
+// throttling, APIs like GDELT return 429s and flood the console. We keep a
+// small per-domain queue that serialises requests and holds a short-lived
+// cache to deduplicate identical URLs within a 60-second window.
+
+const _intelQueue = new Map();   // domain -> Promise chain
+const _intelCache = new Map();   // url -> { ts, body }
+const INTEL_CACHE_TTL = 60_000;  // 60 s
+const INTEL_DOMAIN_DELAY = 350;  // ms between requests to the same domain
+
+function _enqueueIntelFetch(domain, fn) {
+  const prev = _intelQueue.get(domain) || Promise.resolve();
+  const next = prev
+    .then(() => new Promise((r) => setTimeout(r, INTEL_DOMAIN_DELAY)))
+    .then(fn)
+    .catch((err) => { throw err; });
+  _intelQueue.set(domain, next.catch(() => {}));
+  return next;
+}
+
 ipcMain.handle('intel:fetch', async (event, url) => {
-  // Only the homepage (loaded from the app bundle over file://) may use
-  // this proxy. Arbitrary websites visited in tabs cannot.
   const senderUrl = event.sender.getURL();
   if (!senderUrl.startsWith('file://')) {
     throw new Error('intel:fetch is not available on this origin');
@@ -1438,8 +1460,11 @@ ipcMain.handle('intel:fetch', async (event, url) => {
     throw new Error(`unsupported scheme: ${parsed.protocol}`);
   }
 
-  // YouTube and some APIs block generic bots — send a browser-like UA for
-  // those domains, and a standard accept header.
+  const cached = _intelCache.get(url);
+  if (cached && Date.now() - cached.ts < INTEL_CACHE_TTL) {
+    return cached.body;
+  }
+
   const isYouTube = parsed.hostname.endsWith('youtube.com') || parsed.hostname.endsWith('googlevideo.com');
   const userAgent = isYouTube
     ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
@@ -1448,22 +1473,28 @@ ipcMain.handle('intel:fetch', async (event, url) => {
     ? 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
     : 'application/json, text/plain, */*';
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20_000);
-  try {
-    const res = await fetch(parsed.toString(), {
-      headers: { accept, 'user-agent': userAgent },
-      signal: controller.signal,
-      redirect: 'follow',
-    });
-    const body = await res.text();
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
+  return _enqueueIntelFetch(parsed.hostname, async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20_000);
+    try {
+      const res = await fetch(parsed.toString(), {
+        headers: { accept, 'user-agent': userAgent },
+        signal: controller.signal,
+        redirect: 'follow',
+      });
+      const body = await res.text();
+      if (!res.ok) {
+        if (res.status === 429) {
+          console.warn(`[intel] 429 rate-limited by ${parsed.hostname} — will retry on next panel refresh`);
+        }
+        throw new Error(`HTTP ${res.status}`);
+      }
+      _intelCache.set(url, { ts: Date.now(), body });
+      return body;
+    } finally {
+      clearTimeout(timer);
     }
-    return body;
-  } finally {
-    clearTimeout(timer);
-  }
+  });
 });
 
 // ---------------------------------------------------------------------------

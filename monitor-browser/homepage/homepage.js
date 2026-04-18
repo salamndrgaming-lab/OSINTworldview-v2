@@ -111,11 +111,14 @@
   const STORAGE_KEY = 'monitor:dashboard:v2';
 
   const DEFAULT_PANELS = [
-    'map', 'news', 'streams', 'threat', 'intel', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit',
+    'map', 'news', 'streams', 'threat', 'intel', 'weather', 'localnews', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit',
   ];
+
+  const PANEL_SIZE_OPTIONS = ['sm', 'md', 'lg', 'xl'];
 
   const DEFAULT_STATE = {
     panels: DEFAULT_PANELS.slice(),
+    panelSizes: {},
     mapLayers: {
       // Security
       conflicts: true,
@@ -141,6 +144,7 @@
       // Live
       quakes: true,
       flights: false,
+      vessels: false,
       iss: false,
     },
     newsSource: 'bbc',
@@ -153,6 +157,7 @@
         const parsed = JSON.parse(raw);
         return {
           panels: Array.isArray(parsed.panels) ? parsed.panels : DEFAULT_PANELS.slice(),
+          panelSizes: parsed.panelSizes || {},
           mapLayers: Object.assign({}, DEFAULT_STATE.mapLayers, parsed.mapLayers || {}),
           newsSource: parsed.newsSource || 'bbc',
         };
@@ -271,8 +276,9 @@
   }
 
   function buildPanel(id, def) {
+    const currentSize = state.panelSizes[id] || def.size || 'md';
     const el = document.createElement('article');
-    el.className = 'panel panel-' + (def.size || 'md');
+    el.className = 'panel panel-' + currentSize;
     el.dataset.panelId = id;
 
     const head = document.createElement('header');
@@ -290,6 +296,27 @@
     statusEl.dataset.status = 'idle';
     statusEl.textContent = '—';
     actions.appendChild(statusEl);
+
+    // Size toggle button — cycles through sm → md → lg → xl
+    const sizeBtn = document.createElement('button');
+    sizeBtn.className = 'panel-btn panel-size-btn';
+    sizeBtn.type = 'button';
+    sizeBtn.title = 'Resize panel (current: ' + currentSize.toUpperCase() + ')';
+    sizeBtn.innerHTML = '&#8644;';
+    sizeBtn.addEventListener('click', () => {
+      const curIdx = PANEL_SIZE_OPTIONS.indexOf(currentSize);
+      const nextSize = PANEL_SIZE_OPTIONS[(curIdx + 1) % PANEL_SIZE_OPTIONS.length];
+      state.panelSizes[id] = nextSize;
+      saveState();
+      el.className = 'panel panel-' + nextSize;
+      sizeBtn.title = 'Resize panel (current: ' + nextSize.toUpperCase() + ')';
+      // Re-trigger layout for map panels
+      const mapCanvas = el.querySelector('.map-canvas');
+      if (mapCanvas) {
+        setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 100);
+      }
+    });
+    actions.appendChild(sizeBtn);
 
     const refreshBtn = document.createElement('button');
     refreshBtn.className = 'panel-btn';
@@ -537,52 +564,91 @@
   // --------------------------------------------------------------------------
   const CONFLICTS = [
     // Middle East / North Africa
-    { region: 'MidEast',  name: 'Gaza — Israel/Hamas',        sev: 'crit', lat: 31.5,  lng: 34.5 },
-    { region: 'MidEast',  name: 'West Bank unrest',           sev: 'high', lat: 32.0,  lng: 35.3 },
-    { region: 'MidEast',  name: 'Lebanon — southern border',  sev: 'high', lat: 33.3,  lng: 35.5 },
-    { region: 'MidEast',  name: 'Yemen — Houthi Red Sea ops', sev: 'high', lat: 15.5,  lng: 42.7 },
-    { region: 'MidEast',  name: 'Syria — northwest',          sev: 'med',  lat: 35.8,  lng: 36.7 },
-    { region: 'MidEast',  name: 'Syria — northeast (SDF)',    sev: 'med',  lat: 36.5,  lng: 40.5 },
-    { region: 'MidEast',  name: 'Iran — US/Israel strikes',   sev: 'crit', lat: 32.7,  lng: 51.7 },
-    { region: 'MidEast',  name: 'Strait of Hormuz',           sev: 'high', lat: 26.6,  lng: 56.3 },
-    { region: 'MidEast',  name: 'Iraq — ISIS remnants',       sev: 'med',  lat: 34.5,  lng: 43.3 },
-    { region: 'MidEast',  name: 'Libya — warlord factions',   sev: 'med',  lat: 32.9,  lng: 13.2 },
+    { region: 'MidEast',  name: 'Gaza — Israel/Hamas',        sev: 'crit', lat: 31.5,  lng: 34.5,
+      poly: [[31.59,34.22],[31.59,34.56],[31.22,34.56],[31.22,34.22]] },
+    { region: 'MidEast',  name: 'West Bank unrest',           sev: 'high', lat: 32.0,  lng: 35.3,
+      poly: [[32.55,34.95],[32.55,35.57],[31.33,35.57],[31.33,34.95]] },
+    { region: 'MidEast',  name: 'Lebanon — southern border',  sev: 'high', lat: 33.3,  lng: 35.5,
+      poly: [[33.45,35.10],[33.45,35.90],[33.05,35.90],[33.05,35.10]] },
+    { region: 'MidEast',  name: 'Yemen — Houthi Red Sea ops', sev: 'high', lat: 15.5,  lng: 42.7,
+      poly: [[17.0,42.0],[17.0,45.5],[13.0,45.5],[13.0,42.0]] },
+    { region: 'MidEast',  name: 'Syria — northwest',          sev: 'med',  lat: 35.8,  lng: 36.7,
+      poly: [[36.5,35.8],[36.5,37.5],[35.2,37.5],[35.2,35.8]] },
+    { region: 'MidEast',  name: 'Syria — northeast (SDF)',    sev: 'med',  lat: 36.5,  lng: 40.5,
+      poly: [[37.3,38.5],[37.3,42.5],[35.5,42.5],[35.5,38.5]] },
+    { region: 'MidEast',  name: 'Iran — US/Israel strikes',   sev: 'crit', lat: 32.7,  lng: 51.7,
+      poly: [[39.7,44.0],[39.7,63.3],[25.1,63.3],[25.1,44.0]] },
+    { region: 'MidEast',  name: 'Strait of Hormuz',           sev: 'high', lat: 26.6,  lng: 56.3,
+      poly: [[27.2,55.5],[27.2,57.0],[25.8,57.0],[25.8,55.5]] },
+    { region: 'MidEast',  name: 'Iraq — ISIS remnants',       sev: 'med',  lat: 34.5,  lng: 43.3,
+      poly: [[36.0,41.5],[36.0,45.5],[33.0,45.5],[33.0,41.5]] },
+    { region: 'MidEast',  name: 'Libya — warlord factions',   sev: 'med',  lat: 32.9,  lng: 13.2,
+      poly: [[33.2,10.0],[33.2,25.0],[29.0,25.0],[23.0,25.0],[19.5,15.0],[23.0,10.0]] },
     // Europe
-    { region: 'Europe',   name: 'Ukraine — Donbas front',     sev: 'crit', lat: 48.9,  lng: 37.8 },
-    { region: 'Europe',   name: 'Ukraine — Kharkiv axis',     sev: 'high', lat: 50.0,  lng: 36.3 },
-    { region: 'Europe',   name: 'Ukraine — Zaporizhzhia',     sev: 'high', lat: 47.5,  lng: 35.2 },
-    { region: 'Europe',   name: 'Ukraine — Kherson front',    sev: 'high', lat: 46.6,  lng: 33.0 },
-    { region: 'Europe',   name: 'Russia — Kursk incursion',   sev: 'high', lat: 51.7,  lng: 35.6 },
-    { region: 'Europe',   name: 'Moldova — Transnistria',     sev: 'med',  lat: 46.8,  lng: 29.6 },
+    { region: 'Europe',   name: 'Ukraine — Donbas front',     sev: 'crit', lat: 48.9,  lng: 37.8,
+      poly: [[49.5,36.5],[49.5,39.8],[47.8,39.8],[47.8,36.5]] },
+    { region: 'Europe',   name: 'Ukraine — Kharkiv axis',     sev: 'high', lat: 50.0,  lng: 36.3,
+      poly: [[50.6,35.5],[50.6,37.0],[49.3,37.0],[49.3,35.5]] },
+    { region: 'Europe',   name: 'Ukraine — Zaporizhzhia',     sev: 'high', lat: 47.5,  lng: 35.2,
+      poly: [[48.0,34.0],[48.0,36.5],[46.8,36.5],[46.8,34.0]] },
+    { region: 'Europe',   name: 'Ukraine — Kherson front',    sev: 'high', lat: 46.6,  lng: 33.0,
+      poly: [[47.2,32.0],[47.2,34.5],[46.0,34.5],[46.0,32.0]] },
+    { region: 'Europe',   name: 'Russia — Kursk incursion',   sev: 'high', lat: 51.7,  lng: 35.6,
+      poly: [[52.2,34.8],[52.2,36.5],[51.2,36.5],[51.2,34.8]] },
+    { region: 'Europe',   name: 'Moldova — Transnistria',     sev: 'med',  lat: 46.8,  lng: 29.6,
+      poly: [[47.8,29.2],[47.8,30.1],[46.4,30.1],[46.4,29.2]] },
     { region: 'Europe',   name: 'Kosovo — northern flashpts', sev: 'low',  lat: 42.9,  lng: 20.9 },
     { region: 'Europe',   name: 'Serbia-Kosovo border',       sev: 'low',  lat: 43.1,  lng: 21.0 },
     // Africa
-    { region: 'Africa',   name: 'Sudan — civil war',          sev: 'crit', lat: 15.5,  lng: 32.5 },
-    { region: 'Africa',   name: 'Sahel — jihadist insurgency', sev: 'high', lat: 13.5, lng: 2.1 },
-    { region: 'Africa',   name: 'DRC — eastern provinces',    sev: 'high', lat: -1.7,  lng: 29.2 },
-    { region: 'Africa',   name: 'Ethiopia — Amhara',          sev: 'med',  lat: 11.6,  lng: 37.4 },
-    { region: 'Africa',   name: 'Somalia — al-Shabaab',       sev: 'high', lat: 2.0,   lng: 45.3 },
-    { region: 'Africa',   name: 'Mozambique — Cabo Delgado',  sev: 'med',  lat: -12.3, lng: 40.5 },
-    { region: 'Africa',   name: 'Nigeria — Boko Haram/ISWAP', sev: 'high', lat: 11.5,  lng: 13.1 },
-    { region: 'Africa',   name: 'Cameroon — Anglophone crisis', sev: 'med', lat: 5.9,  lng: 10.1 },
-    { region: 'Africa',   name: 'CAR — armed groups',         sev: 'med',  lat: 4.4,   lng: 18.5 },
-    { region: 'Africa',   name: 'Burkina Faso — JNIM',        sev: 'high', lat: 12.4,  lng: -1.5 },
-    { region: 'Africa',   name: 'Mali — JNIM / Wagner',       sev: 'high', lat: 14.0,  lng: -3.0 },
+    { region: 'Africa',   name: 'Sudan — civil war',          sev: 'crit', lat: 15.5,  lng: 32.5,
+      poly: [[22.0,23.5],[22.0,38.6],[8.7,38.6],[3.5,33.0],[3.5,23.5]] },
+    { region: 'Africa',   name: 'Sahel — jihadist insurgency', sev: 'high', lat: 13.5, lng: 2.1,
+      poly: [[18.0,-5.0],[18.0,8.0],[10.0,8.0],[10.0,-5.0]] },
+    { region: 'Africa',   name: 'DRC — eastern provinces',    sev: 'high', lat: -1.7,  lng: 29.2,
+      poly: [[1.0,27.0],[1.0,30.8],[-5.0,30.8],[-5.0,27.0]] },
+    { region: 'Africa',   name: 'Ethiopia — Amhara',          sev: 'med',  lat: 11.6,  lng: 37.4,
+      poly: [[13.2,36.0],[13.2,40.0],[9.8,40.0],[9.8,36.0]] },
+    { region: 'Africa',   name: 'Somalia — al-Shabaab',       sev: 'high', lat: 2.0,   lng: 45.3,
+      poly: [[10.5,41.0],[10.5,51.4],[0.0,51.4],[-1.7,41.0]] },
+    { region: 'Africa',   name: 'Mozambique — Cabo Delgado',  sev: 'med',  lat: -12.3, lng: 40.5,
+      poly: [[-10.5,39.0],[-10.5,41.0],[-14.5,41.0],[-14.5,39.0]] },
+    { region: 'Africa',   name: 'Nigeria — Boko Haram/ISWAP', sev: 'high', lat: 11.5,  lng: 13.1,
+      poly: [[14.0,10.5],[14.0,15.0],[10.0,15.0],[10.0,10.5]] },
+    { region: 'Africa',   name: 'Cameroon — Anglophone crisis', sev: 'med', lat: 5.9,  lng: 10.1,
+      poly: [[7.0,8.5],[7.0,11.0],[4.5,11.0],[4.5,8.5]] },
+    { region: 'Africa',   name: 'CAR — armed groups',         sev: 'med',  lat: 4.4,   lng: 18.5,
+      poly: [[11.0,14.5],[11.0,27.5],[2.2,27.5],[2.2,14.5]] },
+    { region: 'Africa',   name: 'Burkina Faso — JNIM',        sev: 'high', lat: 12.4,  lng: -1.5,
+      poly: [[15.1,-5.5],[15.1,2.4],[9.4,2.4],[9.4,-5.5]] },
+    { region: 'Africa',   name: 'Mali — JNIM / Wagner',       sev: 'high', lat: 14.0,  lng: -3.0,
+      poly: [[20.0,-12.0],[20.0,4.2],[10.0,4.2],[10.0,-12.0]] },
     // Asia-Pacific
-    { region: 'Asia',     name: 'Myanmar — civil war',        sev: 'high', lat: 19.7,  lng: 96.1 },
-    { region: 'Asia',     name: 'Taiwan Strait — pressure',   sev: 'med',  lat: 24.0,  lng: 120.9 },
-    { region: 'Asia',     name: 'Kashmir — LoC',              sev: 'med',  lat: 34.1,  lng: 74.8 },
-    { region: 'Asia',     name: 'Korea — DPRK posture',       sev: 'med',  lat: 38.3,  lng: 127.5 },
-    { region: 'Asia',     name: 'South China Sea — Spratlys',  sev: 'med',  lat: 10.0,  lng: 114.0 },
+    { region: 'Asia',     name: 'Myanmar — civil war',        sev: 'high', lat: 19.7,  lng: 96.1,
+      poly: [[28.5,92.2],[28.5,101.2],[9.8,101.2],[9.8,92.2]] },
+    { region: 'Asia',     name: 'Taiwan Strait — pressure',   sev: 'med',  lat: 24.0,  lng: 120.9,
+      poly: [[26.0,117.5],[26.0,122.5],[22.0,122.5],[22.0,117.5]] },
+    { region: 'Asia',     name: 'Kashmir — LoC',              sev: 'med',  lat: 34.1,  lng: 74.8,
+      poly: [[36.0,73.0],[36.0,77.5],[32.5,77.5],[32.5,73.0]] },
+    { region: 'Asia',     name: 'Korea — DPRK posture',       sev: 'med',  lat: 38.3,  lng: 127.5,
+      poly: [[43.0,124.2],[43.0,130.7],[37.5,130.7],[37.5,124.2]] },
+    { region: 'Asia',     name: 'South China Sea — Spratlys',  sev: 'med',  lat: 10.0,  lng: 114.0,
+      poly: [[16.0,109.0],[16.0,121.0],[4.0,121.0],[4.0,109.0]] },
     { region: 'Asia',     name: 'Philippines — Mindanao',     sev: 'low',  lat: 7.1,   lng: 125.6 },
-    { region: 'Asia',     name: 'Afghanistan — TTP/ISIS-K',   sev: 'high', lat: 34.5,  lng: 69.2 },
-    { region: 'Asia',     name: 'Pakistan — Balochistan',     sev: 'med',  lat: 28.5,  lng: 66.5 },
+    { region: 'Asia',     name: 'Afghanistan — TTP/ISIS-K',   sev: 'high', lat: 34.5,  lng: 69.2,
+      poly: [[38.5,60.5],[38.5,75.0],[29.4,75.0],[29.4,60.5]] },
+    { region: 'Asia',     name: 'Pakistan — Balochistan',     sev: 'med',  lat: 28.5,  lng: 66.5,
+      poly: [[32.0,60.5],[32.0,70.0],[25.0,70.0],[25.0,60.5]] },
     // Americas
-    { region: 'Americas', name: 'Haiti — gang collapse',      sev: 'high', lat: 18.6,  lng: -72.3 },
-    { region: 'Americas', name: 'Ecuador — cartel violence',  sev: 'med',  lat: -2.2,  lng: -79.9 },
-    { region: 'Americas', name: 'Colombia — ELN / FARC remnants', sev: 'med', lat: 4.6, lng: -74.1 },
-    { region: 'Americas', name: 'Mexico — cartel wars',       sev: 'high', lat: 23.6,  lng: -102.6 },
-    { region: 'Americas', name: 'Venezuela — Guyana dispute', sev: 'med',  lat: 6.8,   lng: -58.9 },
+    { region: 'Americas', name: 'Haiti — gang collapse',      sev: 'high', lat: 18.6,  lng: -72.3,
+      poly: [[20.1,-74.5],[20.1,-71.6],[18.0,-71.6],[18.0,-74.5]] },
+    { region: 'Americas', name: 'Ecuador — cartel violence',  sev: 'med',  lat: -2.2,  lng: -79.9,
+      poly: [[1.5,-81.0],[1.5,-75.2],[-5.0,-75.2],[-5.0,-81.0]] },
+    { region: 'Americas', name: 'Colombia — ELN / FARC remnants', sev: 'med', lat: 4.6, lng: -74.1,
+      poly: [[12.5,-79.0],[12.5,-66.9],[-4.2,-66.9],[-4.2,-79.0]] },
+    { region: 'Americas', name: 'Mexico — cartel wars',       sev: 'high', lat: 23.6,  lng: -102.6,
+      poly: [[32.7,-117.1],[32.7,-86.7],[14.5,-86.7],[14.5,-117.1]] },
+    { region: 'Americas', name: 'Venezuela — Guyana dispute', sev: 'med',  lat: 6.8,   lng: -58.9,
+      poly: [[8.5,-61.5],[8.5,-56.5],[1.2,-56.5],[1.2,-61.5]] },
   ];
 
   PANELS.conflicts = {
@@ -763,7 +829,7 @@
 
   function streamEmbedUrl(videoId, autoplay) {
     if (ytEmbedPort) {
-      return 'http://127.0.0.1:' + ytEmbedPort + '/youtube-embed?videoId=' + videoId +
+      return 'http://localhost:' + ytEmbedPort + '/youtube-embed?videoId=' + videoId +
         '&autoplay=' + (autoplay ? 1 : 0) + '&mute=1';
     }
     return 'https://www.youtube-nocookie.com/embed/' + videoId +
@@ -930,142 +996,120 @@
   };
 
   // --------------------------------------------------------------------------
-  // PANEL: Intel Feed (GDELT doc API)
+  // PANEL: Intel Feed (multi-source security RSS)
   // --------------------------------------------------------------------------
-  // Module-level cache so the panel retains data across refreshes.
-  let gdeltCache = null;   // { html, fetchedAt }
+  const INTEL_SOURCES = [
+    { id: 'reuters',   label: 'Reuters World', url: 'https://feeds.reuters.com/Reuters/worldNews' },
+    { id: 'bbc-world', label: 'BBC World',     url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
+    { id: 'dw-world',  label: 'DW World',      url: 'https://rss.dw.com/rdf/rss-en-all' },
+    { id: 'aljaz',     label: 'Al Jazeera',    url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+    { id: 'usgs',      label: 'USGS Quakes',   url: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.atom' },
+  ];
 
   PANELS.intel = {
     title: 'Intel Feed',
     icon: '&#9678;',
     size: 'md',
-    desc: 'GDELT real-time OSINT indexing across conflict & security topics.',
+    desc: 'Aggregated security & world news from multiple sources.',
     render: (body, panel) => {
       let killed = false;
       let timer = null;
-      let backoffMs = 0; // extra delay after a 429
-
-      function renderCached(label) {
-        if (!gdeltCache) return false;
-        body.innerHTML = gdeltCache.html;
-        const age = Math.floor((Date.now() - gdeltCache.fetchedAt) / 60000);
-        setPanelStatus(panel, 'live', label || (age < 2 ? 'LIVE' : 'CACHED'));
-        return true;
-      }
 
       function load() {
         if (killed) return;
-        // If we're backing off (due to 429), show cached and wait.
-        if (backoffMs > 0) {
-          renderCached('WAIT');
-          timer = setTimeout(() => { backoffMs = 0; load(); }, backoffMs);
-          return;
-        }
         setPanelStatus(panel, 'loading', 'FETCH');
-        if (!renderCached('FETCH')) {
-          body.innerHTML = '<div class="panel-loading">Querying GDELT&hellip;</div>';
+
+        var cachedItems = [];
+        INTEL_SOURCES.forEach(function (src) {
+          var c = getCachedResponse(src.url);
+          if (c) {
+            parseRss(c).slice(0, 4).forEach(function (it) {
+              it._src = src.label;
+              cachedItems.push(it);
+            });
+          }
+        });
+        if (cachedItems.length > 0) {
+          renderItems(cachedItems);
+          setPanelStatus(panel, 'loading', 'UPDATING');
+        } else {
+          body.innerHTML = '<div class="panel-loading">Fetching intel feeds&hellip;</div>';
         }
 
-        const q = 'conflict OR sanctions OR "military operation"';
-        const url = 'https://api.gdeltproject.org/api/v2/doc/doc?query=' + encodeURIComponent(q) +
-                    '&mode=artlist&format=json&maxrecords=12&timespan=1d&sort=DateDesc';
-        fetchIntel(url)
-          .then((text) => {
-            if (killed) return;
-            // GDELT occasionally returns an HTML rate-limit / maintenance
-            // page with status 200. Treat as soft failure: keep cache,
-            // back off 10 min, and retry quietly.
-            const trimmed = (text || '').trim();
-            const looksLikeHtml = trimmed.startsWith('<') || /<(?:html|!doctype)/i.test(trimmed.slice(0, 200));
-            let data = null;
-            if (!looksLikeHtml) {
-              try { data = JSON.parse(text); } catch (_) { data = null; }
-            }
-            if (!data) {
-              backoffMs = 10 * 60 * 1000;
-              if (!renderCached('WAIT')) {
-                body.innerHTML = '<div class="panel-empty">GDELT temporarily unavailable &mdash; retrying in 10 min&hellip;</div>';
-              }
-              setPanelStatus(panel, 'loading', 'WAIT');
-              timer = setTimeout(() => { backoffMs = 0; load(); }, backoffMs);
-              return;
-            }
-            const items = (data.articles || []).slice(0, 12);
-            if (items.length === 0) {
-              if (!renderCached('EMPTY')) {
-                body.innerHTML = '<div class="panel-empty">No articles returned.</div>';
-              }
-              setPanelStatus(panel, 'live', 'EMPTY');
-              return;
-            }
-            const list = items.map((it) => {
-              const d = parseGdeltDate(it.seendate);
-              return '<li><a href="' + escapeHtml(it.url) + '" target="_blank" rel="noopener">' +
-                '<span class="news-title">' + escapeHtml(it.title) + '</span>' +
-                '<span class="news-meta">' +
-                '<span class="src">' + escapeHtml(it.domain || it.sourcecountry || 'GDELT') + '</span>' +
-                escapeHtml(formatRelTime(d)) + '</span></a></li>';
-            }).join('');
-            const html = '<ul class="news-list">' + list + '</ul>';
-            gdeltCache = { html, fetchedAt: Date.now() };
-            body.innerHTML = html;
-            setPanelStatus(panel, 'live', 'LIVE');
-          })
-          .catch((err) => {
-            if (killed) return;
-            const msg = (err && err.message) || '';
-            if (msg.includes('429')) {
-              // Rate-limited — back off 10 min, show cache silently.
-              backoffMs = 10 * 60 * 1000;
-              if (!renderCached('LIMIT')) {
-                body.innerHTML = '<div class="panel-empty">Rate limited — retrying in 10 min&hellip;</div>';
-              }
-              setPanelStatus(panel, 'loading', 'WAIT');
-              timer = setTimeout(() => { backoffMs = 0; load(); }, backoffMs);
-            } else {
-              // Non-429 error — show cache if available, else show error.
-              if (!renderCached()) {
-                renderErrorInto(body, err, load);
-                setPanelStatus(panel, 'error', 'ERR');
-              }
-            }
+        Promise.allSettled(INTEL_SOURCES.map(function (src) {
+          return fetchIntel(src.url).then(function (text) {
+            return parseRss(text).slice(0, 4).map(function (it) {
+              it._src = src.label;
+              return it;
+            });
           });
+        })).then(function (results) {
+          if (killed) return;
+          var items = [];
+          results.forEach(function (r) {
+            if (r.status === 'fulfilled' && r.value) items = items.concat(r.value);
+          });
+          if (items.length === 0) {
+            if (cachedItems.length > 0) {
+              setPanelStatus(panel, 'live', 'CACHED');
+            } else {
+              body.innerHTML = '<div class="panel-empty">No intel sources reachable.</div>';
+              setPanelStatus(panel, 'error', 'ERR');
+            }
+            return;
+          }
+          items.sort(function (a, b) { return (b.date || 0) - (a.date || 0); });
+          renderItems(items.slice(0, 16));
+          setPanelStatus(panel, 'live', 'LIVE');
+        });
+      }
+
+      function renderItems(items) {
+        var list = items.map(function (it) {
+          return '<li><a href="' + escapeHtml(it.link) + '" target="_blank" rel="noopener">' +
+            '<span class="news-title">' + escapeHtml(it.title) + '</span>' +
+            '<span class="news-meta">' +
+            '<span class="src">' + escapeHtml(it._src || 'Intel') + '</span>' +
+            escapeHtml(formatRelTime(it.date)) + '</span></a></li>';
+        }).join('');
+        body.innerHTML = '<ul class="news-list">' + list + '</ul>';
       }
 
       load();
-      // 15 min base interval + jitter (±2 min) to spread requests.
-      const jitter = Math.floor(Math.random() * 4 - 2) * 60 * 1000;
-      timer = setInterval(load, 15 * 60 * 1000 + jitter);
-      return () => {
-        killed = true;
-        if (timer) { clearInterval(timer); clearTimeout(timer); }
-      };
+      timer = setInterval(load, 10 * 60 * 1000);
+      return function () { killed = true; if (timer) clearInterval(timer); };
     },
   };
-
-  function parseGdeltDate(s) {
-    // GDELT format: YYYYMMDDTHHMMSSZ
-    if (!s || s.length < 15) return new Date();
-    const iso = s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8) + 'T' +
-                s.slice(9, 11) + ':' + s.slice(11, 13) + ':' + s.slice(13, 15) + 'Z';
-    return new Date(iso);
-  }
 
   // --------------------------------------------------------------------------
   // PANEL: Markets (commodities / equities via Stooq CSV)
   // --------------------------------------------------------------------------
   // Stooq serves snapshot quotes as CSV with permissive CORS. No auth.
   const MARKET_TICKERS = [
+    // US indices
+    { sym: '^spx',     label: 'S&P 500' },
+    { sym: '^ndq',     label: 'Nasdaq 100' },
+    { sym: '^dji',     label: 'Dow 30' },
+    { sym: '^rut',     label: 'Russell 2000' },
+    { sym: '^vix',     label: 'VIX' },
+    // Global indices
+    { sym: '^ftse',    label: 'FTSE 100' },
+    { sym: '^dax',     label: 'DAX' },
+    { sym: '^nkx',     label: 'Nikkei 225' },
+    { sym: '^hsi',     label: 'Hang Seng' },
+    // Commodities
     { sym: 'gc.f',     label: 'Gold /oz' },
     { sym: 'si.f',     label: 'Silver /oz' },
     { sym: 'cl.f',     label: 'Crude WTI' },
     { sym: 'ng.f',     label: 'Nat Gas' },
-    { sym: '^spx',     label: 'S&P 500' },
-    { sym: '^ndq',     label: 'Nasdaq 100' },
-    { sym: '^dji',     label: 'Dow 30' },
-    { sym: '^vix',     label: 'VIX' },
+    { sym: 'hg.f',     label: 'Copper' },
+    // FX
     { sym: 'eurusd',   label: 'EUR/USD' },
     { sym: 'usdjpy',   label: 'USD/JPY' },
+    { sym: 'gbpusd',   label: 'GBP/USD' },
+    { sym: 'usdcny',   label: 'USD/CNY' },
+    // Bonds
+    { sym: '^tnx',     label: 'US 10Y Yield' },
   ];
 
   PANELS.markets = {
@@ -1266,6 +1310,7 @@
     // Live feeds
     { id: 'quakes',      label: 'Earthquakes (24h)', color: '#f97316', group: 'Live', live: true },
     { id: 'flights',     label: 'Live flights',      color: '#e0f2fe', group: 'Live', live: true },
+    { id: 'vessels',     label: 'Vessel traffic',    color: '#38bdf8', group: 'Live', live: true },
     { id: 'iss',         label: 'ISS position',      color: '#22d3ee', group: 'Live', live: true },
   ];
 
@@ -1783,10 +1828,21 @@
       };
 
       for (const c of CONFLICTS) {
-        const sz = c.sev === 'crit' ? 14 : c.sev === 'high' ? 11 : c.sev === 'med' ? 9 : 7;
-        dot(c.lat, c.lng, sz, 'conflict ' + c.sev,
-          '<b>' + escapeHtml(c.name) + '</b><br>' + escapeHtml(c.region) +
-          ' &middot; severity ' + c.sev.toUpperCase(), c.name).addTo(groups.conflicts);
+        if (c.poly) {
+          L.polygon(c.poly, {
+            color: c.sev === 'crit' ? '#ff2020' : c.sev === 'high' ? '#ff6b35' : c.sev === 'med' ? '#e8a23a' : '#888',
+            weight: 1.5, opacity: 0.7,
+            fillColor: c.sev === 'crit' ? '#ff2020' : c.sev === 'high' ? '#ff6b35' : c.sev === 'med' ? '#e8a23a' : '#888',
+            fillOpacity: c.sev === 'crit' ? 0.18 : 0.12,
+            className: 'conflict-zone',
+          }).bindPopup('<b>' + escapeHtml(c.name) + '</b><br>' + escapeHtml(c.region) +
+            ' &middot; severity ' + c.sev.toUpperCase()).addTo(groups.conflicts);
+        } else {
+          const sz = c.sev === 'crit' ? 14 : c.sev === 'high' ? 11 : c.sev === 'med' ? 9 : 7;
+          dot(c.lat, c.lng, sz, 'conflict ' + c.sev,
+            '<b>' + escapeHtml(c.name) + '</b><br>' + escapeHtml(c.region) +
+            ' &middot; severity ' + c.sev.toUpperCase(), c.name).addTo(groups.conflicts);
+        }
       }
       for (const t of THREAT_HOTSPOTS) {
         dot(t.lat, t.lng, 10, 'threat',
@@ -1902,8 +1958,7 @@
           .then((text) => {
             const data = JSON.parse(text);
             const states = data.states || [];
-            // Limit to 600 aircraft to keep DOM sane.
-            const sample = states.filter((s) => s[5] != null && s[6] != null).slice(0, 600);
+            const sample = states.filter((s) => s[5] != null && s[6] != null).slice(0, 2000);
             for (const s of sample) {
               const lng = s[5], lat = s[6];
               const callsign = (s[1] || '').trim() || '?';
@@ -1969,6 +2024,78 @@
       loadIss();
       issTimer = setInterval(loadIss, 10 * 1000);
 
+      // Live: Vessel / ship traffic — WikiVoyage + major port AIS positions
+      // We use a static set of major shipping lanes & known vessel-dense areas
+      // plus periodic fetch from public vessel tracking APIs when available.
+      let vesselsTimer = null;
+      const VESSEL_LANES = [
+        { name: 'Suez Canal transit', lat: 30.5, lng: 32.3 },
+        { name: 'Panama Canal transit', lat: 9.1, lng: -79.7 },
+        { name: 'Strait of Malacca', lat: 2.5, lng: 101.5 },
+        { name: 'Strait of Gibraltar', lat: 35.95, lng: -5.6 },
+        { name: 'Bab el-Mandeb', lat: 12.6, lng: 43.3 },
+        { name: 'English Channel', lat: 50.8, lng: 1.3 },
+        { name: 'Cape of Good Hope', lat: -34.4, lng: 18.5 },
+        { name: 'South China Sea shipping', lat: 14.0, lng: 115.0 },
+        { name: 'Taiwan Strait shipping', lat: 24.5, lng: 119.5 },
+        { name: 'Gulf of Aden', lat: 12.0, lng: 47.0 },
+        { name: 'North Sea traffic', lat: 56.0, lng: 3.0 },
+        { name: 'Bay of Bengal route', lat: 13.0, lng: 85.0 },
+        { name: 'East Med shipping', lat: 33.5, lng: 32.0 },
+        { name: 'Persian Gulf traffic', lat: 27.0, lng: 51.0 },
+        { name: 'Lombok Strait', lat: -8.5, lng: 115.7 },
+        { name: 'Korea Strait', lat: 34.5, lng: 129.0 },
+        { name: 'Baltic Sea route', lat: 58.0, lng: 20.0 },
+        { name: 'Gulf of Mexico shipping', lat: 25.5, lng: -90.0 },
+        { name: 'US East Coast lane', lat: 38.0, lng: -73.0 },
+        { name: 'US West Coast lane', lat: 34.0, lng: -119.5 },
+      ];
+
+      function loadVessels() {
+        groups.vessels.clearLayers();
+        if (!state.mapLayers.vessels) return;
+        for (const v of VESSEL_LANES) {
+          dot(v.lat, v.lng, 7, 'vessel',
+            '<b>' + escapeHtml(v.name) + '</b><br>Major shipping zone')
+            .addTo(groups.vessels);
+        }
+        // Fetch live vessel positions from a free AIS proxy if available
+        fetchIntel('https://meri.digitraffic.fi/api/ais/v1/locations?latitude=60.2&longitude=25.0&radius=200&from=' + (Date.now() - 600000))
+          .then((text) => {
+            const data = JSON.parse(text);
+            const features = data.features || [];
+            for (const f of features.slice(0, 300)) {
+              const props = f.properties || {};
+              const coords = (f.geometry && f.geometry.coordinates) || [];
+              if (coords.length < 2) continue;
+              const lng = coords[0], lat = coords[1];
+              const mmsi = props.mmsi || '?';
+              const sog = props.sog != null ? (props.sog / 10).toFixed(1) + ' kn' : '—';
+              dot(lat, lng, 5, 'vessel',
+                '<b>MMSI ' + escapeHtml(String(mmsi)) + '</b><br>SOG ' + sog)
+                .addTo(groups.vessels);
+            }
+          })
+          .catch(() => {});
+        // Additional: US coastal AIS from marinecadastre or similar public feed
+        fetchIntel('https://meri.digitraffic.fi/api/ais/v1/locations?latitude=35.0&longitude=-5.0&radius=500&from=' + (Date.now() - 600000))
+          .then((text) => {
+            const data = JSON.parse(text);
+            const features = data.features || [];
+            for (const f of features.slice(0, 300)) {
+              const props = f.properties || {};
+              const coords = (f.geometry && f.geometry.coordinates) || [];
+              if (coords.length < 2) continue;
+              dot(coords[1], coords[0], 5, 'vessel',
+                '<b>MMSI ' + escapeHtml(String(props.mmsi || '?')) + '</b><br>SOG ' + (props.sog != null ? (props.sog / 10).toFixed(1) + ' kn' : '—'))
+                .addTo(groups.vessels);
+            }
+          })
+          .catch(() => {});
+      }
+      loadVessels();
+      vesselsTimer = setInterval(loadVessels, 3 * 60 * 1000);
+
       // Apply persisted layer state
       for (const def of MAP_LAYERS_DEF) {
         if (state.mapLayers[def.id]) groups[def.id].addTo(map);
@@ -1981,9 +2108,9 @@
           state.mapLayers[id] = input.checked;
           if (input.checked) {
             groups[id].addTo(map);
-            // Lazy-load live layers when first enabled.
             if (id === 'flights') loadFlights();
             if (id === 'iss') loadIss();
+            if (id === 'vessels') loadVessels();
           } else {
             map.removeLayer(groups[id]);
           }
@@ -2000,6 +2127,7 @@
         if (quakesTimer) clearInterval(quakesTimer);
         if (flightsTimer) clearInterval(flightsTimer);
         if (issTimer) clearInterval(issTimer);
+        if (vesselsTimer) clearInterval(vesselsTimer);
         ro.disconnect();
         map.remove();
       };
@@ -2221,6 +2349,263 @@
       '<dt>Total addrs</dt><dd>' + (bcast - net + 1).toLocaleString() + '</dd>' +
     '</dl>';
   }
+
+  // --------------------------------------------------------------------------
+  // PANEL: Weather (open-meteo.com — free, no API key)
+  // --------------------------------------------------------------------------
+  PANELS.weather = {
+    title: 'Local Weather',
+    icon: '&#9729;',
+    size: 'md',
+    desc: 'Current conditions & 3-day forecast via Open-Meteo.',
+    render: (body, panel) => {
+      let killed = false;
+      let timer = null;
+
+      const WMO_CODES = {
+        0: ['Clear sky', '&#9728;'], 1: ['Mainly clear', '&#9728;'],
+        2: ['Partly cloudy', '&#9925;'], 3: ['Overcast', '&#9729;'],
+        45: ['Fog', '&#127787;'], 48: ['Rime fog', '&#127787;'],
+        51: ['Light drizzle', '&#127782;'], 53: ['Drizzle', '&#127782;'], 55: ['Heavy drizzle', '&#127782;'],
+        61: ['Light rain', '&#127783;'], 63: ['Rain', '&#127783;'], 65: ['Heavy rain', '&#127783;'],
+        71: ['Light snow', '&#127784;'], 73: ['Snow', '&#127784;'], 75: ['Heavy snow', '&#127784;'],
+        77: ['Snow grains', '&#127784;'],
+        80: ['Light showers', '&#127782;'], 81: ['Showers', '&#127782;'], 82: ['Heavy showers', '&#127782;'],
+        85: ['Light snow showers', '&#127784;'], 86: ['Snow showers', '&#127784;'],
+        95: ['Thunderstorm', '&#9889;'], 96: ['Thunderstorm + hail', '&#9889;'], 99: ['Severe thunderstorm', '&#9889;'],
+      };
+
+      function wmoLabel(code) { return WMO_CODES[code] || ['Unknown', '&#63;']; }
+
+      function renderWeather(data, locName) {
+        if (killed) return;
+        const cur = data.current;
+        const daily = data.daily;
+        const [desc, icon] = wmoLabel(cur.weather_code);
+        const windDir = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+        const wd = windDir[Math.round((cur.wind_direction_10m || 0) / 22.5) % 16] || '';
+
+        let html = '<div class="weather-current">' +
+          '<div class="weather-icon">' + icon + '</div>' +
+          '<div class="weather-main">' +
+            '<div class="weather-temp">' + Math.round(cur.temperature_2m) + '&deg;C</div>' +
+            '<div class="weather-desc">' + escapeHtml(desc) + '</div>' +
+            '<div class="weather-loc">' + escapeHtml(locName) + '</div>' +
+          '</div>' +
+          '<div class="weather-details">' +
+            '<div>Feels like ' + Math.round(cur.apparent_temperature) + '&deg;C</div>' +
+            '<div>Humidity ' + cur.relative_humidity_2m + '%</div>' +
+            '<div>Wind ' + Math.round(cur.wind_speed_10m) + ' km/h ' + wd + '</div>' +
+            '<div>Pressure ' + Math.round(cur.surface_pressure) + ' hPa</div>' +
+          '</div>' +
+        '</div>';
+
+        if (daily && daily.time) {
+          html += '<div class="weather-forecast">';
+          for (let i = 0; i < Math.min(daily.time.length, 5); i++) {
+            const [dDesc, dIcon] = wmoLabel(daily.weather_code[i]);
+            const dayName = i === 0 ? 'Today' : new Date(daily.time[i] + 'T12:00').toLocaleDateString('en-US', { weekday: 'short' });
+            html += '<div class="weather-day">' +
+              '<div class="weather-day-name">' + escapeHtml(dayName) + '</div>' +
+              '<div class="weather-day-icon">' + dIcon + '</div>' +
+              '<div class="weather-day-temps">' +
+                '<span class="weather-hi">' + Math.round(daily.temperature_2m_max[i]) + '&deg;</span>' +
+                '<span class="weather-lo">' + Math.round(daily.temperature_2m_min[i]) + '&deg;</span>' +
+              '</div>' +
+            '</div>';
+          }
+          html += '</div>';
+        }
+        body.innerHTML = html;
+        setPanelStatus(panel, 'live', 'LIVE');
+      }
+
+      function fetchWeather(lat, lon, locName) {
+        const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat +
+          '&longitude=' + lon +
+          '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure' +
+          '&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5';
+        setPanelStatus(panel, 'loading', 'FETCH');
+        fetchIntel(url)
+          .then((text) => { renderWeather(JSON.parse(text), locName); })
+          .catch((err) => {
+            if (killed) return;
+            renderErrorInto(body, err, () => fetchWeather(lat, lon, locName));
+            setPanelStatus(panel, 'error', 'ERR');
+          });
+      }
+
+      function reverseGeo(lat, lon) {
+        return fetchIntel('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lon + '&format=json&zoom=10')
+          .then((t) => {
+            const d = JSON.parse(t);
+            return d.address ? [d.address.city || d.address.town || d.address.village || d.address.county || '', d.address.country || ''].filter(Boolean).join(', ') : (lat.toFixed(2) + ', ' + lon.toFixed(2));
+          })
+          .catch(() => lat.toFixed(2) + ', ' + lon.toFixed(2));
+      }
+
+      function start(lat, lon) {
+        reverseGeo(lat, lon).then((locName) => {
+          fetchWeather(lat, lon, locName);
+          timer = setInterval(() => fetchWeather(lat, lon, locName), 15 * 60 * 1000);
+        });
+      }
+
+      body.innerHTML = '<div class="panel-loading">Detecting location&hellip;</div>';
+      setPanelStatus(panel, 'loading', 'GEO');
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => { if (!killed) start(pos.coords.latitude, pos.coords.longitude); },
+          () => {
+            fetchIntel('http://ip-api.com/json/?fields=lat,lon,city,country')
+              .then((t) => { const d = JSON.parse(t); if (!killed) start(d.lat, d.lon); })
+              .catch((err) => { if (!killed) { renderErrorInto(body, err); setPanelStatus(panel, 'error', 'ERR'); } });
+          },
+          { timeout: 8000 }
+        );
+      } else {
+        fetchIntel('http://ip-api.com/json/?fields=lat,lon,city,country')
+          .then((t) => { const d = JSON.parse(t); if (!killed) start(d.lat, d.lon); })
+          .catch((err) => { if (!killed) { renderErrorInto(body, err); setPanelStatus(panel, 'error', 'ERR'); } });
+      }
+
+      return () => { killed = true; if (timer) clearInterval(timer); };
+    },
+  };
+
+  // --------------------------------------------------------------------------
+  // PANEL: Local News (geolocation-based RSS feeds)
+  // --------------------------------------------------------------------------
+  const LOCAL_NEWS_REGIONS = {
+    US: [
+      { label: 'AP News', url: 'https://rsshub.app/apnews/topics/apf-topnews' },
+      { label: 'NPR', url: 'https://feeds.npr.org/1001/rss.xml' },
+      { label: 'Reuters US', url: 'https://feeds.reuters.com/Reuters/domesticNews' },
+    ],
+    GB: [
+      { label: 'BBC UK', url: 'https://feeds.bbci.co.uk/news/uk/rss.xml' },
+      { label: 'Guardian', url: 'https://www.theguardian.com/uk/rss' },
+      { label: 'Sky News', url: 'https://feeds.skynews.com/feeds/rss/uk.xml' },
+    ],
+    DE: [
+      { label: 'DW', url: 'https://rss.dw.com/rdf/rss-en-all' },
+      { label: 'Spiegel', url: 'https://www.spiegel.de/international/index.rss' },
+    ],
+    FR: [
+      { label: 'France24', url: 'https://www.france24.com/en/rss' },
+    ],
+    AU: [
+      { label: 'ABC AU', url: 'https://www.abc.net.au/news/feed/51120/rss.xml' },
+      { label: 'SBS', url: 'https://www.sbs.com.au/news/feed' },
+    ],
+    CA: [
+      { label: 'CBC', url: 'https://www.cbc.ca/webfeed/rss/rss-topstories' },
+      { label: 'Globe&Mail', url: 'https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/canada/' },
+    ],
+    IN: [
+      { label: 'NDTV', url: 'https://feeds.feedburner.com/ndtvnews-top-stories' },
+      { label: 'Times of India', url: 'https://timesofindia.indiatimes.com/rssfeedstopstories.cms' },
+    ],
+    _default: [
+      { label: 'Reuters', url: 'https://feeds.reuters.com/Reuters/worldNews' },
+      { label: 'BBC World', url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
+      { label: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+    ],
+  };
+
+  PANELS.localnews = {
+    title: 'Local News',
+    icon: '&#128240;',
+    size: 'md',
+    desc: 'News feeds based on your region.',
+    render: (body, panel) => {
+      let killed = false;
+      let timer = null;
+      let activeSrc = 0;
+
+      function detectCountry() {
+        return fetchIntel('http://ip-api.com/json/?fields=countryCode')
+          .then((t) => JSON.parse(t).countryCode || '_default')
+          .catch(() => '_default');
+      }
+
+      function parseRssItems(text) {
+        try {
+          var doc = new DOMParser().parseFromString(text, 'text/xml');
+          var items = doc.querySelectorAll('item');
+          if (items.length === 0) items = doc.querySelectorAll('entry');
+          var result = [];
+          items.forEach(function (item) {
+            var title = (item.querySelector('title') || {}).textContent || '';
+            var link = '';
+            var linkEl = item.querySelector('link');
+            if (linkEl) link = linkEl.getAttribute('href') || linkEl.textContent || '';
+            var pubDate = (item.querySelector('pubDate') || item.querySelector('published') || item.querySelector('updated') || {}).textContent || '';
+            if (title) result.push({ title: title.trim(), link: link.trim(), date: pubDate });
+          });
+          return result;
+        } catch (_) { return []; }
+      }
+
+      function renderFeed(feeds, country) {
+        if (killed) return;
+        var tabs = feeds.map(function (f, i) {
+          return '<button class="' + (i === activeSrc ? 'is-active' : '') + '" data-idx="' + i + '">' +
+            escapeHtml(f.label) + '</button>';
+        }).join('');
+
+        function loadSource(idx) {
+          activeSrc = idx;
+          body.querySelectorAll('.news-tabs button').forEach(function (b) {
+            b.classList.toggle('is-active', parseInt(b.dataset.idx, 10) === idx);
+          });
+          var listEl = body.querySelector('.localnews-list');
+          listEl.innerHTML = '<div class="panel-loading">Loading&hellip;</div>';
+          setPanelStatus(panel, 'loading', 'FETCH');
+          fetchIntel(feeds[idx].url)
+            .then(function (text) {
+              if (killed) return;
+              var items = parseRssItems(text).slice(0, 15);
+              if (items.length === 0) {
+                listEl.innerHTML = '<div class="panel-empty">No items found.</div>';
+                setPanelStatus(panel, 'live', 'EMPTY');
+                return;
+              }
+              listEl.innerHTML = items.map(function (it) {
+                return '<a class="news-item" href="' + escapeHtml(it.link) + '" target="_blank" rel="noopener">' +
+                  '<span class="news-title">' + escapeHtml(it.title) + '</span>' +
+                  (it.date ? '<span class="news-date">' + escapeHtml(new Date(it.date).toLocaleString()) + '</span>' : '') +
+                  '</a>';
+              }).join('');
+              setPanelStatus(panel, 'live', country);
+            })
+            .catch(function (err) {
+              if (killed) return;
+              listEl.innerHTML = '<div class="panel-error">' + escapeHtml(err.message) + '</div>';
+              setPanelStatus(panel, 'error', 'ERR');
+            });
+        }
+
+        body.innerHTML = '<div class="news-tabs">' + tabs + '</div><div class="localnews-list"></div>';
+        body.querySelectorAll('.news-tabs button').forEach(function (btn) {
+          btn.addEventListener('click', function () { loadSource(parseInt(btn.dataset.idx, 10)); });
+        });
+        loadSource(activeSrc);
+        timer = setInterval(function () { loadSource(activeSrc); }, 10 * 60 * 1000);
+      }
+
+      body.innerHTML = '<div class="panel-loading">Detecting region&hellip;</div>';
+      setPanelStatus(panel, 'loading', 'GEO');
+      detectCountry().then(function (cc) {
+        if (killed) return;
+        var feeds = LOCAL_NEWS_REGIONS[cc] || LOCAL_NEWS_REGIONS._default;
+        renderFeed(feeds, cc);
+      });
+
+      return () => { killed = true; if (timer) clearInterval(timer); };
+    },
+  };
 
   // --------------------------------------------------------------------------
   // Kick off initial render

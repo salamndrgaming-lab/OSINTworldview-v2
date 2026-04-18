@@ -1463,6 +1463,33 @@ app.whenReady().then(() => {
       }
       cb({ requestHeaders: headers });
     });
+
+    // Strip X-Frame-Options and CSP frame-ancestors from YouTube responses
+    // so embeds work when the parent page is file:// (Error 152 fix).
+    const embedFilter = {
+      urls: [
+        'https://*.youtube.com/*',
+        'https://youtube.com/*',
+        'https://*.googlevideo.com/*',
+      ],
+    };
+    session.defaultSession.webRequest.onHeadersReceived(embedFilter, (details, cb) => {
+      const headers = { ...details.responseHeaders };
+      delete headers['x-frame-options'];
+      delete headers['X-Frame-Options'];
+      // Relax CSP frame-ancestors to allow file:// embedding
+      if (headers['content-security-policy']) {
+        headers['content-security-policy'] = headers['content-security-policy'].map(
+          (v) => v.replace(/frame-ancestors[^;]*(;|$)/gi, 'frame-ancestors * $1')
+        );
+      }
+      if (headers['Content-Security-Policy']) {
+        headers['Content-Security-Policy'] = headers['Content-Security-Policy'].map(
+          (v) => v.replace(/frame-ancestors[^;]*(;|$)/gi, 'frame-ancestors * $1')
+        );
+      }
+      cb({ responseHeaders: headers });
+    });
   } catch (err) {
     console.warn('[monitor] failed to register header injection hook', err);
   }

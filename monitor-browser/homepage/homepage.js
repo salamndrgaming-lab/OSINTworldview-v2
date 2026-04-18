@@ -750,11 +750,18 @@
   }
 
   function streamEmbedUrl(videoId, autoplay) {
-    return 'https://www.youtube.com/embed/' + videoId +
-      '?autoplay=' + (autoplay ? 1 : 0) + '&mute=1&rel=0&modestbranding=1';
+    // Use youtube-nocookie.com which is more permissive with embedding
+    return 'https://www.youtube-nocookie.com/embed/' + videoId +
+      '?autoplay=' + (autoplay ? 1 : 0) + '&mute=1&rel=0&modestbranding=1&origin=https://www.youtube.com';
+  }
+  function streamThumbnail(videoId) {
+    return 'https://img.youtube.com/vi/' + videoId + '/hqdefault.jpg';
   }
   function streamWatchUrl(channelId) {
     return 'https://www.youtube.com/channel/' + channelId + '/live';
+  }
+  function streamVideoUrl(videoId) {
+    return 'https://www.youtube.com/watch?v=' + videoId;
   }
 
   function renderStreamEmbed(body, channelId, autoplay) {
@@ -770,9 +777,45 @@
           '</div>';
         return;
       }
+      // Show thumbnail with play button; clicking opens in new tab.
+      // Also attempt iframe embed (nocookie domain) but with fallback.
       embed.innerHTML =
-        '<iframe src="' + streamEmbedUrl(videoId, autoplay) +
-        '" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>';
+        '<div class="stream-player" data-vid="' + videoId + '" data-ch="' + channelId + '">' +
+        '  <div class="stream-thumb-wrap">' +
+        '    <img class="stream-thumb" src="' + streamThumbnail(videoId) + '" alt="Live stream" />' +
+        '    <button class="stream-play-btn" title="Play in embed">&#9654;</button>' +
+        '    <a class="stream-open-btn" href="' + streamVideoUrl(videoId) + '" target="_blank" rel="noopener" title="Open in new tab">&#8599; Open</a>' +
+        '  </div>' +
+        '</div>';
+
+      var playBtn = embed.querySelector('.stream-play-btn');
+      if (playBtn) {
+        playBtn.addEventListener('click', function () {
+          // Replace thumbnail with iframe embed attempt
+          var player = embed.querySelector('.stream-player');
+          if (player) {
+            player.innerHTML =
+              '<iframe src="' + streamEmbedUrl(videoId, true) +
+              '" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>' +
+              '<div class="stream-embed-fallback">' +
+              'If the stream shows an error, <a href="' + streamVideoUrl(videoId) + '" target="_blank" rel="noopener">open on YouTube</a> instead.' +
+              '</div>';
+          }
+        });
+      }
+
+      // If autoplay requested, go straight to iframe
+      if (autoplay) {
+        var player = embed.querySelector('.stream-player');
+        if (player) {
+          player.innerHTML =
+            '<iframe src="' + streamEmbedUrl(videoId, true) +
+            '" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>' +
+            '<div class="stream-embed-fallback">' +
+            'If the stream shows an error, <a href="' + streamVideoUrl(videoId) + '" target="_blank" rel="noopener">open on YouTube</a> instead.' +
+            '</div>';
+        }
+      }
     });
   }
 

@@ -269,12 +269,13 @@ function newTab(rawUrl) {
 
   const url = normalizeUrl(rawUrl);
   const id = randomUUID();
+  const homepage = isHomepageUrl(url);
 
   const view = new WebContentsView({
     webPreferences: {
-      preload: path.join(__dirname, 'preload-content.js'),
+      preload: path.join(__dirname, homepage ? 'preload-content.js' : 'preload-content.js'),
       contextIsolation: true,
-      sandbox: true,
+      sandbox: !homepage,
       nodeIntegration: false,
       webviewTag: false,
       spellcheck: true,
@@ -1448,6 +1449,8 @@ app.whenReady().then(() => {
         'https://tile.openstreetmap.org/*',
         'https://*.youtube.com/*',
         'https://youtube.com/*',
+        'https://*.youtube-nocookie.com/*',
+        'https://youtube-nocookie.com/*',
         'https://*.googlevideo.com/*',
         'https://*.ytimg.com/*',
       ],
@@ -1457,7 +1460,7 @@ app.whenReady().then(() => {
       const url = details.url || '';
       if (url.includes('openstreetmap.org')) {
         headers['Referer'] = 'https://www.openstreetmap.org/';
-      } else if (url.includes('youtube.com') || url.includes('googlevideo.com') || url.includes('ytimg.com')) {
+      } else if (url.includes('youtube.com') || url.includes('youtube-nocookie.com') || url.includes('googlevideo.com') || url.includes('ytimg.com')) {
         headers['Referer'] = 'https://www.youtube.com/';
         headers['Origin'] = 'https://www.youtube.com';
       }
@@ -1470,23 +1473,25 @@ app.whenReady().then(() => {
       urls: [
         'https://*.youtube.com/*',
         'https://youtube.com/*',
+        'https://*.youtube-nocookie.com/*',
+        'https://youtube-nocookie.com/*',
         'https://*.googlevideo.com/*',
       ],
     };
     session.defaultSession.webRequest.onHeadersReceived(embedFilter, (details, cb) => {
       const headers = { ...details.responseHeaders };
-      delete headers['x-frame-options'];
-      delete headers['X-Frame-Options'];
-      // Relax CSP frame-ancestors to allow file:// embedding
-      if (headers['content-security-policy']) {
-        headers['content-security-policy'] = headers['content-security-policy'].map(
-          (v) => v.replace(/frame-ancestors[^;]*(;|$)/gi, 'frame-ancestors * $1')
-        );
-      }
-      if (headers['Content-Security-Policy']) {
-        headers['Content-Security-Policy'] = headers['Content-Security-Policy'].map(
-          (v) => v.replace(/frame-ancestors[^;]*(;|$)/gi, 'frame-ancestors * $1')
-        );
+      // Remove all frame-blocking headers
+      const keysToRemove = Object.keys(headers).filter(
+        (k) => k.toLowerCase() === 'x-frame-options'
+      );
+      for (const k of keysToRemove) delete headers[k];
+      // Rewrite all CSP headers to allow any embedder
+      for (const key of Object.keys(headers)) {
+        if (key.toLowerCase() === 'content-security-policy') {
+          headers[key] = headers[key].map(
+            (v) => v.replace(/frame-ancestors[^;]*(;|$)/gi, 'frame-ancestors * $1')
+          );
+        }
       }
       cb({ responseHeaders: headers });
     });

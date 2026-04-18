@@ -753,39 +753,14 @@
   }
 
   // --------------------------------------------------------------------------
-  // PANEL: Live News Streams (YouTube live embeds)
+  // PANEL: Live Streams (user-managed YouTube embeds)
   // --------------------------------------------------------------------------
 
-  // Channels with 24/7 live streams. We embed directly via the local embed
-  // server's /youtube-live endpoint using the channel ID — no video ID
-  // scraping needed. The embed server serves from http://127.0.0.1:{port}
-  // which YouTube accepts as a valid origin (avoids Error 152).
-  const LIVE_STREAMS = [
-    { id: 'aje',      label: 'Al Jazeera',  channelId: 'UCNye-wNBqNL5ZzHSJj3l8Bg' },
-    { id: 'dw',       label: 'DW News',     channelId: 'UCknLrEdhRCp1aegoMqRaCZg' },
-    { id: 'france24', label: 'France 24',   channelId: 'UCQfwfsi5VrQ8yKZ-UWmAEFg' },
-    { id: 'sky',      label: 'Sky News',    channelId: 'UCoMdktPbSTixAyNGwb-UYkQ' },
-    { id: 'cna',      label: 'CNA',         channelId: 'UCDvg5oPkDc9fyN6CZaORvYw' },
-    { id: 'abc',      label: 'ABC AU',      channelId: 'UCVgO39Bk5sMo66-6o6Aqb5A' },
-    { id: 'nhk',      label: 'NHK World',   channelId: 'UCSPEjw8F2nQDtmUKPFNF7_A' },
-    { id: 'euronews', label: 'Euronews',    channelId: 'UCSrZ3UV4jOidv8ppoVuvW9Q' },
-  ];
-
-  // Port for local YouTube embed server (avoids Error 152 from file:// origin)
   let ytEmbedPort = 0;
   const ytPortReady = (window.monitorApi && window.monitorApi.getYtEmbedPort)
     ? window.monitorApi.getYtEmbedPort().then(function (p) { ytEmbedPort = p || 0; return p; }).catch(function () { return 0; })
     : Promise.resolve(0);
 
-  function streamLiveUrl(channelId, autoplay) {
-    if (ytEmbedPort) {
-      return 'http://127.0.0.1:' + ytEmbedPort + '/youtube-live?channelId=' + channelId +
-        '&autoplay=' + (autoplay ? 1 : 0) + '&mute=1';
-    }
-    // Fallback: direct YouTube embed (may fail from file:// origin)
-    return 'https://www.youtube.com/embed/live_stream?channel=' + channelId +
-      '&autoplay=' + (autoplay ? 1 : 0) + '&mute=1&rel=0&modestbranding=1';
-  }
   function streamEmbedUrl(videoId, autoplay) {
     if (ytEmbedPort) {
       return 'http://127.0.0.1:' + ytEmbedPort + '/youtube-embed?videoId=' + videoId +
@@ -794,67 +769,163 @@
     return 'https://www.youtube-nocookie.com/embed/' + videoId +
       '?autoplay=' + (autoplay ? 1 : 0) + '&mute=1&rel=0&modestbranding=1';
   }
-  function streamWatchUrl(channelId) {
-    return 'https://www.youtube.com/channel/' + channelId + '/live';
+
+  function extractVideoId(input) {
+    if (!input) return null;
+    var v = input.trim();
+    if (/^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
+    var m = v.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+    if (m) return m[1];
+    m = v.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+    if (m) return m[1];
+    m = v.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/);
+    if (m) return m[1];
+    m = v.match(/youtube\.com\/live\/([a-zA-Z0-9_-]{11})/);
+    if (m) return m[1];
+    m = v.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
+    if (m) return m[1];
+    return null;
   }
 
-  function renderStreamEmbed(body, channelId, autoplay) {
-    var embed = body.querySelector('.stream-embed');
-    if (!embed) return;
-    embed.innerHTML = '<div class="stream-loading">Loading live stream&hellip;</div>';
-
-    ytPortReady.then(function () {
-      if (!ytEmbedPort) {
-        embed.innerHTML =
-          '<div class="stream-offline">' +
-          '<span>Embed server not available</span>' +
-          '<a href="' + streamWatchUrl(channelId) + '" target="_blank" rel="noopener">Watch on YouTube &rarr;</a>' +
-          '</div>';
-        return;
-      }
-      embed.innerHTML =
-        '<iframe src="' + streamLiveUrl(channelId, autoplay) +
-        '" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture; fullscreen; storage-access" allowfullscreen></iframe>' +
-        '<div class="stream-embed-foot">' +
-        '<a href="' + streamWatchUrl(channelId) + '" target="_blank" rel="noopener">Open on YouTube &rarr;</a>' +
-        '</div>';
-    });
+  var STREAMS_KEY = 'monitor:streams:v1';
+  function loadStreams() {
+    try {
+      var raw = localStorage.getItem(STREAMS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return [];
+  }
+  function saveStreams(list) {
+    try { localStorage.setItem(STREAMS_KEY, JSON.stringify(list)); } catch (_) {}
   }
 
   PANELS.streams = {
     title: 'Live Streams',
     icon: '&#9654;',
     size: 'lg',
-    desc: 'Live 24/7 news channels via YouTube.',
+    desc: 'YouTube live streams — add any video URL.',
     render: (body, panel) => {
-      setPanelStatus(panel, 'live', 'LIVE');
-      const activeStream = LIVE_STREAMS[0];
-      const tabs = LIVE_STREAMS.map((s) =>
-        '<button data-ch="' + escapeHtml(s.channelId) + '" class="' +
-        (s.channelId === activeStream.channelId ? 'is-active' : '') + '">' +
-        escapeHtml(s.label) + '</button>'
-      ).join('');
-      body.innerHTML =
-        '<div class="news-tabs stream-tabs">' + tabs + '</div>' +
-        '<div class="stream-embed"></div>' +
-        '<div class="stream-foot">' +
-        '  <a class="stream-watch" target="_blank" rel="noopener" href="' +
-        streamWatchUrl(activeStream.channelId) + '">Open on YouTube &rarr;</a>' +
-        '  <span class="stream-hint">If a stream shows an error, the channel may be off-air.</span>' +
-        '</div>';
+      setPanelStatus(panel, 'live', 'READY');
+      var streams = loadStreams();
+      var activeIdx = 0;
 
-      renderStreamEmbed(body, activeStream.channelId, false);
+      function renderPanel() {
+        streams = loadStreams();
+        var tabsHtml = streams.map(function (s, i) {
+          return '<button data-idx="' + i + '" class="' + (i === activeIdx ? 'is-active' : '') + '">' +
+            escapeHtml(s.label) +
+            '<span class="stream-remove" data-idx="' + i + '" title="Remove">&times;</span>' +
+            '</button>';
+        }).join('');
 
-      body.querySelectorAll('.stream-tabs button').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          body.querySelectorAll('.stream-tabs button').forEach((b) =>
-            b.classList.toggle('is-active', b === btn));
-          const ch = btn.dataset.ch;
-          renderStreamEmbed(body, ch, true);
-          const watch = body.querySelector('.stream-watch');
-          if (watch) watch.href = streamWatchUrl(ch);
+        body.innerHTML =
+          '<div class="news-tabs stream-tabs">' +
+          tabsHtml +
+          '<button class="stream-add-btn" title="Add stream">+</button>' +
+          '</div>' +
+          '<div class="stream-embed"></div>' +
+          '<div class="stream-foot">' +
+          '  <span class="stream-hint">Paste any YouTube video or live stream URL to add it.</span>' +
+          '</div>';
+
+        body.querySelector('.stream-add-btn').addEventListener('click', showAddForm);
+
+        body.querySelectorAll('.stream-remove').forEach(function (btn) {
+          btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var idx = parseInt(btn.dataset.idx, 10);
+            streams.splice(idx, 1);
+            saveStreams(streams);
+            if (activeIdx >= streams.length) activeIdx = Math.max(0, streams.length - 1);
+            renderPanel();
+          });
         });
-      });
+
+        body.querySelectorAll('.stream-tabs button[data-idx]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            activeIdx = parseInt(btn.dataset.idx, 10);
+            body.querySelectorAll('.stream-tabs button[data-idx]').forEach(function (b) {
+              b.classList.toggle('is-active', parseInt(b.dataset.idx, 10) === activeIdx);
+            });
+            loadEmbed(true);
+          });
+        });
+
+        if (streams.length > 0) {
+          loadEmbed(false);
+        } else {
+          showEmpty();
+        }
+      }
+
+      function showEmpty() {
+        var embed = body.querySelector('.stream-embed');
+        embed.innerHTML =
+          '<div class="stream-offline">' +
+          '<div style="font-size:28px;margin-bottom:8px">&#9654;</div>' +
+          '<span>No streams added yet</span>' +
+          '<div style="margin-top:8px;opacity:0.7;font-size:12px">Click <b>+</b> to add a YouTube live stream or video URL</div>' +
+          '</div>';
+      }
+
+      function loadEmbed(autoplay) {
+        var embed = body.querySelector('.stream-embed');
+        if (!embed || !streams[activeIdx]) return;
+        var s = streams[activeIdx];
+        embed.innerHTML = '<div class="stream-loading">Loading stream&hellip;</div>';
+        ytPortReady.then(function () {
+          embed.innerHTML =
+            '<iframe src="' + streamEmbedUrl(s.videoId, autoplay) +
+            '" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>' +
+            '<div class="stream-embed-foot">' +
+            '<a href="https://www.youtube.com/watch?v=' + escapeHtml(s.videoId) +
+            '" target="_blank" rel="noopener">Open on YouTube &rarr;</a>' +
+            '</div>';
+        });
+      }
+
+      function showAddForm() {
+        var embed = body.querySelector('.stream-embed');
+        embed.innerHTML =
+          '<div class="stream-add-form">' +
+          '<div class="stream-add-title">Add YouTube Stream</div>' +
+          '<input type="text" class="stream-url-input" placeholder="Paste YouTube URL or video ID&hellip;" />' +
+          '<input type="text" class="stream-label-input" placeholder="Label (e.g. Al Jazeera Live)" />' +
+          '<div class="stream-add-actions">' +
+          '<button class="stream-add-cancel">Cancel</button>' +
+          '<button class="stream-add-confirm">Add</button>' +
+          '</div>' +
+          '<div class="stream-add-error"></div>' +
+          '</div>';
+
+        var urlInput = embed.querySelector('.stream-url-input');
+        var labelInput = embed.querySelector('.stream-label-input');
+        var errEl = embed.querySelector('.stream-add-error');
+        urlInput.focus();
+
+        embed.querySelector('.stream-add-cancel').addEventListener('click', function () {
+          if (streams.length > 0) loadEmbed(false); else showEmpty();
+        });
+
+        function doAdd() {
+          var videoId = extractVideoId(urlInput.value);
+          if (!videoId) {
+            errEl.textContent = 'Could not extract video ID. Paste a YouTube URL or 11-character ID.';
+            return;
+          }
+          var label = labelInput.value.trim() || ('Stream ' + (streams.length + 1));
+          streams.push({ videoId: videoId, label: label });
+          saveStreams(streams);
+          activeIdx = streams.length - 1;
+          renderPanel();
+        }
+
+        embed.querySelector('.stream-add-confirm').addEventListener('click', doAdd);
+        urlInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); if (!labelInput.value) labelInput.focus(); else doAdd(); } });
+        labelInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
+      }
+
+      renderPanel();
     },
   };
 

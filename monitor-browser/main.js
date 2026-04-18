@@ -30,6 +30,82 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { randomUUID } = require('node:crypto');
 const { pathToFileURL } = require('node:url');
+const http = require('node:http');
+
+// ---------------------------------------------------------------------------
+// Local YouTube embed server
+// ---------------------------------------------------------------------------
+// YouTube rejects embeds from file:// origins (Error 152). We serve a small
+// HTML page from localhost that loads the YouTube IFrame API — YouTube
+// accepts localhost as a valid origin. This mirrors the OSINT dashboard's
+// Tauri sidecar approach.
+
+let ytEmbedPort = 0;
+
+function startYtEmbedServer() {
+  return new Promise((resolve) => {
+    const server = http.createServer((req, res) => {
+      const parsed = new URL(req.url, 'http://localhost');
+      if (parsed.pathname !== '/youtube-embed') {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+      const videoId = (parsed.searchParams.get('videoId') || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      const autoplay = parsed.searchParams.get('autoplay') === '1' ? 1 : 0;
+      const mute = parsed.searchParams.get('mute') === '0' ? 0 : 1;
+      if (!videoId) { res.writeHead(400); res.end('Missing videoId'); return; }
+
+      const html = `<!doctype html>
+<html><head>
+<meta charset="utf-8"/>
+<meta name="referrer" content="strict-origin-when-cross-origin"/>
+<style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}#player{width:100%;height:100%}
+#play-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,0.4)}
+#play-overlay svg{width:72px;height:72px;opacity:0.9;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5))}
+#play-overlay.hidden{display:none}</style>
+</head><body>
+<div id="player"></div>
+<div id="play-overlay" class="hidden"><svg viewBox="0 0 68 48"><path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55C3.97 2.33 2.27 4.81 1.48 7.74.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.64-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="red"/><path d="M45 24L27 14v20" fill="#fff"/></svg></div>
+<script>
+if(document.requestStorageAccess)document.requestStorageAccess().catch(function(){});
+var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);
+var player,overlay=document.getElementById('play-overlay'),started=false;
+function onYouTubeIframeAPIReady(){
+  player=new YT.Player('player',{
+    videoId:'${videoId}',
+    host:'https://www.youtube.com',
+    playerVars:{autoplay:${autoplay},mute:${mute},playsinline:1,rel:0,controls:1,modestbranding:1,enablejsapi:1,origin:'http://localhost:'+location.port},
+    events:{
+      onReady:function(){if(${autoplay}===1)player.playVideo()},
+      onError:function(e){window.parent.postMessage({type:'yt-error',code:e.data},'*')},
+      onStateChange:function(e){if(e.data===1||e.data===3){overlay.classList.add('hidden');started=true}}
+    }
+  });
+}
+overlay.addEventListener('click',function(){
+  if(document.requestStorageAccess)document.requestStorageAccess().catch(function(){});
+  if(player&&player.playVideo){player.playVideo();player.unMute();overlay.classList.add('hidden')}
+});
+setTimeout(function(){if(!started)overlay.classList.remove('hidden')},3000);
+</script></body></html>`;
+
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Permissions-Policy': 'autoplay=*, encrypted-media=*, storage-access=(self "https://www.youtube.com")',
+      });
+      res.end(html);
+    });
+
+    server.listen(0, '127.0.0.1', () => {
+      ytEmbedPort = server.address().port;
+      console.log('[monitor] YouTube embed server on http://127.0.0.1:' + ytEmbedPort);
+      resolve(ytEmbedPort);
+    });
+    server.on('error', () => resolve(0));
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -374,6 +450,24 @@ function wireTabEvents(id, tab) {
       return { action: 'deny' };
     }
     return { action: 'deny' };
+  });
+
+  // HTML5 fullscreen (e.g. YouTube video player fullscreen button)
+  wc.on('enter-html-full-screen', () => {
+    if (mainWindow) {
+      mainWindow.setFullScreen(true);
+      // Hide chrome, give tab full window
+      if (chromeView) chromeView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+      const { width, height } = mainWindow.getContentBounds();
+      tab.view.setBounds({ x: 0, y: 0, width, height });
+    }
+  });
+
+  wc.on('leave-html-full-screen', () => {
+    if (mainWindow) {
+      mainWindow.setFullScreen(false);
+      layoutViews();
+    }
   });
 
   // Intercept middle-click / ctrl-click link semantics by opening in new tab.
@@ -1346,6 +1440,8 @@ ipcMain.handle('shell:open-external', (_e, url) => {
 // Intel fetch proxy (used by homepage only)
 // ---------------------------------------------------------------------------
 
+ipcMain.handle('yt:embed-port', () => ytEmbedPort);
+
 ipcMain.handle('intel:fetch', async (event, url) => {
   // Only the homepage (loaded from the app bundle over file://) may use
   // this proxy. Arbitrary websites visited in tabs cannot.
@@ -1504,7 +1600,10 @@ app.whenReady().then(() => {
   setupDownloadListener();
   setupPermissionHandlers();
 
-  createWindow();
+  // Start local YouTube embed server, then create window
+  startYtEmbedServer().then(() => {
+    createWindow();
+  });
   app.on('activate', () => {
     if (!mainWindow) createWindow();
   });

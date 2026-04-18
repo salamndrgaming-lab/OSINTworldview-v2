@@ -602,6 +602,21 @@ html, body {
 }
 .stream-embed-fallback a { color: var(--intel-accent); text-decoration: none; }
 .stream-embed-fallback a:hover { text-decoration: underline; }
+.stream-embed-foot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  padding: 4px 8px;
+  z-index: 5;
+}
+.stream-embed-foot a {
+  font-size: 10px;
+  font-family: var(--font-data);
+  color: var(--intel-accent);
+  text-decoration: none;
+  opacity: 0.6;
+}
+.stream-embed-foot a:hover { opacity: 1; text-decoration: underline; }
 .stream-foot {
   margin-top: 8px;
   display: flex;

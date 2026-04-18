@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('browser', {
   duplicateTab: (id) => ipcRenderer.invoke('tab:duplicate', id),
   pinTab: (id) => ipcRenderer.invoke('tab:pin', id),
   muteTab: (id) => ipcRenderer.invoke('tab:mute', id),
+  reorderTab: (fromId, toId) => ipcRenderer.invoke('tab:reorder', fromId, toId),
 
   // Find in page
   findStart: (text, opts) => ipcRenderer.invoke('find:start', text, opts),
@@ -32,8 +33,11 @@ contextBridge.exposeInMainWorld('browser', {
   zoomOut: () => ipcRenderer.invoke('zoom:out'),
   zoomReset: () => ipcRenderer.invoke('zoom:reset'),
 
-  // Print / fullscreen
+  // Print / fullscreen / PDF / PiP / Reader
   print: () => ipcRenderer.invoke('page:print'),
+  savePdf: () => ipcRenderer.invoke('page:save-pdf'),
+  pip: () => ipcRenderer.invoke('page:pip'),
+  reader: () => ipcRenderer.invoke('page:reader'),
   fullscreen: () => ipcRenderer.invoke('window:fullscreen'),
 
   // Window controls (custom titlebar)
@@ -42,6 +46,7 @@ contextBridge.exposeInMainWorld('browser', {
   closeWindow: () => ipcRenderer.invoke('window:close'),
   isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
 
+  incognito: () => ipcRenderer.invoke('window:incognito'),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
 
   // Bookmarks
@@ -76,6 +81,15 @@ contextBridge.exposeInMainWorld('browser', {
     ipcRenderer.on('settings:changed', listener);
     return () => ipcRenderer.off('settings:changed', listener);
   },
+
+  // Security / certificates
+  securityInfo: () => ipcRenderer.invoke('page:security-info'),
+
+  // Per-site permissions
+  permissionsGet: (origin) => ipcRenderer.invoke('permissions:get', origin),
+  permissionsSet: (origin, perm, value) => ipcRenderer.invoke('permissions:set', origin, perm, value),
+  permissionsList: () => ipcRenderer.invoke('permissions:list'),
+  permissionsRemoveSite: (origin) => ipcRenderer.invoke('permissions:remove-site', origin),
 
   // Subscribe to tab list updates from the main process.
   onTabsUpdated: (handler) => {

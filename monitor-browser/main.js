@@ -93,6 +93,8 @@ const DEFAULT_SETTINGS = {
   httpsOnly: false,
   defaultZoom: 0,          // Electron zoom level (0 = 100%)
   startupBehavior: 'homepage', // 'homepage' | 'restore' | 'blank'
+  adBlock: true,
+  showBookmarksBar: false,
 };
 
 let settingsCache = null;
@@ -126,12 +128,8 @@ function saveSettings(patch) {
     console.warn('[monitor] failed to persist settings', err);
   }
   broadcastSettings();
-  // UA depends on showBranding.
-  try {
-    applyBrandedUA();
-  } catch (err) {
-    console.warn('[monitor] failed to reapply UA', err);
-  }
+  try { applyBrandedUA(); } catch (err) { console.warn('[monitor] failed to reapply UA', err); }
+  try { applyRequestFilters(); } catch (err) { console.warn('[monitor] failed to reapply filters', err); }
   return next;
 }
 
@@ -633,6 +631,173 @@ ipcMain.handle('window:maximize-toggle', () => {
 ipcMain.handle('window:close', () => mainWindow?.close());
 ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false);
 
+// ---------------------------------------------------------------------------
+// Incognito / Private window
+// ---------------------------------------------------------------------------
+let incognitoCounter = 0;
+
+ipcMain.handle('window:incognito', () => {
+  createIncognitoWindow();
+});
+
+function createIncognitoWindow() {
+  incognitoCounter++;
+  const partitionName = 'incognito-' + incognitoCounter + '-' + Date.now();
+
+  const win = new BaseWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 800,
+    minHeight: 500,
+    frame: false,
+    backgroundColor: '#0a0a10',
+    title: 'Monitor Browser — Private',
+  });
+
+  const chrome = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, 'preload-chrome.js'),
+      contextIsolation: true,
+      sandbox: false,
+      nodeIntegration: false,
+      partition: partitionName,
+    },
+  });
+  win.contentView.addChildView(chrome);
+  chrome.webContents.loadFile(CHROME_HTML);
+
+  const incTabs = new Map();
+  const incOrder = [];
+  let incActiveId = null;
+
+  function incLayoutViews() {
+    const { width, height } = win.getContentBounds();
+    chrome.setBounds({ x: 0, y: 0, width, height: CHROME_HEIGHT });
+    for (const [id, tab] of incTabs) {
+      if (id === incActiveId) {
+        tab.view.setBounds({ x: 0, y: CHROME_HEIGHT, width, height: Math.max(0, height - CHROME_HEIGHT) });
+      } else {
+        tab.view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+      }
+    }
+  }
+
+  function incBroadcastTabs() {
+    const payload = incOrder.filter((id) => incTabs.has(id)).map((id) => {
+      const t = incTabs.get(id);
+      const wc = t.view.webContents;
+      return {
+        id, url: t.url, title: t.title, favicon: t.favicon,
+        isLoading: t.isLoading, canGoBack: wc.canGoBack(), canGoForward: wc.canGoForward(),
+        isHomepage: t.url.startsWith('file://') && t.url.includes('homepage'),
+        pinned: t.pinned || false, muted: t.muted || false, audible: wc.isCurrentlyAudible(),
+      };
+    });
+    try { chrome.webContents.send('tabs:updated', { tabs: payload, activeId: incActiveId, incognito: true }); } catch {}
+  }
+
+  function incNewTab(rawUrl) {
+    const url = normalizeUrl(rawUrl || resolveHomepageUrl());
+    const id = randomUUID();
+    const view = new WebContentsView({
+      webPreferences: {
+        preload: path.join(__dirname, 'preload-content.js'),
+        contextIsolation: true, sandbox: true, nodeIntegration: false,
+        partition: partitionName,
+      },
+    });
+    const tab = { view, url, title: 'New Tab', favicon: null, isLoading: true, canGoBack: false, canGoForward: false, pinned: false, muted: false };
+    incTabs.set(id, tab);
+    incOrder.push(id);
+
+    const wc = view.webContents;
+    wc.on('did-start-navigation', () => { tab.isLoading = true; incBroadcastTabs(); });
+    wc.on('did-navigate', (_e, navUrl) => { tab.url = navUrl; tab.isLoading = false; incBroadcastTabs(); });
+    wc.on('did-navigate-in-page', (_e, navUrl) => { tab.url = navUrl; incBroadcastTabs(); });
+    wc.on('page-title-updated', (_e, title) => { tab.title = title; incBroadcastTabs(); });
+    wc.on('page-favicon-updated', (_e, favicons) => { tab.favicon = favicons[0] || null; incBroadcastTabs(); });
+    wc.on('did-fail-load', () => { tab.isLoading = false; incBroadcastTabs(); });
+    wc.on('did-finish-load', () => { tab.isLoading = false; incBroadcastTabs(); });
+
+    win.contentView.addChildView(view);
+    wc.loadURL(url);
+    incActiveId = id;
+    incLayoutViews();
+    incBroadcastTabs();
+    return id;
+  }
+
+  function incSwitchTab(id) {
+    if (!incTabs.has(id)) return;
+    incActiveId = id;
+    incLayoutViews();
+    incBroadcastTabs();
+  }
+
+  function incCloseTab(id) {
+    const tab = incTabs.get(id);
+    if (!tab) return;
+    win.contentView.removeChildView(tab.view);
+    tab.view.webContents.close();
+    incTabs.delete(id);
+    const idx = incOrder.indexOf(id);
+    if (idx >= 0) incOrder.splice(idx, 1);
+    if (incActiveId === id) {
+      if (incOrder.length > 0) {
+        incSwitchTab(incOrder[Math.min(idx, incOrder.length - 1)]);
+      } else {
+        win.close();
+        return;
+      }
+    }
+    incBroadcastTabs();
+  }
+
+  // Route IPC from this incognito chrome to local tab management
+  const wcId = chrome.webContents.id;
+  const incIpc = {
+    'tab:new': (_e, url) => incNewTab(url),
+    'tab:close': (_e, id) => incCloseTab(id ?? incActiveId),
+    'tab:switch': (_e, id) => incSwitchTab(id),
+    'tab:navigate': (_e, _id, url) => {
+      const t = incTabs.get(incActiveId);
+      if (t) t.view.webContents.loadURL(normalizeUrl(url));
+    },
+    'tab:back': () => { const t = incTabs.get(incActiveId); if (t) t.view.webContents.goBack(); },
+    'tab:forward': () => { const t = incTabs.get(incActiveId); if (t) t.view.webContents.goForward(); },
+    'tab:reload': () => { const t = incTabs.get(incActiveId); if (t) t.view.webContents.reload(); },
+    'tab:home': () => { const t = incTabs.get(incActiveId); if (t) t.view.webContents.loadURL(resolveHomepageUrl()); },
+    'window:minimize': () => win.minimize(),
+    'window:maximize-toggle': () => { if (win.isMaximized()) win.unmaximize(); else win.maximize(); },
+    'window:close': () => win.close(),
+    'window:is-maximized': () => win.isMaximized(),
+  };
+
+  // Intercept IPC from this window's chrome
+  chrome.webContents.ipc.handle = chrome.webContents.ipc.handle || (() => {});
+  for (const [channel, handler] of Object.entries(incIpc)) {
+    chrome.webContents.ipc.handle(channel, handler);
+  }
+
+  win.on('resize', incLayoutViews);
+  win.on('maximize', incLayoutViews);
+  win.on('unmaximize', incLayoutViews);
+
+  win.on('closed', () => {
+    for (const [, tab] of incTabs) {
+      try { tab.view.webContents.close(); } catch {}
+    }
+    incTabs.clear();
+    incOrder.length = 0;
+  });
+
+  chrome.webContents.once('did-finish-load', () => {
+    win.show();
+    incNewTab(resolveHomepageUrl());
+    try { chrome.webContents.send('settings:changed', { ...loadSettings(), incognito: true }); } catch {}
+  });
+}
+
 // Settings overlay: expand the chromeView to full window height so the
 // settings card isn't clipped by the normal 76px chrome height.
 ipcMain.handle('window:settings-expand', () => {
@@ -663,6 +828,15 @@ ipcMain.handle('tab:pin', (_e, id) => {
     return tab.pinned;
   }
   return false;
+});
+
+ipcMain.handle('tab:reorder', (_e, fromId, toId) => {
+  const fromIdx = tabOrder.indexOf(fromId);
+  const toIdx = tabOrder.indexOf(toId);
+  if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+  tabOrder.splice(fromIdx, 1);
+  tabOrder.splice(toIdx, 0, fromId);
+  broadcastTabs();
 });
 
 ipcMain.handle('tab:mute', (_e, id) => {
@@ -736,6 +910,195 @@ ipcMain.handle('window:fullscreen', () => {
   mainWindow.setFullScreen(fs);
   return fs;
 });
+
+// Save as PDF
+ipcMain.handle('page:save-pdf', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab || !mainWindow) return false;
+  const { dialog } = require('electron');
+  const { filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save as PDF',
+    defaultPath: (tab.title || 'page').replace(/[/\\?%*:|"<>]/g, '_') + '.pdf',
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  });
+  if (!filePath) return false;
+  try {
+    const data = await tab.view.webContents.printToPDF({
+      printBackground: true,
+      landscape: false,
+    });
+    fs.writeFileSync(filePath, data);
+    return true;
+  } catch (err) {
+    console.warn('[monitor] save-pdf failed', err);
+    return false;
+  }
+});
+
+// Picture-in-Picture (inject JS into page to trigger PiP on first playing video)
+ipcMain.handle('page:pip', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return false;
+  try {
+    await tab.view.webContents.executeJavaScript(`
+      (function() {
+        const v = document.querySelector('video');
+        if (!v) return false;
+        if (document.pictureInPictureElement) {
+          document.exitPictureInPicture();
+          return true;
+        }
+        v.requestPictureInPicture().catch(() => {});
+        return true;
+      })()
+    `);
+    return true;
+  } catch { return false; }
+});
+
+// Reader mode — extract main content and render in a clean overlay
+ipcMain.handle('page:reader', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return null;
+  try {
+    const result = await tab.view.webContents.executeJavaScript(`
+      (function() {
+        // Heuristic: grab article or main or largest text container
+        const article = document.querySelector('article')
+          || document.querySelector('[role="main"]')
+          || document.querySelector('main')
+          || document.querySelector('.post-content, .entry-content, .article-body');
+        if (!article) return null;
+        return {
+          title: document.title,
+          content: article.innerHTML,
+          url: location.href,
+        };
+      })()
+    `);
+    return result;
+  } catch { return null; }
+});
+
+// ---------------------------------------------------------------------------
+// Certificate / security info
+// ---------------------------------------------------------------------------
+ipcMain.handle('page:security-info', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return null;
+  const url = tab.url;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') {
+      return { secure: false, protocol: parsed.protocol, host: parsed.hostname, url };
+    }
+    const tls = require('tls');
+    return await new Promise((resolve) => {
+      const sock = tls.connect(parsed.port || 443, parsed.hostname, { servername: parsed.hostname }, () => {
+        const cert = sock.getPeerCertificate();
+        sock.destroy();
+        resolve({
+          secure: true,
+          protocol: 'https:',
+          host: parsed.hostname,
+          url,
+          cert: {
+            subject: cert.subject || {},
+            issuer: cert.issuer || {},
+            valid_from: cert.valid_from,
+            valid_to: cert.valid_to,
+            fingerprint: cert.fingerprint,
+            serialNumber: cert.serialNumber,
+          },
+        });
+      });
+      sock.on('error', () => {
+        resolve({ secure: false, protocol: 'https:', host: parsed.hostname, url, error: 'TLS error' });
+      });
+      setTimeout(() => { sock.destroy(); resolve({ secure: false, protocol: 'https:', host: parsed.hostname, url, error: 'Timeout' }); }, 5000);
+    });
+  } catch {
+    return { secure: false, protocol: 'unknown', host: '', url };
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Per-site permissions
+// ---------------------------------------------------------------------------
+const PERMISSION_TYPES = ['camera', 'microphone', 'geolocation', 'notifications', 'media'];
+
+function permissionsPath() {
+  return path.join(app.getPath('userData'), 'permissions.json');
+}
+
+function loadPermissions() {
+  try {
+    return JSON.parse(fs.readFileSync(permissionsPath(), 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function savePermissions(perms) {
+  try {
+    fs.mkdirSync(path.dirname(permissionsPath()), { recursive: true });
+    fs.writeFileSync(permissionsPath(), JSON.stringify(perms, null, 2));
+  } catch (err) {
+    console.warn('[monitor] failed to save permissions', err);
+  }
+}
+
+function getOriginPerms(origin) {
+  const all = loadPermissions();
+  return all[origin] || {};
+}
+
+function setOriginPerm(origin, perm, value) {
+  const all = loadPermissions();
+  if (!all[origin]) all[origin] = {};
+  all[origin][perm] = value;
+  savePermissions(all);
+}
+
+ipcMain.handle('permissions:get', (_e, origin) => {
+  return getOriginPerms(origin);
+});
+
+ipcMain.handle('permissions:set', (_e, origin, perm, value) => {
+  setOriginPerm(origin, perm, value);
+});
+
+ipcMain.handle('permissions:list', () => {
+  return loadPermissions();
+});
+
+ipcMain.handle('permissions:remove-site', (_e, origin) => {
+  const all = loadPermissions();
+  delete all[origin];
+  savePermissions(all);
+});
+
+function setupPermissionHandlers() {
+  session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
+    try {
+      const url = wc.getURL();
+      const origin = new URL(url).origin;
+      const perms = getOriginPerms(origin);
+      if (perms[permission] === 'allow') { callback(true); return; }
+      if (perms[permission] === 'deny') { callback(false); return; }
+      // Default: allow media, deny others until user grants
+      if (permission === 'media') { callback(true); return; }
+      callback(false);
+    } catch {
+      callback(false);
+    }
+  });
+
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
+    if (permission === 'media') return true;
+    return false;
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Bookmarks store
@@ -893,18 +1256,77 @@ ipcMain.handle('downloads:reveal', (_e, id) => {
 
 // ---------------------------------------------------------------------------
 // Privacy: HTTPS-only mode
-// ---------------------------------------------------------------------------
-function applyHttpsOnlyMode() {
+// ── Request filters: ad blocking + HTTPS-only ─────────────────────
+const AD_DOMAINS = new Set([
+  'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
+  'google-analytics.com', 'googletagmanager.com', 'googletagservices.com',
+  'pagead2.googlesyndication.com', 'adservice.google.com',
+  'facebook.net', 'connect.facebook.net', 'pixel.facebook.com',
+  'analytics.twitter.com', 'ads-twitter.com', 'static.ads-twitter.com',
+  'ad.doubleclick.net', 'stats.g.doubleclick.net',
+  'adnxs.com', 'adsrvr.org', 'adsymptotic.com',
+  'amazon-adsystem.com', 'aax.amazon-adsystem.com',
+  'criteo.com', 'criteo.net', 'static.criteo.net',
+  'outbrain.com', 'taboola.com', 'widgets.outbrain.com',
+  'scorecardresearch.com', 'sb.scorecardresearch.com',
+  'quantserve.com', 'pixel.quantserve.com',
+  'hotjar.com', 'static.hotjar.com', 'script.hotjar.com',
+  'mouseflow.com', 'fullstory.com',
+  'optimizely.com', 'cdn.optimizely.com',
+  'rubiconproject.com', 'fastclick.net',
+  'pubmatic.com', 'openx.net', 'casalemedia.com',
+  'moatads.com', 'serving-sys.com', 'smartadserver.com',
+  'turn.com', 'mathtag.com', 'rlcdn.com', 'bluekai.com',
+  'demdex.net', 'krxd.net', 'exelator.com', 'eyeota.net',
+  'tapad.com', 'agkn.com', 'bidswitch.net',
+  'chartbeat.com', 'chartbeat.net',
+  'mixpanel.com', 'cdn.mxpnl.com',
+  'segment.com', 'cdn.segment.com', 'api.segment.io',
+  'amplitude.com', 'cdn.amplitude.com',
+  'newrelic.com', 'js-agent.newrelic.com', 'bam.nr-data.net',
+  'sentry.io', 'browser.sentry-cdn.com',
+  'intercom.io', 'widget.intercom.io',
+  'drift.com', 'js.driftt.com',
+  'popads.net', 'popcash.net', 'propellerads.com',
+  'revcontent.com', 'mgid.com', 'zergnet.com',
+  'buysellads.com', 'carbonads.com', 'carbonads.net',
+  'adroll.com', 'd.adroll.com',
+  'mediavine.com', 'ads.mediavine.com',
+  'adskeeper.co.uk', 'adsterra.com',
+]);
+
+function applyRequestFilters() {
   const s = loadSettings();
-  if (s.httpsOnly) {
-    session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*'] }, (details, cb) => {
-      if (details.url.startsWith('http://localhost') || details.url.startsWith('http://127.0.0.1')) {
-        cb({});
+  const doBlock = s.adBlock;
+  const doHttps = s.httpsOnly;
+
+  if (!doBlock && !doHttps) {
+    session.defaultSession.webRequest.onBeforeRequest(null);
+    return;
+  }
+
+  session.defaultSession.webRequest.onBeforeRequest((details, cb) => {
+    // Ad / tracker blocking
+    if (doBlock) {
+      try {
+        const host = new URL(details.url).hostname;
+        for (const domain of AD_DOMAINS) {
+          if (host === domain || host.endsWith('.' + domain)) {
+            cb({ cancel: true });
+            return;
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    // HTTPS-only redirect
+    if (doHttps && details.url.startsWith('http://')) {
+      if (!details.url.startsWith('http://localhost') && !details.url.startsWith('http://127.0.0.1')) {
+        cb({ redirectURL: details.url.replace(/^http:/, 'https:') });
         return;
       }
-      cb({ redirectURL: details.url.replace(/^http:/, 'https:') });
-    });
-  }
+    }
+    cb({});
+  });
 }
 
 ipcMain.handle('shell:open-external', (_e, url) => {
@@ -1046,8 +1468,9 @@ app.whenReady().then(() => {
   }
 
   applyBrandedUA();
-  applyHttpsOnlyMode();
+  applyRequestFilters();
   setupDownloadListener();
+  setupPermissionHandlers();
 
   createWindow();
   app.on('activate', () => {

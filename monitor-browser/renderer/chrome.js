@@ -108,8 +108,35 @@
     });
 
     el.addEventListener('auxclick', (e) => {
-      // Middle-click closes tab.
       if (e.button === 1) browser.closeTab(tab.id);
+    });
+
+    // Drag-to-reorder
+    el.setAttribute('draggable', 'true');
+    el.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', tab.id);
+      el.classList.add('is-dragging');
+    });
+    el.addEventListener('dragend', () => {
+      el.classList.remove('is-dragging');
+      document.querySelectorAll('.tab.drag-over').forEach((t) => t.classList.remove('drag-over'));
+    });
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      el.classList.add('drag-over');
+    });
+    el.addEventListener('dragleave', () => {
+      el.classList.remove('drag-over');
+    });
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.classList.remove('drag-over');
+      const fromId = e.dataTransfer.getData('text/plain');
+      if (fromId && fromId !== tab.id) {
+        browser.reorderTab(fromId, tab.id);
+      }
     });
 
     return el;
@@ -178,6 +205,14 @@
   homeBtn.addEventListener('click', () => browser.home());
   devtoolsBtn.addEventListener('click', () => browser.devtools());
 
+  const readerBtn = document.getElementById('action-reader');
+  const pipBtn = document.getElementById('action-pip');
+  readerBtn.addEventListener('click', () => openReaderMode());
+  pipBtn.addEventListener('click', () => browser.pip());
+
+  urlScheme.addEventListener('click', () => showSecurityPopup());
+  urlScheme.style.cursor = 'pointer';
+
   wbMin.addEventListener('click', () => browser.minimize());
   wbMax.addEventListener('click', () => browser.maximizeToggle());
   wbClose.addEventListener('click', () => browser.closeWindow());
@@ -197,21 +232,129 @@
 
   urlInput.addEventListener('input', () => {
     urlBarDirty = true;
+    showAutocompleteSuggestions(urlInput.value.trim());
   });
 
   urlInput.addEventListener('blur', () => {
+    setTimeout(() => { hideAutocomplete(); }, 150);
     urlBarDirty = false;
-    // Restore displayed URL to canonical form.
     renderUrlBar();
   });
 
   urlInput.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if (acDropdown && !acDropdown.classList.contains('hidden')) {
+        hideAutocomplete();
+        return;
+      }
       urlBarDirty = false;
       urlInput.blur();
       renderUrlBar();
+      return;
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); acMove(1); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); acMove(-1); return; }
+    if (e.key === 'Enter' && acSelectedIdx >= 0) {
+      e.preventDefault();
+      acCommit();
+      return;
     }
   });
+
+  // ------------------------------------------------------------------
+  // URL autocomplete
+  // ------------------------------------------------------------------
+
+  let acDropdown = null;
+  let acItems = [];
+  let acSelectedIdx = -1;
+  let acDebounce = null;
+
+  function ensureAcDropdown() {
+    if (acDropdown) return;
+    acDropdown = document.createElement('div');
+    acDropdown.className = 'ac-dropdown hidden';
+    urlWrap.parentElement.appendChild(acDropdown);
+  }
+
+  function hideAutocomplete() {
+    if (acDropdown) acDropdown.classList.add('hidden');
+    acItems = [];
+    acSelectedIdx = -1;
+  }
+
+  function showAutocompleteSuggestions(query) {
+    if (!query || query.length < 2) { hideAutocomplete(); return; }
+    clearTimeout(acDebounce);
+    acDebounce = setTimeout(() => fetchSuggestions(query), 120);
+  }
+
+  async function fetchSuggestions(query) {
+    const [bookmarks, history] = await Promise.all([
+      browser.bookmarksList().catch(() => []),
+      browser.historyList(query, 20).catch(() => []),
+    ]);
+
+    const q = query.toLowerCase();
+    const bmMatches = bookmarks
+      .filter((b) => ((b.title || '') + ' ' + b.url).toLowerCase().includes(q))
+      .slice(0, 5)
+      .map((b) => ({ title: b.title || b.url, url: b.url, type: 'bookmark' }));
+
+    const histMatches = history
+      .slice(0, 10)
+      .map((h) => ({ title: h.title || h.url, url: h.url, type: 'history' }));
+
+    const seen = new Set();
+    const merged = [];
+    for (const item of bmMatches.concat(histMatches)) {
+      if (seen.has(item.url)) continue;
+      seen.add(item.url);
+      merged.push(item);
+      if (merged.length >= 8) break;
+    }
+
+    if (merged.length === 0) { hideAutocomplete(); return; }
+
+    ensureAcDropdown();
+    acItems = merged;
+    acSelectedIdx = -1;
+    acDropdown.classList.remove('hidden');
+    acDropdown.innerHTML = merged.map((item, i) =>
+      '<div class="ac-item" data-idx="' + i + '">' +
+      '<span class="ac-icon">' + (item.type === 'bookmark' ? '★' : '↻') + '</span>' +
+      '<span class="ac-title">' + esc(item.title) + '</span>' +
+      '<span class="ac-url">' + esc(shortUrl(item.url)) + '</span>' +
+      '</div>'
+    ).join('');
+
+    acDropdown.querySelectorAll('.ac-item').forEach((el) => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        acSelectedIdx = parseInt(el.dataset.idx, 10);
+        acCommit();
+      });
+    });
+  }
+
+  function acMove(dir) {
+    if (!acDropdown || acItems.length === 0) return;
+    acSelectedIdx = (acSelectedIdx + dir + acItems.length) % acItems.length;
+    acDropdown.querySelectorAll('.ac-item').forEach((el, i) => {
+      el.classList.toggle('is-selected', i === acSelectedIdx);
+    });
+    urlInput.value = acItems[acSelectedIdx].url;
+  }
+
+  function acCommit() {
+    if (acSelectedIdx < 0 || acSelectedIdx >= acItems.length) return;
+    const url = acItems[acSelectedIdx].url;
+    hideAutocomplete();
+    urlBarDirty = false;
+    urlInput.value = url;
+    urlInput.blur();
+    browser.navigate(null, url);
+  }
 
   // ------------------------------------------------------------------
   // Global keyboard shortcuts
@@ -246,6 +389,9 @@
         e.preventDefault();
         browser.newTab();
         break;
+      case 'n':
+        if (e.shiftKey) { e.preventDefault(); browser.incognito(); }
+        break;
       case 'w':
         e.preventDefault();
         if (activeId) browser.closeTab(activeId);
@@ -265,11 +411,15 @@
         break;
       case 'p':
         e.preventDefault();
-        browser.print();
+        if (e.shiftKey) browser.savePdf();
+        else browser.print();
         break;
       case 'd':
         e.preventDefault();
         bookmarkCurrentPage();
+        break;
+      case 'e':
+        if (e.shiftKey) { e.preventDefault(); openReaderMode(); }
         break;
       case 'h':
         if (e.shiftKey) { e.preventDefault(); togglePanel('history'); }
@@ -341,16 +491,28 @@
     document.documentElement.dataset.theme = name || 'amber';
   }
 
+  const wordmarkEl = document.querySelector('.wordmark');
+
+  function applyIncognitoMode(isIncognito) {
+    if (isIncognito) {
+      document.body.classList.add('is-incognito');
+      if (wordmarkEl) wordmarkEl.textContent = 'PRIVATE';
+    }
+  }
+
   // Load initial settings.
   browser.getSettings().then((res) => {
     currentSettings = res.settings || {};
     settingsMeta = { searchEngines: res.searchEngines || {}, themes: res.themes || {} };
     applyThemeToChrome(currentSettings.theme);
+    applyIncognitoMode(currentSettings.incognito);
   }).catch(() => {});
 
   browser.onSettingsChanged((s) => {
     currentSettings = s || currentSettings;
     applyThemeToChrome(currentSettings.theme);
+    applyIncognitoMode(currentSettings.incognito);
+    if (typeof refreshBookmarksBar === 'function') refreshBookmarksBar();
   });
 
   settingsBtn.addEventListener('click', () => openSettings());
@@ -362,6 +524,9 @@
     const engines = Object.entries(settingsMeta.searchEngines);
     const themes = Object.entries(settingsMeta.themes);
 
+    const zoomLabels = { '-3': '50%', '-2': '67%', '-1': '80%', '0': '100%', '1': '125%', '2': '150%', '3': '175%', '4': '200%' };
+    const startupOpts = { homepage: 'Open Monitor Home', blank: 'Open blank tab', restore: 'Restore last session' };
+
     settingsOverlay.innerHTML =
       '<div class="settings-card">' +
       '  <header class="settings-head">' +
@@ -369,6 +534,27 @@
       '    <button class="settings-close" id="settings-close" title="Close">&times;</button>' +
       '  </header>' +
       '  <div class="settings-body">' +
+
+      '    <section class="settings-section">' +
+      '      <h3>On startup</h3>' +
+      '      <select id="set-startup">' +
+             Object.entries(startupOpts).map(([k, label]) =>
+               '<option value="' + k + '"' + ((currentSettings.startupBehavior || 'homepage') === k ? ' selected' : '') + '>' +
+               label + '</option>'
+             ).join('') +
+      '      </select>' +
+      '    </section>' +
+
+      '    <section class="settings-section">' +
+      '      <h3>Homepage</h3>' +
+      '      <label class="toggle-row"><input type="checkbox" id="set-use-custom-home"' +
+             (currentSettings.useCustomHomepage ? ' checked' : '') +
+      '       /> Use custom homepage URL</label>' +
+      '      <input type="text" class="settings-input" id="set-custom-home" placeholder="https://example.com"' +
+      '        value="' + escapeAttr(currentSettings.customHomepage || '') + '"' +
+             (!currentSettings.useCustomHomepage ? ' disabled' : '') + ' />' +
+      '    </section>' +
+
       '    <section class="settings-section">' +
       '      <h3>Search engine</h3>' +
       '      <select id="set-engine">' +
@@ -378,6 +564,7 @@
              ).join('') +
       '      </select>' +
       '    </section>' +
+
       '    <section class="settings-section">' +
       '      <h3>Theme</h3>' +
       '      <div class="theme-grid" id="theme-grid">' +
@@ -388,16 +575,45 @@
              ).join('') +
       '      </div>' +
       '    </section>' +
+
       '    <section class="settings-section">' +
-      '      <h3>Browser branding</h3>' +
+      '      <h3>Default zoom</h3>' +
+      '      <select id="set-zoom">' +
+             Object.entries(zoomLabels).map(([val, label]) =>
+               '<option value="' + val + '"' + (String(currentSettings.defaultZoom || 0) === val ? ' selected' : '') + '>' +
+               label + '</option>'
+             ).join('') +
+      '      </select>' +
+      '    </section>' +
+
+      '    <section class="settings-section">' +
+      '      <h3>Privacy &amp; Security</h3>' +
+      '      <label class="toggle-row"><input type="checkbox" id="set-adblock"' +
+             (currentSettings.adBlock !== false ? ' checked' : '') +
+      '       /> Block ads &amp; trackers</label>' +
+      '      <label class="toggle-row"><input type="checkbox" id="set-https-only"' +
+             (currentSettings.httpsOnly ? ' checked' : '') +
+      '       /> HTTPS-only mode</label>' +
       '      <label class="toggle-row"><input type="checkbox" id="set-branding"' +
              (currentSettings.showBranding !== false ? ' checked' : '') +
       '       /> Show MonitorBrowser/1.0 in user-agent</label>' +
       '    </section>' +
+
+      '    <section class="settings-section">' +
+      '      <h3>Toolbar</h3>' +
+      '      <label class="toggle-row"><input type="checkbox" id="set-bm-bar"' +
+             (currentSettings.showBookmarksBar ? ' checked' : '') +
+      '       /> Show bookmarks bar</label>' +
+      '    </section>' +
+
       '    <section class="settings-section">' +
       '      <h3>Data</h3>' +
       '      <button class="settings-btn" id="clear-data">Clear browsing data</button>' +
       '      <button class="settings-btn" id="reset-settings">Reset all settings</button>' +
+      '    </section>' +
+      '    <section class="settings-section">' +
+      '      <h3>Site permissions</h3>' +
+      '      <button class="settings-btn" id="manage-perms">Manage site permissions</button>' +
       '    </section>' +
       '  </div>' +
       '</div>';
@@ -405,6 +621,20 @@
     document.getElementById('settings-close').addEventListener('click', closeSettings);
     settingsOverlay.addEventListener('click', (e) => {
       if (e.target === settingsOverlay) closeSettings();
+    });
+
+    document.getElementById('set-startup').addEventListener('change', (e) => {
+      browser.setSettings({ startupBehavior: e.target.value });
+    });
+
+    const customHomeCheck = document.getElementById('set-use-custom-home');
+    const customHomeInput = document.getElementById('set-custom-home');
+    customHomeCheck.addEventListener('change', (e) => {
+      customHomeInput.disabled = !e.target.checked;
+      browser.setSettings({ useCustomHomepage: e.target.checked });
+    });
+    customHomeInput.addEventListener('change', (e) => {
+      browser.setSettings({ customHomepage: e.target.value.trim() });
     });
 
     document.getElementById('set-engine').addEventListener('change', (e) => {
@@ -417,6 +647,22 @@
         btn.classList.add('is-active');
         browser.setSettings({ theme: btn.dataset.theme });
       });
+    });
+
+    document.getElementById('set-zoom').addEventListener('change', (e) => {
+      browser.setSettings({ defaultZoom: parseFloat(e.target.value) });
+    });
+
+    document.getElementById('set-bm-bar').addEventListener('change', (e) => {
+      browser.setSettings({ showBookmarksBar: e.target.checked });
+    });
+
+    document.getElementById('set-adblock').addEventListener('change', (e) => {
+      browser.setSettings({ adBlock: e.target.checked });
+    });
+
+    document.getElementById('set-https-only').addEventListener('change', (e) => {
+      browser.setSettings({ httpsOnly: e.target.checked });
     });
 
     document.getElementById('set-branding').addEventListener('change', (e) => {
@@ -432,6 +678,11 @@
     document.getElementById('reset-settings').addEventListener('click', () => {
       browser.resetSettings().then(() => closeSettings());
     });
+
+    document.getElementById('manage-perms').addEventListener('click', () => {
+      closeSettings();
+      togglePanel('permissions');
+    });
   }
 
   function closeSettings() {
@@ -442,6 +693,7 @@
 
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if (readerOverlay && !readerOverlay.classList.contains('hidden')) { closeReaderMode(); return; }
       if (!settingsOverlay.classList.contains('hidden')) { closeSettings(); return; }
       if (findBarEl && !findBarEl.classList.contains('hidden')) { closeFindBar(); return; }
       if (activePanelId) { closePanel(); return; }
@@ -492,6 +744,120 @@
   function closeFindBar() {
     if (findBarEl) findBarEl.classList.add('hidden');
     browser.findStop();
+  }
+
+  // ------------------------------------------------------------------
+  // Reader mode overlay
+  // ------------------------------------------------------------------
+
+  let readerOverlay = null;
+
+  async function openReaderMode() {
+    const data = await browser.reader();
+    if (!data) return;
+
+    if (!readerOverlay) {
+      readerOverlay = document.createElement('div');
+      readerOverlay.id = 'reader-overlay';
+      readerOverlay.className = 'reader-overlay hidden';
+      document.body.appendChild(readerOverlay);
+    }
+
+    readerOverlay.classList.remove('hidden');
+    readerOverlay.innerHTML =
+      '<div class="reader-card">' +
+      '  <header class="reader-head">' +
+      '    <h1 class="reader-title">' + esc(data.title) + '</h1>' +
+      '    <div class="reader-meta">' + esc(shortUrl(data.url)) + '</div>' +
+      '    <button class="settings-close reader-close" id="reader-close">&times;</button>' +
+      '  </header>' +
+      '  <article class="reader-body">' + data.content + '</article>' +
+      '</div>';
+
+    document.getElementById('reader-close').addEventListener('click', closeReaderMode);
+    readerOverlay.addEventListener('click', (e) => {
+      if (e.target === readerOverlay) closeReaderMode();
+    });
+  }
+
+  function closeReaderMode() {
+    if (readerOverlay) readerOverlay.classList.add('hidden');
+  }
+
+  // ------------------------------------------------------------------
+  // Security / certificate popup
+  // ------------------------------------------------------------------
+
+  async function showSecurityPopup() {
+    removeSecurityPopup();
+    const info = await browser.securityInfo();
+    if (!info) return;
+
+    const popup = document.createElement('div');
+    popup.className = 'security-popup';
+
+    let certHtml = '';
+    if (info.cert) {
+      const c = info.cert;
+      const subj = c.subject ? (c.subject.CN || c.subject.O || '') : '';
+      const issuer = c.issuer ? (c.issuer.O || c.issuer.CN || '') : '';
+      certHtml =
+        '<div class="sec-section">' +
+        '<div class="sec-label">Certificate</div>' +
+        '<div class="sec-value">' + esc(subj) + '</div>' +
+        '<div class="sec-detail">Issued by: ' + esc(issuer) + '</div>' +
+        '<div class="sec-detail">Valid: ' + esc(c.valid_from || '') + ' — ' + esc(c.valid_to || '') + '</div>' +
+        '<div class="sec-detail sec-mono">SHA-256: ' + esc(c.fingerprint || '') + '</div>' +
+        '</div>';
+    }
+
+    // Load per-site permissions
+    let permsHtml = '';
+    if (info.host) {
+      const origin = info.protocol + '//' + info.host;
+      const perms = await browser.permissionsGet(origin);
+      const permLabels = { camera: 'Camera', microphone: 'Microphone', geolocation: 'Location', notifications: 'Notifications' };
+      permsHtml = '<div class="sec-section">' +
+        '<div class="sec-label">Site permissions</div>' +
+        Object.entries(permLabels).map(([key, label]) => {
+          const val = perms[key] || 'default';
+          return '<div class="sec-perm-row">' +
+            '<span>' + label + '</span>' +
+            '<select data-perm="' + key + '" data-origin="' + escapeAttr(origin) + '">' +
+            '<option value="default"' + (val === 'default' ? ' selected' : '') + '>Default</option>' +
+            '<option value="allow"' + (val === 'allow' ? ' selected' : '') + '>Allow</option>' +
+            '<option value="deny"' + (val === 'deny' ? ' selected' : '') + '>Deny</option>' +
+            '</select></div>';
+        }).join('') +
+        '</div>';
+    }
+
+    popup.innerHTML =
+      '<div class="sec-header">' +
+      '<span class="sec-icon">' + (info.secure ? '⬢' : '!') + '</span>' +
+      '<span class="sec-status">' + (info.secure ? 'Connection is secure' : 'Connection is not secure') + '</span>' +
+      '</div>' +
+      '<div class="sec-host">' + esc(info.host || info.url) + '</div>' +
+      certHtml + permsHtml;
+
+    document.body.appendChild(popup);
+
+    popup.querySelectorAll('.sec-perm-row select').forEach((sel) => {
+      sel.addEventListener('change', () => {
+        browser.permissionsSet(sel.dataset.origin, sel.dataset.perm, sel.value);
+      });
+    });
+
+    requestAnimationFrame(() => {
+      document.addEventListener('click', (e) => {
+        if (!popup.contains(e.target) && e.target !== urlScheme) removeSecurityPopup();
+      }, { once: true });
+    });
+  }
+
+  function removeSecurityPopup() {
+    const old = document.querySelector('.security-popup');
+    if (old) old.remove();
   }
 
   // ------------------------------------------------------------------
@@ -569,6 +935,7 @@
     if (id === 'bookmarks') renderBookmarksPanel(overlay);
     else if (id === 'history') renderHistoryPanel(overlay);
     else if (id === 'downloads') renderDownloadsPanel(overlay);
+    else if (id === 'permissions') renderPermissionsPanel(overlay);
   }
 
   function closePanel() {
@@ -581,8 +948,37 @@
   function bookmarkCurrentPage() {
     const tab = tabs.find((t) => t.id === activeId);
     if (!tab || tab.isHomepage) return;
-    browser.bookmarksAdd({ url: tab.url, title: tab.title, favicon: tab.favicon });
+    browser.bookmarksAdd({ url: tab.url, title: tab.title, favicon: tab.favicon }).then(() => {
+      refreshBookmarksBar();
+    });
   }
+
+  // --- Bookmarks bar ---
+  const bmBar = document.getElementById('bookmarks-bar');
+
+  function refreshBookmarksBar() {
+    if (!currentSettings.showBookmarksBar) {
+      bmBar.classList.add('hidden');
+      return;
+    }
+    bmBar.classList.remove('hidden');
+    browser.bookmarksList().then((bm) => {
+      if (!bm || bm.length === 0) {
+        bmBar.innerHTML = '<span class="bm-bar-empty">No bookmarks yet — press Ctrl+D to add one</span>';
+        return;
+      }
+      bmBar.innerHTML = bm.slice(0, 20).map((b) =>
+        '<button class="bm-bar-item" data-url="' + escapeAttr(b.url) + '" title="' + escapeAttr(b.url) + '">' +
+        (b.favicon ? '<img class="bm-bar-icon" src="' + escapeAttr(b.favicon) + '" onerror="this.style.display=\'none\'" />' : '') +
+        '<span>' + esc(b.title || shortUrl(b.url)) + '</span></button>'
+      ).join('');
+      bmBar.querySelectorAll('.bm-bar-item').forEach((btn) => {
+        btn.addEventListener('click', () => browser.navigate(null, btn.dataset.url));
+      });
+    }).catch(() => {});
+  }
+
+  refreshBookmarksBar();
 
   // --- Bookmarks panel ---
   function renderBookmarksPanel(container) {
@@ -737,6 +1133,48 @@
       if (container.classList.contains('hidden')) { unsub(); obs.disconnect(); }
     });
     obs.observe(container, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  // --- Permissions panel ---
+  function renderPermissionsPanel(container) {
+    container.innerHTML =
+      '<div class="settings-card side-panel">' +
+      '  <header class="settings-head"><h2>Site Permissions</h2>' +
+      '    <button class="settings-close panel-close-btn">&times;</button></header>' +
+      '  <div class="panel-list" id="perms-list"></div>' +
+      '</div>';
+
+    container.querySelector('.panel-close-btn').addEventListener('click', closePanel);
+    container.addEventListener('click', (e) => { if (e.target === container) closePanel(); });
+
+    const listEl = document.getElementById('perms-list');
+    const permLabels = { camera: 'Cam', microphone: 'Mic', geolocation: 'Loc', notifications: 'Notif', media: 'Media' };
+
+    browser.permissionsList().then((all) => {
+      const sites = Object.entries(all);
+      if (sites.length === 0) {
+        listEl.innerHTML = '<div class="panel-empty-msg">No site permissions saved.</div>';
+        return;
+      }
+      listEl.innerHTML = sites.map(([origin, perms]) =>
+        '<div class="panel-row perm-site-row">' +
+        '<span class="row-title">' + esc(origin) + '</span>' +
+        '<div class="perm-badges">' +
+          Object.entries(perms).map(([k, v]) =>
+            '<span class="perm-badge perm-' + v + '" title="' + escapeAttr(k + ': ' + v) + '">' +
+            esc(permLabels[k] || k) + '</span>'
+          ).join('') +
+        '</div>' +
+        '<button class="row-del" data-origin="' + escapeAttr(origin) + '" title="Remove">&times;</button>' +
+        '</div>'
+      ).join('');
+
+      listEl.querySelectorAll('.row-del').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          browser.permissionsRemoveSite(btn.dataset.origin).then(() => renderPermissionsPanel(container));
+        });
+      });
+    });
   }
 
   // ------------------------------------------------------------------

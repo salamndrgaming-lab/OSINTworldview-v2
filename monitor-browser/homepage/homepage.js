@@ -122,7 +122,7 @@
   const STORAGE_KEY = 'monitor:dashboard:v2';
 
   const DEFAULT_PANELS = [
-    'map', 'news', 'streams', 'threat', 'intel', 'weather', 'localnews', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit',
+    'map', 'news', 'threat', 'intel', 'weather', 'localnews', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit',
   ];
 
   const PANEL_SIZE_OPTIONS = ['sm', 'md', 'lg', 'xl'];
@@ -134,6 +134,7 @@
     panelRadius: 10,
     showHero: true,
     compactHeader: false,
+    useFahrenheit: false,
   };
 
   const DEFAULT_STATE = {
@@ -177,6 +178,8 @@
       if (raw) {
         const parsed = JSON.parse(raw);
         let panels = Array.isArray(parsed.panels) ? parsed.panels : DEFAULT_PANELS.slice();
+        // Remove deleted panels
+        panels = panels.filter(function (p) { return p !== 'streams'; });
         // Auto-add new default panels that didn't exist before
         for (const dp of DEFAULT_PANELS) {
           if (!panels.includes(dp)) panels.push(dp);
@@ -531,13 +534,13 @@
       id: 'full',
       name: 'Full OSINT',
       desc: 'Every panel. Maximum situational awareness.',
-      panels: ['map', 'threat', 'news', 'streams', 'intel', 'weather', 'localnews', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit'],
+      panels: ['map', 'threat', 'news', 'intel', 'weather', 'localnews', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit'],
     },
     {
       id: 'geo',
       name: 'Geopolitical',
       desc: 'Map, conflicts, intel feed, live streams.',
-      panels: ['map', 'threat', 'conflicts', 'intel', 'news', 'streams'],
+      panels: ['map', 'threat', 'conflicts', 'intel', 'news'],
     },
     {
       id: 'market',
@@ -555,7 +558,7 @@
       id: 'media',
       name: 'Media Watch',
       desc: 'News feeds, local news, live video.',
-      panels: ['streams', 'news', 'localnews', 'intel'],
+      panels: ['news', 'localnews', 'intel'],
     },
     {
       id: 'toolkit',
@@ -1063,10 +1066,16 @@
         var items = parseRss(text).slice(0, 14);
         if (items.length === 0) return false;
         var list = items.map(function (it) {
+          var thumbHtml = it.thumb
+            ? '<img class="news-thumb" src="' + escapeHtml(it.thumb) + '" alt="" loading="lazy" />'
+            : '';
           return '<li><a href="' + escapeHtml(it.link) + '" target="_blank" rel="noopener">' +
+            thumbHtml +
+            '<div class="news-text">' +
             '<span class="news-title">' + escapeHtml(it.title) + '</span>' +
             '<span class="news-meta"><span class="src">' + escapeHtml(src.label) + '</span>' +
-            escapeHtml(formatRelTime(it.date)) + '</span></a></li>';
+            escapeHtml(formatRelTime(it.date)) + '</span>' +
+            '</div></a></li>';
         }).join('');
         out.innerHTML = '<ul class="news-list">' + list + '</ul>';
         return true;
@@ -1144,8 +1153,27 @@
         n.querySelector('pubDate')?.textContent ||
         n.querySelector('published')?.textContent ||
         n.querySelector('updated')?.textContent || '';
+      let thumb = '';
+      const mediaThumbnail = n.querySelector('thumbnail');
+      if (mediaThumbnail) thumb = mediaThumbnail.getAttribute('url') || '';
+      if (!thumb) {
+        const enclosure = n.querySelector('enclosure[type^="image"]');
+        if (enclosure) thumb = enclosure.getAttribute('url') || '';
+      }
+      if (!thumb) {
+        const mediaContent = n.querySelector('content[url]');
+        if (mediaContent && /image/i.test(mediaContent.getAttribute('type') || mediaContent.getAttribute('medium') || '')) {
+          thumb = mediaContent.getAttribute('url') || '';
+        }
+        if (!thumb && mediaContent) thumb = mediaContent.getAttribute('url') || '';
+      }
+      if (!thumb) {
+        const desc = n.querySelector('description')?.textContent || '';
+        const imgMatch = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (imgMatch) thumb = imgMatch[1];
+      }
       if (title && link) {
-        out.push({ title, link, date: date ? new Date(date) : new Date() });
+        out.push({ title, link, date: date ? new Date(date) : new Date(), thumb });
       }
     });
     return out;
@@ -1159,183 +1187,6 @@
     if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
     return Math.floor(diff / 86400) + 'd ago';
   }
-
-  // --------------------------------------------------------------------------
-  // PANEL: Live Streams (user-managed YouTube embeds)
-  // --------------------------------------------------------------------------
-
-  let ytEmbedPort = 0;
-  const ytPortReady = (window.monitorApi && window.monitorApi.getYtEmbedPort)
-    ? window.monitorApi.getYtEmbedPort().then(function (p) { ytEmbedPort = p || 0; return p; }).catch(function () { return 0; })
-    : Promise.resolve(0);
-
-  function streamEmbedUrl(videoId, autoplay) {
-    if (ytEmbedPort) {
-      return 'http://localhost:' + ytEmbedPort + '/youtube-embed?videoId=' + videoId +
-        '&autoplay=' + (autoplay ? 1 : 0) + '&mute=1';
-    }
-    return 'https://www.youtube-nocookie.com/embed/' + videoId +
-      '?autoplay=' + (autoplay ? 1 : 0) + '&mute=1&rel=0&modestbranding=1';
-  }
-
-  function extractVideoId(input) {
-    if (!input) return null;
-    var v = input.trim();
-    if (/^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
-    var m = v.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
-    if (m) return m[1];
-    m = v.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
-    if (m) return m[1];
-    m = v.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/);
-    if (m) return m[1];
-    m = v.match(/youtube\.com\/live\/([a-zA-Z0-9_-]{11})/);
-    if (m) return m[1];
-    m = v.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
-    if (m) return m[1];
-    return null;
-  }
-
-  var STREAMS_KEY = 'monitor:streams:v1';
-  function loadStreams() {
-    try {
-      var raw = localStorage.getItem(STREAMS_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (_) {}
-    return [];
-  }
-  function saveStreams(list) {
-    try { localStorage.setItem(STREAMS_KEY, JSON.stringify(list)); } catch (_) {}
-  }
-
-  PANELS.streams = {
-    title: 'Live Streams',
-    icon: '&#9654;',
-    size: 'lg',
-    desc: 'YouTube live streams — add any video URL.',
-    render: (body, panel) => {
-      setPanelStatus(panel, 'live', 'READY');
-      var streams = loadStreams();
-      var activeIdx = 0;
-
-      function renderPanel() {
-        streams = loadStreams();
-        var tabsHtml = streams.map(function (s, i) {
-          return '<button data-idx="' + i + '" class="' + (i === activeIdx ? 'is-active' : '') + '">' +
-            escapeHtml(s.label) +
-            '<span class="stream-remove" data-idx="' + i + '" title="Remove">&times;</span>' +
-            '</button>';
-        }).join('');
-
-        body.innerHTML =
-          '<div class="news-tabs stream-tabs">' +
-          tabsHtml +
-          '<button class="stream-add-btn" title="Add stream">+</button>' +
-          '</div>' +
-          '<div class="stream-embed"></div>' +
-          '<div class="stream-foot">' +
-          '  <span class="stream-hint">Paste any YouTube video or live stream URL to add it.</span>' +
-          '</div>';
-
-        body.querySelector('.stream-add-btn').addEventListener('click', showAddForm);
-
-        body.querySelectorAll('.stream-remove').forEach(function (btn) {
-          btn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            var idx = parseInt(btn.dataset.idx, 10);
-            streams.splice(idx, 1);
-            saveStreams(streams);
-            if (activeIdx >= streams.length) activeIdx = Math.max(0, streams.length - 1);
-            renderPanel();
-          });
-        });
-
-        body.querySelectorAll('.stream-tabs button[data-idx]').forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            activeIdx = parseInt(btn.dataset.idx, 10);
-            body.querySelectorAll('.stream-tabs button[data-idx]').forEach(function (b) {
-              b.classList.toggle('is-active', parseInt(b.dataset.idx, 10) === activeIdx);
-            });
-            loadEmbed(true);
-          });
-        });
-
-        if (streams.length > 0) {
-          loadEmbed(false);
-        } else {
-          showEmpty();
-        }
-      }
-
-      function showEmpty() {
-        var embed = body.querySelector('.stream-embed');
-        embed.innerHTML =
-          '<div class="stream-offline">' +
-          '<div style="font-size:28px;margin-bottom:8px">&#9654;</div>' +
-          '<span>No streams added yet</span>' +
-          '<div style="margin-top:8px;opacity:0.7;font-size:12px">Click <b>+</b> to add a YouTube live stream or video URL</div>' +
-          '</div>';
-      }
-
-      function loadEmbed(autoplay) {
-        var embed = body.querySelector('.stream-embed');
-        if (!embed || !streams[activeIdx]) return;
-        var s = streams[activeIdx];
-        embed.innerHTML = '<div class="stream-loading">Loading stream&hellip;</div>';
-        ytPortReady.then(function () {
-          embed.innerHTML =
-            '<iframe src="' + streamEmbedUrl(s.videoId, autoplay) +
-            '" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>' +
-            '<div class="stream-embed-foot">' +
-            '<a href="https://www.youtube.com/watch?v=' + escapeHtml(s.videoId) +
-            '" target="_blank" rel="noopener">Open on YouTube &rarr;</a>' +
-            '</div>';
-        });
-      }
-
-      function showAddForm() {
-        var embed = body.querySelector('.stream-embed');
-        embed.innerHTML =
-          '<div class="stream-add-form">' +
-          '<div class="stream-add-title">Add YouTube Stream</div>' +
-          '<input type="text" class="stream-url-input" placeholder="Paste YouTube URL or video ID&hellip;" />' +
-          '<input type="text" class="stream-label-input" placeholder="Label (e.g. Al Jazeera Live)" />' +
-          '<div class="stream-add-actions">' +
-          '<button class="stream-add-cancel">Cancel</button>' +
-          '<button class="stream-add-confirm">Add</button>' +
-          '</div>' +
-          '<div class="stream-add-error"></div>' +
-          '</div>';
-
-        var urlInput = embed.querySelector('.stream-url-input');
-        var labelInput = embed.querySelector('.stream-label-input');
-        var errEl = embed.querySelector('.stream-add-error');
-        urlInput.focus();
-
-        embed.querySelector('.stream-add-cancel').addEventListener('click', function () {
-          if (streams.length > 0) loadEmbed(false); else showEmpty();
-        });
-
-        function doAdd() {
-          var videoId = extractVideoId(urlInput.value);
-          if (!videoId) {
-            errEl.textContent = 'Could not extract video ID. Paste a YouTube URL or 11-character ID.';
-            return;
-          }
-          var label = labelInput.value.trim() || ('Stream ' + (streams.length + 1));
-          streams.push({ videoId: videoId, label: label });
-          saveStreams(streams);
-          activeIdx = streams.length - 1;
-          renderPanel();
-        }
-
-        embed.querySelector('.stream-add-confirm').addEventListener('click', doAdd);
-        urlInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); if (!labelInput.value) labelInput.focus(); else doAdd(); } });
-        labelInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
-      }
-
-      renderPanel();
-    },
-  };
 
   // --------------------------------------------------------------------------
   // PANEL: Intel Feed (multi-source security RSS)
@@ -2686,10 +2537,12 @@
     title: 'Local Weather',
     icon: '&#9729;',
     size: 'md',
-    desc: 'Current conditions & 3-day forecast via Open-Meteo.',
+    desc: 'Current conditions & 5-day forecast via Open-Meteo.',
     render: (body, panel) => {
       let killed = false;
       let timer = null;
+      let lastData = null;
+      let lastLocName = '';
 
       const WMO_CODES = {
         0: ['Clear sky', '&#9728;'], 1: ['Mainly clear', '&#9728;'],
@@ -2705,26 +2558,46 @@
       };
 
       function wmoLabel(code) { return WMO_CODES[code] || ['Unknown', '&#63;']; }
+      function cToF(c) { return Math.round(c * 9 / 5 + 32); }
+      function tempStr(c) {
+        var useF = state.prefs.useFahrenheit;
+        return useF ? cToF(c) + '&deg;F' : Math.round(c) + '&deg;C';
+      }
+      function tempShort(c) {
+        var useF = state.prefs.useFahrenheit;
+        return useF ? cToF(c) + '&deg;' : Math.round(c) + '&deg;';
+      }
+      function windStr(kmh) {
+        if (state.prefs.useFahrenheit) return Math.round(kmh * 0.621371) + ' mph';
+        return Math.round(kmh) + ' km/h';
+      }
 
       function renderWeather(data, locName) {
         if (killed) return;
+        lastData = data;
+        lastLocName = locName;
         const cur = data.current;
         const daily = data.daily;
         const [desc, icon] = wmoLabel(cur.weather_code);
         const windDir = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
         const wd = windDir[Math.round((cur.wind_direction_10m || 0) / 22.5) % 16] || '';
+        const unitLabel = state.prefs.useFahrenheit ? 'F' : 'C';
 
-        let html = '<div class="weather-current">' +
+        let html = '<div class="weather-unit-toggle">' +
+          '<button class="weather-unit-btn' + (state.prefs.useFahrenheit ? '' : ' is-active') + '" data-unit="C">&deg;C</button>' +
+          '<button class="weather-unit-btn' + (state.prefs.useFahrenheit ? ' is-active' : '') + '" data-unit="F">&deg;F</button>' +
+        '</div>' +
+        '<div class="weather-current">' +
           '<div class="weather-icon">' + icon + '</div>' +
           '<div class="weather-main">' +
-            '<div class="weather-temp">' + Math.round(cur.temperature_2m) + '&deg;C</div>' +
+            '<div class="weather-temp">' + tempStr(cur.temperature_2m) + '</div>' +
             '<div class="weather-desc">' + escapeHtml(desc) + '</div>' +
             '<div class="weather-loc">' + escapeHtml(locName) + '</div>' +
           '</div>' +
           '<div class="weather-details">' +
-            '<div>Feels like ' + Math.round(cur.apparent_temperature) + '&deg;C</div>' +
+            '<div>Feels like ' + tempStr(cur.apparent_temperature) + '</div>' +
             '<div>Humidity ' + cur.relative_humidity_2m + '%</div>' +
-            '<div>Wind ' + Math.round(cur.wind_speed_10m) + ' km/h ' + wd + '</div>' +
+            '<div>Wind ' + windStr(cur.wind_speed_10m) + ' ' + wd + '</div>' +
             '<div>Pressure ' + Math.round(cur.surface_pressure) + ' hPa</div>' +
           '</div>' +
         '</div>';
@@ -2738,8 +2611,8 @@
               '<div class="weather-day-name">' + escapeHtml(dayName) + '</div>' +
               '<div class="weather-day-icon">' + dIcon + '</div>' +
               '<div class="weather-day-temps">' +
-                '<span class="weather-hi">' + Math.round(daily.temperature_2m_max[i]) + '&deg;</span>' +
-                '<span class="weather-lo">' + Math.round(daily.temperature_2m_min[i]) + '&deg;</span>' +
+                '<span class="weather-hi">' + tempShort(daily.temperature_2m_max[i]) + '</span>' +
+                '<span class="weather-lo">' + tempShort(daily.temperature_2m_min[i]) + '</span>' +
               '</div>' +
             '</div>';
           }
@@ -2747,6 +2620,14 @@
         }
         body.innerHTML = html;
         setPanelStatus(panel, 'live', 'LIVE');
+
+        body.querySelectorAll('.weather-unit-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            state.prefs.useFahrenheit = btn.dataset.unit === 'F';
+            saveState();
+            if (lastData) renderWeather(lastData, lastLocName);
+          });
+        });
       }
 
       function fetchWeather(lat, lon, locName) {
@@ -2808,38 +2689,33 @@
   // --------------------------------------------------------------------------
   const LOCAL_NEWS_REGIONS = {
     US: [
-      { label: 'AP News', url: 'https://rsshub.app/apnews/topics/apf-topnews' },
       { label: 'NPR', url: 'https://feeds.npr.org/1001/rss.xml' },
-      { label: 'Reuters US', url: 'https://feeds.reuters.com/Reuters/domesticNews' },
+      { label: 'CNBC', url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html' },
+      { label: 'Fox', url: 'https://moxie.foxnews.com/google-publisher/latest.xml' },
     ],
     GB: [
       { label: 'BBC UK', url: 'https://feeds.bbci.co.uk/news/uk/rss.xml' },
       { label: 'Guardian', url: 'https://www.theguardian.com/uk/rss' },
-      { label: 'Sky News', url: 'https://feeds.skynews.com/feeds/rss/uk.xml' },
     ],
     DE: [
       { label: 'DW', url: 'https://rss.dw.com/rdf/rss-en-all' },
-      { label: 'Spiegel', url: 'https://www.spiegel.de/international/index.rss' },
     ],
     FR: [
       { label: 'France24', url: 'https://www.france24.com/en/rss' },
     ],
     AU: [
       { label: 'ABC AU', url: 'https://www.abc.net.au/news/feed/51120/rss.xml' },
-      { label: 'SBS', url: 'https://www.sbs.com.au/news/feed' },
     ],
     CA: [
       { label: 'CBC', url: 'https://www.cbc.ca/webfeed/rss/rss-topstories' },
-      { label: 'Globe&Mail', url: 'https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/canada/' },
     ],
     IN: [
-      { label: 'NDTV', url: 'https://feeds.feedburner.com/ndtvnews-top-stories' },
       { label: 'Times of India', url: 'https://timesofindia.indiatimes.com/rssfeedstopstories.cms' },
     ],
     _default: [
-      { label: 'Reuters', url: 'https://feeds.reuters.com/Reuters/worldNews' },
       { label: 'BBC World', url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
       { label: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+      { label: 'DW', url: 'https://rss.dw.com/rdf/rss-en-all' },
     ],
   };
 
@@ -2847,7 +2723,7 @@
     title: 'Local News',
     icon: '&#128240;',
     size: 'md',
-    desc: 'News feeds based on your region.',
+    desc: 'News feeds based on your detected region.',
     render: (body, panel) => {
       let killed = false;
       let timer = null;
@@ -2855,26 +2731,8 @@
 
       function detectCountry() {
         return fetchIntel('http://ip-api.com/json/?fields=countryCode')
-          .then((t) => JSON.parse(t).countryCode || '_default')
-          .catch(() => '_default');
-      }
-
-      function parseRssItems(text) {
-        try {
-          var doc = new DOMParser().parseFromString(text, 'text/xml');
-          var items = doc.querySelectorAll('item');
-          if (items.length === 0) items = doc.querySelectorAll('entry');
-          var result = [];
-          items.forEach(function (item) {
-            var title = (item.querySelector('title') || {}).textContent || '';
-            var link = '';
-            var linkEl = item.querySelector('link');
-            if (linkEl) link = linkEl.getAttribute('href') || linkEl.textContent || '';
-            var pubDate = (item.querySelector('pubDate') || item.querySelector('published') || item.querySelector('updated') || {}).textContent || '';
-            if (title) result.push({ title: title.trim(), link: link.trim(), date: pubDate });
-          });
-          return result;
-        } catch (_) { return []; }
+          .then(function (t) { return JSON.parse(t).countryCode || '_default'; })
+          .catch(function () { return '_default'; });
       }
 
       function renderFeed(feeds, country) {
@@ -2895,18 +2753,24 @@
           fetchIntel(feeds[idx].url)
             .then(function (text) {
               if (killed) return;
-              var items = parseRssItems(text).slice(0, 15);
+              var items = parseRss(text).slice(0, 12);
               if (items.length === 0) {
                 listEl.innerHTML = '<div class="panel-empty">No items found.</div>';
                 setPanelStatus(panel, 'live', 'EMPTY');
                 return;
               }
-              listEl.innerHTML = items.map(function (it) {
-                return '<a class="news-item" href="' + escapeHtml(it.link) + '" target="_blank" rel="noopener">' +
+              listEl.innerHTML = '<ul class="news-list">' + items.map(function (it) {
+                var thumbHtml = it.thumb
+                  ? '<img class="news-thumb" src="' + escapeHtml(it.thumb) + '" alt="" loading="lazy" />'
+                  : '';
+                return '<li><a href="' + escapeHtml(it.link) + '" target="_blank" rel="noopener">' +
+                  thumbHtml +
+                  '<div class="news-text">' +
                   '<span class="news-title">' + escapeHtml(it.title) + '</span>' +
-                  (it.date ? '<span class="news-date">' + escapeHtml(new Date(it.date).toLocaleString()) + '</span>' : '') +
-                  '</a>';
-              }).join('');
+                  '<span class="news-meta"><span class="src">' + escapeHtml(feeds[idx].label) + '</span>' +
+                  escapeHtml(formatRelTime(it.date)) + '</span>' +
+                  '</div></a></li>';
+              }).join('') + '</ul>';
               setPanelStatus(panel, 'live', country);
             })
             .catch(function (err) {

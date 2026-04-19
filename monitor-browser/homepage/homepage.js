@@ -74,9 +74,20 @@
 
   /** Live mirror of the browser settings (theme, search engine, …). */
   let browserSettings = { searchEngine: 'duckduckgo', theme: 'amber' };
+  const THEME_LIST = [
+    { id: 'amber',    label: 'Amber',    accent: '#d4a843', desc: 'Classic intelligence gold' },
+    { id: 'cyber',    label: 'Cyber',    accent: '#3aff8a', desc: 'Green terminal hacker' },
+    { id: 'palantir', label: 'Palantir', accent: '#4a90e2', desc: 'Cool blue analyst' },
+    { id: 'crimson',  label: 'Crimson',  accent: '#ff4e4e', desc: 'Red threat alert' },
+    { id: 'mono',     label: 'Mono',     accent: '#e8e8f0', desc: 'Clean monochrome' },
+    { id: 'arctic',   label: 'Arctic',   accent: '#22d3ee', desc: 'Ice-cold cyan' },
+    { id: 'violet',   label: 'Violet',   accent: '#a78bfa', desc: 'Deep purple' },
+    { id: 'emerald',  label: 'Emerald',  accent: '#34d399', desc: 'Forest green' },
+    { id: 'sunrise',  label: 'Sunrise',  accent: '#fb923c', desc: 'Warm orange' },
+  ];
+  const VALID_THEMES = THEME_LIST.map((t) => t.id);
   function applyTheme(name) {
-    const valid = ['amber', 'cyber', 'palantir', 'crimson', 'mono'];
-    document.documentElement.dataset.theme = valid.includes(name) ? name : 'amber';
+    document.documentElement.dataset.theme = VALID_THEMES.includes(name) ? name : 'amber';
   }
   applyTheme('amber');
   if (settingsApi) {
@@ -116,9 +127,19 @@
 
   const PANEL_SIZE_OPTIONS = ['sm', 'md', 'lg', 'xl'];
 
+  const DEFAULT_PREFS = {
+    dashTheme: 'amber',
+    showRadar: true,
+    dashGap: 16,
+    panelRadius: 10,
+    showHero: true,
+    compactHeader: false,
+  };
+
   const DEFAULT_STATE = {
     panels: DEFAULT_PANELS.slice(),
     panelSizes: {},
+    prefs: Object.assign({}, DEFAULT_PREFS),
     mapLayers: {
       // Security
       conflicts: true,
@@ -163,6 +184,7 @@
         return {
           panels: panels,
           panelSizes: parsed.panelSizes || {},
+          prefs: Object.assign({}, DEFAULT_PREFS, parsed.prefs || {}),
           mapLayers: Object.assign({}, DEFAULT_STATE.mapLayers, parsed.mapLayers || {}),
           newsSource: parsed.newsSource || 'bbc',
         };
@@ -182,6 +204,21 @@
   }
 
   const state = loadState();
+
+  function applyPrefs() {
+    const p = state.prefs;
+    applyTheme(p.dashTheme || 'amber');
+    const radar = document.querySelector('.radar-bg');
+    if (radar) radar.style.display = p.showRadar === false ? 'none' : '';
+    const dash = document.getElementById('dashboard');
+    if (dash) dash.style.gap = (p.dashGap || 16) + 'px';
+    document.documentElement.style.setProperty('--panel-radius', (p.panelRadius || 10) + 'px');
+    const hero = document.querySelector('.hero');
+    if (hero) hero.style.display = p.showHero === false ? 'none' : '';
+    const header = document.querySelector('.top-header');
+    if (header) header.classList.toggle('compact', !!p.compactHeader);
+  }
+  applyPrefs();
 
   // --------------------------------------------------------------------------
   // Panel registry — each panel declares its metadata + render function.
@@ -253,6 +290,8 @@
     activeCleanups.clear();
   }
 
+  let dragSrcId = null;
+
   function renderDashboard() {
     runCleanups();
     dashboardEl.innerHTML = '';
@@ -267,6 +306,41 @@
       const def = PANELS[id];
       if (!def) continue;
       const panelEl = buildPanel(id, def);
+      panelEl.setAttribute('draggable', 'true');
+      panelEl.addEventListener('dragstart', (e) => {
+        dragSrcId = id;
+        panelEl.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', id);
+      });
+      panelEl.addEventListener('dragend', () => {
+        panelEl.classList.remove('dragging');
+        dashboardEl.querySelectorAll('.panel').forEach((p) => p.classList.remove('drag-over'));
+        dragSrcId = null;
+      });
+      panelEl.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (dragSrcId && dragSrcId !== id) {
+          panelEl.classList.add('drag-over');
+        }
+      });
+      panelEl.addEventListener('dragleave', () => {
+        panelEl.classList.remove('drag-over');
+      });
+      panelEl.addEventListener('drop', (e) => {
+        e.preventDefault();
+        panelEl.classList.remove('drag-over');
+        if (!dragSrcId || dragSrcId === id) return;
+        const fromIdx = state.panels.indexOf(dragSrcId);
+        const toIdx = state.panels.indexOf(id);
+        if (fromIdx === -1 || toIdx === -1) return;
+        state.panels.splice(fromIdx, 1);
+        state.panels.splice(toIdx, 0, dragSrcId);
+        saveState();
+        renderDashboard();
+      });
+
       dashboardEl.appendChild(panelEl);
       try {
         const cleanup = def.render(panelEl.querySelector('.panel-body'), panelEl);
@@ -456,8 +530,8 @@
     {
       id: 'full',
       name: 'Full OSINT',
-      desc: 'All panels. Maximum awareness.',
-      panels: ['map', 'threat', 'news', 'streams', 'intel', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit'],
+      desc: 'Every panel. Maximum situational awareness.',
+      panels: ['map', 'threat', 'news', 'streams', 'intel', 'weather', 'localnews', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit'],
     },
     {
       id: 'geo',
@@ -467,27 +541,33 @@
     },
     {
       id: 'market',
-      name: 'Markets only',
-      desc: 'Commodities, equities, crypto.',
-      panels: ['markets', 'crypto', 'news'],
+      name: 'Markets & Finance',
+      desc: 'Equities, commodities, crypto, news.',
+      panels: ['markets', 'crypto', 'news', 'weather'],
     },
     {
       id: 'minimal',
       name: 'Minimal',
-      desc: 'Threat level + news.',
-      panels: ['threat', 'news'],
+      desc: 'Threat level, news, weather.',
+      panels: ['threat', 'news', 'weather'],
     },
     {
       id: 'media',
-      name: 'Media watch',
-      desc: 'News feeds + live video streams.',
-      panels: ['streams', 'news', 'intel'],
+      name: 'Media Watch',
+      desc: 'News feeds, local news, live video.',
+      panels: ['streams', 'news', 'localnews', 'intel'],
     },
     {
       id: 'toolkit',
-      name: 'Analyst toolkit',
-      desc: 'Sources + OSINT toolkit, no live feeds.',
-      panels: ['sources', 'toolkit'],
+      name: 'Analyst Toolkit',
+      desc: 'Sources, toolkit, intel. No live feeds.',
+      panels: ['sources', 'toolkit', 'intel'],
+    },
+    {
+      id: 'daily',
+      name: 'Daily Brief',
+      desc: 'Weather, news, markets, threat overview.',
+      panels: ['weather', 'threat', 'news', 'localnews', 'markets'],
     },
   ];
 
@@ -526,6 +606,264 @@
   }
 
   document.getElementById('preset-btn').addEventListener('click', openPresets);
+
+  // --------------------------------------------------------------------------
+  // Customize modal — full dashboard customization
+  // --------------------------------------------------------------------------
+
+  function openCustomize() {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    const card = document.createElement('div');
+    card.className = 'modal-card modal-card-wide';
+    card.innerHTML =
+      '<header class="modal-head">' +
+      '  <h2>Customize Dashboard</h2>' +
+      '  <button class="modal-close" type="button">&times;</button>' +
+      '</header>' +
+      '<div class="modal-body">' +
+      '  <div class="cust-tabs"></div>' +
+      '  <div class="cust-content"></div>' +
+      '</div>';
+
+    const tabs = card.querySelector('.cust-tabs');
+    const content = card.querySelector('.cust-content');
+
+    const SECTIONS = [
+      { id: 'theme', label: 'Theme', icon: '&#127912;' },
+      { id: 'layout', label: 'Layout', icon: '&#9783;' },
+      { id: 'panels', label: 'Panels', icon: '&#9638;' },
+      { id: 'display', label: 'Display', icon: '&#9788;' },
+    ];
+
+    let activeSection = 'theme';
+
+    function renderTabs() {
+      tabs.innerHTML = SECTIONS.map(function (s) {
+        return '<button class="cust-tab' + (s.id === activeSection ? ' is-active' : '') +
+          '" data-section="' + s.id + '">' +
+          '<span class="cust-tab-icon">' + s.icon + '</span>' +
+          '<span>' + escapeHtml(s.label) + '</span></button>';
+      }).join('');
+      tabs.querySelectorAll('.cust-tab').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          activeSection = btn.dataset.section;
+          renderTabs();
+          renderContent();
+        });
+      });
+    }
+
+    function renderContent() {
+      if (activeSection === 'theme') renderThemeSection();
+      else if (activeSection === 'layout') renderLayoutSection();
+      else if (activeSection === 'panels') renderPanelsSection();
+      else if (activeSection === 'display') renderDisplaySection();
+    }
+
+    // — THEME —
+    function renderThemeSection() {
+      content.innerHTML =
+        '<h3 class="cust-section-title">Color Theme</h3>' +
+        '<div class="cust-theme-grid"></div>';
+      var grid = content.querySelector('.cust-theme-grid');
+      for (var i = 0; i < THEME_LIST.length; i++) {
+        var t = THEME_LIST[i];
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cust-theme-card' + (state.prefs.dashTheme === t.id ? ' is-active' : '');
+        btn.dataset.theme = t.id;
+        btn.innerHTML =
+          '<div class="cust-theme-swatch" style="background:' + t.accent + '"></div>' +
+          '<div class="cust-theme-name">' + escapeHtml(t.label) + '</div>' +
+          '<div class="cust-theme-desc">' + escapeHtml(t.desc) + '</div>';
+        btn.addEventListener('click', (function (themeId) {
+          return function () {
+            state.prefs.dashTheme = themeId;
+            saveState();
+            applyPrefs();
+            renderThemeSection();
+          };
+        })(t.id));
+        grid.appendChild(btn);
+      }
+    }
+
+    // — LAYOUT —
+    function renderLayoutSection() {
+      content.innerHTML =
+        '<h3 class="cust-section-title">Dashboard Layout</h3>' +
+        '<div class="cust-form">' +
+        '  <div class="cust-field">' +
+        '    <label>Panel spacing</label>' +
+        '    <div class="cust-range-row">' +
+        '      <input type="range" min="4" max="32" value="' + (state.prefs.dashGap || 16) + '" data-pref="dashGap" />' +
+        '      <span class="cust-range-val">' + (state.prefs.dashGap || 16) + 'px</span>' +
+        '    </div>' +
+        '  </div>' +
+        '  <div class="cust-field">' +
+        '    <label>Panel corner radius</label>' +
+        '    <div class="cust-range-row">' +
+        '      <input type="range" min="0" max="20" value="' + (state.prefs.panelRadius || 10) + '" data-pref="panelRadius" />' +
+        '      <span class="cust-range-val">' + (state.prefs.panelRadius || 10) + 'px</span>' +
+        '    </div>' +
+        '  </div>' +
+        '</div>' +
+        '<h3 class="cust-section-title" style="margin-top:24px">Panel Order</h3>' +
+        '<p class="cust-hint">Drag panels on the dashboard to reorder, or reorder here.</p>' +
+        '<div class="cust-panel-order"></div>';
+
+      content.querySelectorAll('input[type="range"]').forEach(function (inp) {
+        inp.addEventListener('input', function () {
+          var key = inp.dataset.pref;
+          var val = parseInt(inp.value, 10);
+          state.prefs[key] = val;
+          inp.parentElement.querySelector('.cust-range-val').textContent = val + 'px';
+          saveState();
+          applyPrefs();
+        });
+      });
+
+      var orderList = content.querySelector('.cust-panel-order');
+      renderPanelOrder(orderList);
+    }
+
+    function renderPanelOrder(container) {
+      container.innerHTML = '';
+      state.panels.forEach(function (id, idx) {
+        var def = PANELS[id];
+        if (!def) return;
+        var row = document.createElement('div');
+        row.className = 'cust-order-row';
+        row.innerHTML =
+          '<span class="cust-order-handle" title="Drag to reorder">&#8942;&#8942;</span>' +
+          '<span class="cust-order-icon">' + def.icon + '</span>' +
+          '<span class="cust-order-name">' + escapeHtml(def.title) + '</span>' +
+          '<div class="cust-order-btns">' +
+          (idx > 0 ? '<button class="cust-order-btn" data-dir="up" title="Move up">&#9650;</button>' : '') +
+          (idx < state.panels.length - 1 ? '<button class="cust-order-btn" data-dir="down" title="Move down">&#9660;</button>' : '') +
+          '</div>';
+        row.querySelectorAll('.cust-order-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var dir = btn.dataset.dir;
+            var newIdx = dir === 'up' ? idx - 1 : idx + 1;
+            state.panels.splice(idx, 1);
+            state.panels.splice(newIdx, 0, id);
+            saveState();
+            renderDashboard();
+            renderPanelOrder(container);
+          });
+        });
+        container.appendChild(row);
+      });
+    }
+
+    // — PANELS —
+    function renderPanelsSection() {
+      content.innerHTML =
+        '<h3 class="cust-section-title">Toggle Panels</h3>' +
+        '<div class="picker-grid"></div>';
+      var grid = content.querySelector('.picker-grid');
+      for (var _id in PANELS) {
+        if (!PANELS.hasOwnProperty(_id)) continue;
+        var def = PANELS[_id];
+        var active = state.panels.includes(_id);
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'picker-card' + (active ? ' is-active' : '');
+        btn.dataset.pid = _id;
+        btn.innerHTML =
+          '<div class="picker-icon">' + def.icon + '</div>' +
+          '<div class="picker-title">' + escapeHtml(def.title) + '</div>' +
+          '<div class="picker-desc">' + escapeHtml(def.desc || '') + '</div>' +
+          '<div class="picker-state">' + (active ? 'ADDED' : 'ADD TO DASHBOARD') + '</div>';
+        btn.addEventListener('click', (function (panelId) {
+          return function () {
+            var nowActive = !state.panels.includes(panelId);
+            if (nowActive) {
+              state.panels.push(panelId);
+            } else {
+              state.panels = state.panels.filter(function (pid) { return pid !== panelId; });
+            }
+            saveState();
+            renderDashboard();
+            renderPanelsSection();
+          };
+        })(_id));
+        grid.appendChild(btn);
+      }
+    }
+
+    // — DISPLAY —
+    function renderDisplaySection() {
+      var p = state.prefs;
+      content.innerHTML =
+        '<h3 class="cust-section-title">Display Options</h3>' +
+        '<div class="cust-toggles">' +
+        '  <label class="cust-toggle">' +
+        '    <input type="checkbox" data-pref="showRadar" ' + (p.showRadar !== false ? 'checked' : '') + ' />' +
+        '    <span>Show radar background animation</span>' +
+        '  </label>' +
+        '  <label class="cust-toggle">' +
+        '    <input type="checkbox" data-pref="showHero" ' + (p.showHero !== false ? 'checked' : '') + ' />' +
+        '    <span>Show hero section (search bar + tagline)</span>' +
+        '  </label>' +
+        '  <label class="cust-toggle">' +
+        '    <input type="checkbox" data-pref="compactHeader" ' + (p.compactHeader ? 'checked' : '') + ' />' +
+        '    <span>Compact header</span>' +
+        '  </label>' +
+        '</div>' +
+        '<h3 class="cust-section-title" style="margin-top:24px">Quick Actions</h3>' +
+        '<div class="cust-quick-actions">' +
+        '  <button class="cust-action-btn" data-action="reset-layout">Reset panel layout</button>' +
+        '  <button class="cust-action-btn" data-action="reset-sizes">Reset panel sizes</button>' +
+        '  <button class="cust-action-btn" data-action="reset-all">Reset everything to defaults</button>' +
+        '</div>';
+
+      content.querySelectorAll('input[data-pref]').forEach(function (inp) {
+        inp.addEventListener('change', function () {
+          state.prefs[inp.dataset.pref] = inp.checked;
+          saveState();
+          applyPrefs();
+        });
+      });
+
+      content.querySelectorAll('[data-action]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var action = btn.dataset.action;
+          if (action === 'reset-layout') {
+            state.panels = DEFAULT_PANELS.slice();
+          } else if (action === 'reset-sizes') {
+            state.panelSizes = {};
+          } else if (action === 'reset-all') {
+            var fresh = JSON.parse(JSON.stringify(DEFAULT_STATE));
+            state.panels = fresh.panels;
+            state.panelSizes = fresh.panelSizes;
+            state.prefs = fresh.prefs;
+            state.mapLayers = fresh.mapLayers;
+          }
+          saveState();
+          applyPrefs();
+          renderDashboard();
+          renderDisplaySection();
+        });
+      });
+    }
+
+    renderTabs();
+    renderContent();
+
+    backdrop.appendChild(card);
+    function close() { backdrop.remove(); }
+    card.querySelector('.modal-close').addEventListener('click', close);
+    backdrop.addEventListener('click', function (e) { if (e.target === backdrop) close(); });
+    document.addEventListener('keydown', function escHandler(e) {
+      if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escHandler); }
+    });
+    document.getElementById('modal-root').appendChild(backdrop);
+  }
+
+  document.getElementById('customize-btn').addEventListener('click', openCustomize);
 
   // --------------------------------------------------------------------------
   // PANEL: Threat Level

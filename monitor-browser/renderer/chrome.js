@@ -213,6 +213,7 @@
   document.getElementById('action-bookmarks').addEventListener('click', () => togglePanel('bookmarks'));
   document.getElementById('action-history').addEventListener('click', () => togglePanel('history'));
   document.getElementById('action-downloads').addEventListener('click', () => togglePanel('downloads'));
+  document.getElementById('action-extensions').addEventListener('click', () => togglePanel('extensions'));
 
   urlScheme.addEventListener('click', () => showSecurityPopup());
   urlScheme.style.cursor = 'pointer';
@@ -945,6 +946,7 @@
     else if (id === 'history') renderHistoryPanel(overlay);
     else if (id === 'downloads') renderDownloadsPanel(overlay);
     else if (id === 'permissions') renderPermissionsPanel(overlay);
+    else if (id === 'extensions') renderExtensionsPanel(overlay);
   }
 
   function closePanel() {
@@ -1184,6 +1186,68 @@
         });
       });
     });
+  }
+
+  // ------------------------------------------------------------------
+  // Extensions panel
+  // ------------------------------------------------------------------
+
+  function renderExtensionsPanel(container) {
+    container.innerHTML =
+      '<div class="settings-card side-panel">' +
+      '  <header class="settings-head"><h2>Extensions</h2>' +
+      '    <div class="head-actions">' +
+      '      <button class="settings-btn" id="ext-install">Load unpacked</button>' +
+      '      <button class="settings-btn" id="ext-open-dir">Open folder</button>' +
+      '      <button class="settings-close panel-close-btn">&times;</button>' +
+      '    </div></header>' +
+      '  <div class="panel-list" id="ext-list"></div>' +
+      '</div>';
+
+    container.querySelector('.panel-close-btn').addEventListener('click', closePanel);
+    container.addEventListener('click', (e) => { if (e.target === container) closePanel(); });
+
+    const listEl = document.getElementById('ext-list');
+
+    function load() {
+      browser.extensionsList().then((exts) => {
+        if (!exts || exts.length === 0) {
+          listEl.innerHTML = '<div class="panel-empty-msg">No extensions installed.<br>Click "Load unpacked" to add a Chrome extension.</div>';
+          return;
+        }
+        listEl.innerHTML = exts.map((ext) =>
+          '<div class="panel-row ext-row" data-id="' + escapeAttr(ext.id) + '">' +
+          '  <span class="row-title">' + esc(ext.name) + '</span>' +
+          '  <span class="row-meta">v' + esc(ext.version || '?') + '</span>' +
+          '  <button class="row-del" title="Remove">&times;</button>' +
+          '</div>'
+        ).join('');
+
+        listEl.querySelectorAll('.ext-row .row-del').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const row = btn.closest('.ext-row');
+            browser.extensionsRemove(row.dataset.id).then(() => load());
+          });
+        });
+      });
+    }
+
+    document.getElementById('ext-install').addEventListener('click', () => {
+      browser.extensionsPickFolder().then((result) => {
+        if (result && result.error) {
+          listEl.innerHTML = '<div class="panel-empty-msg" style="color:var(--text-danger)">' + esc(result.error) + '</div>';
+        } else {
+          load();
+        }
+      });
+    });
+
+    document.getElementById('ext-open-dir').addEventListener('click', () => {
+      browser.extensionsOpenDir();
+    });
+
+    load();
   }
 
   // ------------------------------------------------------------------

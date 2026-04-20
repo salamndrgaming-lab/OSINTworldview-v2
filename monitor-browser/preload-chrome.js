@@ -83,6 +83,13 @@ contextBridge.exposeInMainWorld('browser', {
     return () => ipcRenderer.off('settings:changed', listener);
   },
 
+  // Chrome extensions
+  extensionsList: () => ipcRenderer.invoke('extensions:list'),
+  extensionsInstall: (path) => ipcRenderer.invoke('extensions:install', path),
+  extensionsRemove: (id) => ipcRenderer.invoke('extensions:remove', id),
+  extensionsOpenDir: () => ipcRenderer.invoke('extensions:open-dir'),
+  extensionsPickFolder: () => ipcRenderer.invoke('extensions:pick-folder'),
+
   // Security / certificates
   securityInfo: () => ipcRenderer.invoke('page:security-info'),
 

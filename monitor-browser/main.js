@@ -1390,6 +1390,103 @@ ipcMain.handle('downloads:reveal', (_e, id) => {
 });
 
 // ---------------------------------------------------------------------------
+// Chrome Extensions
+// ---------------------------------------------------------------------------
+const loadedExtensions = new Map();
+
+function extensionsDir() {
+  return path.join(app.getPath('userData'), 'extensions');
+}
+
+async function loadAllExtensions() {
+  const dir = extensionsDir();
+  try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const extPath = path.join(dir, entry.name);
+    const manifestPath = path.join(extPath, 'manifest.json');
+    if (!fs.existsSync(manifestPath)) continue;
+    try {
+      const ext = await session.defaultSession.loadExtension(extPath, { allowFileAccess: true });
+      loadedExtensions.set(ext.id, { ext, path: extPath });
+      console.log('[monitor] loaded extension:', ext.name);
+    } catch (err) {
+      console.warn('[monitor] failed to load extension at', extPath, err.message);
+    }
+  }
+}
+
+async function installExtensionFromPath(extPath) {
+  const manifestPath = path.join(extPath, 'manifest.json');
+  if (!fs.existsSync(manifestPath)) return { error: 'No manifest.json found' };
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const safeName = (manifest.name || 'extension').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64);
+    const destDir = path.join(extensionsDir(), safeName);
+    if (fs.existsSync(destDir)) {
+      fs.rmSync(destDir, { recursive: true, force: true });
+    }
+    copyDirSync(extPath, destDir);
+    const ext = await session.defaultSession.loadExtension(destDir, { allowFileAccess: true });
+    loadedExtensions.set(ext.id, { ext, path: destDir });
+    return { id: ext.id, name: ext.name };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+function copyDirSync(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const s = path.join(src, entry.name);
+    const d = path.join(dest, entry.name);
+    if (entry.isDirectory()) copyDirSync(s, d);
+    else fs.copyFileSync(s, d);
+  }
+}
+
+function removeExtension(extId) {
+  const loaded = loadedExtensions.get(extId);
+  if (!loaded) return false;
+  try { session.defaultSession.removeExtension(extId); } catch {}
+  try { fs.rmSync(loaded.path, { recursive: true, force: true }); } catch {}
+  loadedExtensions.delete(extId);
+  return true;
+}
+
+function listExtensions() {
+  const exts = session.defaultSession.getAllExtensions();
+  return exts.map((ext) => ({
+    id: ext.id,
+    name: ext.name,
+    version: ext.version,
+    url: ext.url,
+  }));
+}
+
+ipcMain.handle('extensions:list', () => listExtensions());
+ipcMain.handle('extensions:install', async (_e, extPath) => installExtensionFromPath(extPath));
+ipcMain.handle('extensions:remove', (_e, extId) => removeExtension(extId));
+ipcMain.handle('extensions:open-dir', () => {
+  const dir = extensionsDir();
+  fs.mkdirSync(dir, { recursive: true });
+  shell.openPath(dir);
+  return dir;
+});
+ipcMain.handle('extensions:pick-folder', async () => {
+  if (!mainWindow) return null;
+  const { dialog } = require('electron');
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Select unpacked extension folder',
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  return installExtensionFromPath(result.filePaths[0]);
+});
+
+// ---------------------------------------------------------------------------
 // Privacy: HTTPS-only mode
 // ── Request filters: ad blocking + HTTPS-only ─────────────────────
 const AD_DOMAINS = new Set([
@@ -1700,6 +1797,7 @@ app.whenReady().then(() => {
   applyRequestFilters();
   setupDownloadListener();
   setupPermissionHandlers();
+  loadAllExtensions().catch((err) => console.warn('[monitor] extension load failed', err));
 
   // Start local YouTube embed server, then create window
   startYtEmbedServer().then(() => {

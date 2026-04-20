@@ -151,12 +151,15 @@
     devtoolsBtn.disabled = !active;
   }
 
+  let credBadgeEl = null;
+
   function renderUrlBar() {
     const active = tabs.find((t) => t.id === activeId);
     if (!active) {
       if (!urlBarDirty) urlInput.value = '';
       urlWrap.removeAttribute('data-secure');
       urlScheme.textContent = '⌕';
+      removeCredBadge();
       return;
     }
 
@@ -167,16 +170,40 @@
     if (active.isHomepage) {
       urlWrap.removeAttribute('data-secure');
       urlScheme.textContent = '◉';
+      removeCredBadge();
     } else if (active.url.startsWith('https://')) {
       urlWrap.setAttribute('data-secure', 'true');
       urlScheme.textContent = '⬢';
+      updateCredBadge(active.url);
     } else if (active.url.startsWith('http://')) {
       urlWrap.setAttribute('data-secure', 'false');
       urlScheme.textContent = '!';
+      updateCredBadge(active.url);
     } else {
       urlWrap.removeAttribute('data-secure');
       urlScheme.textContent = '⌕';
+      removeCredBadge();
     }
+  }
+
+  function removeCredBadge() {
+    if (credBadgeEl) { credBadgeEl.remove(); credBadgeEl = null; }
+  }
+
+  function updateCredBadge(url) {
+    browser.getCredibility(url).then((data) => {
+      if (!data || data.tier === 'unknown') { removeCredBadge(); return; }
+      const colors = { high: '#2ecc71', medium: '#d4a843', low: '#ff4e4e', government: '#4a90e2' };
+      const labels = { high: 'HIGH', medium: 'MED', low: 'LOW', government: 'GOV' };
+      if (!credBadgeEl) {
+        credBadgeEl = document.createElement('span');
+        credBadgeEl.className = 'cred-badge';
+        urlWrap.appendChild(credBadgeEl);
+      }
+      credBadgeEl.textContent = labels[data.tier] || '';
+      credBadgeEl.style.setProperty('--cred-color', colors[data.tier] || '#606070');
+      credBadgeEl.title = 'Source credibility: ' + (data.tier || 'unknown');
+    }).catch(() => removeCredBadge());
   }
 
   function formatUrlForDisplay(url, isHomepage) {
@@ -210,6 +237,7 @@
   readerBtn.addEventListener('click', () => openReaderMode());
   pipBtn.addEventListener('click', () => browser.pip());
 
+  document.getElementById('action-intel').addEventListener('click', () => toggleIntelSidebar());
   document.getElementById('action-bookmarks').addEventListener('click', () => togglePanel('bookmarks'));
   document.getElementById('action-history').addEventListener('click', () => togglePanel('history'));
   document.getElementById('action-downloads').addEventListener('click', () => togglePanel('downloads'));
@@ -427,6 +455,13 @@
         e.preventDefault();
         bookmarkCurrentPage();
         break;
+      case 'i':
+        e.preventDefault();
+        toggleIntelSidebar();
+        break;
+      case 'o':
+        if (e.shiftKey) { e.preventDefault(); openQuickOsintLookup(); }
+        break;
       case 'e':
         if (e.shiftKey) { e.preventDefault(); openReaderMode(); }
         break;
@@ -439,6 +474,7 @@
         break;
       case 'b':
         if (e.shiftKey) { e.preventDefault(); togglePanel('bookmarks'); }
+        else { e.preventDefault(); toggleIntelSidebar(); }
         break;
       case '=':
       case '+':
@@ -702,6 +738,8 @@
 
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if (osintLookupEl) { closeQuickOsintLookup(); return; }
+      if (intelVisible) { closeIntelSidebar(); return; }
       if (tabSearchEl) { closeTabSearch(); return; }
       if (readerOverlay && !readerOverlay.classList.contains('hidden')) { closeReaderMode(); return; }
       if (!settingsOverlay.classList.contains('hidden')) { closeSettings(); return; }
@@ -1186,6 +1224,227 @@
         });
       });
     });
+  }
+
+  // ------------------------------------------------------------------
+  // Intel Sidebar (Ctrl+B toggle) — core OSINT product identity
+  // ------------------------------------------------------------------
+
+  let intelSidebar = null;
+  let intelVisible = false;
+
+  function toggleIntelSidebar() {
+    if (intelVisible) { closeIntelSidebar(); return; }
+    openIntelSidebar();
+  }
+
+  async function openIntelSidebar() {
+    if (intelSidebar) intelSidebar.remove();
+
+    intelSidebar = document.createElement('div');
+    intelSidebar.className = 'intel-sidebar';
+    intelSidebar.innerHTML =
+      '<div class="intel-sidebar-head">' +
+      '  <span class="intel-sidebar-title">&#9673; Intel Sidebar</span>' +
+      '  <button class="intel-sidebar-close">&times;</button>' +
+      '</div>' +
+      '<div class="intel-sidebar-body">' +
+      '  <div class="intel-loading">Scanning page…</div>' +
+      '</div>';
+    document.body.appendChild(intelSidebar);
+    intelVisible = true;
+
+    intelSidebar.querySelector('.intel-sidebar-close').addEventListener('click', closeIntelSidebar);
+
+    const active = tabs.find((t) => t.id === activeId);
+    const body = intelSidebar.querySelector('.intel-sidebar-body');
+
+    const [entityData, credData] = await Promise.all([
+      browser.extractEntities().catch(() => null),
+      browser.getCredibility(active?.url).catch(() => ({ tier: 'unknown' })),
+    ]);
+
+    if (!intelVisible) return;
+
+    let html = '';
+
+    // Credibility badge
+    const tierLabels = { high: 'High Credibility', medium: 'Medium Credibility', low: 'Low Credibility', government: 'Government Source', unknown: 'Unrated' };
+    const tierColors = { high: '#2ecc71', medium: '#d4a843', low: '#ff4e4e', government: '#4a90e2', unknown: '#606070' };
+    const tier = credData?.tier || 'unknown';
+    html += '<div class="intel-section">' +
+      '<div class="intel-section-title">Source Credibility</div>' +
+      '<div class="intel-cred-badge" style="--cred-color:' + (tierColors[tier] || '#606070') + '">' +
+      '<span class="intel-cred-dot"></span>' +
+      '<span>' + (tierLabels[tier] || 'Unrated') + '</span></div></div>';
+
+    // Entities
+    if (entityData && entityData.total > 0) {
+      const e = entityData.entities;
+      html += '<div class="intel-section"><div class="intel-section-title">Extracted Entities (' + entityData.total + ')</div>';
+      if (e.ips.length) {
+        html += '<div class="intel-entity-group"><span class="intel-entity-label">IP Addresses</span>';
+        html += e.ips.map((ip) => '<button class="intel-entity" data-type="ip" data-val="' + escapeAttr(ip) + '">' + esc(ip) + '</button>').join('');
+        html += '</div>';
+      }
+      if (e.domains.length) {
+        html += '<div class="intel-entity-group"><span class="intel-entity-label">Domains</span>';
+        html += e.domains.map((d) => '<button class="intel-entity" data-type="domain" data-val="' + escapeAttr(d) + '">' + esc(d) + '</button>').join('');
+        html += '</div>';
+      }
+      if (e.emails.length) {
+        html += '<div class="intel-entity-group"><span class="intel-entity-label">Emails</span>';
+        html += e.emails.map((em) => '<button class="intel-entity" data-type="email" data-val="' + escapeAttr(em) + '">' + esc(em) + '</button>').join('');
+        html += '</div>';
+      }
+      if (e.hashes.length) {
+        html += '<div class="intel-entity-group"><span class="intel-entity-label">Hashes</span>';
+        html += e.hashes.map((h) => '<button class="intel-entity" data-type="hash" data-val="' + escapeAttr(h) + '">' + esc(h.substring(0, 16) + '…') + '</button>').join('');
+        html += '</div>';
+      }
+      html += '</div>';
+    } else {
+      html += '<div class="intel-section"><div class="intel-section-title">Extracted Entities</div>' +
+        '<div class="intel-empty">No entities detected on this page.</div></div>';
+    }
+
+    // Quick OSINT lookup section
+    html += '<div class="intel-section">' +
+      '<div class="intel-section-title">Quick Lookup</div>' +
+      '<div class="intel-lookup-form">' +
+      '<input type="text" class="intel-lookup-input" placeholder="IP, domain, hash, email…" spellcheck="false" />' +
+      '<button class="intel-lookup-btn">Lookup</button></div></div>';
+
+    // Page URL info
+    if (active && !active.isHomepage) {
+      html += '<div class="intel-section"><div class="intel-section-title">Page Info</div>' +
+        '<div class="intel-page-url">' + esc(active.url) + '</div>' +
+        '<div class="intel-page-title">' + esc(active.title) + '</div></div>';
+    }
+
+    body.innerHTML = html;
+
+    // Wire entity clicks -> OSINT lookup
+    body.querySelectorAll('.intel-entity').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const val = btn.dataset.val;
+        const type = btn.dataset.type;
+        performOsintLookup(val, type);
+      });
+    });
+
+    // Wire quick lookup form
+    const lookupInput = body.querySelector('.intel-lookup-input');
+    const lookupBtn = body.querySelector('.intel-lookup-btn');
+    if (lookupBtn) {
+      lookupBtn.addEventListener('click', () => {
+        if (lookupInput.value.trim()) performOsintLookup(lookupInput.value.trim());
+      });
+      lookupInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && lookupInput.value.trim()) performOsintLookup(lookupInput.value.trim());
+      });
+    }
+  }
+
+  function performOsintLookup(value, type) {
+    const v = encodeURIComponent(value);
+    const detectedType = type || detectEntityType(value);
+    let url;
+    switch (detectedType) {
+      case 'ip':
+        url = 'https://www.shodan.io/host/' + v;
+        break;
+      case 'domain':
+        url = 'https://www.virustotal.com/gui/domain/' + v;
+        break;
+      case 'email':
+        url = 'https://haveibeenpwned.com/unifiedsearch/' + v;
+        break;
+      case 'hash':
+        url = 'https://www.virustotal.com/gui/search/' + v;
+        break;
+      default:
+        url = 'https://www.virustotal.com/gui/search/' + v;
+    }
+    browser.newTab(url);
+  }
+
+  function detectEntityType(val) {
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(val)) return 'ip';
+    if (/^[a-fA-F0-9]{32,64}$/.test(val)) return 'hash';
+    if (/@/.test(val)) return 'email';
+    if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(val)) return 'domain';
+    return 'unknown';
+  }
+
+  function closeIntelSidebar() {
+    if (intelSidebar) { intelSidebar.remove(); intelSidebar = null; }
+    intelVisible = false;
+  }
+
+  // Quick OSINT lookup (Ctrl+Shift+O)
+  let osintLookupEl = null;
+
+  function openQuickOsintLookup() {
+    if (osintLookupEl) { osintLookupEl.remove(); osintLookupEl = null; return; }
+    browser.settingsExpand();
+    osintLookupEl = document.createElement('div');
+    osintLookupEl.className = 'tab-search-overlay';
+    osintLookupEl.innerHTML =
+      '<div class="tab-search-card">' +
+      '  <input type="text" class="tab-search-input" placeholder="Enter IP, domain, hash, or email for OSINT lookup…" spellcheck="false" />' +
+      '  <div class="tab-search-list osint-tools">' +
+      '    <button class="tab-search-row" data-tool="shodan">Shodan — IP/host lookup</button>' +
+      '    <button class="tab-search-row" data-tool="virustotal">VirusTotal — file/URL/domain scan</button>' +
+      '    <button class="tab-search-row" data-tool="censys">Censys — internet scan data</button>' +
+      '    <button class="tab-search-row" data-tool="hibp">Have I Been Pwned — breach check</button>' +
+      '    <button class="tab-search-row" data-tool="urlscan">URLScan — website scanner</button>' +
+      '    <button class="tab-search-row" data-tool="whois">WHOIS — domain registration</button>' +
+      '    <button class="tab-search-row" data-tool="otx">AlienVault OTX — threat intel</button>' +
+      '    <button class="tab-search-row" data-tool="greynoise">GreyNoise — IP noise context</button>' +
+      '  </div>' +
+      '</div>';
+
+    document.body.appendChild(osintLookupEl);
+
+    const input = osintLookupEl.querySelector('.tab-search-input');
+    input.focus();
+
+    function doLookup(tool) {
+      const val = input.value.trim();
+      if (!val) return;
+      const v = encodeURIComponent(val);
+      const urls = {
+        shodan: 'https://www.shodan.io/search?query=' + v,
+        virustotal: 'https://www.virustotal.com/gui/search/' + v,
+        censys: 'https://search.censys.io/search?q=' + v,
+        hibp: 'https://haveibeenpwned.com/unifiedsearch/' + v,
+        urlscan: 'https://urlscan.io/search/#' + v,
+        whois: 'https://www.whois.com/whois/' + v,
+        otx: 'https://otx.alienvault.com/indicator/search/' + v,
+        greynoise: 'https://viz.greynoise.io/ip/' + v,
+      };
+      browser.newTab(urls[tool] || urls.virustotal);
+      closeQuickOsintLookup();
+    }
+
+    osintLookupEl.querySelectorAll('[data-tool]').forEach((btn) => {
+      btn.addEventListener('click', () => doLookup(btn.dataset.tool));
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeQuickOsintLookup(); return; }
+      if (e.key === 'Enter') doLookup('virustotal');
+    });
+
+    osintLookupEl.addEventListener('click', (e) => {
+      if (e.target === osintLookupEl) closeQuickOsintLookup();
+    });
+  }
+
+  function closeQuickOsintLookup() {
+    if (osintLookupEl) { osintLookupEl.remove(); osintLookupEl = null; }
+    browser.settingsCollapse();
   }
 
   // ------------------------------------------------------------------

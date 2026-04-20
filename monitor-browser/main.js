@@ -1090,6 +1090,97 @@ ipcMain.handle('page:pip', async () => {
   } catch { return false; }
 });
 
+// ---------------------------------------------------------------------------
+// Entity extraction — auto-detect IPs, domains, emails, hashes on page load
+// ---------------------------------------------------------------------------
+ipcMain.handle('page:extract-entities', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return null;
+  try {
+    return await tab.view.webContents.executeJavaScript(`
+      (function() {
+        const text = document.body ? document.body.innerText : '';
+        const entities = { ips: [], domains: [], emails: [], hashes: [], urls: [], names: [] };
+        const ipRe = /\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b/g;
+        const emailRe = /[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}/g;
+        const md5Re = /\\b[a-fA-F0-9]{32}\\b/g;
+        const sha256Re = /\\b[a-fA-F0-9]{64}\\b/g;
+        const domainRe = /\\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+(?:com|net|org|io|gov|edu|mil|co|info|biz|xyz|dev|app|me|us|uk|de|fr|ru|cn|jp|au|ca|br|in|za|ng|ke)\\b/gi;
+        const urlRe = /https?:\\/\\/[^\\s<>"']+/g;
+        let m;
+        const seen = new Set();
+        function add(arr, val) { if (!seen.has(val)) { seen.add(val); arr.push(val); } }
+        while ((m = ipRe.exec(text))) add(entities.ips, m[0]);
+        while ((m = emailRe.exec(text))) add(entities.emails, m[0]);
+        while ((m = sha256Re.exec(text))) add(entities.hashes, m[0]);
+        while ((m = md5Re.exec(text))) add(entities.hashes, m[0]);
+        while ((m = domainRe.exec(text))) add(entities.domains, m[0]);
+        while ((m = urlRe.exec(text))) add(entities.urls, m[0]);
+        entities.ips = entities.ips.slice(0, 50);
+        entities.domains = entities.domains.slice(0, 50);
+        entities.emails = entities.emails.slice(0, 50);
+        entities.hashes = entities.hashes.slice(0, 30);
+        entities.urls = entities.urls.slice(0, 50);
+        const total = entities.ips.length + entities.domains.length + entities.emails.length + entities.hashes.length;
+        return { entities, total, url: location.href, title: document.title };
+      })()
+    `);
+  } catch { return null; }
+});
+
+// Source credibility — rate domains based on known tier lists
+const CREDIBILITY_TIERS = {
+  high: new Set([
+    'reuters.com', 'apnews.com', 'bbc.com', 'bbc.co.uk', 'nytimes.com', 'washingtonpost.com',
+    'theguardian.com', 'economist.com', 'nature.com', 'science.org', 'ft.com',
+    'wsj.com', 'bloomberg.com', 'aljazeera.com', 'dw.com', 'france24.com',
+    'npr.org', 'pbs.org', 'c-span.org', 'arstechnica.com', 'theintercept.com',
+    'propublica.org', 'foreignaffairs.com', 'cfr.org', 'brookings.edu', 'rand.org',
+    'iiss.org', 'sipri.org', 'icij.org', 'bellingcat.com', 'csis.org',
+  ]),
+  medium: new Set([
+    'cnn.com', 'cnbc.com', 'abc.net.au', 'nbcnews.com', 'cbsnews.com',
+    'politico.com', 'axios.com', 'thehill.com', 'vox.com', 'slate.com',
+    'time.com', 'newsweek.com', 'usatoday.com', 'vice.com', 'wired.com',
+    'techcrunch.com', 'theverge.com', 'engadget.com', 'zdnet.com',
+    'foxnews.com', 'nypost.com', 'dailymail.co.uk', 'independent.co.uk',
+    'thedailybeast.com', 'buzzfeed.com', 'huffpost.com', 'salon.com',
+    'bild.de', 'corriere.it', 'lemonde.fr', 'elpais.com', 'repubblica.it',
+  ]),
+  low: new Set([
+    'rt.com', 'sputniknews.com', 'tass.com', 'globalresearch.ca', 'zerohedge.com',
+    'infowars.com', 'breitbart.com', 'oann.com', 'newsmax.com', 'thegatewaypundit.com',
+    'naturalnews.com', 'beforeitsnews.com', 'worldtruth.tv', 'collective-evolution.com',
+    'yournewswire.com', 'neonnettle.com', 'theblaze.com',
+  ]),
+  government: new Set([
+    'state.gov', 'whitehouse.gov', 'mod.uk', 'gov.uk', 'kremlin.ru',
+    'mfa.gov.cn', 'mofa.go.jp', 'diplomatie.gouv.fr', 'un.org', 'who.int',
+    'nato.int', 'europa.eu', 'osce.org',
+  ]),
+};
+
+function getCredibility(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    for (const [tier, domains] of Object.entries(CREDIBILITY_TIERS)) {
+      if (domains.has(host)) return tier;
+      const parts = host.split('.');
+      if (parts.length > 2) {
+        const base = parts.slice(-2).join('.');
+        if (domains.has(base)) return tier;
+      }
+    }
+    return 'unknown';
+  } catch { return 'unknown'; }
+}
+
+ipcMain.handle('page:credibility', (_e, url) => {
+  const targetUrl = url || (tabs.get(activeTabId)?.url);
+  if (!targetUrl) return { tier: 'unknown', url: '' };
+  return { tier: getCredibility(targetUrl), url: targetUrl };
+});
+
 // Reader mode — extract main content and render in a clean overlay
 ipcMain.handle('page:reader', async () => {
   const tab = tabs.get(activeTabId);

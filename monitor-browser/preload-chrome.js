@@ -34,12 +34,14 @@ contextBridge.exposeInMainWorld('browser', {
   zoomOut: () => ipcRenderer.invoke('zoom:out'),
   zoomReset: () => ipcRenderer.invoke('zoom:reset'),
 
-  // Print / fullscreen / PDF / PiP / Reader
+  // Print / fullscreen / PDF / PiP / Reader / Intel
   print: () => ipcRenderer.invoke('page:print'),
   savePdf: () => ipcRenderer.invoke('page:save-pdf'),
   pip: () => ipcRenderer.invoke('page:pip'),
   reader: () => ipcRenderer.invoke('page:reader'),
   fullscreen: () => ipcRenderer.invoke('window:fullscreen'),
+  extractEntities: () => ipcRenderer.invoke('page:extract-entities'),
+  getCredibility: (url) => ipcRenderer.invoke('page:credibility', url),
 
   // Window controls (custom titlebar)
   minimize: () => ipcRenderer.invoke('window:minimize'),

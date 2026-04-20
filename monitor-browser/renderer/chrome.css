@@ -1085,6 +1085,40 @@ body.is-incognito .wordmark { color: #a0a0c0; }
 .tab.is-dragging { opacity: 0.4; }
 .tab.drag-over { border-left: 2px solid var(--intel-accent); }
 
+/* Operation tab coloring */
+.tab.has-operation {
+  border-bottom: 2px solid var(--op-color, var(--intel-accent));
+}
+.ops-color-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+.ops-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--surface-border);
+}
+.ops-title {
+  font: 600 14px var(--font-ui); color: var(--text-primary);
+}
+.ops-new-btn {
+  padding: 5px 12px; border-radius: 6px; border: none;
+  background: var(--intel-accent); color: #000;
+  font: 600 11px var(--font-ui); cursor: pointer;
+}
+.ops-new-btn:hover { opacity: 0.85; }
+.ops-del {
+  flex-shrink: 0; background: none; border: none;
+  color: var(--text-danger); font-size: 16px; cursor: pointer;
+  opacity: 0; transition: opacity var(--dur-fast);
+}
+.ops-row:hover .ops-del { opacity: 1; }
+
+/* Dwell time indicator */
+.dwell-indicator {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  font: 10px var(--font-data); color: var(--text-tertiary);
+  letter-spacing: 0.3px; pointer-events: none;
+}
+
 /* Intel button accent */
 .intel-btn { color: var(--intel-accent) !important; }
 
@@ -1182,6 +1216,27 @@ body.is-incognito .wordmark { color: #a0a0c0; }
 }
 .intel-page-title {
   font: 12px var(--font-ui); color: var(--text-secondary);
+}
+.intel-scenario {
+  margin-bottom: 10px; padding: 8px 10px; border-radius: 6px;
+  background: rgba(212, 168, 67, 0.06); border: 1px solid rgba(212, 168, 67, 0.15);
+}
+.intel-scenario-region {
+  font: 600 9px var(--font-data); color: var(--intel-accent);
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.intel-scenario-text {
+  margin: 4px 0 0; font: 12px/1.5 var(--font-ui); color: var(--text-secondary);
+}
+.intel-reading-time {
+  font: 12px var(--font-data); color: var(--text-data);
+}
+
+/* Autocomplete credibility tag */
+.ac-cred {
+  flex-shrink: 0; font: 600 8px var(--font-data);
+  letter-spacing: 0.5px; padding: 1px 5px; border-radius: 3px;
+  background: rgba(255,255,255,0.05);
 }
 
 /* Credibility badge in URL bar */

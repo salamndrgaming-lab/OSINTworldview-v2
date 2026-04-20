@@ -268,6 +268,89 @@ const tabOrder = [];
 const closedTabStack = [];
 
 // ---------------------------------------------------------------------------
+// Operations (Investigation Compartments)
+// ---------------------------------------------------------------------------
+const operations = new Map();
+let activeOperationId = null;
+
+function operationsPath() {
+  return path.join(app.getPath('userData'), 'operations.json');
+}
+
+function loadOperations() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(operationsPath(), 'utf8'));
+    for (const op of raw) {
+      if (!operations.has(op.id)) {
+        operations.set(op.id, { id: op.id, name: op.name, color: op.color, tabs: [], annotations: op.annotations || [], createdAt: op.createdAt });
+      }
+    }
+  } catch {}
+}
+
+function saveOperations() {
+  const arr = [];
+  for (const [, op] of operations) {
+    arr.push({
+      id: op.id, name: op.name, color: op.color,
+      annotations: op.annotations || [],
+      createdAt: op.createdAt,
+      tabUrls: tabOrder.filter((tid) => {
+        const t = tabs.get(tid);
+        return t && t.operationId === op.id;
+      }).map((tid) => tabs.get(tid)?.url).filter(Boolean),
+    });
+  }
+  try {
+    fs.mkdirSync(path.dirname(operationsPath()), { recursive: true });
+    fs.writeFileSync(operationsPath(), JSON.stringify(arr, null, 2));
+  } catch {}
+}
+
+function createOperation(name, color) {
+  const id = randomUUID();
+  operations.set(id, { id, name: name || 'Unnamed Op', color: color || '#d4a843', tabs: [], annotations: [], createdAt: Date.now() });
+  saveOperations();
+  return id;
+}
+
+function deleteOperation(opId) {
+  operations.delete(opId);
+  for (const [, tab] of tabs) {
+    if (tab.operationId === opId) tab.operationId = null;
+  }
+  if (activeOperationId === opId) activeOperationId = null;
+  saveOperations();
+  broadcastTabs();
+}
+
+function addAnnotation(opId, text, url) {
+  const op = operations.get(opId);
+  if (!op) return;
+  op.annotations.push({ id: randomUUID(), text, url, createdAt: Date.now() });
+  saveOperations();
+}
+
+function listOperations() {
+  const result = [];
+  for (const [, op] of operations) {
+    const tabCount = tabOrder.filter((tid) => tabs.get(tid)?.operationId === op.id).length;
+    result.push({ id: op.id, name: op.name, color: op.color, tabCount, annotationCount: (op.annotations || []).length, createdAt: op.createdAt });
+  }
+  return result;
+}
+
+function getOperation(opId) {
+  const op = operations.get(opId);
+  if (!op) return null;
+  const opTabs = tabOrder.filter((tid) => tabs.get(tid)?.operationId === opId).map((tid) => {
+    const t = tabs.get(tid);
+    return { id: tid, url: t.url, title: t.title };
+  });
+  return { ...op, tabs: opTabs };
+}
+
+// ---------------------------------------------------------------------------
 // Window creation
 // ---------------------------------------------------------------------------
 
@@ -397,6 +480,9 @@ function newTab(rawUrl) {
     canGoForward: false,
     pinned: false,
     muted: false,
+    operationId: activeOperationId || null,
+    dwellStart: Date.now(),
+    dwellTime: 0,
   };
   tabs.set(id, tab);
   tabOrder.push(id);
@@ -509,7 +595,13 @@ function wireTabEvents(id, tab) {
 
 function switchTab(id) {
   if (!tabs.has(id) || !mainWindow) return;
+  if (activeTabId && tabs.has(activeTabId)) {
+    const prev = tabs.get(activeTabId);
+    prev.dwellTime += Date.now() - prev.dwellStart;
+  }
   activeTabId = id;
+  const next = tabs.get(id);
+  if (next) next.dwellStart = Date.now();
   layoutViews();
   // Bring active view to front so it paints above inactive ones.
   const tab = tabs.get(id);
@@ -655,6 +747,7 @@ function broadcastTabs() {
     .map((id) => {
       const t = tabs.get(id);
       if (!t) return null;
+      const op = t.operationId ? operations.get(t.operationId) : null;
       return {
         id,
         url: t.url,
@@ -667,6 +760,10 @@ function broadcastTabs() {
         pinned: !!t.pinned,
         muted: !!t.muted,
         audible: t.view.webContents.isCurrentlyAudible?.() ?? false,
+        operationId: t.operationId || null,
+        operationColor: op?.color || null,
+        operationName: op?.name || null,
+        dwellTime: t.dwellTime + (id === activeTabId ? (Date.now() - t.dwellStart) : 0),
       };
     })
     .filter(Boolean);
@@ -987,6 +1084,69 @@ ipcMain.handle('tab:mute', (_e, id) => {
 });
 
 // ---------------------------------------------------------------------------
+// Operations IPC
+// ---------------------------------------------------------------------------
+ipcMain.handle('ops:list', () => listOperations());
+ipcMain.handle('ops:get', (_e, id) => getOperation(id));
+ipcMain.handle('ops:create', (_e, name, color) => createOperation(name, color));
+ipcMain.handle('ops:delete', (_e, id) => deleteOperation(id));
+ipcMain.handle('ops:rename', (_e, id, name) => {
+  const op = operations.get(id);
+  if (op) { op.name = name; saveOperations(); broadcastTabs(); }
+});
+ipcMain.handle('ops:set-color', (_e, id, color) => {
+  const op = operations.get(id);
+  if (op) { op.color = color; saveOperations(); broadcastTabs(); }
+});
+ipcMain.handle('ops:assign-tab', (_e, tabId, opId) => {
+  const tab = tabs.get(tabId);
+  if (tab) { tab.operationId = opId || null; broadcastTabs(); saveOperations(); }
+});
+ipcMain.handle('ops:set-active', (_e, opId) => {
+  activeOperationId = opId || null;
+});
+ipcMain.handle('ops:annotate', (_e, opId, text, url) => {
+  addAnnotation(opId, text, url);
+});
+
+// Mute all tabs at once (Noise Gate)
+ipcMain.handle('tabs:mute-all', () => {
+  let allMuted = true;
+  for (const [, tab] of tabs) {
+    if (!tab.view.webContents.isAudioMuted()) { allMuted = false; break; }
+  }
+  for (const [, tab] of tabs) {
+    tab.view.webContents.setAudioMuted(!allMuted);
+    tab.muted = !allMuted;
+  }
+  broadcastTabs();
+  return !allMuted;
+});
+
+// Dwell time for current tab
+ipcMain.handle('tab:dwell-time', (_e, id) => {
+  const tab = tabs.get(id ?? activeTabId);
+  if (!tab) return 0;
+  return tab.dwellTime + (id === activeTabId ? (Date.now() - tab.dwellStart) : 0);
+});
+
+// Reading time estimate
+ipcMain.handle('page:reading-time', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return null;
+  try {
+    return await tab.view.webContents.executeJavaScript(`
+      (function() {
+        const text = (document.body ? document.body.innerText : '');
+        const words = text.trim().split(/\\s+/).length;
+        const minutes = Math.ceil(words / 230);
+        return { words, minutes };
+      })()
+    `);
+  } catch { return null; }
+});
+
+// ---------------------------------------------------------------------------
 // Find in page
 // ---------------------------------------------------------------------------
 ipcMain.handle('find:start', (_e, text, opts) => {
@@ -1179,6 +1339,34 @@ ipcMain.handle('page:credibility', (_e, url) => {
   const targetUrl = url || (tabs.get(activeTabId)?.url);
   if (!targetUrl) return { tier: 'unknown', url: '' };
   return { tier: getCredibility(targetUrl), url: targetUrl };
+});
+
+// Contextual counterfactual trigger — surface related scenarios
+const COUNTERFACTUAL_TRIGGERS = [
+  { keywords: ['hormuz', 'strait of hormuz', 'persian gulf'], scenario: 'Strait of Hormuz closure scenario: 20% of global oil transits here. Closure would spike crude 40-80% within 48h.', region: 'Middle East' },
+  { keywords: ['taiwan', 'taiwan strait', 'pla navy'], scenario: 'Taiwan contingency: PLA amphibious capability assessed at 2-3 divisions. TSMC produces 90% of advanced chips — disruption cascades globally.', region: 'Asia-Pacific' },
+  { keywords: ['suez canal', 'suez'], scenario: 'Suez disruption scenario: 12% of global trade. 2021 Ever Given blockage cost $9.6B/day. Houthi attacks already rerouting traffic.', region: 'Middle East' },
+  { keywords: ['arctic', 'northern sea route', 'svalbard'], scenario: 'Arctic sea route opening: 40% shorter than Suez. Russian icebreaker fleet dominance. NATO surveillance gap above 75°N.', region: 'Europe' },
+  { keywords: ['south china sea', 'spratly', 'scarborough'], scenario: 'South China Sea escalation: $5.3T in annual trade transits. 7 PRC artificial islands with military installations. UNCLOS ruling ignored.', region: 'Asia-Pacific' },
+  { keywords: ['nuclear', 'icbm', 'nuclear weapon'], scenario: 'Nuclear escalation ladder: tactical → theater → strategic. Current global stockpile ~12,500 warheads. Launch-to-impact 15-30 min.', region: 'Global' },
+  { keywords: ['ransomware', 'cyberattack', 'apt'], scenario: 'Critical infrastructure cyber scenario: Colonial Pipeline precedent. Average ransomware dwell time 11 days before detection.', region: 'Global' },
+  { keywords: ['famine', 'food crisis', 'grain'], scenario: 'Global food security: Ukraine/Russia = 30% of global wheat exports. El Niño compounds drought across Horn of Africa.', region: 'Global' },
+  { keywords: ['kashmir', 'line of control', 'india pakistan'], scenario: 'Kashmir flashpoint: Two nuclear powers, 740K Indian troops deployed. Potential for conventional→nuclear escalation.', region: 'Asia-Pacific' },
+  { keywords: ['wagner', 'africa corps', 'pmc'], scenario: 'Russian PMC expansion: Active in 10+ African states. Resource extraction model funds operations. Displaces Western influence.', region: 'Africa' },
+];
+
+ipcMain.handle('page:counterfactual', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return null;
+  try {
+    const text = await tab.view.webContents.executeJavaScript(`
+      (document.body ? document.body.innerText.substring(0, 5000).toLowerCase() : '')
+    `);
+    const matches = COUNTERFACTUAL_TRIGGERS.filter((t) =>
+      t.keywords.some((kw) => text.includes(kw))
+    );
+    return matches.length > 0 ? matches : null;
+  } catch { return null; }
 });
 
 // Reader mode — extract main content and render in a clean overlay
@@ -1888,6 +2076,7 @@ app.whenReady().then(() => {
   applyRequestFilters();
   setupDownloadListener();
   setupPermissionHandlers();
+  loadOperations();
   loadAllExtensions().catch((err) => console.warn('[monitor] extension load failed', err));
 
   // Start local YouTube embed server, then create window

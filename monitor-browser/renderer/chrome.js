@@ -353,13 +353,23 @@
     acItems = merged;
     acSelectedIdx = -1;
     acDropdown.classList.remove('hidden');
-    acDropdown.innerHTML = merged.map((item, i) =>
-      '<div class="ac-item" data-idx="' + i + '">' +
-      '<span class="ac-icon">' + (item.type === 'bookmark' ? '★' : '↻') + '</span>' +
-      '<span class="ac-title">' + esc(item.title) + '</span>' +
-      '<span class="ac-url">' + esc(shortUrl(item.url)) + '</span>' +
-      '</div>'
-    ).join('');
+    const credChecks = merged.map((item) => browser.getCredibility(item.url).catch(() => ({ tier: 'unknown' })));
+    const creds = await Promise.all(credChecks);
+    const credColors = { high: '#2ecc71', medium: '#d4a843', low: '#ff4e4e', government: '#4a90e2' };
+    const credLabels = { high: 'HIGH', medium: 'MED', low: 'LOW', government: 'GOV' };
+
+    acDropdown.innerHTML = merged.map((item, i) => {
+      const cred = creds[i]?.tier;
+      const credHtml = cred && cred !== 'unknown'
+        ? '<span class="ac-cred" style="color:' + (credColors[cred] || '') + '">' + (credLabels[cred] || '') + '</span>'
+        : '';
+      return '<div class="ac-item" data-idx="' + i + '">' +
+        '<span class="ac-icon">' + (item.type === 'bookmark' ? '★' : '↻') + '</span>' +
+        '<span class="ac-title">' + esc(item.title) + '</span>' +
+        credHtml +
+        '<span class="ac-url">' + esc(shortUrl(item.url)) + '</span>' +
+        '</div>';
+    }).join('');
 
     acDropdown.querySelectorAll('.ac-item').forEach((el) => {
       el.addEventListener('mousedown', (e) => {
@@ -471,6 +481,12 @@
       case 'j':
         e.preventDefault();
         togglePanel('downloads');
+        break;
+      case 'm':
+        if (e.shiftKey) { e.preventDefault(); browser.muteAll(); }
+        break;
+      case 'y':
+        if (e.shiftKey) { e.preventDefault(); openOperationSwitcher(); }
         break;
       case 'b':
         if (e.shiftKey) { e.preventDefault(); togglePanel('bookmarks'); }
@@ -935,11 +951,14 @@
       { label: tab.muted ? 'Unmute tab' : 'Mute tab', action: () => browser.muteTab(tabId) },
       { label: 'Duplicate tab', action: () => browser.duplicateTab(tabId) },
       { sep: true },
+      { label: 'Assign to Operation…', action: () => assignTabToOp(tabId) },
+      { label: tab.operationId ? 'Remove from Operation' : null, action: () => browser.opsAssignTab(tabId, null) },
+      { sep: true },
       { label: 'Close tab', action: () => browser.closeTab(tabId), danger: true },
       { label: 'Close other tabs', action: () => {
         tabs.filter((t) => t.id !== tabId && !t.pinned).forEach((t) => browser.closeTab(t.id));
       }, danger: true },
-    ];
+    ].filter((i) => i.label !== null);
 
     for (const item of items) {
       if (item.sep) {
@@ -959,6 +978,25 @@
     requestAnimationFrame(() => {
       document.addEventListener('click', removeContextMenu, { once: true });
     });
+  }
+
+  async function assignTabToOp(tabId) {
+    removeContextMenu();
+    const ops = await browser.opsList();
+    if (ops.length === 0) {
+      const name = prompt('No operations yet. Create one:');
+      if (!name) return;
+      const opId = await browser.opsCreate(name, '#d4a843');
+      browser.opsAssignTab(tabId, opId);
+      return;
+    }
+    const names = ops.map((o, i) => (i + 1) + '. ' + o.name).join('\n');
+    const choice = prompt('Assign to operation:\n' + names + '\n\nEnter number:');
+    if (!choice) return;
+    const idx = parseInt(choice, 10) - 1;
+    if (idx >= 0 && idx < ops.length) {
+      browser.opsAssignTab(tabId, ops[idx].id);
+    }
   }
 
   function removeContextMenu() {
@@ -1315,6 +1353,25 @@
       '<input type="text" class="intel-lookup-input" placeholder="IP, domain, hash, email…" spellcheck="false" />' +
       '<button class="intel-lookup-btn">Lookup</button></div></div>';
 
+    // Counterfactual triggers
+    const cfData = await browser.getCounterfactual().catch(() => null);
+    if (cfData && cfData.length > 0) {
+      html += '<div class="intel-section"><div class="intel-section-title">Scenario Intelligence</div>';
+      for (const cf of cfData) {
+        html += '<div class="intel-scenario">' +
+          '<span class="intel-scenario-region">' + esc(cf.region) + '</span>' +
+          '<p class="intel-scenario-text">' + esc(cf.scenario) + '</p></div>';
+      }
+      html += '</div>';
+    }
+
+    // Reading time
+    const readTime = await browser.getReadingTime().catch(() => null);
+    if (readTime && readTime.words > 100) {
+      html += '<div class="intel-section"><div class="intel-section-title">Reading Estimate</div>' +
+        '<div class="intel-reading-time">' + readTime.minutes + ' min read · ' + readTime.words.toLocaleString() + ' words</div></div>';
+    }
+
     // Page URL info
     if (active && !active.isHomepage) {
       html += '<div class="intel-section"><div class="intel-section-title">Page Info</div>' +
@@ -1446,6 +1503,107 @@
     if (osintLookupEl) { osintLookupEl.remove(); osintLookupEl = null; }
     browser.settingsCollapse();
   }
+
+  // ------------------------------------------------------------------
+  // Operation Switcher (Ctrl+Shift+O alias on main menu)
+  // ------------------------------------------------------------------
+
+  let opsSwitcherEl = null;
+
+  async function openOperationSwitcher() {
+    if (opsSwitcherEl) { closeOperationSwitcher(); return; }
+    browser.settingsExpand();
+    opsSwitcherEl = document.createElement('div');
+    opsSwitcherEl.className = 'tab-search-overlay';
+    document.body.appendChild(opsSwitcherEl);
+
+    const ops = await browser.opsList();
+
+    let html = '<div class="tab-search-card ops-card">' +
+      '<div class="ops-head"><span class="ops-title">Operations</span>' +
+      '<button class="ops-new-btn" id="ops-new">+ New Operation</button></div>';
+
+    if (ops.length === 0) {
+      html += '<div class="panel-empty-msg" style="padding:20px">No operations yet. Create one to start compartmentalizing your investigation.</div>';
+    } else {
+      html += '<div class="tab-search-list">';
+      for (const op of ops) {
+        html += '<div class="tab-search-row ops-row" data-id="' + op.id + '">' +
+          '<span class="ops-color-dot" style="background:' + (op.color || '#d4a843') + '"></span>' +
+          '<span class="tab-search-title">' + esc(op.name) + '</span>' +
+          '<span class="tab-search-url">' + op.tabCount + ' tabs · ' + op.annotationCount + ' notes</span>' +
+          '<button class="row-del ops-del" data-id="' + op.id + '">&times;</button>' +
+          '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    opsSwitcherEl.innerHTML = html;
+
+    opsSwitcherEl.addEventListener('click', (e) => {
+      if (e.target === opsSwitcherEl) closeOperationSwitcher();
+    });
+
+    document.getElementById('ops-new').addEventListener('click', () => {
+      const name = prompt('Operation name:');
+      if (!name) return;
+      const colors = ['#d4a843', '#4a90e2', '#2ecc71', '#ff4e4e', '#a78bfa', '#fb923c', '#22d3ee'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      browser.opsCreate(name, color).then(() => {
+        closeOperationSwitcher();
+        openOperationSwitcher();
+      });
+    });
+
+    opsSwitcherEl.querySelectorAll('.ops-row').forEach((row) => {
+      row.addEventListener('click', (e) => {
+        if (e.target.classList.contains('ops-del')) {
+          browser.opsDelete(e.target.dataset.id).then(() => {
+            closeOperationSwitcher();
+            openOperationSwitcher();
+          });
+          return;
+        }
+        browser.opsSetActive(row.dataset.id);
+        closeOperationSwitcher();
+      });
+    });
+  }
+
+  function closeOperationSwitcher() {
+    if (opsSwitcherEl) { opsSwitcherEl.remove(); opsSwitcherEl = null; }
+    browser.settingsCollapse();
+  }
+
+  // ------------------------------------------------------------------
+  // Dwell time indicator + reading time in URL bar
+  // ------------------------------------------------------------------
+
+  let dwellEl = null;
+  let dwellTimer = null;
+
+  function startDwellTimer() {
+    if (dwellTimer) clearInterval(dwellTimer);
+    dwellTimer = setInterval(updateDwellDisplay, 5000);
+    updateDwellDisplay();
+  }
+
+  async function updateDwellDisplay() {
+    if (!activeId) return;
+    const ms = await browser.getDwellTime(activeId).catch(() => 0);
+    if (!dwellEl) {
+      dwellEl = document.createElement('span');
+      dwellEl.className = 'dwell-indicator';
+      const toolbar = document.querySelector('.toolbar');
+      if (toolbar) toolbar.appendChild(dwellEl);
+    }
+    const secs = Math.floor(ms / 1000);
+    if (secs < 60) dwellEl.textContent = secs + 's';
+    else if (secs < 3600) dwellEl.textContent = Math.floor(secs / 60) + 'm';
+    else dwellEl.textContent = Math.floor(secs / 3600) + 'h ' + Math.floor((secs % 3600) / 60) + 'm';
+  }
+
+  startDwellTimer();
 
   // ------------------------------------------------------------------
   // Extensions panel
@@ -1583,6 +1741,10 @@
   function buildTabElEnhanced(tab) {
     const el = buildTabEl(tab);
     if (tab.pinned) el.classList.add('is-pinned');
+    if (tab.operationColor) {
+      el.style.setProperty('--op-color', tab.operationColor);
+      el.classList.add('has-operation');
+    }
     if (tab.muted) {
       const badge = document.createElement('span');
       badge.className = 'tab-muted';

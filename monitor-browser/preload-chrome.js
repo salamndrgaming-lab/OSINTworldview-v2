@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('browser', {
   fullscreen: () => ipcRenderer.invoke('window:fullscreen'),
   extractEntities: () => ipcRenderer.invoke('page:extract-entities'),
   getCredibility: (url) => ipcRenderer.invoke('page:credibility', url),
+  getCounterfactual: () => ipcRenderer.invoke('page:counterfactual'),
 
   // Window controls (custom titlebar)
   minimize: () => ipcRenderer.invoke('window:minimize'),
@@ -84,6 +85,20 @@ contextBridge.exposeInMainWorld('browser', {
     ipcRenderer.on('settings:changed', listener);
     return () => ipcRenderer.off('settings:changed', listener);
   },
+
+  // Operations (investigations)
+  opsList: () => ipcRenderer.invoke('ops:list'),
+  opsGet: (id) => ipcRenderer.invoke('ops:get', id),
+  opsCreate: (name, color) => ipcRenderer.invoke('ops:create', name, color),
+  opsDelete: (id) => ipcRenderer.invoke('ops:delete', id),
+  opsRename: (id, name) => ipcRenderer.invoke('ops:rename', id, name),
+  opsSetColor: (id, color) => ipcRenderer.invoke('ops:set-color', id, color),
+  opsAssignTab: (tabId, opId) => ipcRenderer.invoke('ops:assign-tab', tabId, opId),
+  opsSetActive: (opId) => ipcRenderer.invoke('ops:set-active', opId),
+  opsAnnotate: (opId, text, url) => ipcRenderer.invoke('ops:annotate', opId, text, url),
+  muteAll: () => ipcRenderer.invoke('tabs:mute-all'),
+  getDwellTime: (id) => ipcRenderer.invoke('tab:dwell-time', id),
+  getReadingTime: () => ipcRenderer.invoke('page:reading-time'),
 
   // Chrome extensions
   extensionsList: () => ipcRenderer.invoke('extensions:list'),

@@ -122,7 +122,7 @@
   const STORAGE_KEY = 'monitor:dashboard:v2';
 
   const DEFAULT_PANELS = [
-    'map', 'news', 'streams', 'threat', 'intel', 'weather', 'localnews', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit',
+    'map', 'news', 'threat', 'intel', 'weather', 'localnews', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit',
   ];
 
   const PANEL_SIZE_OPTIONS = ['sm', 'md', 'lg', 'xl'];
@@ -134,6 +134,7 @@
     panelRadius: 10,
     showHero: true,
     compactHeader: false,
+    useFahrenheit: false,
   };
 
   const DEFAULT_STATE = {
@@ -177,6 +178,8 @@
       if (raw) {
         const parsed = JSON.parse(raw);
         let panels = Array.isArray(parsed.panels) ? parsed.panels : DEFAULT_PANELS.slice();
+        // Remove deleted panels
+        panels = panels.filter(function (p) { return p !== 'streams'; });
         // Auto-add new default panels that didn't exist before
         for (const dp of DEFAULT_PANELS) {
           if (!panels.includes(dp)) panels.push(dp);
@@ -531,13 +534,13 @@
       id: 'full',
       name: 'Full OSINT',
       desc: 'Every panel. Maximum situational awareness.',
-      panels: ['map', 'threat', 'news', 'streams', 'intel', 'weather', 'localnews', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit'],
+      panels: ['map', 'threat', 'news', 'intel', 'weather', 'localnews', 'markets', 'crypto', 'conflicts', 'sources', 'toolkit'],
     },
     {
       id: 'geo',
       name: 'Geopolitical',
       desc: 'Map, conflicts, intel feed, live streams.',
-      panels: ['map', 'threat', 'conflicts', 'intel', 'news', 'streams'],
+      panels: ['map', 'threat', 'conflicts', 'intel', 'news'],
     },
     {
       id: 'market',
@@ -555,7 +558,7 @@
       id: 'media',
       name: 'Media Watch',
       desc: 'News feeds, local news, live video.',
-      panels: ['streams', 'news', 'localnews', 'intel'],
+      panels: ['news', 'localnews', 'intel'],
     },
     {
       id: 'toolkit',
@@ -906,91 +909,108 @@
   // --------------------------------------------------------------------------
   const CONFLICTS = [
     // Middle East / North Africa
-    { region: 'MidEast',  name: 'Gaza — Israel/Hamas',        sev: 'crit', lat: 31.5,  lng: 34.5,
-      poly: [[31.59,34.22],[31.59,34.56],[31.22,34.56],[31.22,34.22]] },
+    { region: 'MidEast',  name: 'Gaza — Israel/Hamas',        sev: 'crit', lat: 31.4,  lng: 34.4,
+      poly: [[31.59,34.22],[31.59,34.28],[31.53,34.35],[31.52,34.49],[31.52,34.56],[31.34,34.52],[31.23,34.48],[31.22,34.27],[31.30,34.22]] },
     { region: 'MidEast',  name: 'West Bank unrest',           sev: 'high', lat: 32.0,  lng: 35.3,
-      poly: [[32.55,34.95],[32.55,35.57],[31.33,35.57],[31.33,34.95]] },
-    { region: 'MidEast',  name: 'Lebanon — southern border',  sev: 'high', lat: 33.3,  lng: 35.5,
-      poly: [[33.45,35.10],[33.45,35.90],[33.05,35.90],[33.05,35.10]] },
-    { region: 'MidEast',  name: 'Yemen — Houthi Red Sea ops', sev: 'high', lat: 15.5,  lng: 42.7,
-      poly: [[17.0,42.0],[17.0,45.5],[13.0,45.5],[13.0,42.0]] },
-    { region: 'MidEast',  name: 'Syria — northwest',          sev: 'med',  lat: 35.8,  lng: 36.7,
-      poly: [[36.5,35.8],[36.5,37.5],[35.2,37.5],[35.2,35.8]] },
-    { region: 'MidEast',  name: 'Syria — northeast (SDF)',    sev: 'med',  lat: 36.5,  lng: 40.5,
-      poly: [[37.3,38.5],[37.3,42.5],[35.5,42.5],[35.5,38.5]] },
-    { region: 'MidEast',  name: 'Iran — US/Israel strikes',   sev: 'crit', lat: 32.7,  lng: 51.7,
-      poly: [[39.7,44.0],[39.7,63.3],[25.1,63.3],[25.1,44.0]] },
-    { region: 'MidEast',  name: 'Strait of Hormuz',           sev: 'high', lat: 26.6,  lng: 56.3,
-      poly: [[27.2,55.5],[27.2,57.0],[25.8,57.0],[25.8,55.5]] },
-    { region: 'MidEast',  name: 'Iraq — ISIS remnants',       sev: 'med',  lat: 34.5,  lng: 43.3,
-      poly: [[36.0,41.5],[36.0,45.5],[33.0,45.5],[33.0,41.5]] },
-    { region: 'MidEast',  name: 'Libya — warlord factions',   sev: 'med',  lat: 32.9,  lng: 13.2,
-      poly: [[33.2,10.0],[33.2,25.0],[29.0,25.0],[23.0,25.0],[19.5,15.0],[23.0,10.0]] },
-    // Europe
-    { region: 'Europe',   name: 'Ukraine — Donbas front',     sev: 'crit', lat: 48.9,  lng: 37.8,
-      poly: [[49.5,36.5],[49.5,39.8],[47.8,39.8],[47.8,36.5]] },
-    { region: 'Europe',   name: 'Ukraine — Kharkiv axis',     sev: 'high', lat: 50.0,  lng: 36.3,
-      poly: [[50.6,35.5],[50.6,37.0],[49.3,37.0],[49.3,35.5]] },
-    { region: 'Europe',   name: 'Ukraine — Zaporizhzhia',     sev: 'high', lat: 47.5,  lng: 35.2,
-      poly: [[48.0,34.0],[48.0,36.5],[46.8,36.5],[46.8,34.0]] },
-    { region: 'Europe',   name: 'Ukraine — Kherson front',    sev: 'high', lat: 46.6,  lng: 33.0,
-      poly: [[47.2,32.0],[47.2,34.5],[46.0,34.5],[46.0,32.0]] },
-    { region: 'Europe',   name: 'Russia — Kursk incursion',   sev: 'high', lat: 51.7,  lng: 35.6,
-      poly: [[52.2,34.8],[52.2,36.5],[51.2,36.5],[51.2,34.8]] },
-    { region: 'Europe',   name: 'Moldova — Transnistria',     sev: 'med',  lat: 46.8,  lng: 29.6,
-      poly: [[47.8,29.2],[47.8,30.1],[46.4,30.1],[46.4,29.2]] },
-    { region: 'Europe',   name: 'Kosovo — northern flashpts', sev: 'low',  lat: 42.9,  lng: 20.9 },
-    { region: 'Europe',   name: 'Serbia-Kosovo border',       sev: 'low',  lat: 43.1,  lng: 21.0 },
-    // Africa
-    { region: 'Africa',   name: 'Sudan — civil war',          sev: 'crit', lat: 15.5,  lng: 32.5,
-      poly: [[22.0,23.5],[22.0,38.6],[8.7,38.6],[3.5,33.0],[3.5,23.5]] },
-    { region: 'Africa',   name: 'Sahel — jihadist insurgency', sev: 'high', lat: 13.5, lng: 2.1,
-      poly: [[18.0,-5.0],[18.0,8.0],[10.0,8.0],[10.0,-5.0]] },
-    { region: 'Africa',   name: 'DRC — eastern provinces',    sev: 'high', lat: -1.7,  lng: 29.2,
-      poly: [[1.0,27.0],[1.0,30.8],[-5.0,30.8],[-5.0,27.0]] },
-    { region: 'Africa',   name: 'Ethiopia — Amhara',          sev: 'med',  lat: 11.6,  lng: 37.4,
-      poly: [[13.2,36.0],[13.2,40.0],[9.8,40.0],[9.8,36.0]] },
-    { region: 'Africa',   name: 'Somalia — al-Shabaab',       sev: 'high', lat: 2.0,   lng: 45.3,
-      poly: [[10.5,41.0],[10.5,51.4],[0.0,51.4],[-1.7,41.0]] },
-    { region: 'Africa',   name: 'Mozambique — Cabo Delgado',  sev: 'med',  lat: -12.3, lng: 40.5,
-      poly: [[-10.5,39.0],[-10.5,41.0],[-14.5,41.0],[-14.5,39.0]] },
-    { region: 'Africa',   name: 'Nigeria — Boko Haram/ISWAP', sev: 'high', lat: 11.5,  lng: 13.1,
-      poly: [[14.0,10.5],[14.0,15.0],[10.0,15.0],[10.0,10.5]] },
-    { region: 'Africa',   name: 'Cameroon — Anglophone crisis', sev: 'med', lat: 5.9,  lng: 10.1,
-      poly: [[7.0,8.5],[7.0,11.0],[4.5,11.0],[4.5,8.5]] },
-    { region: 'Africa',   name: 'CAR — armed groups',         sev: 'med',  lat: 4.4,   lng: 18.5,
-      poly: [[11.0,14.5],[11.0,27.5],[2.2,27.5],[2.2,14.5]] },
-    { region: 'Africa',   name: 'Burkina Faso — JNIM',        sev: 'high', lat: 12.4,  lng: -1.5,
-      poly: [[15.1,-5.5],[15.1,2.4],[9.4,2.4],[9.4,-5.5]] },
-    { region: 'Africa',   name: 'Mali — JNIM / Wagner',       sev: 'high', lat: 14.0,  lng: -3.0,
-      poly: [[20.0,-12.0],[20.0,4.2],[10.0,4.2],[10.0,-12.0]] },
+      poly: [[32.54,35.00],[32.55,35.19],[32.49,35.40],[32.38,35.55],[32.18,35.54],[31.95,35.53],[31.75,35.49],[31.50,35.46],[31.34,35.40],[31.35,35.20],[31.50,35.10],[31.78,35.03],[32.00,34.96],[32.27,34.97],[32.54,35.00]] },
+    { region: 'MidEast',  name: 'Lebanon — southern border',  sev: 'high', lat: 33.8,  lng: 35.8,
+      poly: [[34.69,35.60],[34.65,36.00],[34.65,36.28],[34.49,36.38],[34.22,36.51],[33.92,36.37],[33.72,36.18],[33.55,35.98],[33.27,35.86],[33.05,35.75],[33.07,35.47],[33.28,35.19],[33.90,35.10],[34.15,35.60],[34.69,35.60]] },
+    { region: 'MidEast',  name: 'Yemen — Houthi Red Sea ops', sev: 'high', lat: 15.5,  lng: 44.0,
+      poly: [[16.95,42.75],[17.20,43.40],[16.90,44.80],[16.50,45.40],[16.40,46.30],[15.80,47.00],[15.40,47.80],[14.90,48.40],[14.50,49.00],[13.60,48.60],[13.10,47.70],[12.60,45.00],[12.70,43.60],[12.95,43.15],[13.30,43.30],[14.00,42.50],[14.50,42.80],[15.30,42.55],[16.00,42.65],[16.95,42.75]] },
+    { region: 'MidEast',  name: 'Syria — northwest Idlib',    sev: 'med',  lat: 35.8,  lng: 36.5,
+      poly: [[36.22,36.00],[36.35,36.30],[36.40,36.65],[36.15,36.80],[35.85,36.75],[35.55,36.55],[35.50,36.20],[35.70,36.00],[36.22,36.00]] },
+    { region: 'MidEast',  name: 'Syria — northeast (SDF)',    sev: 'med',  lat: 36.2,  lng: 40.5,
+      poly: [[37.32,38.80],[37.10,40.00],[37.05,41.00],[37.30,42.00],[37.30,42.38],[36.80,42.38],[36.50,41.40],[35.70,41.00],[35.10,40.50],[35.20,39.50],[35.60,38.80],[36.20,38.60],[36.80,38.50],[37.32,38.80]] },
+    { region: 'MidEast',  name: 'Iran — US/Israel strikes',   sev: 'crit', lat: 32.4,  lng: 53.7,
+      poly: [[39.78,44.05],[39.40,45.50],[39.20,47.50],[38.85,48.00],[38.40,48.88],[37.60,49.10],[37.05,50.10],[36.95,53.90],[37.35,55.35],[37.30,57.20],[36.70,59.40],[35.60,61.05],[34.30,60.70],[33.80,59.80],[31.40,61.80],[30.00,61.60],[27.20,63.30],[26.50,62.00],[25.30,61.60],[25.10,57.50],[26.60,56.30],[26.00,54.00],[25.30,52.80],[25.90,51.40],[27.80,50.90],[29.00,50.30],[29.30,48.50],[30.50,48.00],[31.00,47.70],[32.00,45.00],[33.30,44.20],[34.40,44.00],[35.20,44.20],[36.60,44.30],[38.00,44.00],[39.78,44.05]] },
+    { region: 'MidEast',  name: 'Strait of Hormuz',           sev: 'high', lat: 26.5,  lng: 56.3,
+      poly: [[27.10,56.60],[26.80,57.10],[26.20,57.00],[25.80,56.50],[25.90,55.80],[26.30,55.50],[26.80,55.70],[27.10,56.60]] },
+    { region: 'MidEast',  name: 'Iraq — ISIS remnants',       sev: 'med',  lat: 33.3,  lng: 44.4,
+      poly: [[37.38,42.36],[37.10,43.50],[37.00,44.80],[36.50,45.30],[35.80,45.80],[35.10,45.80],[34.00,46.00],[33.00,46.00],[31.00,47.70],[29.30,48.50],[29.00,47.00],[30.30,44.50],[31.30,42.00],[32.20,39.30],[33.30,38.80],[34.70,39.50],[36.40,41.00],[36.80,41.80],[37.38,42.36]] },
+    { region: 'MidEast',  name: 'Libya — warlord factions',   sev: 'med',  lat: 28.0,  lng: 17.0,
+      poly: [[33.17,11.50],[33.10,12.30],[32.80,13.00],[32.54,15.20],[31.70,16.60],[31.20,19.00],[30.25,19.50],[30.00,24.00],[29.00,25.00],[25.00,25.00],[23.50,24.00],[21.80,24.00],[19.80,18.00],[19.50,15.50],[22.80,14.90],[23.50,11.97],[24.30,10.00],[25.70,10.00],[30.00,9.80],[32.10,11.60],[33.17,11.50]] },
+    // Europe — Donetsk + Luhansk oblasts
+    { region: 'Europe',   name: 'Ukraine — Donbas front',     sev: 'crit', lat: 48.5,  lng: 38.5,
+      poly: [[49.27,36.28],[49.20,37.10],[48.90,38.30],[49.30,39.15],[49.15,39.75],[48.50,40.15],[48.00,39.95],[47.70,39.20],[47.25,38.50],[47.05,37.60],[47.40,36.80],[47.80,36.20],[48.20,35.90],[48.80,36.00],[49.27,36.28]] },
+    // Kharkiv oblast
+    { region: 'Europe',   name: 'Ukraine — Kharkiv axis',     sev: 'high', lat: 49.8,  lng: 36.3,
+      poly: [[50.55,35.30],[50.60,36.30],[50.40,37.40],[50.05,38.20],[49.60,38.00],[49.20,37.10],[49.27,36.28],[49.50,35.80],[49.80,35.25],[50.10,35.15],[50.55,35.30]] },
+    // Zaporizhzhia oblast
+    { region: 'Europe',   name: 'Ukraine — Zaporizhzhia',     sev: 'high', lat: 47.5,  lng: 35.5,
+      poly: [[48.20,35.90],[47.80,36.20],[47.40,36.80],[47.05,37.00],[46.85,36.40],[46.60,35.80],[46.65,35.00],[47.00,34.40],[47.50,34.20],[48.00,34.60],[48.20,35.30],[48.20,35.90]] },
+    // Kherson oblast
+    { region: 'Europe',   name: 'Ukraine — Kherson front',    sev: 'high', lat: 46.6,  lng: 33.4,
+      poly: [[47.00,34.40],[46.65,35.00],[46.60,34.40],[46.20,34.10],[46.10,33.50],[46.20,33.00],[46.50,32.50],[46.55,32.00],[46.80,32.70],[47.30,33.20],[47.40,33.80],[47.00,34.40]] },
+    // Kursk oblast (Russia, near UA border)
+    { region: 'Europe',   name: 'Russia — Kursk incursion',   sev: 'high', lat: 51.7,  lng: 36.2,
+      poly: [[52.35,34.70],[52.40,35.40],[52.30,36.40],[52.10,37.30],[51.70,37.50],[51.20,37.20],[51.00,36.40],[51.05,35.60],[51.20,34.80],[51.60,34.50],[52.00,34.50],[52.35,34.70]] },
+    // Transnistria — narrow strip east of Dniester
+    { region: 'Europe',   name: 'Moldova — Transnistria',     sev: 'med',  lat: 47.0,  lng: 29.5,
+      poly: [[47.80,29.10],[47.75,29.60],[47.45,29.80],[47.10,29.90],[46.80,30.10],[46.55,30.05],[46.40,29.70],[46.50,29.40],[46.80,29.20],[47.10,29.10],[47.40,29.00],[47.80,29.10]] },
+    // Kosovo — whole territory
+    { region: 'Europe',   name: 'Kosovo — tensions',          sev: 'low',  lat: 42.6,  lng: 21.0,
+      poly: [[43.25,20.59],[43.21,21.06],[43.00,21.40],[42.75,21.78],[42.46,21.54],[42.23,21.25],[42.24,20.95],[42.35,20.65],[42.46,20.47],[42.65,20.30],[42.90,20.35],[43.25,20.59]] },
+    // Africa — Sudan whole country
+    { region: 'Africa',   name: 'Sudan — civil war',          sev: 'crit', lat: 15.5,  lng: 30.0,
+      poly: [[22.00,24.00],[22.00,31.40],[21.83,31.50],[22.00,33.20],[22.00,36.90],[20.80,37.00],[18.30,38.60],[16.50,38.50],[14.20,36.40],[12.50,36.00],[11.00,35.00],[10.00,34.30],[9.50,33.80],[8.70,33.00],[7.70,30.20],[6.60,28.50],[5.20,27.50],[3.60,27.00],[3.50,25.00],[5.00,24.00],[9.50,24.00],[13.90,24.00],[15.50,24.00],[22.00,24.00]] },
+    // Sahel — Mali + Burkina Faso + Niger combined
+    { region: 'Africa',   name: 'Sahel — jihadist insurgency', sev: 'high', lat: 15.0, lng: 2.0,
+      poly: [[25.00,-12.20],[24.00,0.20],[23.50,4.00],[23.00,5.60],[21.00,6.00],[20.00,9.00],[18.50,12.00],[16.00,13.80],[15.30,16.00],[14.70,15.60],[13.70,13.60],[13.00,15.00],[12.00,15.10],[11.10,13.80],[11.90,12.30],[11.00,10.80],[11.10,9.40],[12.00,8.00],[11.80,5.50],[11.10,4.40],[11.10,2.30],[11.50,0.80],[12.30,0.00],[11.00,-1.00],[11.00,-3.00],[9.90,-5.00],[10.80,-5.50],[11.90,-5.20],[14.50,-5.20],[15.10,-4.20],[15.00,-2.00],[14.50,-0.70],[15.00,1.00],[16.00,-0.50],[17.00,-0.50],[18.00,1.00],[19.50,1.50],[20.00,0.00],[22.00,-2.00],[23.00,-6.00],[22.50,-8.00],[21.00,-11.00],[22.50,-12.20],[25.00,-12.20]] },
+    // DRC — Ituri, North Kivu, South Kivu provinces
+    { region: 'Africa',   name: 'DRC — eastern provinces',    sev: 'high', lat: -1.5,  lng: 29.0,
+      poly: [[2.50,27.40],[2.30,28.00],[2.00,29.00],[1.30,29.60],[0.80,29.80],[0.10,29.60],[-1.00,29.20],[-1.80,28.80],[-2.50,29.00],[-3.40,29.30],[-4.50,29.50],[-4.90,29.00],[-4.50,28.50],[-3.50,27.80],[-2.50,27.20],[-1.50,26.80],[-0.50,27.00],[0.80,27.20],[2.00,27.30],[2.50,27.40]] },
+    // Ethiopia — Amhara region
+    { region: 'Africa',   name: 'Ethiopia — Amhara',          sev: 'med',  lat: 11.5,  lng: 38.0,
+      poly: [[13.30,36.40],[13.00,37.50],[12.80,38.50],[12.50,39.40],[12.00,40.00],[11.30,39.80],[10.60,39.90],[10.00,39.50],[9.70,38.70],[9.90,37.80],[10.00,37.00],[10.50,36.30],[11.00,35.80],[11.60,36.00],[12.50,36.10],[13.30,36.40]] },
+    // Somalia — whole country
+    { region: 'Africa',   name: 'Somalia — al-Shabaab',       sev: 'high', lat: 5.0,   lng: 46.0,
+      poly: [[11.50,43.30],[11.80,44.60],[11.50,47.00],[11.00,49.20],[10.40,50.80],[9.50,50.80],[7.00,49.30],[5.00,48.00],[3.00,46.00],[1.50,44.00],[0.00,42.50],[-1.60,41.50],[-1.00,41.00],[1.50,41.00],[3.50,42.00],[5.00,42.50],[7.00,43.00],[9.50,43.00],[10.50,43.20],[11.50,43.30]] },
+    // Mozambique — Cabo Delgado province
+    { region: 'Africa',   name: 'Mozambique — Cabo Delgado',  sev: 'med',  lat: -12.5, lng: 40.0,
+      poly: [[-10.47,40.60],[-10.50,39.80],[-11.20,39.30],[-11.70,38.80],[-12.40,38.70],[-13.60,38.80],[-14.40,39.80],[-14.10,40.60],[-13.20,40.90],[-12.00,40.80],[-10.47,40.60]] },
+    // Nigeria — Borno, Yobe, Adamawa states (northeast)
+    { region: 'Africa',   name: 'Nigeria — Boko Haram/ISWAP', sev: 'high', lat: 11.5,  lng: 13.0,
+      poly: [[13.70,10.50],[13.80,12.00],[13.60,13.50],[13.20,14.20],[12.50,14.80],[11.80,14.50],[11.20,13.70],[10.50,13.00],[10.00,12.50],[9.70,11.60],[10.00,10.80],[10.50,10.40],[11.50,10.30],[12.50,10.40],[13.70,10.50]] },
+    // Cameroon — Northwest + Southwest anglophone regions
+    { region: 'Africa',   name: 'Cameroon — Anglophone crisis', sev: 'med', lat: 5.9,  lng: 9.8,
+      poly: [[7.00,8.60],[6.80,9.50],[6.60,10.30],[6.30,10.80],[5.80,10.60],[5.30,10.40],[4.50,10.10],[4.20,9.50],[4.30,9.00],[4.70,8.60],[5.30,8.50],[5.80,8.40],[6.30,8.40],[7.00,8.60]] },
+    // CAR — whole country
+    { region: 'Africa',   name: 'CAR — armed groups',         sev: 'med',  lat: 6.6,   lng: 20.9,
+      poly: [[10.70,14.40],[11.00,15.60],[10.70,18.50],[10.50,20.00],[10.90,22.40],[10.00,24.00],[9.40,25.00],[8.80,25.20],[7.80,27.50],[5.40,27.50],[4.20,25.50],[3.50,24.00],[3.50,22.50],[4.30,18.60],[4.50,16.00],[4.00,15.50],[3.20,16.00],[2.20,16.00],[2.20,15.60],[3.50,14.40],[6.50,14.50],[8.00,14.40],[10.70,14.40]] },
+    // Burkina Faso — whole country
+    { region: 'Africa',   name: 'Burkina Faso — JNIM',        sev: 'high', lat: 12.3,  lng: -1.5,
+      poly: [[15.08,-4.20],[14.90,-2.00],[14.50,-0.70],[15.00,1.00],[14.50,2.20],[12.30,2.10],[11.10,2.30],[11.10,0.80],[11.50,-0.10],[12.30,0.00],[11.00,-1.00],[11.00,-3.10],[9.90,-5.00],[10.80,-5.50],[12.00,-5.20],[14.50,-5.20],[15.08,-4.20]] },
+    // Mali — whole country
+    { region: 'Africa',   name: 'Mali — JNIM / Wagner',       sev: 'high', lat: 17.6,  lng: -4.0,
+      poly: [[25.00,-12.20],[24.00,0.20],[21.00,1.00],[18.00,1.00],[17.00,-0.50],[16.00,-0.50],[15.00,1.00],[14.90,-2.00],[15.08,-4.20],[14.50,-5.20],[12.00,-5.20],[10.80,-5.50],[11.00,-7.50],[11.40,-8.50],[12.20,-8.30],[12.00,-9.60],[12.30,-10.50],[12.60,-11.70],[14.80,-12.10],[15.20,-11.10],[15.40,-10.20],[16.30,-9.40],[17.00,-9.50],[18.00,-10.00],[19.50,-11.50],[21.00,-11.00],[22.50,-12.20],[25.00,-12.20]] },
     // Asia-Pacific
     { region: 'Asia',     name: 'Myanmar — civil war',        sev: 'high', lat: 19.7,  lng: 96.1,
-      poly: [[28.5,92.2],[28.5,101.2],[9.8,101.2],[9.8,92.2]] },
+      poly: [[28.30,97.35],[28.20,98.50],[27.10,97.00],[26.80,97.80],[25.60,98.60],[24.50,97.80],[23.90,97.60],[23.30,98.40],[22.50,99.50],[21.70,101.10],[21.20,100.50],[20.40,100.00],[19.80,100.90],[19.40,101.20],[18.50,101.00],[17.60,98.60],[16.50,98.30],[15.80,98.50],[15.00,98.20],[14.10,99.00],[13.00,99.10],[12.00,99.00],[10.50,98.80],[10.00,98.60],[11.00,97.60],[12.50,98.00],[13.80,97.60],[14.20,97.60],[14.80,97.00],[16.00,97.00],[16.50,97.70],[17.80,97.30],[17.00,96.00],[16.30,96.40],[16.00,95.50],[16.50,94.80],[17.80,94.40],[18.50,94.70],[19.30,93.90],[20.20,92.40],[21.00,92.30],[21.70,92.10],[22.80,92.60],[24.40,94.10],[26.00,95.00],[27.10,96.50],[28.30,97.35]] },
     { region: 'Asia',     name: 'Taiwan Strait — pressure',   sev: 'med',  lat: 24.0,  lng: 120.9,
-      poly: [[26.0,117.5],[26.0,122.5],[22.0,122.5],[22.0,117.5]] },
+      poly: [[25.30,121.00],[25.60,121.90],[25.30,122.10],[25.00,121.60],[24.80,122.00],[24.50,121.80],[23.80,121.60],[23.40,121.40],[22.80,121.10],[22.00,120.80],[21.90,120.70],[22.30,120.30],[22.60,120.30],[23.00,120.20],[23.30,120.10],[23.50,120.20],[23.80,120.60],[24.50,120.60],[24.80,121.00],[25.00,121.00],[25.30,121.00]] },
     { region: 'Asia',     name: 'Kashmir — LoC',              sev: 'med',  lat: 34.1,  lng: 74.8,
-      poly: [[36.0,73.0],[36.0,77.5],[32.5,77.5],[32.5,73.0]] },
-    { region: 'Asia',     name: 'Korea — DPRK posture',       sev: 'med',  lat: 38.3,  lng: 127.5,
-      poly: [[43.0,124.2],[43.0,130.7],[37.5,130.7],[37.5,124.2]] },
+      poly: [[36.90,74.00],[36.50,74.90],[36.00,76.00],[35.50,77.80],[35.10,77.50],[34.60,77.00],[34.20,77.50],[33.80,76.80],[33.50,76.20],[33.00,75.80],[32.70,75.30],[32.50,74.70],[33.00,74.00],[33.20,73.70],[33.80,73.60],[34.00,73.40],[34.50,73.30],[35.50,73.50],[36.00,73.60],[36.50,73.80],[36.90,74.00]] },
+    { region: 'Asia',     name: 'Korea — DPRK posture',       sev: 'med',  lat: 40.0,  lng: 127.0,
+      poly: [[43.00,129.80],[42.40,130.70],[42.00,130.60],[41.50,129.70],[40.90,129.70],[40.50,129.40],[39.80,128.40],[39.20,127.50],[38.60,128.40],[38.30,128.10],[37.80,127.50],[37.70,126.90],[37.60,126.10],[37.80,125.50],[38.10,124.70],[39.00,124.30],[39.60,124.40],[40.10,124.50],[40.70,124.90],[41.00,125.30],[41.50,126.00],[41.80,126.90],[42.00,128.00],[42.40,129.30],[43.00,129.80]] },
     { region: 'Asia',     name: 'South China Sea — Spratlys',  sev: 'med',  lat: 10.0,  lng: 114.0,
-      poly: [[16.0,109.0],[16.0,121.0],[4.0,121.0],[4.0,109.0]] },
-    { region: 'Asia',     name: 'Philippines — Mindanao',     sev: 'low',  lat: 7.1,   lng: 125.6 },
+      poly: [[23.00,117.00],[21.00,112.00],[18.00,109.00],[15.00,109.50],[12.00,110.00],[7.00,110.00],[3.50,110.50],[3.00,112.50],[2.50,115.00],[5.00,117.50],[8.00,118.00],[10.50,119.50],[12.50,120.00],[15.50,119.50],[18.50,120.00],[21.00,119.00],[23.00,117.00]] },
+    { region: 'Asia',     name: 'Philippines — Mindanao',     sev: 'low',  lat: 7.1,   lng: 125.6,
+      poly: [[9.80,123.50],[9.50,124.60],[9.20,125.50],[8.50,126.40],[8.00,126.60],[7.50,126.60],[7.00,126.20],[6.00,126.20],[5.60,125.70],[6.10,125.00],[6.50,124.50],[7.00,124.00],[7.50,123.50],[7.80,122.50],[7.50,122.00],[7.80,122.00],[8.00,122.50],[8.50,123.00],[9.00,123.20],[9.80,123.50]] },
     { region: 'Asia',     name: 'Afghanistan — TTP/ISIS-K',   sev: 'high', lat: 34.5,  lng: 69.2,
-      poly: [[38.5,60.5],[38.5,75.0],[29.4,75.0],[29.4,60.5]] },
+      poly: [[37.40,71.50],[38.40,68.40],[37.30,67.80],[37.10,66.50],[36.50,65.60],[35.90,64.00],[35.30,63.10],[34.30,62.00],[33.50,60.50],[31.30,60.80],[29.90,61.70],[29.40,63.00],[29.30,64.10],[29.00,66.30],[29.50,67.50],[30.40,69.30],[31.00,69.60],[31.80,69.30],[32.50,69.80],[33.60,70.30],[34.00,71.00],[34.30,71.10],[35.00,71.60],[36.20,71.80],[36.90,71.60],[37.40,71.50]] },
     { region: 'Asia',     name: 'Pakistan — Balochistan',     sev: 'med',  lat: 28.5,  lng: 66.5,
-      poly: [[32.0,60.5],[32.0,70.0],[25.0,70.0],[25.0,60.5]] },
+      poly: [[31.30,60.80],[30.50,61.60],[30.00,62.50],[29.40,63.00],[29.30,64.10],[29.00,66.30],[28.50,67.00],[27.80,68.10],[27.20,68.50],[26.50,68.10],[26.00,67.50],[25.50,66.80],[25.00,66.50],[25.00,65.50],[25.10,64.50],[25.30,63.50],[25.50,62.50],[25.80,61.80],[26.50,61.50],[27.20,62.80],[27.80,63.00],[28.40,62.00],[29.00,61.00],[29.90,61.70],[31.30,60.80]] },
     // Americas
     { region: 'Americas', name: 'Haiti — gang collapse',      sev: 'high', lat: 18.6,  lng: -72.3,
-      poly: [[20.1,-74.5],[20.1,-71.6],[18.0,-71.6],[18.0,-74.5]] },
+      poly: [[20.09,-72.80],[20.00,-72.00],[19.90,-71.70],[19.60,-71.70],[19.30,-71.80],[19.10,-72.00],[18.80,-71.70],[18.40,-71.70],[18.20,-71.80],[18.10,-72.00],[18.30,-72.50],[18.20,-73.00],[18.30,-73.50],[18.40,-73.80],[18.60,-74.00],[18.90,-74.30],[19.30,-74.40],[19.70,-73.40],[19.90,-73.10],[20.09,-72.80]] },
     { region: 'Americas', name: 'Ecuador — cartel violence',  sev: 'med',  lat: -2.2,  lng: -79.9,
-      poly: [[1.5,-81.0],[1.5,-75.2],[-5.0,-75.2],[-5.0,-81.0]] },
+      poly: [[1.40,-79.00],[1.00,-77.70],[0.80,-77.30],[0.20,-76.30],[0.00,-75.50],[-0.50,-75.30],[-1.00,-75.50],[-2.00,-76.70],[-2.90,-78.10],[-3.40,-78.50],[-4.00,-79.00],[-4.60,-79.50],[-5.00,-80.10],[-4.20,-80.40],[-3.50,-80.50],[-2.80,-80.50],[-2.20,-80.90],[-1.40,-80.40],[-0.60,-80.10],[0.00,-80.00],[0.80,-80.00],[1.00,-79.50],[1.40,-79.00]] },
     { region: 'Americas', name: 'Colombia — ELN / FARC remnants', sev: 'med', lat: 4.6, lng: -74.1,
-      poly: [[12.5,-79.0],[12.5,-66.9],[-4.2,-66.9],[-4.2,-79.0]] },
+      poly: [[12.40,-71.70],[11.80,-71.30],[11.00,-72.20],[10.50,-72.80],[9.50,-73.60],[8.60,-76.70],[7.90,-77.00],[7.30,-77.90],[6.50,-77.40],[4.00,-77.60],[2.50,-78.70],[1.50,-79.00],[1.00,-77.60],[0.50,-76.60],[0.00,-75.50],[-0.50,-75.30],[-1.00,-75.50],[-1.50,-75.00],[-0.50,-73.50],[0.50,-72.00],[1.00,-70.00],[2.00,-69.50],[3.50,-68.00],[4.50,-67.50],[5.50,-67.80],[6.00,-68.50],[6.50,-70.00],[7.00,-70.70],[7.50,-71.50],[8.00,-72.00],[9.00,-71.00],[10.00,-71.50],[11.00,-71.00],[11.50,-71.50],[12.40,-71.70]] },
     { region: 'Americas', name: 'Mexico — cartel wars',       sev: 'high', lat: 23.6,  lng: -102.6,
-      poly: [[32.7,-117.1],[32.7,-86.7],[14.5,-86.7],[14.5,-117.1]] },
+      poly: [[32.50,-117.00],[32.70,-114.70],[31.30,-111.00],[31.00,-108.00],[31.80,-106.40],[29.80,-104.40],[29.40,-103.10],[27.80,-99.50],[26.00,-97.20],[22.40,-97.80],[21.50,-97.20],[19.50,-96.50],[18.50,-95.50],[18.20,-94.50],[17.80,-94.00],[16.10,-93.50],[15.70,-93.00],[15.60,-92.20],[16.40,-91.40],[16.00,-90.40],[17.80,-91.00],[18.50,-88.00],[21.50,-87.40],[21.20,-89.50],[21.00,-90.40],[20.00,-90.30],[18.70,-91.50],[19.50,-92.30],[20.00,-92.00],[20.50,-91.30],[21.50,-90.00],[21.30,-89.90],[20.50,-90.50],[19.80,-92.50],[20.80,-92.00],[21.00,-91.50],[21.50,-93.00],[23.00,-97.50],[24.50,-99.00],[26.00,-99.30],[27.50,-101.00],[28.00,-103.00],[30.00,-104.50],[31.50,-106.50],[31.00,-109.50],[32.00,-114.50],[32.50,-117.00]] },
     { region: 'Americas', name: 'Venezuela — Guyana dispute', sev: 'med',  lat: 6.8,   lng: -58.9,
-      poly: [[8.5,-61.5],[8.5,-56.5],[1.2,-56.5],[1.2,-61.5]] },
+      poly: [[8.50,-60.00],[8.00,-59.00],[7.50,-59.00],[7.00,-59.50],[6.50,-60.50],[6.00,-61.00],[5.00,-60.70],[4.00,-60.00],[3.50,-59.50],[2.00,-59.00],[1.50,-59.00],[1.20,-58.50],[1.50,-58.00],[2.00,-57.00],[3.00,-57.50],[4.00,-58.00],[5.50,-57.50],[6.50,-57.00],[7.00,-57.50],[7.50,-58.00],[8.00,-58.50],[8.50,-59.00],[8.50,-60.00]] },
   ];
 
   PANELS.conflicts = {
@@ -1063,10 +1083,16 @@
         var items = parseRss(text).slice(0, 14);
         if (items.length === 0) return false;
         var list = items.map(function (it) {
+          var thumbHtml = it.thumb
+            ? '<img class="news-thumb" src="' + escapeHtml(it.thumb) + '" alt="" loading="lazy" />'
+            : '';
           return '<li><a href="' + escapeHtml(it.link) + '" target="_blank" rel="noopener">' +
+            thumbHtml +
+            '<div class="news-text">' +
             '<span class="news-title">' + escapeHtml(it.title) + '</span>' +
             '<span class="news-meta"><span class="src">' + escapeHtml(src.label) + '</span>' +
-            escapeHtml(formatRelTime(it.date)) + '</span></a></li>';
+            escapeHtml(formatRelTime(it.date)) + '</span>' +
+            '</div></a></li>';
         }).join('');
         out.innerHTML = '<ul class="news-list">' + list + '</ul>';
         return true;
@@ -1144,8 +1170,27 @@
         n.querySelector('pubDate')?.textContent ||
         n.querySelector('published')?.textContent ||
         n.querySelector('updated')?.textContent || '';
+      let thumb = '';
+      const mediaThumbnail = n.querySelector('thumbnail');
+      if (mediaThumbnail) thumb = mediaThumbnail.getAttribute('url') || '';
+      if (!thumb) {
+        const enclosure = n.querySelector('enclosure[type^="image"]');
+        if (enclosure) thumb = enclosure.getAttribute('url') || '';
+      }
+      if (!thumb) {
+        const mediaContent = n.querySelector('content[url]');
+        if (mediaContent && /image/i.test(mediaContent.getAttribute('type') || mediaContent.getAttribute('medium') || '')) {
+          thumb = mediaContent.getAttribute('url') || '';
+        }
+        if (!thumb && mediaContent) thumb = mediaContent.getAttribute('url') || '';
+      }
+      if (!thumb) {
+        const desc = n.querySelector('description')?.textContent || '';
+        const imgMatch = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (imgMatch) thumb = imgMatch[1];
+      }
       if (title && link) {
-        out.push({ title, link, date: date ? new Date(date) : new Date() });
+        out.push({ title, link, date: date ? new Date(date) : new Date(), thumb });
       }
     });
     return out;
@@ -1159,183 +1204,6 @@
     if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
     return Math.floor(diff / 86400) + 'd ago';
   }
-
-  // --------------------------------------------------------------------------
-  // PANEL: Live Streams (user-managed YouTube embeds)
-  // --------------------------------------------------------------------------
-
-  let ytEmbedPort = 0;
-  const ytPortReady = (window.monitorApi && window.monitorApi.getYtEmbedPort)
-    ? window.monitorApi.getYtEmbedPort().then(function (p) { ytEmbedPort = p || 0; return p; }).catch(function () { return 0; })
-    : Promise.resolve(0);
-
-  function streamEmbedUrl(videoId, autoplay) {
-    if (ytEmbedPort) {
-      return 'http://localhost:' + ytEmbedPort + '/youtube-embed?videoId=' + videoId +
-        '&autoplay=' + (autoplay ? 1 : 0) + '&mute=1';
-    }
-    return 'https://www.youtube-nocookie.com/embed/' + videoId +
-      '?autoplay=' + (autoplay ? 1 : 0) + '&mute=1&rel=0&modestbranding=1';
-  }
-
-  function extractVideoId(input) {
-    if (!input) return null;
-    var v = input.trim();
-    if (/^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
-    var m = v.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
-    if (m) return m[1];
-    m = v.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
-    if (m) return m[1];
-    m = v.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/);
-    if (m) return m[1];
-    m = v.match(/youtube\.com\/live\/([a-zA-Z0-9_-]{11})/);
-    if (m) return m[1];
-    m = v.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
-    if (m) return m[1];
-    return null;
-  }
-
-  var STREAMS_KEY = 'monitor:streams:v1';
-  function loadStreams() {
-    try {
-      var raw = localStorage.getItem(STREAMS_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (_) {}
-    return [];
-  }
-  function saveStreams(list) {
-    try { localStorage.setItem(STREAMS_KEY, JSON.stringify(list)); } catch (_) {}
-  }
-
-  PANELS.streams = {
-    title: 'Live Streams',
-    icon: '&#9654;',
-    size: 'lg',
-    desc: 'YouTube live streams — add any video URL.',
-    render: (body, panel) => {
-      setPanelStatus(panel, 'live', 'READY');
-      var streams = loadStreams();
-      var activeIdx = 0;
-
-      function renderPanel() {
-        streams = loadStreams();
-        var tabsHtml = streams.map(function (s, i) {
-          return '<button data-idx="' + i + '" class="' + (i === activeIdx ? 'is-active' : '') + '">' +
-            escapeHtml(s.label) +
-            '<span class="stream-remove" data-idx="' + i + '" title="Remove">&times;</span>' +
-            '</button>';
-        }).join('');
-
-        body.innerHTML =
-          '<div class="news-tabs stream-tabs">' +
-          tabsHtml +
-          '<button class="stream-add-btn" title="Add stream">+</button>' +
-          '</div>' +
-          '<div class="stream-embed"></div>' +
-          '<div class="stream-foot">' +
-          '  <span class="stream-hint">Paste any YouTube video or live stream URL to add it.</span>' +
-          '</div>';
-
-        body.querySelector('.stream-add-btn').addEventListener('click', showAddForm);
-
-        body.querySelectorAll('.stream-remove').forEach(function (btn) {
-          btn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            var idx = parseInt(btn.dataset.idx, 10);
-            streams.splice(idx, 1);
-            saveStreams(streams);
-            if (activeIdx >= streams.length) activeIdx = Math.max(0, streams.length - 1);
-            renderPanel();
-          });
-        });
-
-        body.querySelectorAll('.stream-tabs button[data-idx]').forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            activeIdx = parseInt(btn.dataset.idx, 10);
-            body.querySelectorAll('.stream-tabs button[data-idx]').forEach(function (b) {
-              b.classList.toggle('is-active', parseInt(b.dataset.idx, 10) === activeIdx);
-            });
-            loadEmbed(true);
-          });
-        });
-
-        if (streams.length > 0) {
-          loadEmbed(false);
-        } else {
-          showEmpty();
-        }
-      }
-
-      function showEmpty() {
-        var embed = body.querySelector('.stream-embed');
-        embed.innerHTML =
-          '<div class="stream-offline">' +
-          '<div style="font-size:28px;margin-bottom:8px">&#9654;</div>' +
-          '<span>No streams added yet</span>' +
-          '<div style="margin-top:8px;opacity:0.7;font-size:12px">Click <b>+</b> to add a YouTube live stream or video URL</div>' +
-          '</div>';
-      }
-
-      function loadEmbed(autoplay) {
-        var embed = body.querySelector('.stream-embed');
-        if (!embed || !streams[activeIdx]) return;
-        var s = streams[activeIdx];
-        embed.innerHTML = '<div class="stream-loading">Loading stream&hellip;</div>';
-        ytPortReady.then(function () {
-          embed.innerHTML =
-            '<iframe src="' + streamEmbedUrl(s.videoId, autoplay) +
-            '" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>' +
-            '<div class="stream-embed-foot">' +
-            '<a href="https://www.youtube.com/watch?v=' + escapeHtml(s.videoId) +
-            '" target="_blank" rel="noopener">Open on YouTube &rarr;</a>' +
-            '</div>';
-        });
-      }
-
-      function showAddForm() {
-        var embed = body.querySelector('.stream-embed');
-        embed.innerHTML =
-          '<div class="stream-add-form">' +
-          '<div class="stream-add-title">Add YouTube Stream</div>' +
-          '<input type="text" class="stream-url-input" placeholder="Paste YouTube URL or video ID&hellip;" />' +
-          '<input type="text" class="stream-label-input" placeholder="Label (e.g. Al Jazeera Live)" />' +
-          '<div class="stream-add-actions">' +
-          '<button class="stream-add-cancel">Cancel</button>' +
-          '<button class="stream-add-confirm">Add</button>' +
-          '</div>' +
-          '<div class="stream-add-error"></div>' +
-          '</div>';
-
-        var urlInput = embed.querySelector('.stream-url-input');
-        var labelInput = embed.querySelector('.stream-label-input');
-        var errEl = embed.querySelector('.stream-add-error');
-        urlInput.focus();
-
-        embed.querySelector('.stream-add-cancel').addEventListener('click', function () {
-          if (streams.length > 0) loadEmbed(false); else showEmpty();
-        });
-
-        function doAdd() {
-          var videoId = extractVideoId(urlInput.value);
-          if (!videoId) {
-            errEl.textContent = 'Could not extract video ID. Paste a YouTube URL or 11-character ID.';
-            return;
-          }
-          var label = labelInput.value.trim() || ('Stream ' + (streams.length + 1));
-          streams.push({ videoId: videoId, label: label });
-          saveStreams(streams);
-          activeIdx = streams.length - 1;
-          renderPanel();
-        }
-
-        embed.querySelector('.stream-add-confirm').addEventListener('click', doAdd);
-        urlInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); if (!labelInput.value) labelInput.focus(); else doAdd(); } });
-        labelInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
-      }
-
-      renderPanel();
-    },
-  };
 
   // --------------------------------------------------------------------------
   // PANEL: Intel Feed (multi-source security RSS)
@@ -2686,10 +2554,12 @@
     title: 'Local Weather',
     icon: '&#9729;',
     size: 'md',
-    desc: 'Current conditions & 3-day forecast via Open-Meteo.',
+    desc: 'Current conditions & 5-day forecast via Open-Meteo.',
     render: (body, panel) => {
       let killed = false;
       let timer = null;
+      let lastData = null;
+      let lastLocName = '';
 
       const WMO_CODES = {
         0: ['Clear sky', '&#9728;'], 1: ['Mainly clear', '&#9728;'],
@@ -2705,26 +2575,46 @@
       };
 
       function wmoLabel(code) { return WMO_CODES[code] || ['Unknown', '&#63;']; }
+      function cToF(c) { return Math.round(c * 9 / 5 + 32); }
+      function tempStr(c) {
+        var useF = state.prefs.useFahrenheit;
+        return useF ? cToF(c) + '&deg;F' : Math.round(c) + '&deg;C';
+      }
+      function tempShort(c) {
+        var useF = state.prefs.useFahrenheit;
+        return useF ? cToF(c) + '&deg;' : Math.round(c) + '&deg;';
+      }
+      function windStr(kmh) {
+        if (state.prefs.useFahrenheit) return Math.round(kmh * 0.621371) + ' mph';
+        return Math.round(kmh) + ' km/h';
+      }
 
       function renderWeather(data, locName) {
         if (killed) return;
+        lastData = data;
+        lastLocName = locName;
         const cur = data.current;
         const daily = data.daily;
         const [desc, icon] = wmoLabel(cur.weather_code);
         const windDir = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
         const wd = windDir[Math.round((cur.wind_direction_10m || 0) / 22.5) % 16] || '';
+        const unitLabel = state.prefs.useFahrenheit ? 'F' : 'C';
 
-        let html = '<div class="weather-current">' +
+        let html = '<div class="weather-unit-toggle">' +
+          '<button class="weather-unit-btn' + (state.prefs.useFahrenheit ? '' : ' is-active') + '" data-unit="C">&deg;C</button>' +
+          '<button class="weather-unit-btn' + (state.prefs.useFahrenheit ? ' is-active' : '') + '" data-unit="F">&deg;F</button>' +
+        '</div>' +
+        '<div class="weather-current">' +
           '<div class="weather-icon">' + icon + '</div>' +
           '<div class="weather-main">' +
-            '<div class="weather-temp">' + Math.round(cur.temperature_2m) + '&deg;C</div>' +
+            '<div class="weather-temp">' + tempStr(cur.temperature_2m) + '</div>' +
             '<div class="weather-desc">' + escapeHtml(desc) + '</div>' +
             '<div class="weather-loc">' + escapeHtml(locName) + '</div>' +
           '</div>' +
           '<div class="weather-details">' +
-            '<div>Feels like ' + Math.round(cur.apparent_temperature) + '&deg;C</div>' +
+            '<div>Feels like ' + tempStr(cur.apparent_temperature) + '</div>' +
             '<div>Humidity ' + cur.relative_humidity_2m + '%</div>' +
-            '<div>Wind ' + Math.round(cur.wind_speed_10m) + ' km/h ' + wd + '</div>' +
+            '<div>Wind ' + windStr(cur.wind_speed_10m) + ' ' + wd + '</div>' +
             '<div>Pressure ' + Math.round(cur.surface_pressure) + ' hPa</div>' +
           '</div>' +
         '</div>';
@@ -2738,8 +2628,8 @@
               '<div class="weather-day-name">' + escapeHtml(dayName) + '</div>' +
               '<div class="weather-day-icon">' + dIcon + '</div>' +
               '<div class="weather-day-temps">' +
-                '<span class="weather-hi">' + Math.round(daily.temperature_2m_max[i]) + '&deg;</span>' +
-                '<span class="weather-lo">' + Math.round(daily.temperature_2m_min[i]) + '&deg;</span>' +
+                '<span class="weather-hi">' + tempShort(daily.temperature_2m_max[i]) + '</span>' +
+                '<span class="weather-lo">' + tempShort(daily.temperature_2m_min[i]) + '</span>' +
               '</div>' +
             '</div>';
           }
@@ -2747,6 +2637,14 @@
         }
         body.innerHTML = html;
         setPanelStatus(panel, 'live', 'LIVE');
+
+        body.querySelectorAll('.weather-unit-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            state.prefs.useFahrenheit = btn.dataset.unit === 'F';
+            saveState();
+            if (lastData) renderWeather(lastData, lastLocName);
+          });
+        });
       }
 
       function fetchWeather(lat, lon, locName) {
@@ -2808,38 +2706,33 @@
   // --------------------------------------------------------------------------
   const LOCAL_NEWS_REGIONS = {
     US: [
-      { label: 'AP News', url: 'https://rsshub.app/apnews/topics/apf-topnews' },
       { label: 'NPR', url: 'https://feeds.npr.org/1001/rss.xml' },
-      { label: 'Reuters US', url: 'https://feeds.reuters.com/Reuters/domesticNews' },
+      { label: 'CNBC', url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html' },
+      { label: 'Fox', url: 'https://moxie.foxnews.com/google-publisher/latest.xml' },
     ],
     GB: [
       { label: 'BBC UK', url: 'https://feeds.bbci.co.uk/news/uk/rss.xml' },
       { label: 'Guardian', url: 'https://www.theguardian.com/uk/rss' },
-      { label: 'Sky News', url: 'https://feeds.skynews.com/feeds/rss/uk.xml' },
     ],
     DE: [
       { label: 'DW', url: 'https://rss.dw.com/rdf/rss-en-all' },
-      { label: 'Spiegel', url: 'https://www.spiegel.de/international/index.rss' },
     ],
     FR: [
       { label: 'France24', url: 'https://www.france24.com/en/rss' },
     ],
     AU: [
       { label: 'ABC AU', url: 'https://www.abc.net.au/news/feed/51120/rss.xml' },
-      { label: 'SBS', url: 'https://www.sbs.com.au/news/feed' },
     ],
     CA: [
       { label: 'CBC', url: 'https://www.cbc.ca/webfeed/rss/rss-topstories' },
-      { label: 'Globe&Mail', url: 'https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/canada/' },
     ],
     IN: [
-      { label: 'NDTV', url: 'https://feeds.feedburner.com/ndtvnews-top-stories' },
       { label: 'Times of India', url: 'https://timesofindia.indiatimes.com/rssfeedstopstories.cms' },
     ],
     _default: [
-      { label: 'Reuters', url: 'https://feeds.reuters.com/Reuters/worldNews' },
       { label: 'BBC World', url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
       { label: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+      { label: 'DW', url: 'https://rss.dw.com/rdf/rss-en-all' },
     ],
   };
 
@@ -2847,7 +2740,7 @@
     title: 'Local News',
     icon: '&#128240;',
     size: 'md',
-    desc: 'News feeds based on your region.',
+    desc: 'News feeds based on your detected region.',
     render: (body, panel) => {
       let killed = false;
       let timer = null;
@@ -2855,26 +2748,8 @@
 
       function detectCountry() {
         return fetchIntel('http://ip-api.com/json/?fields=countryCode')
-          .then((t) => JSON.parse(t).countryCode || '_default')
-          .catch(() => '_default');
-      }
-
-      function parseRssItems(text) {
-        try {
-          var doc = new DOMParser().parseFromString(text, 'text/xml');
-          var items = doc.querySelectorAll('item');
-          if (items.length === 0) items = doc.querySelectorAll('entry');
-          var result = [];
-          items.forEach(function (item) {
-            var title = (item.querySelector('title') || {}).textContent || '';
-            var link = '';
-            var linkEl = item.querySelector('link');
-            if (linkEl) link = linkEl.getAttribute('href') || linkEl.textContent || '';
-            var pubDate = (item.querySelector('pubDate') || item.querySelector('published') || item.querySelector('updated') || {}).textContent || '';
-            if (title) result.push({ title: title.trim(), link: link.trim(), date: pubDate });
-          });
-          return result;
-        } catch (_) { return []; }
+          .then(function (t) { return JSON.parse(t).countryCode || '_default'; })
+          .catch(function () { return '_default'; });
       }
 
       function renderFeed(feeds, country) {
@@ -2895,18 +2770,24 @@
           fetchIntel(feeds[idx].url)
             .then(function (text) {
               if (killed) return;
-              var items = parseRssItems(text).slice(0, 15);
+              var items = parseRss(text).slice(0, 12);
               if (items.length === 0) {
                 listEl.innerHTML = '<div class="panel-empty">No items found.</div>';
                 setPanelStatus(panel, 'live', 'EMPTY');
                 return;
               }
-              listEl.innerHTML = items.map(function (it) {
-                return '<a class="news-item" href="' + escapeHtml(it.link) + '" target="_blank" rel="noopener">' +
+              listEl.innerHTML = '<ul class="news-list">' + items.map(function (it) {
+                var thumbHtml = it.thumb
+                  ? '<img class="news-thumb" src="' + escapeHtml(it.thumb) + '" alt="" loading="lazy" />'
+                  : '';
+                return '<li><a href="' + escapeHtml(it.link) + '" target="_blank" rel="noopener">' +
+                  thumbHtml +
+                  '<div class="news-text">' +
                   '<span class="news-title">' + escapeHtml(it.title) + '</span>' +
-                  (it.date ? '<span class="news-date">' + escapeHtml(new Date(it.date).toLocaleString()) + '</span>' : '') +
-                  '</a>';
-              }).join('');
+                  '<span class="news-meta"><span class="src">' + escapeHtml(feeds[idx].label) + '</span>' +
+                  escapeHtml(formatRelTime(it.date)) + '</span>' +
+                  '</div></a></li>';
+              }).join('') + '</ul>';
               setPanelStatus(panel, 'live', country);
             })
             .catch(function (err) {

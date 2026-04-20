@@ -14,10 +14,9 @@
   },
   "author": "OSINT Worldview",
   "license": "MIT",
-  "dependencies": {},
   "devDependencies": {
-    "electron": "^32.2.0",
-    "electron-builder": "^25.1.8"
+    "electron": "^41.2.1",
+    "electron-builder": "^26.8.1"
   },
   "build": {
     "appId": "com.osint.monitor-browser",
@@ -36,16 +35,25 @@
       "output": "dist"
     },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "assets/icon.png"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "icon": "assets/icon.png",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
-      "target": ["AppImage", "deb", "rpm", "tar.gz"],
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm",
+        "tar.gz"
+      ],
       "icon": "assets/icon.png",
       "category": "Network;Security;WebBrowser",
       "maintainer": "OSINT Worldview <support@osintview.app>",
@@ -60,5 +68,9 @@
         }
       }
     }
+  },
+  "dependencies": {
+    "npm": "^11.12.1",
+    "start": "^5.1.0"
   }
 }

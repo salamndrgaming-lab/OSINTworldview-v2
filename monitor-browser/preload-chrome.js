@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('browser', {
   pinTab: (id) => ipcRenderer.invoke('tab:pin', id),
   muteTab: (id) => ipcRenderer.invoke('tab:mute', id),
   reorderTab: (fromId, toId) => ipcRenderer.invoke('tab:reorder', fromId, toId),
+  reopenTab: () => ipcRenderer.invoke('tab:reopen'),
 
   // Find in page
   findStart: (text, opts) => ipcRenderer.invoke('find:start', text, opts),

@@ -205,6 +205,40 @@ function getSearchUrl(query) {
 }
 
 // ---------------------------------------------------------------------------
+// Session persistence (save open tabs on close, restore on startup)
+// ---------------------------------------------------------------------------
+
+function sessionPath() {
+  return path.join(app.getPath('userData'), 'session.json');
+}
+
+function saveSession() {
+  const urls = tabOrder
+    .map((id) => {
+      const t = tabs.get(id);
+      if (!t) return null;
+      return { url: t.url, pinned: !!t.pinned };
+    })
+    .filter(Boolean)
+    .filter((e) => !isHomepageUrl(e.url));
+  try {
+    fs.mkdirSync(path.dirname(sessionPath()), { recursive: true });
+    fs.writeFileSync(sessionPath(), JSON.stringify({ tabs: urls, activeIdx: tabOrder.indexOf(activeTabId) }, null, 2));
+  } catch (err) {
+    console.warn('[monitor] failed to save session', err);
+  }
+}
+
+function loadSession() {
+  try {
+    const raw = fs.readFileSync(sessionPath(), 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
@@ -230,6 +264,8 @@ const tabs = new Map();
 let activeTabId = null;
 /** Preserves tab insertion order for the chrome UI. */
 const tabOrder = [];
+/** Stack of recently closed tab URLs for Ctrl+Shift+T. */
+const closedTabStack = [];
 
 // ---------------------------------------------------------------------------
 // Window creation
@@ -265,6 +301,10 @@ function createWindow() {
   mainWindow.on('enter-full-screen', layoutViews);
   mainWindow.on('leave-full-screen', layoutViews);
 
+  mainWindow.on('close', () => {
+    saveSession();
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
     chromeView = null;
@@ -275,9 +315,25 @@ function createWindow() {
 
   chromeView.webContents.once('did-finish-load', () => {
     mainWindow?.show();
-    newTab(resolveHomepageUrl());
-    // Push initial settings to the chrome renderer.
-    try { chromeView.webContents.send('settings:changed', loadSettings()); } catch {}
+    const settings = loadSettings();
+    const sess = settings.startupBehavior === 'restore' ? loadSession() : null;
+    if (sess && sess.tabs && sess.tabs.length > 0) {
+      for (const entry of sess.tabs) {
+        const id = newTab(entry.url);
+        if (entry.pinned && id) {
+          const tab = tabs.get(id);
+          if (tab) tab.pinned = true;
+        }
+      }
+      if (sess.activeIdx >= 0 && sess.activeIdx < tabOrder.length) {
+        switchTab(tabOrder[sess.activeIdx]);
+      }
+    } else if (settings.startupBehavior === 'blank') {
+      newTab('about:blank');
+    } else {
+      newTab(resolveHomepageUrl());
+    }
+    try { chromeView.webContents.send('settings:changed', settings); } catch {}
   });
 
   // Surface chrome devtools on F12 / Ctrl+Shift+I in dev.
@@ -473,6 +529,10 @@ function switchTab(id) {
 function closeTab(id) {
   if (!tabs.has(id) || !mainWindow) return;
   const tab = tabs.get(id);
+  if (tab.url && !isHomepageUrl(tab.url)) {
+    closedTabStack.push({ url: tab.url, title: tab.title });
+    if (closedTabStack.length > 25) closedTabStack.shift();
+  }
   try {
     mainWindow.contentView.removeChildView(tab.view);
   } catch {
@@ -905,6 +965,12 @@ ipcMain.handle('tab:reorder', (_e, fromId, toId) => {
   tabOrder.splice(fromIdx, 1);
   tabOrder.splice(toIdx, 0, fromId);
   broadcastTabs();
+});
+
+ipcMain.handle('tab:reopen', () => {
+  if (closedTabStack.length === 0) return null;
+  const entry = closedTabStack.pop();
+  return newTab(entry.url);
 });
 
 ipcMain.handle('tab:mute', (_e, id) => {

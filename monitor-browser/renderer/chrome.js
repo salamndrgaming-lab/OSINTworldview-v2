@@ -391,7 +391,8 @@
     switch (key) {
       case 't':
         e.preventDefault();
-        browser.newTab();
+        if (e.shiftKey) browser.reopenTab();
+        else browser.newTab();
         break;
       case 'n':
         if (e.shiftKey) { e.preventDefault(); browser.incognito(); }
@@ -399,6 +400,9 @@
       case 'w':
         e.preventDefault();
         if (activeId) browser.closeTab(activeId);
+        break;
+      case 'a':
+        if (e.shiftKey) { e.preventDefault(); openTabSearch(); }
         break;
       case 'l':
         e.preventDefault();
@@ -697,6 +701,7 @@
 
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if (tabSearchEl) { closeTabSearch(); return; }
       if (readerOverlay && !readerOverlay.classList.contains('hidden')) { closeReaderMode(); return; }
       if (!settingsOverlay.classList.contains('hidden')) { closeSettings(); return; }
       if (findBarEl && !findBarEl.classList.contains('hidden')) { closeFindBar(); return; }
@@ -1179,6 +1184,73 @@
         });
       });
     });
+  }
+
+  // ------------------------------------------------------------------
+  // Tab search (Ctrl+Shift+A)
+  // ------------------------------------------------------------------
+
+  let tabSearchEl = null;
+
+  function openTabSearch() {
+    if (tabSearchEl) { closeTabSearch(); return; }
+    browser.settingsExpand();
+    tabSearchEl = document.createElement('div');
+    tabSearchEl.className = 'tab-search-overlay';
+    tabSearchEl.innerHTML =
+      '<div class="tab-search-card">' +
+      '  <input type="text" class="tab-search-input" placeholder="Search open tabs…" spellcheck="false" />' +
+      '  <div class="tab-search-list"></div>' +
+      '</div>';
+    document.body.appendChild(tabSearchEl);
+
+    const input = tabSearchEl.querySelector('.tab-search-input');
+    const listEl = tabSearchEl.querySelector('.tab-search-list');
+
+    function renderResults() {
+      const q = (input.value || '').toLowerCase();
+      const matches = tabs.filter((t) => {
+        if (!q) return true;
+        return (t.title || '').toLowerCase().includes(q) || (t.url || '').toLowerCase().includes(q);
+      });
+      listEl.innerHTML = matches.map((t) =>
+        '<button class="tab-search-row' + (t.id === activeId ? ' is-active' : '') + '" data-id="' + t.id + '">' +
+        '<span class="tab-search-favicon">' +
+          (t.favicon ? '<img src="' + escapeAttr(t.favicon) + '" onerror="this.parentElement.textContent=\'○\'" />' : (t.isHomepage ? '◉' : '○')) +
+        '</span>' +
+        '<span class="tab-search-title">' + esc(t.title || 'New Tab') + '</span>' +
+        '<span class="tab-search-url">' + esc(shortUrl(t.url)) + '</span>' +
+        '</button>'
+      ).join('');
+
+      listEl.querySelectorAll('.tab-search-row').forEach((row) => {
+        row.addEventListener('click', () => {
+          browser.switchTab(row.dataset.id);
+          closeTabSearch();
+        });
+      });
+    }
+
+    input.addEventListener('input', renderResults);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeTabSearch(); return; }
+      if (e.key === 'Enter') {
+        const first = listEl.querySelector('.tab-search-row');
+        if (first) { browser.switchTab(first.dataset.id); closeTabSearch(); }
+      }
+    });
+
+    tabSearchEl.addEventListener('click', (e) => {
+      if (e.target === tabSearchEl) closeTabSearch();
+    });
+
+    renderResults();
+    input.focus();
+  }
+
+  function closeTabSearch() {
+    if (tabSearchEl) { tabSearchEl.remove(); tabSearchEl = null; }
+    browser.settingsCollapse();
   }
 
   // ------------------------------------------------------------------

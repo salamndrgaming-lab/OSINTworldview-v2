@@ -151,12 +151,15 @@
     devtoolsBtn.disabled = !active;
   }
 
+  let credBadgeEl = null;
+
   function renderUrlBar() {
     const active = tabs.find((t) => t.id === activeId);
     if (!active) {
       if (!urlBarDirty) urlInput.value = '';
       urlWrap.removeAttribute('data-secure');
       urlScheme.textContent = '⌕';
+      removeCredBadge();
       return;
     }
 
@@ -167,16 +170,40 @@
     if (active.isHomepage) {
       urlWrap.removeAttribute('data-secure');
       urlScheme.textContent = '◉';
+      removeCredBadge();
     } else if (active.url.startsWith('https://')) {
       urlWrap.setAttribute('data-secure', 'true');
       urlScheme.textContent = '⬢';
+      updateCredBadge(active.url);
     } else if (active.url.startsWith('http://')) {
       urlWrap.setAttribute('data-secure', 'false');
       urlScheme.textContent = '!';
+      updateCredBadge(active.url);
     } else {
       urlWrap.removeAttribute('data-secure');
       urlScheme.textContent = '⌕';
+      removeCredBadge();
     }
+  }
+
+  function removeCredBadge() {
+    if (credBadgeEl) { credBadgeEl.remove(); credBadgeEl = null; }
+  }
+
+  function updateCredBadge(url) {
+    browser.getCredibility(url).then((data) => {
+      if (!data || data.tier === 'unknown') { removeCredBadge(); return; }
+      const colors = { high: '#2ecc71', medium: '#d4a843', low: '#ff4e4e', government: '#4a90e2' };
+      const labels = { high: 'HIGH', medium: 'MED', low: 'LOW', government: 'GOV' };
+      if (!credBadgeEl) {
+        credBadgeEl = document.createElement('span');
+        credBadgeEl.className = 'cred-badge';
+        urlWrap.appendChild(credBadgeEl);
+      }
+      credBadgeEl.textContent = labels[data.tier] || '';
+      credBadgeEl.style.setProperty('--cred-color', colors[data.tier] || '#606070');
+      credBadgeEl.title = 'Source credibility: ' + (data.tier || 'unknown');
+    }).catch(() => removeCredBadge());
   }
 
   function formatUrlForDisplay(url, isHomepage) {
@@ -210,9 +237,11 @@
   readerBtn.addEventListener('click', () => openReaderMode());
   pipBtn.addEventListener('click', () => browser.pip());
 
+  document.getElementById('action-intel').addEventListener('click', () => toggleIntelSidebar());
   document.getElementById('action-bookmarks').addEventListener('click', () => togglePanel('bookmarks'));
   document.getElementById('action-history').addEventListener('click', () => togglePanel('history'));
   document.getElementById('action-downloads').addEventListener('click', () => togglePanel('downloads'));
+  document.getElementById('action-extensions').addEventListener('click', () => togglePanel('extensions'));
 
   urlScheme.addEventListener('click', () => showSecurityPopup());
   urlScheme.style.cursor = 'pointer';
@@ -324,13 +353,23 @@
     acItems = merged;
     acSelectedIdx = -1;
     acDropdown.classList.remove('hidden');
-    acDropdown.innerHTML = merged.map((item, i) =>
-      '<div class="ac-item" data-idx="' + i + '">' +
-      '<span class="ac-icon">' + (item.type === 'bookmark' ? '★' : '↻') + '</span>' +
-      '<span class="ac-title">' + esc(item.title) + '</span>' +
-      '<span class="ac-url">' + esc(shortUrl(item.url)) + '</span>' +
-      '</div>'
-    ).join('');
+    const credChecks = merged.map((item) => browser.getCredibility(item.url).catch(() => ({ tier: 'unknown' })));
+    const creds = await Promise.all(credChecks);
+    const credColors = { high: '#2ecc71', medium: '#d4a843', low: '#ff4e4e', government: '#4a90e2' };
+    const credLabels = { high: 'HIGH', medium: 'MED', low: 'LOW', government: 'GOV' };
+
+    acDropdown.innerHTML = merged.map((item, i) => {
+      const cred = creds[i]?.tier;
+      const credHtml = cred && cred !== 'unknown'
+        ? '<span class="ac-cred" style="color:' + (credColors[cred] || '') + '">' + (credLabels[cred] || '') + '</span>'
+        : '';
+      return '<div class="ac-item" data-idx="' + i + '">' +
+        '<span class="ac-icon">' + (item.type === 'bookmark' ? '★' : '↻') + '</span>' +
+        '<span class="ac-title">' + esc(item.title) + '</span>' +
+        credHtml +
+        '<span class="ac-url">' + esc(shortUrl(item.url)) + '</span>' +
+        '</div>';
+    }).join('');
 
     acDropdown.querySelectorAll('.ac-item').forEach((el) => {
       el.addEventListener('mousedown', (e) => {
@@ -391,7 +430,8 @@
     switch (key) {
       case 't':
         e.preventDefault();
-        browser.newTab();
+        if (e.shiftKey) browser.reopenTab();
+        else browser.newTab();
         break;
       case 'n':
         if (e.shiftKey) { e.preventDefault(); browser.incognito(); }
@@ -399,6 +439,9 @@
       case 'w':
         e.preventDefault();
         if (activeId) browser.closeTab(activeId);
+        break;
+      case 'a':
+        if (e.shiftKey) { e.preventDefault(); openTabSearch(); }
         break;
       case 'l':
         e.preventDefault();
@@ -422,6 +465,13 @@
         e.preventDefault();
         bookmarkCurrentPage();
         break;
+      case 'i':
+        e.preventDefault();
+        toggleIntelSidebar();
+        break;
+      case 'o':
+        if (e.shiftKey) { e.preventDefault(); openQuickOsintLookup(); }
+        break;
       case 'e':
         if (e.shiftKey) { e.preventDefault(); openReaderMode(); }
         break;
@@ -432,8 +482,15 @@
         e.preventDefault();
         togglePanel('downloads');
         break;
+      case 'm':
+        if (e.shiftKey) { e.preventDefault(); browser.muteAll(); }
+        break;
+      case 'y':
+        if (e.shiftKey) { e.preventDefault(); openOperationSwitcher(); }
+        break;
       case 'b':
         if (e.shiftKey) { e.preventDefault(); togglePanel('bookmarks'); }
+        else { e.preventDefault(); toggleIntelSidebar(); }
         break;
       case '=':
       case '+':
@@ -614,6 +671,8 @@
       '      <h3>Data</h3>' +
       '      <button class="settings-btn" id="clear-data">Clear browsing data</button>' +
       '      <button class="settings-btn" id="reset-settings">Reset all settings</button>' +
+      '      <button class="settings-btn" id="export-session">Export session report</button>' +
+      '      <button class="settings-btn" id="archive-page">Archive current page</button>' +
       '    </section>' +
       '    <section class="settings-section">' +
       '      <h3>Site permissions</h3>' +
@@ -687,6 +746,22 @@
       closeSettings();
       togglePanel('permissions');
     });
+
+    document.getElementById('export-session').addEventListener('click', () => {
+      browser.sessionExport().then((path) => {
+        const el = document.getElementById('export-session');
+        el.textContent = path ? 'Exported!' : 'Cancelled';
+        setTimeout(() => { el.textContent = 'Export session report'; }, 2000);
+      });
+    });
+
+    document.getElementById('archive-page').addEventListener('click', () => {
+      browser.pageArchive().then((result) => {
+        const el = document.getElementById('archive-page');
+        el.textContent = result ? 'Archived!' : 'Failed';
+        setTimeout(() => { el.textContent = 'Archive current page'; }, 2000);
+      });
+    });
   }
 
   function closeSettings() {
@@ -697,6 +772,9 @@
 
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if (osintLookupEl) { closeQuickOsintLookup(); return; }
+      if (intelVisible) { closeIntelSidebar(); return; }
+      if (tabSearchEl) { closeTabSearch(); return; }
       if (readerOverlay && !readerOverlay.classList.contains('hidden')) { closeReaderMode(); return; }
       if (!settingsOverlay.classList.contains('hidden')) { closeSettings(); return; }
       if (findBarEl && !findBarEl.classList.contains('hidden')) { closeFindBar(); return; }
@@ -891,11 +969,14 @@
       { label: tab.muted ? 'Unmute tab' : 'Mute tab', action: () => browser.muteTab(tabId) },
       { label: 'Duplicate tab', action: () => browser.duplicateTab(tabId) },
       { sep: true },
+      { label: 'Assign to Operation…', action: () => assignTabToOp(tabId) },
+      { label: tab.operationId ? 'Remove from Operation' : null, action: () => browser.opsAssignTab(tabId, null) },
+      { sep: true },
       { label: 'Close tab', action: () => browser.closeTab(tabId), danger: true },
       { label: 'Close other tabs', action: () => {
         tabs.filter((t) => t.id !== tabId && !t.pinned).forEach((t) => browser.closeTab(t.id));
       }, danger: true },
-    ];
+    ].filter((i) => i.label !== null);
 
     for (const item of items) {
       if (item.sep) {
@@ -915,6 +996,25 @@
     requestAnimationFrame(() => {
       document.addEventListener('click', removeContextMenu, { once: true });
     });
+  }
+
+  async function assignTabToOp(tabId) {
+    removeContextMenu();
+    const ops = await browser.opsList();
+    if (ops.length === 0) {
+      const name = prompt('No operations yet. Create one:');
+      if (!name) return;
+      const opId = await browser.opsCreate(name, '#d4a843');
+      browser.opsAssignTab(tabId, opId);
+      return;
+    }
+    const names = ops.map((o, i) => (i + 1) + '. ' + o.name).join('\n');
+    const choice = prompt('Assign to operation:\n' + names + '\n\nEnter number:');
+    if (!choice) return;
+    const idx = parseInt(choice, 10) - 1;
+    if (idx >= 0 && idx < ops.length) {
+      browser.opsAssignTab(tabId, ops[idx].id);
+    }
   }
 
   function removeContextMenu() {
@@ -940,6 +1040,7 @@
     else if (id === 'history') renderHistoryPanel(overlay);
     else if (id === 'downloads') renderDownloadsPanel(overlay);
     else if (id === 'permissions') renderPermissionsPanel(overlay);
+    else if (id === 'extensions') renderExtensionsPanel(overlay);
   }
 
   function closePanel() {
@@ -1182,12 +1283,539 @@
   }
 
   // ------------------------------------------------------------------
+  // Intel Sidebar (Ctrl+B toggle) — core OSINT product identity
+  // ------------------------------------------------------------------
+
+  let intelSidebar = null;
+  let intelVisible = false;
+
+  function toggleIntelSidebar() {
+    if (intelVisible) { closeIntelSidebar(); return; }
+    openIntelSidebar();
+  }
+
+  async function openIntelSidebar() {
+    if (intelSidebar) intelSidebar.remove();
+
+    intelSidebar = document.createElement('div');
+    intelSidebar.className = 'intel-sidebar';
+    intelSidebar.innerHTML =
+      '<div class="intel-sidebar-head">' +
+      '  <span class="intel-sidebar-title">&#9673; Intel Sidebar</span>' +
+      '  <button class="intel-sidebar-close">&times;</button>' +
+      '</div>' +
+      '<div class="intel-sidebar-body">' +
+      '  <div class="intel-loading">Scanning page…</div>' +
+      '</div>';
+    document.body.appendChild(intelSidebar);
+    intelVisible = true;
+
+    intelSidebar.querySelector('.intel-sidebar-close').addEventListener('click', closeIntelSidebar);
+
+    const active = tabs.find((t) => t.id === activeId);
+    const body = intelSidebar.querySelector('.intel-sidebar-body');
+
+    const [entityData, credData] = await Promise.all([
+      browser.extractEntities().catch(() => null),
+      browser.getCredibility(active?.url).catch(() => ({ tier: 'unknown' })),
+    ]);
+
+    if (!intelVisible) return;
+
+    let html = '';
+
+    // Credibility badge
+    const tierLabels = { high: 'High Credibility', medium: 'Medium Credibility', low: 'Low Credibility', government: 'Government Source', unknown: 'Unrated' };
+    const tierColors = { high: '#2ecc71', medium: '#d4a843', low: '#ff4e4e', government: '#4a90e2', unknown: '#606070' };
+    const tier = credData?.tier || 'unknown';
+    html += '<div class="intel-section">' +
+      '<div class="intel-section-title">Source Credibility</div>' +
+      '<div class="intel-cred-badge" style="--cred-color:' + (tierColors[tier] || '#606070') + '">' +
+      '<span class="intel-cred-dot"></span>' +
+      '<span>' + (tierLabels[tier] || 'Unrated') + '</span></div></div>';
+
+    // Entities
+    if (entityData && entityData.total > 0) {
+      const e = entityData.entities;
+      html += '<div class="intel-section"><div class="intel-section-title">Extracted Entities (' + entityData.total + ')</div>';
+      if (e.ips.length) {
+        html += '<div class="intel-entity-group"><span class="intel-entity-label">IP Addresses</span>';
+        html += e.ips.map((ip) => '<button class="intel-entity" data-type="ip" data-val="' + escapeAttr(ip) + '">' + esc(ip) + '</button>').join('');
+        html += '</div>';
+      }
+      if (e.domains.length) {
+        html += '<div class="intel-entity-group"><span class="intel-entity-label">Domains</span>';
+        html += e.domains.map((d) => '<button class="intel-entity" data-type="domain" data-val="' + escapeAttr(d) + '">' + esc(d) + '</button>').join('');
+        html += '</div>';
+      }
+      if (e.emails.length) {
+        html += '<div class="intel-entity-group"><span class="intel-entity-label">Emails</span>';
+        html += e.emails.map((em) => '<button class="intel-entity" data-type="email" data-val="' + escapeAttr(em) + '">' + esc(em) + '</button>').join('');
+        html += '</div>';
+      }
+      if (e.hashes.length) {
+        html += '<div class="intel-entity-group"><span class="intel-entity-label">Hashes</span>';
+        html += e.hashes.map((h) => '<button class="intel-entity" data-type="hash" data-val="' + escapeAttr(h) + '">' + esc(h.substring(0, 16) + '…') + '</button>').join('');
+        html += '</div>';
+      }
+      html += '</div>';
+    } else {
+      html += '<div class="intel-section"><div class="intel-section-title">Extracted Entities</div>' +
+        '<div class="intel-empty">No entities detected on this page.</div></div>';
+    }
+
+    // Quick OSINT lookup section
+    html += '<div class="intel-section">' +
+      '<div class="intel-section-title">Quick Lookup</div>' +
+      '<div class="intel-lookup-form">' +
+      '<input type="text" class="intel-lookup-input" placeholder="IP, domain, hash, email…" spellcheck="false" />' +
+      '<button class="intel-lookup-btn">Lookup</button></div></div>';
+
+    // Counterfactual triggers
+    const cfData = await browser.getCounterfactual().catch(() => null);
+    if (cfData && cfData.length > 0) {
+      html += '<div class="intel-section"><div class="intel-section-title">Scenario Intelligence</div>';
+      for (const cf of cfData) {
+        html += '<div class="intel-scenario">' +
+          '<span class="intel-scenario-region">' + esc(cf.region) + '</span>' +
+          '<p class="intel-scenario-text">' + esc(cf.scenario) + '</p></div>';
+      }
+      html += '</div>';
+    }
+
+    // Reading time
+    const readTime = await browser.getReadingTime().catch(() => null);
+    if (readTime && readTime.words > 100) {
+      html += '<div class="intel-section"><div class="intel-section-title">Reading Estimate</div>' +
+        '<div class="intel-reading-time">' + readTime.minutes + ' min read · ' + readTime.words.toLocaleString() + ' words</div></div>';
+    }
+
+    // Page URL info
+    if (active && !active.isHomepage) {
+      html += '<div class="intel-section"><div class="intel-section-title">Page Info</div>' +
+        '<div class="intel-page-url">' + esc(active.url) + '</div>' +
+        '<div class="intel-page-title">' + esc(active.title) + '</div></div>';
+    }
+
+    body.innerHTML = html;
+
+    // Wire entity clicks -> OSINT lookup
+    body.querySelectorAll('.intel-entity').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const val = btn.dataset.val;
+        const type = btn.dataset.type;
+        performOsintLookup(val, type);
+      });
+    });
+
+    // Annotation tool
+    html += '<div class="intel-section"><div class="intel-section-title">Annotate</div>' +
+      '<div class="intel-annotate-form">' +
+      '<textarea class="intel-annotate-input" placeholder="Select text on page, then paste or type notes here…" rows="2"></textarea>' +
+      '<button class="intel-annotate-btn" disabled>Add to Operation</button></div></div>';
+
+    body.innerHTML = html;
+
+    // Wire annotation
+    const annotateInput = body.querySelector('.intel-annotate-input');
+    const annotateBtn = body.querySelector('.intel-annotate-btn');
+    browser.opsList().then((ops) => {
+      if (ops.length > 0) annotateBtn.disabled = false;
+      annotateBtn.addEventListener('click', async () => {
+        if (!annotateInput.value.trim()) return;
+        if (ops.length === 0) return;
+        const targetOp = ops.find((o) => o.id === (active?.operationId)) || ops[0];
+        await browser.opsAnnotate(targetOp.id, annotateInput.value.trim(), active?.url || '');
+        annotateInput.value = '';
+        annotateBtn.textContent = 'Added!';
+        setTimeout(() => { annotateBtn.textContent = 'Add to Operation'; }, 1500);
+      });
+    });
+
+    // Wire quick lookup form
+    const lookupInput = body.querySelector('.intel-lookup-input');
+    const lookupBtn = body.querySelector('.intel-lookup-btn');
+    if (lookupBtn) {
+      lookupBtn.addEventListener('click', () => {
+        if (lookupInput.value.trim()) performOsintLookup(lookupInput.value.trim());
+      });
+      lookupInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && lookupInput.value.trim()) performOsintLookup(lookupInput.value.trim());
+      });
+    }
+  }
+
+  function performOsintLookup(value, type) {
+    const v = encodeURIComponent(value);
+    const detectedType = type || detectEntityType(value);
+    let url;
+    switch (detectedType) {
+      case 'ip':
+        url = 'https://www.shodan.io/host/' + v;
+        break;
+      case 'domain':
+        url = 'https://www.virustotal.com/gui/domain/' + v;
+        break;
+      case 'email':
+        url = 'https://haveibeenpwned.com/unifiedsearch/' + v;
+        break;
+      case 'hash':
+        url = 'https://www.virustotal.com/gui/search/' + v;
+        break;
+      default:
+        url = 'https://www.virustotal.com/gui/search/' + v;
+    }
+    browser.newTab(url);
+  }
+
+  function detectEntityType(val) {
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(val)) return 'ip';
+    if (/^[a-fA-F0-9]{32,64}$/.test(val)) return 'hash';
+    if (/@/.test(val)) return 'email';
+    if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(val)) return 'domain';
+    return 'unknown';
+  }
+
+  function closeIntelSidebar() {
+    if (intelSidebar) { intelSidebar.remove(); intelSidebar = null; }
+    intelVisible = false;
+  }
+
+  // Quick OSINT lookup (Ctrl+Shift+O)
+  let osintLookupEl = null;
+
+  function openQuickOsintLookup() {
+    if (osintLookupEl) { osintLookupEl.remove(); osintLookupEl = null; return; }
+    browser.settingsExpand();
+    osintLookupEl = document.createElement('div');
+    osintLookupEl.className = 'tab-search-overlay';
+    osintLookupEl.innerHTML =
+      '<div class="tab-search-card">' +
+      '  <input type="text" class="tab-search-input" placeholder="Enter IP, domain, hash, or email for OSINT lookup…" spellcheck="false" />' +
+      '  <div class="tab-search-list osint-tools">' +
+      '    <button class="tab-search-row" data-tool="shodan">Shodan — IP/host lookup</button>' +
+      '    <button class="tab-search-row" data-tool="virustotal">VirusTotal — file/URL/domain scan</button>' +
+      '    <button class="tab-search-row" data-tool="censys">Censys — internet scan data</button>' +
+      '    <button class="tab-search-row" data-tool="hibp">Have I Been Pwned — breach check</button>' +
+      '    <button class="tab-search-row" data-tool="urlscan">URLScan — website scanner</button>' +
+      '    <button class="tab-search-row" data-tool="whois">WHOIS — domain registration</button>' +
+      '    <button class="tab-search-row" data-tool="otx">AlienVault OTX — threat intel</button>' +
+      '    <button class="tab-search-row" data-tool="greynoise">GreyNoise — IP noise context</button>' +
+      '  </div>' +
+      '</div>';
+
+    document.body.appendChild(osintLookupEl);
+
+    const input = osintLookupEl.querySelector('.tab-search-input');
+    input.focus();
+
+    function doLookup(tool) {
+      const val = input.value.trim();
+      if (!val) return;
+      const v = encodeURIComponent(val);
+      const urls = {
+        shodan: 'https://www.shodan.io/search?query=' + v,
+        virustotal: 'https://www.virustotal.com/gui/search/' + v,
+        censys: 'https://search.censys.io/search?q=' + v,
+        hibp: 'https://haveibeenpwned.com/unifiedsearch/' + v,
+        urlscan: 'https://urlscan.io/search/#' + v,
+        whois: 'https://www.whois.com/whois/' + v,
+        otx: 'https://otx.alienvault.com/indicator/search/' + v,
+        greynoise: 'https://viz.greynoise.io/ip/' + v,
+      };
+      browser.newTab(urls[tool] || urls.virustotal);
+      closeQuickOsintLookup();
+    }
+
+    osintLookupEl.querySelectorAll('[data-tool]').forEach((btn) => {
+      btn.addEventListener('click', () => doLookup(btn.dataset.tool));
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeQuickOsintLookup(); return; }
+      if (e.key === 'Enter') doLookup('virustotal');
+    });
+
+    osintLookupEl.addEventListener('click', (e) => {
+      if (e.target === osintLookupEl) closeQuickOsintLookup();
+    });
+  }
+
+  function closeQuickOsintLookup() {
+    if (osintLookupEl) { osintLookupEl.remove(); osintLookupEl = null; }
+    browser.settingsCollapse();
+  }
+
+  // ------------------------------------------------------------------
+  // Operation Switcher (Ctrl+Shift+O alias on main menu)
+  // ------------------------------------------------------------------
+
+  let opsSwitcherEl = null;
+
+  async function openOperationSwitcher() {
+    if (opsSwitcherEl) { closeOperationSwitcher(); return; }
+    browser.settingsExpand();
+    opsSwitcherEl = document.createElement('div');
+    opsSwitcherEl.className = 'tab-search-overlay';
+    document.body.appendChild(opsSwitcherEl);
+
+    const ops = await browser.opsList();
+
+    let html = '<div class="tab-search-card ops-card">' +
+      '<div class="ops-head"><span class="ops-title">Operations</span>' +
+      '<button class="ops-new-btn" id="ops-new">+ New Operation</button></div>';
+
+    if (ops.length === 0) {
+      html += '<div class="panel-empty-msg" style="padding:20px">No operations yet. Create one to start compartmentalizing your investigation.</div>';
+    } else {
+      html += '<div class="tab-search-list">';
+      for (const op of ops) {
+        html += '<div class="tab-search-row ops-row" data-id="' + op.id + '">' +
+          '<span class="ops-color-dot" style="background:' + (op.color || '#d4a843') + '"></span>' +
+          '<span class="tab-search-title">' + esc(op.name) + '</span>' +
+          '<span class="tab-search-url">' + op.tabCount + ' tabs · ' + op.annotationCount + ' notes</span>' +
+          '<button class="row-del ops-del" data-id="' + op.id + '">&times;</button>' +
+          '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    opsSwitcherEl.innerHTML = html;
+
+    opsSwitcherEl.addEventListener('click', (e) => {
+      if (e.target === opsSwitcherEl) closeOperationSwitcher();
+    });
+
+    document.getElementById('ops-new').addEventListener('click', () => {
+      const name = prompt('Operation name:');
+      if (!name) return;
+      const colors = ['#d4a843', '#4a90e2', '#2ecc71', '#ff4e4e', '#a78bfa', '#fb923c', '#22d3ee'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      browser.opsCreate(name, color).then(() => {
+        closeOperationSwitcher();
+        openOperationSwitcher();
+      });
+    });
+
+    opsSwitcherEl.querySelectorAll('.ops-row').forEach((row) => {
+      row.addEventListener('click', (e) => {
+        if (e.target.classList.contains('ops-del')) {
+          browser.opsDelete(e.target.dataset.id).then(() => {
+            closeOperationSwitcher();
+            openOperationSwitcher();
+          });
+          return;
+        }
+        browser.opsSetActive(row.dataset.id);
+        closeOperationSwitcher();
+      });
+    });
+  }
+
+  function closeOperationSwitcher() {
+    if (opsSwitcherEl) { opsSwitcherEl.remove(); opsSwitcherEl = null; }
+    browser.settingsCollapse();
+  }
+
+  // ------------------------------------------------------------------
+  // Dwell time indicator + reading time in URL bar
+  // ------------------------------------------------------------------
+
+  let dwellEl = null;
+  let dwellTimer = null;
+
+  function startDwellTimer() {
+    if (dwellTimer) clearInterval(dwellTimer);
+    dwellTimer = setInterval(updateDwellDisplay, 5000);
+    updateDwellDisplay();
+  }
+
+  async function updateDwellDisplay() {
+    if (!activeId) return;
+    const ms = await browser.getDwellTime(activeId).catch(() => 0);
+    if (!dwellEl) {
+      dwellEl = document.createElement('span');
+      dwellEl.className = 'dwell-indicator';
+      const toolbar = document.querySelector('.toolbar');
+      if (toolbar) toolbar.appendChild(dwellEl);
+    }
+    const secs = Math.floor(ms / 1000);
+    if (secs < 60) dwellEl.textContent = secs + 's';
+    else if (secs < 3600) dwellEl.textContent = Math.floor(secs / 60) + 'm';
+    else dwellEl.textContent = Math.floor(secs / 3600) + 'h ' + Math.floor((secs % 3600) / 60) + 'm';
+  }
+
+  startDwellTimer();
+
+  // ------------------------------------------------------------------
+  // Extensions panel
+  // ------------------------------------------------------------------
+
+  function renderExtensionsPanel(container) {
+    container.innerHTML =
+      '<div class="settings-card side-panel">' +
+      '  <header class="settings-head"><h2>Extensions</h2>' +
+      '    <div class="head-actions">' +
+      '      <button class="settings-btn" id="ext-install">Load unpacked</button>' +
+      '      <button class="settings-btn" id="ext-open-dir">Open folder</button>' +
+      '      <button class="settings-close panel-close-btn">&times;</button>' +
+      '    </div></header>' +
+      '  <div class="panel-list" id="ext-list"></div>' +
+      '</div>';
+
+    container.querySelector('.panel-close-btn').addEventListener('click', closePanel);
+    container.addEventListener('click', (e) => { if (e.target === container) closePanel(); });
+
+    const listEl = document.getElementById('ext-list');
+
+    function load() {
+      browser.extensionsList().then((exts) => {
+        if (!exts || exts.length === 0) {
+          listEl.innerHTML = '<div class="panel-empty-msg">No extensions installed.<br>Click "Load unpacked" to add a Chrome extension.</div>';
+          return;
+        }
+        listEl.innerHTML = exts.map((ext) =>
+          '<div class="panel-row ext-row" data-id="' + escapeAttr(ext.id) + '">' +
+          '  <span class="row-title">' + esc(ext.name) + '</span>' +
+          '  <span class="row-meta">v' + esc(ext.version || '?') + '</span>' +
+          '  <button class="row-del" title="Remove">&times;</button>' +
+          '</div>'
+        ).join('');
+
+        listEl.querySelectorAll('.ext-row .row-del').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const row = btn.closest('.ext-row');
+            browser.extensionsRemove(row.dataset.id).then(() => load());
+          });
+        });
+      });
+    }
+
+    document.getElementById('ext-install').addEventListener('click', () => {
+      browser.extensionsPickFolder().then((result) => {
+        if (result && result.error) {
+          listEl.innerHTML = '<div class="panel-empty-msg" style="color:var(--text-danger)">' + esc(result.error) + '</div>';
+        } else {
+          load();
+        }
+      });
+    });
+
+    document.getElementById('ext-open-dir').addEventListener('click', () => {
+      browser.extensionsOpenDir();
+    });
+
+    load();
+  }
+
+  // ------------------------------------------------------------------
+  // Tab search (Ctrl+Shift+A)
+  // ------------------------------------------------------------------
+
+  let tabSearchEl = null;
+
+  function openTabSearch() {
+    if (tabSearchEl) { closeTabSearch(); return; }
+    browser.settingsExpand();
+    tabSearchEl = document.createElement('div');
+    tabSearchEl.className = 'tab-search-overlay';
+    tabSearchEl.innerHTML =
+      '<div class="tab-search-card">' +
+      '  <input type="text" class="tab-search-input" placeholder="Search open tabs…" spellcheck="false" />' +
+      '  <div class="tab-search-list"></div>' +
+      '</div>';
+    document.body.appendChild(tabSearchEl);
+
+    const input = tabSearchEl.querySelector('.tab-search-input');
+    const listEl = tabSearchEl.querySelector('.tab-search-list');
+
+    function renderResults() {
+      const q = (input.value || '').toLowerCase();
+      const matches = tabs.filter((t) => {
+        if (!q) return true;
+        return (t.title || '').toLowerCase().includes(q) || (t.url || '').toLowerCase().includes(q);
+      });
+      listEl.innerHTML = matches.map((t) =>
+        '<button class="tab-search-row' + (t.id === activeId ? ' is-active' : '') + '" data-id="' + t.id + '">' +
+        '<span class="tab-search-favicon">' +
+          (t.favicon ? '<img src="' + escapeAttr(t.favicon) + '" onerror="this.parentElement.textContent=\'○\'" />' : (t.isHomepage ? '◉' : '○')) +
+        '</span>' +
+        '<span class="tab-search-title">' + esc(t.title || 'New Tab') + '</span>' +
+        '<span class="tab-search-url">' + esc(shortUrl(t.url)) + '</span>' +
+        '</button>'
+      ).join('');
+
+      listEl.querySelectorAll('.tab-search-row').forEach((row) => {
+        row.addEventListener('click', () => {
+          browser.switchTab(row.dataset.id);
+          closeTabSearch();
+        });
+      });
+    }
+
+    input.addEventListener('input', renderResults);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeTabSearch(); return; }
+      if (e.key === 'Enter') {
+        const first = listEl.querySelector('.tab-search-row');
+        if (first) { browser.switchTab(first.dataset.id); closeTabSearch(); }
+      }
+    });
+
+    tabSearchEl.addEventListener('click', (e) => {
+      if (e.target === tabSearchEl) closeTabSearch();
+    });
+
+    renderResults();
+    input.focus();
+  }
+
+  function closeTabSearch() {
+    if (tabSearchEl) { tabSearchEl.remove(); tabSearchEl = null; }
+    browser.settingsCollapse();
+  }
+
+  // ------------------------------------------------------------------
   // Enhanced render: pin/mute badges, pinned tabs first
   // ------------------------------------------------------------------
 
   function buildTabElEnhanced(tab) {
     const el = buildTabEl(tab);
     if (tab.pinned) el.classList.add('is-pinned');
+    if (tab.operationColor) {
+      el.style.setProperty('--op-color', tab.operationColor);
+      el.classList.add('has-operation');
+    }
+    // Tab heat map: highlight frequently visited tabs
+    if (tab.dwellTime > 0) {
+      const heat = Math.min(tab.dwellTime / 300000, 1);
+      if (heat > 0.3) {
+        el.style.setProperty('--tab-heat', heat.toFixed(2));
+        el.classList.add('has-heat');
+      }
+    }
+    // Tab preview on hover
+    let previewTimer = null;
+    let previewEl = null;
+    el.addEventListener('mouseenter', () => {
+      if (tab.id === activeId) return;
+      previewTimer = setTimeout(async () => {
+        const src = await browser.tabPreview(tab.id).catch(() => null);
+        if (!src) return;
+        previewEl = document.createElement('div');
+        previewEl.className = 'tab-preview';
+        previewEl.innerHTML = '<img src="' + src + '" /><div class="tab-preview-title">' + esc(tab.title) + '</div>';
+        const rect = el.getBoundingClientRect();
+        previewEl.style.left = rect.left + 'px';
+        previewEl.style.top = (rect.bottom + 4) + 'px';
+        document.body.appendChild(previewEl);
+      }, 600);
+    });
+    el.addEventListener('mouseleave', () => {
+      clearTimeout(previewTimer);
+      if (previewEl) { previewEl.remove(); previewEl = null; }
+    });
     if (tab.muted) {
       const badge = document.createElement('span');
       badge.className = 'tab-muted';

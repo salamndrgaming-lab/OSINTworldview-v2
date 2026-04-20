@@ -205,6 +205,40 @@ function getSearchUrl(query) {
 }
 
 // ---------------------------------------------------------------------------
+// Session persistence (save open tabs on close, restore on startup)
+// ---------------------------------------------------------------------------
+
+function sessionPath() {
+  return path.join(app.getPath('userData'), 'session.json');
+}
+
+function saveSession() {
+  const urls = tabOrder
+    .map((id) => {
+      const t = tabs.get(id);
+      if (!t) return null;
+      return { url: t.url, pinned: !!t.pinned };
+    })
+    .filter(Boolean)
+    .filter((e) => !isHomepageUrl(e.url));
+  try {
+    fs.mkdirSync(path.dirname(sessionPath()), { recursive: true });
+    fs.writeFileSync(sessionPath(), JSON.stringify({ tabs: urls, activeIdx: tabOrder.indexOf(activeTabId) }, null, 2));
+  } catch (err) {
+    console.warn('[monitor] failed to save session', err);
+  }
+}
+
+function loadSession() {
+  try {
+    const raw = fs.readFileSync(sessionPath(), 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
@@ -230,6 +264,91 @@ const tabs = new Map();
 let activeTabId = null;
 /** Preserves tab insertion order for the chrome UI. */
 const tabOrder = [];
+/** Stack of recently closed tab URLs for Ctrl+Shift+T. */
+const closedTabStack = [];
+
+// ---------------------------------------------------------------------------
+// Operations (Investigation Compartments)
+// ---------------------------------------------------------------------------
+const operations = new Map();
+let activeOperationId = null;
+
+function operationsPath() {
+  return path.join(app.getPath('userData'), 'operations.json');
+}
+
+function loadOperations() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(operationsPath(), 'utf8'));
+    for (const op of raw) {
+      if (!operations.has(op.id)) {
+        operations.set(op.id, { id: op.id, name: op.name, color: op.color, tabs: [], annotations: op.annotations || [], createdAt: op.createdAt });
+      }
+    }
+  } catch {}
+}
+
+function saveOperations() {
+  const arr = [];
+  for (const [, op] of operations) {
+    arr.push({
+      id: op.id, name: op.name, color: op.color,
+      annotations: op.annotations || [],
+      createdAt: op.createdAt,
+      tabUrls: tabOrder.filter((tid) => {
+        const t = tabs.get(tid);
+        return t && t.operationId === op.id;
+      }).map((tid) => tabs.get(tid)?.url).filter(Boolean),
+    });
+  }
+  try {
+    fs.mkdirSync(path.dirname(operationsPath()), { recursive: true });
+    fs.writeFileSync(operationsPath(), JSON.stringify(arr, null, 2));
+  } catch {}
+}
+
+function createOperation(name, color) {
+  const id = randomUUID();
+  operations.set(id, { id, name: name || 'Unnamed Op', color: color || '#d4a843', tabs: [], annotations: [], createdAt: Date.now() });
+  saveOperations();
+  return id;
+}
+
+function deleteOperation(opId) {
+  operations.delete(opId);
+  for (const [, tab] of tabs) {
+    if (tab.operationId === opId) tab.operationId = null;
+  }
+  if (activeOperationId === opId) activeOperationId = null;
+  saveOperations();
+  broadcastTabs();
+}
+
+function addAnnotation(opId, text, url) {
+  const op = operations.get(opId);
+  if (!op) return;
+  op.annotations.push({ id: randomUUID(), text, url, createdAt: Date.now() });
+  saveOperations();
+}
+
+function listOperations() {
+  const result = [];
+  for (const [, op] of operations) {
+    const tabCount = tabOrder.filter((tid) => tabs.get(tid)?.operationId === op.id).length;
+    result.push({ id: op.id, name: op.name, color: op.color, tabCount, annotationCount: (op.annotations || []).length, createdAt: op.createdAt });
+  }
+  return result;
+}
+
+function getOperation(opId) {
+  const op = operations.get(opId);
+  if (!op) return null;
+  const opTabs = tabOrder.filter((tid) => tabs.get(tid)?.operationId === opId).map((tid) => {
+    const t = tabs.get(tid);
+    return { id: tid, url: t.url, title: t.title };
+  });
+  return { ...op, tabs: opTabs };
+}
 
 // ---------------------------------------------------------------------------
 // Window creation
@@ -265,6 +384,10 @@ function createWindow() {
   mainWindow.on('enter-full-screen', layoutViews);
   mainWindow.on('leave-full-screen', layoutViews);
 
+  mainWindow.on('close', () => {
+    saveSession();
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
     chromeView = null;
@@ -275,9 +398,25 @@ function createWindow() {
 
   chromeView.webContents.once('did-finish-load', () => {
     mainWindow?.show();
-    newTab(resolveHomepageUrl());
-    // Push initial settings to the chrome renderer.
-    try { chromeView.webContents.send('settings:changed', loadSettings()); } catch {}
+    const settings = loadSettings();
+    const sess = settings.startupBehavior === 'restore' ? loadSession() : null;
+    if (sess && sess.tabs && sess.tabs.length > 0) {
+      for (const entry of sess.tabs) {
+        const id = newTab(entry.url);
+        if (entry.pinned && id) {
+          const tab = tabs.get(id);
+          if (tab) tab.pinned = true;
+        }
+      }
+      if (sess.activeIdx >= 0 && sess.activeIdx < tabOrder.length) {
+        switchTab(tabOrder[sess.activeIdx]);
+      }
+    } else if (settings.startupBehavior === 'blank') {
+      newTab('about:blank');
+    } else {
+      newTab(resolveHomepageUrl());
+    }
+    try { chromeView.webContents.send('settings:changed', settings); } catch {}
   });
 
   // Surface chrome devtools on F12 / Ctrl+Shift+I in dev.
@@ -341,6 +480,9 @@ function newTab(rawUrl) {
     canGoForward: false,
     pinned: false,
     muted: false,
+    operationId: activeOperationId || null,
+    dwellStart: Date.now(),
+    dwellTime: 0,
   };
   tabs.set(id, tab);
   tabOrder.push(id);
@@ -453,7 +595,13 @@ function wireTabEvents(id, tab) {
 
 function switchTab(id) {
   if (!tabs.has(id) || !mainWindow) return;
+  if (activeTabId && tabs.has(activeTabId)) {
+    const prev = tabs.get(activeTabId);
+    prev.dwellTime += Date.now() - prev.dwellStart;
+  }
   activeTabId = id;
+  const next = tabs.get(id);
+  if (next) next.dwellStart = Date.now();
   layoutViews();
   // Bring active view to front so it paints above inactive ones.
   const tab = tabs.get(id);
@@ -473,6 +621,10 @@ function switchTab(id) {
 function closeTab(id) {
   if (!tabs.has(id) || !mainWindow) return;
   const tab = tabs.get(id);
+  if (tab.url && !isHomepageUrl(tab.url)) {
+    closedTabStack.push({ url: tab.url, title: tab.title });
+    if (closedTabStack.length > 25) closedTabStack.shift();
+  }
   try {
     mainWindow.contentView.removeChildView(tab.view);
   } catch {
@@ -595,6 +747,7 @@ function broadcastTabs() {
     .map((id) => {
       const t = tabs.get(id);
       if (!t) return null;
+      const op = t.operationId ? operations.get(t.operationId) : null;
       return {
         id,
         url: t.url,
@@ -607,6 +760,10 @@ function broadcastTabs() {
         pinned: !!t.pinned,
         muted: !!t.muted,
         audible: t.view.webContents.isCurrentlyAudible?.() ?? false,
+        operationId: t.operationId || null,
+        operationColor: op?.color || null,
+        operationName: op?.name || null,
+        dwellTime: t.dwellTime + (id === activeTabId ? (Date.now() - t.dwellStart) : 0),
       };
     })
     .filter(Boolean);
@@ -907,6 +1064,12 @@ ipcMain.handle('tab:reorder', (_e, fromId, toId) => {
   broadcastTabs();
 });
 
+ipcMain.handle('tab:reopen', () => {
+  if (closedTabStack.length === 0) return null;
+  const entry = closedTabStack.pop();
+  return newTab(entry.url);
+});
+
 ipcMain.handle('tab:mute', (_e, id) => {
   const tab = tabs.get(id ?? activeTabId);
   if (tab) {
@@ -918,6 +1081,213 @@ ipcMain.handle('tab:mute', (_e, id) => {
     return muted;
   }
   return false;
+});
+
+// ---------------------------------------------------------------------------
+// Operations IPC
+// ---------------------------------------------------------------------------
+ipcMain.handle('ops:list', () => listOperations());
+ipcMain.handle('ops:get', (_e, id) => getOperation(id));
+ipcMain.handle('ops:create', (_e, name, color) => createOperation(name, color));
+ipcMain.handle('ops:delete', (_e, id) => deleteOperation(id));
+ipcMain.handle('ops:rename', (_e, id, name) => {
+  const op = operations.get(id);
+  if (op) { op.name = name; saveOperations(); broadcastTabs(); }
+});
+ipcMain.handle('ops:set-color', (_e, id, color) => {
+  const op = operations.get(id);
+  if (op) { op.color = color; saveOperations(); broadcastTabs(); }
+});
+ipcMain.handle('ops:assign-tab', (_e, tabId, opId) => {
+  const tab = tabs.get(tabId);
+  if (tab) { tab.operationId = opId || null; broadcastTabs(); saveOperations(); }
+});
+ipcMain.handle('ops:set-active', (_e, opId) => {
+  activeOperationId = opId || null;
+});
+ipcMain.handle('ops:annotate', (_e, opId, text, url) => {
+  addAnnotation(opId, text, url);
+});
+
+// Mute all tabs at once (Noise Gate)
+ipcMain.handle('tabs:mute-all', () => {
+  let allMuted = true;
+  for (const [, tab] of tabs) {
+    if (!tab.view.webContents.isAudioMuted()) { allMuted = false; break; }
+  }
+  for (const [, tab] of tabs) {
+    tab.view.webContents.setAudioMuted(!allMuted);
+    tab.muted = !allMuted;
+  }
+  broadcastTabs();
+  return !allMuted;
+});
+
+// Dwell time for current tab
+ipcMain.handle('tab:dwell-time', (_e, id) => {
+  const tab = tabs.get(id ?? activeTabId);
+  if (!tab) return 0;
+  return tab.dwellTime + (id === activeTabId ? (Date.now() - tab.dwellStart) : 0);
+});
+
+// Reading time estimate
+ipcMain.handle('page:reading-time', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return null;
+  try {
+    return await tab.view.webContents.executeJavaScript(`
+      (function() {
+        const text = (document.body ? document.body.innerText : '');
+        const words = text.trim().split(/\\s+/).length;
+        const minutes = Math.ceil(words / 230);
+        return { words, minutes };
+      })()
+    `);
+  } catch { return null; }
+});
+
+// ---------------------------------------------------------------------------
+// Session export as report (#31)
+// ---------------------------------------------------------------------------
+ipcMain.handle('session:export', async () => {
+  const { dialog } = require('electron');
+  if (!mainWindow) return null;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+  const result = await dialog.showSaveDialog(mainWindow, {
+    defaultPath: `monitor-report-${timestamp}.html`,
+    filters: [{ name: 'HTML Report', extensions: ['html'] }],
+  });
+  if (result.canceled || !result.filePath) return null;
+
+  const allTabs = tabOrder.map((id) => {
+    const t = tabs.get(id);
+    if (!t) return null;
+    const op = t.operationId ? operations.get(t.operationId) : null;
+    return { url: t.url, title: t.title, operation: op?.name || 'None', dwell: t.dwellTime };
+  }).filter(Boolean);
+
+  const opsArr = listOperations();
+  const hist = loadHistory().slice(0, 100);
+
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Monitor Browser Report — ${timestamp}</title>
+<style>
+  :root{color-scheme:dark}body{margin:0;background:#060608;color:#e8e8f0;font:14px/1.6 system-ui,sans-serif;padding:40px 60px}
+  h1{font-size:28px;color:#d4a843;margin:0 0 8px}h2{font-size:18px;margin:32px 0 12px;border-bottom:1px solid #2a2a3a;padding-bottom:8px}
+  .meta{color:#8888a0;font-size:12px;margin-bottom:32px}table{width:100%;border-collapse:collapse;margin:12px 0}
+  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #1a1a2a}th{color:#d4a843;font-size:11px;text-transform:uppercase;letter-spacing:1px}
+  td{font-size:13px}a{color:#a0c8ff;text-decoration:none}a:hover{text-decoration:underline}
+  .badge{font-size:10px;padding:2px 6px;border-radius:3px;background:#1a1a2a}
+</style></head><body>
+<h1>&#9673; Monitor Browser — Session Report</h1>
+<div class="meta">Generated ${new Date().toUTCString()}</div>
+<h2>Open Tabs (${allTabs.length})</h2>
+<table><tr><th>Title</th><th>URL</th><th>Operation</th><th>Dwell</th></tr>
+${allTabs.map((t) => '<tr><td>' + escapeHtml(t.title) + '</td><td><a href="' + escapeHtml(t.url) + '">' + escapeHtml(t.url) + '</a></td><td><span class="badge">' + escapeHtml(t.operation) + '</span></td><td>' + Math.round(t.dwell / 1000) + 's</td></tr>').join('')}
+</table>
+<h2>Operations (${opsArr.length})</h2>
+<table><tr><th>Name</th><th>Tabs</th><th>Notes</th></tr>
+${opsArr.map((o) => '<tr><td>' + escapeHtml(o.name) + '</td><td>' + o.tabCount + '</td><td>' + o.annotationCount + '</td></tr>').join('')}
+</table>
+<h2>Recent History</h2>
+<table><tr><th>Title</th><th>URL</th><th>Visited</th></tr>
+${hist.map((h) => '<tr><td>' + escapeHtml(h.title || '') + '</td><td><a href="' + escapeHtml(h.url) + '">' + escapeHtml(h.url) + '</a></td><td>' + new Date(h.visitedAt).toLocaleString() + '</td></tr>').join('')}
+</table>
+</body></html>`;
+
+  try {
+    fs.writeFileSync(result.filePath, html, 'utf8');
+    shell.showItemInFolder(result.filePath);
+    return result.filePath;
+  } catch (err) { return null; }
+});
+
+// ---------------------------------------------------------------------------
+// Operation export as zip (#33)
+// ---------------------------------------------------------------------------
+ipcMain.handle('ops:export', async (_e, opId) => {
+  const op = operations.get(opId);
+  if (!op) return null;
+  const { dialog } = require('electron');
+  if (!mainWindow) return null;
+  const safeName = (op.name || 'operation').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const result = await dialog.showSaveDialog(mainWindow, {
+    defaultPath: `${safeName}-export.json`,
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+  });
+  if (result.canceled || !result.filePath) return null;
+  const opTabs = tabOrder.filter((tid) => tabs.get(tid)?.operationId === opId).map((tid) => {
+    const t = tabs.get(tid);
+    return { url: t.url, title: t.title };
+  });
+  const payload = { name: op.name, color: op.color, annotations: op.annotations, tabs: opTabs, exportedAt: Date.now() };
+  try {
+    fs.writeFileSync(result.filePath, JSON.stringify(payload, null, 2), 'utf8');
+    shell.showItemInFolder(result.filePath);
+    return result.filePath;
+  } catch { return null; }
+});
+
+// ---------------------------------------------------------------------------
+// Automatic page archiving (#32)
+// ---------------------------------------------------------------------------
+const pageArchives = new Map();
+
+ipcMain.handle('page:archive', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return null;
+  try {
+    const content = await tab.view.webContents.executeJavaScript(`
+      (function() { return { html: document.documentElement.outerHTML, url: location.href, title: document.title }; })()
+    `);
+    const archiveDir = path.join(app.getPath('userData'), 'archives');
+    fs.mkdirSync(archiveDir, { recursive: true });
+    const ts = Date.now();
+    const filename = 'archive-' + ts + '.html';
+    const filepath = path.join(archiveDir, filename);
+    fs.writeFileSync(filepath, content.html, 'utf8');
+    pageArchives.set(ts, { url: content.url, title: content.title, path: filepath, archivedAt: ts });
+    return { path: filepath, url: content.url };
+  } catch { return null; }
+});
+
+ipcMain.handle('page:archives-list', () => {
+  const arr = [];
+  for (const [, a] of pageArchives) arr.push(a);
+  return arr.sort((a, b) => b.archivedAt - a.archivedAt).slice(0, 100);
+});
+
+// ---------------------------------------------------------------------------
+// Tab preview on hover (#40)
+// ---------------------------------------------------------------------------
+ipcMain.handle('tab:preview', async (_e, tabId) => {
+  const tab = tabs.get(tabId);
+  if (!tab) return null;
+  try {
+    const img = await tab.view.webContents.capturePage();
+    const resized = img.resize({ width: 240 });
+    return 'data:image/png;base64,' + resized.toPNG().toString('base64');
+  } catch { return null; }
+});
+
+// ---------------------------------------------------------------------------
+// Dead tab detector (#37)
+// ---------------------------------------------------------------------------
+ipcMain.handle('tabs:detect-dead', () => {
+  const idleThreshold = 5 * 60 * 1000;
+  const now = Date.now();
+  const dead = [];
+  for (const id of tabOrder) {
+    if (id === activeTabId) continue;
+    const tab = tabs.get(id);
+    if (!tab || isHomepageUrl(tab.url)) continue;
+    const lastActive = tab.dwellStart || 0;
+    const idle = now - lastActive;
+    if (idle > idleThreshold) {
+      dead.push({ id, url: tab.url, title: tab.title, idleMs: idle });
+    }
+  }
+  return dead;
 });
 
 // ---------------------------------------------------------------------------
@@ -1022,6 +1392,125 @@ ipcMain.handle('page:pip', async () => {
     `);
     return true;
   } catch { return false; }
+});
+
+// ---------------------------------------------------------------------------
+// Entity extraction — auto-detect IPs, domains, emails, hashes on page load
+// ---------------------------------------------------------------------------
+ipcMain.handle('page:extract-entities', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return null;
+  try {
+    return await tab.view.webContents.executeJavaScript(`
+      (function() {
+        const text = document.body ? document.body.innerText : '';
+        const entities = { ips: [], domains: [], emails: [], hashes: [], urls: [], names: [] };
+        const ipRe = /\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b/g;
+        const emailRe = /[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}/g;
+        const md5Re = /\\b[a-fA-F0-9]{32}\\b/g;
+        const sha256Re = /\\b[a-fA-F0-9]{64}\\b/g;
+        const domainRe = /\\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+(?:com|net|org|io|gov|edu|mil|co|info|biz|xyz|dev|app|me|us|uk|de|fr|ru|cn|jp|au|ca|br|in|za|ng|ke)\\b/gi;
+        const urlRe = /https?:\\/\\/[^\\s<>"']+/g;
+        let m;
+        const seen = new Set();
+        function add(arr, val) { if (!seen.has(val)) { seen.add(val); arr.push(val); } }
+        while ((m = ipRe.exec(text))) add(entities.ips, m[0]);
+        while ((m = emailRe.exec(text))) add(entities.emails, m[0]);
+        while ((m = sha256Re.exec(text))) add(entities.hashes, m[0]);
+        while ((m = md5Re.exec(text))) add(entities.hashes, m[0]);
+        while ((m = domainRe.exec(text))) add(entities.domains, m[0]);
+        while ((m = urlRe.exec(text))) add(entities.urls, m[0]);
+        entities.ips = entities.ips.slice(0, 50);
+        entities.domains = entities.domains.slice(0, 50);
+        entities.emails = entities.emails.slice(0, 50);
+        entities.hashes = entities.hashes.slice(0, 30);
+        entities.urls = entities.urls.slice(0, 50);
+        const total = entities.ips.length + entities.domains.length + entities.emails.length + entities.hashes.length;
+        return { entities, total, url: location.href, title: document.title };
+      })()
+    `);
+  } catch { return null; }
+});
+
+// Source credibility — rate domains based on known tier lists
+const CREDIBILITY_TIERS = {
+  high: new Set([
+    'reuters.com', 'apnews.com', 'bbc.com', 'bbc.co.uk', 'nytimes.com', 'washingtonpost.com',
+    'theguardian.com', 'economist.com', 'nature.com', 'science.org', 'ft.com',
+    'wsj.com', 'bloomberg.com', 'aljazeera.com', 'dw.com', 'france24.com',
+    'npr.org', 'pbs.org', 'c-span.org', 'arstechnica.com', 'theintercept.com',
+    'propublica.org', 'foreignaffairs.com', 'cfr.org', 'brookings.edu', 'rand.org',
+    'iiss.org', 'sipri.org', 'icij.org', 'bellingcat.com', 'csis.org',
+  ]),
+  medium: new Set([
+    'cnn.com', 'cnbc.com', 'abc.net.au', 'nbcnews.com', 'cbsnews.com',
+    'politico.com', 'axios.com', 'thehill.com', 'vox.com', 'slate.com',
+    'time.com', 'newsweek.com', 'usatoday.com', 'vice.com', 'wired.com',
+    'techcrunch.com', 'theverge.com', 'engadget.com', 'zdnet.com',
+    'foxnews.com', 'nypost.com', 'dailymail.co.uk', 'independent.co.uk',
+    'thedailybeast.com', 'buzzfeed.com', 'huffpost.com', 'salon.com',
+    'bild.de', 'corriere.it', 'lemonde.fr', 'elpais.com', 'repubblica.it',
+  ]),
+  low: new Set([
+    'rt.com', 'sputniknews.com', 'tass.com', 'globalresearch.ca', 'zerohedge.com',
+    'infowars.com', 'breitbart.com', 'oann.com', 'newsmax.com', 'thegatewaypundit.com',
+    'naturalnews.com', 'beforeitsnews.com', 'worldtruth.tv', 'collective-evolution.com',
+    'yournewswire.com', 'neonnettle.com', 'theblaze.com',
+  ]),
+  government: new Set([
+    'state.gov', 'whitehouse.gov', 'mod.uk', 'gov.uk', 'kremlin.ru',
+    'mfa.gov.cn', 'mofa.go.jp', 'diplomatie.gouv.fr', 'un.org', 'who.int',
+    'nato.int', 'europa.eu', 'osce.org',
+  ]),
+};
+
+function getCredibility(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    for (const [tier, domains] of Object.entries(CREDIBILITY_TIERS)) {
+      if (domains.has(host)) return tier;
+      const parts = host.split('.');
+      if (parts.length > 2) {
+        const base = parts.slice(-2).join('.');
+        if (domains.has(base)) return tier;
+      }
+    }
+    return 'unknown';
+  } catch { return 'unknown'; }
+}
+
+ipcMain.handle('page:credibility', (_e, url) => {
+  const targetUrl = url || (tabs.get(activeTabId)?.url);
+  if (!targetUrl) return { tier: 'unknown', url: '' };
+  return { tier: getCredibility(targetUrl), url: targetUrl };
+});
+
+// Contextual counterfactual trigger — surface related scenarios
+const COUNTERFACTUAL_TRIGGERS = [
+  { keywords: ['hormuz', 'strait of hormuz', 'persian gulf'], scenario: 'Strait of Hormuz closure scenario: 20% of global oil transits here. Closure would spike crude 40-80% within 48h.', region: 'Middle East' },
+  { keywords: ['taiwan', 'taiwan strait', 'pla navy'], scenario: 'Taiwan contingency: PLA amphibious capability assessed at 2-3 divisions. TSMC produces 90% of advanced chips — disruption cascades globally.', region: 'Asia-Pacific' },
+  { keywords: ['suez canal', 'suez'], scenario: 'Suez disruption scenario: 12% of global trade. 2021 Ever Given blockage cost $9.6B/day. Houthi attacks already rerouting traffic.', region: 'Middle East' },
+  { keywords: ['arctic', 'northern sea route', 'svalbard'], scenario: 'Arctic sea route opening: 40% shorter than Suez. Russian icebreaker fleet dominance. NATO surveillance gap above 75°N.', region: 'Europe' },
+  { keywords: ['south china sea', 'spratly', 'scarborough'], scenario: 'South China Sea escalation: $5.3T in annual trade transits. 7 PRC artificial islands with military installations. UNCLOS ruling ignored.', region: 'Asia-Pacific' },
+  { keywords: ['nuclear', 'icbm', 'nuclear weapon'], scenario: 'Nuclear escalation ladder: tactical → theater → strategic. Current global stockpile ~12,500 warheads. Launch-to-impact 15-30 min.', region: 'Global' },
+  { keywords: ['ransomware', 'cyberattack', 'apt'], scenario: 'Critical infrastructure cyber scenario: Colonial Pipeline precedent. Average ransomware dwell time 11 days before detection.', region: 'Global' },
+  { keywords: ['famine', 'food crisis', 'grain'], scenario: 'Global food security: Ukraine/Russia = 30% of global wheat exports. El Niño compounds drought across Horn of Africa.', region: 'Global' },
+  { keywords: ['kashmir', 'line of control', 'india pakistan'], scenario: 'Kashmir flashpoint: Two nuclear powers, 740K Indian troops deployed. Potential for conventional→nuclear escalation.', region: 'Asia-Pacific' },
+  { keywords: ['wagner', 'africa corps', 'pmc'], scenario: 'Russian PMC expansion: Active in 10+ African states. Resource extraction model funds operations. Displaces Western influence.', region: 'Africa' },
+];
+
+ipcMain.handle('page:counterfactual', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return null;
+  try {
+    const text = await tab.view.webContents.executeJavaScript(`
+      (document.body ? document.body.innerText.substring(0, 5000).toLowerCase() : '')
+    `);
+    const matches = COUNTERFACTUAL_TRIGGERS.filter((t) =>
+      t.keywords.some((kw) => text.includes(kw))
+    );
+    return matches.length > 0 ? matches : null;
+  } catch { return null; }
 });
 
 // Reader mode — extract main content and render in a clean overlay
@@ -1321,6 +1810,103 @@ ipcMain.handle('downloads:reveal', (_e, id) => {
   if (dl && dl.entry.savePath) {
     shell.showItemInFolder(dl.entry.savePath);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Chrome Extensions
+// ---------------------------------------------------------------------------
+const loadedExtensions = new Map();
+
+function extensionsDir() {
+  return path.join(app.getPath('userData'), 'extensions');
+}
+
+async function loadAllExtensions() {
+  const dir = extensionsDir();
+  try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const extPath = path.join(dir, entry.name);
+    const manifestPath = path.join(extPath, 'manifest.json');
+    if (!fs.existsSync(manifestPath)) continue;
+    try {
+      const ext = await session.defaultSession.loadExtension(extPath, { allowFileAccess: true });
+      loadedExtensions.set(ext.id, { ext, path: extPath });
+      console.log('[monitor] loaded extension:', ext.name);
+    } catch (err) {
+      console.warn('[monitor] failed to load extension at', extPath, err.message);
+    }
+  }
+}
+
+async function installExtensionFromPath(extPath) {
+  const manifestPath = path.join(extPath, 'manifest.json');
+  if (!fs.existsSync(manifestPath)) return { error: 'No manifest.json found' };
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const safeName = (manifest.name || 'extension').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 64);
+    const destDir = path.join(extensionsDir(), safeName);
+    if (fs.existsSync(destDir)) {
+      fs.rmSync(destDir, { recursive: true, force: true });
+    }
+    copyDirSync(extPath, destDir);
+    const ext = await session.defaultSession.loadExtension(destDir, { allowFileAccess: true });
+    loadedExtensions.set(ext.id, { ext, path: destDir });
+    return { id: ext.id, name: ext.name };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+function copyDirSync(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const s = path.join(src, entry.name);
+    const d = path.join(dest, entry.name);
+    if (entry.isDirectory()) copyDirSync(s, d);
+    else fs.copyFileSync(s, d);
+  }
+}
+
+function removeExtension(extId) {
+  const loaded = loadedExtensions.get(extId);
+  if (!loaded) return false;
+  try { session.defaultSession.removeExtension(extId); } catch {}
+  try { fs.rmSync(loaded.path, { recursive: true, force: true }); } catch {}
+  loadedExtensions.delete(extId);
+  return true;
+}
+
+function listExtensions() {
+  const exts = session.defaultSession.getAllExtensions();
+  return exts.map((ext) => ({
+    id: ext.id,
+    name: ext.name,
+    version: ext.version,
+    url: ext.url,
+  }));
+}
+
+ipcMain.handle('extensions:list', () => listExtensions());
+ipcMain.handle('extensions:install', async (_e, extPath) => installExtensionFromPath(extPath));
+ipcMain.handle('extensions:remove', (_e, extId) => removeExtension(extId));
+ipcMain.handle('extensions:open-dir', () => {
+  const dir = extensionsDir();
+  fs.mkdirSync(dir, { recursive: true });
+  shell.openPath(dir);
+  return dir;
+});
+ipcMain.handle('extensions:pick-folder', async () => {
+  if (!mainWindow) return null;
+  const { dialog } = require('electron');
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Select unpacked extension folder',
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  return installExtensionFromPath(result.filePaths[0]);
 });
 
 // ---------------------------------------------------------------------------
@@ -1634,6 +2220,8 @@ app.whenReady().then(() => {
   applyRequestFilters();
   setupDownloadListener();
   setupPermissionHandlers();
+  loadOperations();
+  loadAllExtensions().catch((err) => console.warn('[monitor] extension load failed', err));
 
   // Start local YouTube embed server, then create window
   startYtEmbedServer().then(() => {

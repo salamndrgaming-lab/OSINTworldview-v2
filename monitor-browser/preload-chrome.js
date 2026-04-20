@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('browser', {
   pinTab: (id) => ipcRenderer.invoke('tab:pin', id),
   muteTab: (id) => ipcRenderer.invoke('tab:mute', id),
   reorderTab: (fromId, toId) => ipcRenderer.invoke('tab:reorder', fromId, toId),
+  reopenTab: () => ipcRenderer.invoke('tab:reopen'),
 
   // Find in page
   findStart: (text, opts) => ipcRenderer.invoke('find:start', text, opts),
@@ -33,12 +34,15 @@ contextBridge.exposeInMainWorld('browser', {
   zoomOut: () => ipcRenderer.invoke('zoom:out'),
   zoomReset: () => ipcRenderer.invoke('zoom:reset'),
 
-  // Print / fullscreen / PDF / PiP / Reader
+  // Print / fullscreen / PDF / PiP / Reader / Intel
   print: () => ipcRenderer.invoke('page:print'),
   savePdf: () => ipcRenderer.invoke('page:save-pdf'),
   pip: () => ipcRenderer.invoke('page:pip'),
   reader: () => ipcRenderer.invoke('page:reader'),
   fullscreen: () => ipcRenderer.invoke('window:fullscreen'),
+  extractEntities: () => ipcRenderer.invoke('page:extract-entities'),
+  getCredibility: (url) => ipcRenderer.invoke('page:credibility', url),
+  getCounterfactual: () => ipcRenderer.invoke('page:counterfactual'),
 
   // Window controls (custom titlebar)
   minimize: () => ipcRenderer.invoke('window:minimize'),
@@ -81,6 +85,35 @@ contextBridge.exposeInMainWorld('browser', {
     ipcRenderer.on('settings:changed', listener);
     return () => ipcRenderer.off('settings:changed', listener);
   },
+
+  // Session & page features
+  sessionExport: () => ipcRenderer.invoke('session:export'),
+  pageArchive: () => ipcRenderer.invoke('page:archive'),
+  pageArchivesList: () => ipcRenderer.invoke('page:archives-list'),
+  tabPreview: (id) => ipcRenderer.invoke('tab:preview', id),
+  detectDeadTabs: () => ipcRenderer.invoke('tabs:detect-dead'),
+  opsExport: (id) => ipcRenderer.invoke('ops:export', id),
+
+  // Operations (investigations)
+  opsList: () => ipcRenderer.invoke('ops:list'),
+  opsGet: (id) => ipcRenderer.invoke('ops:get', id),
+  opsCreate: (name, color) => ipcRenderer.invoke('ops:create', name, color),
+  opsDelete: (id) => ipcRenderer.invoke('ops:delete', id),
+  opsRename: (id, name) => ipcRenderer.invoke('ops:rename', id, name),
+  opsSetColor: (id, color) => ipcRenderer.invoke('ops:set-color', id, color),
+  opsAssignTab: (tabId, opId) => ipcRenderer.invoke('ops:assign-tab', tabId, opId),
+  opsSetActive: (opId) => ipcRenderer.invoke('ops:set-active', opId),
+  opsAnnotate: (opId, text, url) => ipcRenderer.invoke('ops:annotate', opId, text, url),
+  muteAll: () => ipcRenderer.invoke('tabs:mute-all'),
+  getDwellTime: (id) => ipcRenderer.invoke('tab:dwell-time', id),
+  getReadingTime: () => ipcRenderer.invoke('page:reading-time'),
+
+  // Chrome extensions
+  extensionsList: () => ipcRenderer.invoke('extensions:list'),
+  extensionsInstall: (path) => ipcRenderer.invoke('extensions:install', path),
+  extensionsRemove: (id) => ipcRenderer.invoke('extensions:remove', id),
+  extensionsOpenDir: () => ipcRenderer.invoke('extensions:open-dir'),
+  extensionsPickFolder: () => ipcRenderer.invoke('extensions:pick-folder'),
 
   // Security / certificates
   securityInfo: () => ipcRenderer.invoke('page:security-info'),

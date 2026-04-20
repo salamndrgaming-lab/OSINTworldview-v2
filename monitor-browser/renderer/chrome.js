@@ -671,6 +671,8 @@
       '      <h3>Data</h3>' +
       '      <button class="settings-btn" id="clear-data">Clear browsing data</button>' +
       '      <button class="settings-btn" id="reset-settings">Reset all settings</button>' +
+      '      <button class="settings-btn" id="export-session">Export session report</button>' +
+      '      <button class="settings-btn" id="archive-page">Archive current page</button>' +
       '    </section>' +
       '    <section class="settings-section">' +
       '      <h3>Site permissions</h3>' +
@@ -743,6 +745,22 @@
     document.getElementById('manage-perms').addEventListener('click', () => {
       closeSettings();
       togglePanel('permissions');
+    });
+
+    document.getElementById('export-session').addEventListener('click', () => {
+      browser.sessionExport().then((path) => {
+        const el = document.getElementById('export-session');
+        el.textContent = path ? 'Exported!' : 'Cancelled';
+        setTimeout(() => { el.textContent = 'Export session report'; }, 2000);
+      });
+    });
+
+    document.getElementById('archive-page').addEventListener('click', () => {
+      browser.pageArchive().then((result) => {
+        const el = document.getElementById('archive-page');
+        el.textContent = result ? 'Archived!' : 'Failed';
+        setTimeout(() => { el.textContent = 'Archive current page'; }, 2000);
+      });
     });
   }
 
@@ -1390,6 +1408,30 @@
       });
     });
 
+    // Annotation tool
+    html += '<div class="intel-section"><div class="intel-section-title">Annotate</div>' +
+      '<div class="intel-annotate-form">' +
+      '<textarea class="intel-annotate-input" placeholder="Select text on page, then paste or type notes here…" rows="2"></textarea>' +
+      '<button class="intel-annotate-btn" disabled>Add to Operation</button></div></div>';
+
+    body.innerHTML = html;
+
+    // Wire annotation
+    const annotateInput = body.querySelector('.intel-annotate-input');
+    const annotateBtn = body.querySelector('.intel-annotate-btn');
+    browser.opsList().then((ops) => {
+      if (ops.length > 0) annotateBtn.disabled = false;
+      annotateBtn.addEventListener('click', async () => {
+        if (!annotateInput.value.trim()) return;
+        if (ops.length === 0) return;
+        const targetOp = ops.find((o) => o.id === (active?.operationId)) || ops[0];
+        await browser.opsAnnotate(targetOp.id, annotateInput.value.trim(), active?.url || '');
+        annotateInput.value = '';
+        annotateBtn.textContent = 'Added!';
+        setTimeout(() => { annotateBtn.textContent = 'Add to Operation'; }, 1500);
+      });
+    });
+
     // Wire quick lookup form
     const lookupInput = body.querySelector('.intel-lookup-input');
     const lookupBtn = body.querySelector('.intel-lookup-btn');
@@ -1745,6 +1787,35 @@
       el.style.setProperty('--op-color', tab.operationColor);
       el.classList.add('has-operation');
     }
+    // Tab heat map: highlight frequently visited tabs
+    if (tab.dwellTime > 0) {
+      const heat = Math.min(tab.dwellTime / 300000, 1);
+      if (heat > 0.3) {
+        el.style.setProperty('--tab-heat', heat.toFixed(2));
+        el.classList.add('has-heat');
+      }
+    }
+    // Tab preview on hover
+    let previewTimer = null;
+    let previewEl = null;
+    el.addEventListener('mouseenter', () => {
+      if (tab.id === activeId) return;
+      previewTimer = setTimeout(async () => {
+        const src = await browser.tabPreview(tab.id).catch(() => null);
+        if (!src) return;
+        previewEl = document.createElement('div');
+        previewEl.className = 'tab-preview';
+        previewEl.innerHTML = '<img src="' + src + '" /><div class="tab-preview-title">' + esc(tab.title) + '</div>';
+        const rect = el.getBoundingClientRect();
+        previewEl.style.left = rect.left + 'px';
+        previewEl.style.top = (rect.bottom + 4) + 'px';
+        document.body.appendChild(previewEl);
+      }, 600);
+    });
+    el.addEventListener('mouseleave', () => {
+      clearTimeout(previewTimer);
+      if (previewEl) { previewEl.remove(); previewEl = null; }
+    });
     if (tab.muted) {
       const badge = document.createElement('span');
       badge.className = 'tab-muted';

@@ -1085,6 +1085,27 @@ body.is-incognito .wordmark { color: #a0a0c0; }
 .tab.is-dragging { opacity: 0.4; }
 .tab.drag-over { border-left: 2px solid var(--intel-accent); }
 
+/* Tab heat map */
+.tab.has-heat {
+  box-shadow: inset 0 -2px 8px rgba(212, 168, 67, calc(var(--tab-heat, 0) * 0.3));
+}
+
+/* Tab preview on hover */
+.tab-preview {
+  position: fixed; z-index: 10000;
+  background: var(--surface-raised); border: 1px solid var(--surface-border);
+  border-radius: 8px; overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  width: 240px; pointer-events: none;
+  animation: fadeIn 0.15s var(--easing-out);
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.tab-preview img { width: 100%; display: block; }
+.tab-preview-title {
+  padding: 6px 10px; font: 11px var(--font-ui); color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
 /* Operation tab coloring */
 .tab.has-operation {
   border-bottom: 2px solid var(--op-color, var(--intel-accent));
@@ -1231,6 +1252,23 @@ body.is-incognito .wordmark { color: #a0a0c0; }
 .intel-reading-time {
   font: 12px var(--font-data); color: var(--text-data);
 }
+.intel-annotate-form {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.intel-annotate-input {
+  width: 100%; padding: 8px 10px; resize: vertical;
+  background: var(--surface-panel); border: 1px solid var(--surface-border);
+  border-radius: 6px; color: var(--text-primary); font: 12px var(--font-ui);
+  outline: none;
+}
+.intel-annotate-input:focus { border-color: var(--intel-accent); }
+.intel-annotate-btn {
+  align-self: flex-end; padding: 5px 14px; border-radius: 6px; border: none;
+  background: var(--intel-accent); color: #000;
+  font: 600 11px var(--font-ui); cursor: pointer;
+}
+.intel-annotate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.intel-annotate-btn:not(:disabled):hover { opacity: 0.85; }
 
 /* Autocomplete credibility tag */
 .ac-cred {

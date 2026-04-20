@@ -86,6 +86,14 @@ contextBridge.exposeInMainWorld('browser', {
     return () => ipcRenderer.off('settings:changed', listener);
   },
 
+  // Session & page features
+  sessionExport: () => ipcRenderer.invoke('session:export'),
+  pageArchive: () => ipcRenderer.invoke('page:archive'),
+  pageArchivesList: () => ipcRenderer.invoke('page:archives-list'),
+  tabPreview: (id) => ipcRenderer.invoke('tab:preview', id),
+  detectDeadTabs: () => ipcRenderer.invoke('tabs:detect-dead'),
+  opsExport: (id) => ipcRenderer.invoke('ops:export', id),
+
   // Operations (investigations)
   opsList: () => ipcRenderer.invoke('ops:list'),
   opsGet: (id) => ipcRenderer.invoke('ops:get', id),

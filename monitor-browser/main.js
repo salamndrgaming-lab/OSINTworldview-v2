@@ -1147,6 +1147,150 @@ ipcMain.handle('page:reading-time', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Session export as report (#31)
+// ---------------------------------------------------------------------------
+ipcMain.handle('session:export', async () => {
+  const { dialog } = require('electron');
+  if (!mainWindow) return null;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+  const result = await dialog.showSaveDialog(mainWindow, {
+    defaultPath: `monitor-report-${timestamp}.html`,
+    filters: [{ name: 'HTML Report', extensions: ['html'] }],
+  });
+  if (result.canceled || !result.filePath) return null;
+
+  const allTabs = tabOrder.map((id) => {
+    const t = tabs.get(id);
+    if (!t) return null;
+    const op = t.operationId ? operations.get(t.operationId) : null;
+    return { url: t.url, title: t.title, operation: op?.name || 'None', dwell: t.dwellTime };
+  }).filter(Boolean);
+
+  const opsArr = listOperations();
+  const hist = loadHistory().slice(0, 100);
+
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Monitor Browser Report — ${timestamp}</title>
+<style>
+  :root{color-scheme:dark}body{margin:0;background:#060608;color:#e8e8f0;font:14px/1.6 system-ui,sans-serif;padding:40px 60px}
+  h1{font-size:28px;color:#d4a843;margin:0 0 8px}h2{font-size:18px;margin:32px 0 12px;border-bottom:1px solid #2a2a3a;padding-bottom:8px}
+  .meta{color:#8888a0;font-size:12px;margin-bottom:32px}table{width:100%;border-collapse:collapse;margin:12px 0}
+  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #1a1a2a}th{color:#d4a843;font-size:11px;text-transform:uppercase;letter-spacing:1px}
+  td{font-size:13px}a{color:#a0c8ff;text-decoration:none}a:hover{text-decoration:underline}
+  .badge{font-size:10px;padding:2px 6px;border-radius:3px;background:#1a1a2a}
+</style></head><body>
+<h1>&#9673; Monitor Browser — Session Report</h1>
+<div class="meta">Generated ${new Date().toUTCString()}</div>
+<h2>Open Tabs (${allTabs.length})</h2>
+<table><tr><th>Title</th><th>URL</th><th>Operation</th><th>Dwell</th></tr>
+${allTabs.map((t) => '<tr><td>' + escapeHtml(t.title) + '</td><td><a href="' + escapeHtml(t.url) + '">' + escapeHtml(t.url) + '</a></td><td><span class="badge">' + escapeHtml(t.operation) + '</span></td><td>' + Math.round(t.dwell / 1000) + 's</td></tr>').join('')}
+</table>
+<h2>Operations (${opsArr.length})</h2>
+<table><tr><th>Name</th><th>Tabs</th><th>Notes</th></tr>
+${opsArr.map((o) => '<tr><td>' + escapeHtml(o.name) + '</td><td>' + o.tabCount + '</td><td>' + o.annotationCount + '</td></tr>').join('')}
+</table>
+<h2>Recent History</h2>
+<table><tr><th>Title</th><th>URL</th><th>Visited</th></tr>
+${hist.map((h) => '<tr><td>' + escapeHtml(h.title || '') + '</td><td><a href="' + escapeHtml(h.url) + '">' + escapeHtml(h.url) + '</a></td><td>' + new Date(h.visitedAt).toLocaleString() + '</td></tr>').join('')}
+</table>
+</body></html>`;
+
+  try {
+    fs.writeFileSync(result.filePath, html, 'utf8');
+    shell.showItemInFolder(result.filePath);
+    return result.filePath;
+  } catch (err) { return null; }
+});
+
+// ---------------------------------------------------------------------------
+// Operation export as zip (#33)
+// ---------------------------------------------------------------------------
+ipcMain.handle('ops:export', async (_e, opId) => {
+  const op = operations.get(opId);
+  if (!op) return null;
+  const { dialog } = require('electron');
+  if (!mainWindow) return null;
+  const safeName = (op.name || 'operation').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const result = await dialog.showSaveDialog(mainWindow, {
+    defaultPath: `${safeName}-export.json`,
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+  });
+  if (result.canceled || !result.filePath) return null;
+  const opTabs = tabOrder.filter((tid) => tabs.get(tid)?.operationId === opId).map((tid) => {
+    const t = tabs.get(tid);
+    return { url: t.url, title: t.title };
+  });
+  const payload = { name: op.name, color: op.color, annotations: op.annotations, tabs: opTabs, exportedAt: Date.now() };
+  try {
+    fs.writeFileSync(result.filePath, JSON.stringify(payload, null, 2), 'utf8');
+    shell.showItemInFolder(result.filePath);
+    return result.filePath;
+  } catch { return null; }
+});
+
+// ---------------------------------------------------------------------------
+// Automatic page archiving (#32)
+// ---------------------------------------------------------------------------
+const pageArchives = new Map();
+
+ipcMain.handle('page:archive', async () => {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return null;
+  try {
+    const content = await tab.view.webContents.executeJavaScript(`
+      (function() { return { html: document.documentElement.outerHTML, url: location.href, title: document.title }; })()
+    `);
+    const archiveDir = path.join(app.getPath('userData'), 'archives');
+    fs.mkdirSync(archiveDir, { recursive: true });
+    const ts = Date.now();
+    const filename = 'archive-' + ts + '.html';
+    const filepath = path.join(archiveDir, filename);
+    fs.writeFileSync(filepath, content.html, 'utf8');
+    pageArchives.set(ts, { url: content.url, title: content.title, path: filepath, archivedAt: ts });
+    return { path: filepath, url: content.url };
+  } catch { return null; }
+});
+
+ipcMain.handle('page:archives-list', () => {
+  const arr = [];
+  for (const [, a] of pageArchives) arr.push(a);
+  return arr.sort((a, b) => b.archivedAt - a.archivedAt).slice(0, 100);
+});
+
+// ---------------------------------------------------------------------------
+// Tab preview on hover (#40)
+// ---------------------------------------------------------------------------
+ipcMain.handle('tab:preview', async (_e, tabId) => {
+  const tab = tabs.get(tabId);
+  if (!tab) return null;
+  try {
+    const img = await tab.view.webContents.capturePage();
+    const resized = img.resize({ width: 240 });
+    return 'data:image/png;base64,' + resized.toPNG().toString('base64');
+  } catch { return null; }
+});
+
+// ---------------------------------------------------------------------------
+// Dead tab detector (#37)
+// ---------------------------------------------------------------------------
+ipcMain.handle('tabs:detect-dead', () => {
+  const idleThreshold = 5 * 60 * 1000;
+  const now = Date.now();
+  const dead = [];
+  for (const id of tabOrder) {
+    if (id === activeTabId) continue;
+    const tab = tabs.get(id);
+    if (!tab || isHomepageUrl(tab.url)) continue;
+    const lastActive = tab.dwellStart || 0;
+    const idle = now - lastActive;
+    if (idle > idleThreshold) {
+      dead.push({ id, url: tab.url, title: tab.title, idleMs: idle });
+    }
+  }
+  return dead;
+});
+
+// ---------------------------------------------------------------------------
 // Find in page
 // ---------------------------------------------------------------------------
 ipcMain.handle('find:start', (_e, text, opts) => {

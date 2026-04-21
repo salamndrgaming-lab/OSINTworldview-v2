@@ -1,1369 +1,773 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Monitor Browser — New Tab</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <style>
-    /* ── Design Tokens ─────────────────────────────────────── */
-    :root {
-      --intel-accent:        #d4a843;
-      --intel-accent-dim:    #b8922f;
-      --intel-accent-glow:   rgba(212, 168, 67, 0.20);
-      --intel-accent-subtle: rgba(212, 168, 67, 0.07);
-      --intel-accent-border: rgba(212, 168, 67, 0.18);
-      --bg-deep:    #060608;
-      --bg:         #0c0c10;
-      --surface:    #12121a;
-      --surface-raised: #181822;
-      --surface-hover:  #1e1e2c;
-      --border:     #252535;
-      --border-subtle: #1a1a28;
-      --text-primary:   #e8e8f0;
-      --text-secondary: #8888a0;
-      --text-dim:       #55556a;
-      --font-ui:   'Geist', system-ui, sans-serif;
-      --font-data: 'JetBrains Mono', monospace;
-      --cat-threat:   #e53e3e;
-      --cat-cyber:    #9f7aea;
-      --cat-market:   #4299e1;
-      --cat-news:     #ed8936;
-      --cat-positive: #48bb78;
-      --cat-military: #f97316;
-    }
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Monitor Browser — New Tab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --accent:#d4a843;--accent-dim:#b8922f;--accent-glow:rgba(212,168,67,.18);
+  --accent-subtle:rgba(212,168,67,.07);--accent-border:rgba(212,168,67,.16);
+  --bg:#060608;--bg2:#0c0c10;--surface:#111118;--surface2:#17171f;--surface3:#1c1c26;
+  --border:#22222e;--border2:#2a2a38;
+  --text:#e4e4f0;--text2:#80809a;--text3:#484860;
+  --font:'Geist',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  --red:#e53e3e;--red-bg:rgba(229,62,62,.1);
+  --blue:#4299e1;--blue-bg:rgba(66,153,225,.1);
+  --purple:#9f7aea;--purple-bg:rgba(159,122,234,.1);
+  --green:#48bb78;--green-bg:rgba(72,187,120,.1);
+  --orange:#f97316;--orange-bg:rgba(249,115,22,.1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text);overflow-x:hidden}
+button{font-family:var(--font);cursor:pointer;border:none;background:none}
+a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:block;flex-shrink:0}
 
-    /* ── Reset ─────────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.bg-wrap{position:fixed;inset:0;z-index:0;pointer-events:none}
+.bg-g{position:absolute;inset:0;background:radial-gradient(ellipse 70% 40% at 50% 0%,rgba(212,168,67,.055) 0%,transparent 65%),linear-gradient(180deg,#060608 0%,#08080f 100%)}
+.bg-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.012) 1px,transparent 1px);background-size:52px 52px;mask-image:radial-gradient(ellipse 75% 55% at 50% 25%,black 0%,transparent 100%)}
 
-    html, body {
-      height: 100%;
-      font-family: var(--font-ui);
-      background: var(--bg-deep);
-      color: var(--text-primary);
-      overflow-x: hidden;
-    }
+.page{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;padding-bottom:44px}
 
-    /* ── Background ────────────────────────────────────────── */
-    .bg-layer {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      background:
-        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(212,168,67,0.06) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(91,141,217,0.04) 0%, transparent 50%),
-        linear-gradient(180deg, #060608 0%, #090910 40%, #0a0a12 100%);
-    }
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:11px 20px;border-bottom:1px solid var(--border);background:rgba(6,6,8,.8);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);position:sticky;top:0;z-index:100}
+.tb-left{display:flex;align-items:center;gap:14px}
+.logo{display:flex;align-items:center;gap:7px}
+.logo-txt{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.tb-sep{width:1px;height:16px;background:var(--border2)}
+.tb-loc{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text2)}
+.tb-right{display:flex;align-items:center;gap:12px}
+.tb-pill{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:4px;font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--orange);background:var(--orange-bg);border:1px solid rgba(249,115,22,.2)}
+.tb-clock{font-family:var(--mono);font-size:11px;color:var(--text2);letter-spacing:.04em}
+.tb-btn{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;border:1px solid var(--border);color:var(--text2);background:var(--surface);transition:all .15s}
+.tb-btn:hover{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--orange);animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
 
-    /* Subtle grid overlay */
-    .bg-grid {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      background-image:
-        linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
-      background-size: 48px 48px;
-      mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 0%, transparent 100%);
-    }
+/* HERO */
+.hero{display:flex;flex-direction:column;align-items:center;padding:44px 24px 24px;gap:18px;max-width:660px;width:100%;margin:0 auto;animation:rise .5s cubic-bezier(.22,1,.36,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.hero-greet{font-size:12px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);opacity:.7}
+.srch-wrap{width:100%;position:relative}
+.srch-in{width:100%;height:50px;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:0 48px 0 18px;font-size:14.5px;color:var(--text);outline:none;transition:border-color .2s,box-shadow .2s,background .2s}
+.srch-in::placeholder{color:var(--text3)}
+.srch-in:focus{border-color:var(--accent-border);box-shadow:0 0 0 3px var(--accent-glow),0 4px 20px rgba(0,0,0,.4);background:var(--surface3)}
+.srch-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:var(--surface3);border:1px solid var(--border2);color:var(--text2);transition:all .15s}
+.srch-wrap:focus-within .srch-btn{border-color:var(--accent-border);color:var(--accent)}
+.eng-row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.eng-btn{padding:3px 11px;border-radius:20px;font-size:11px;font-weight:500;border:1px solid var(--border);color:var(--text2);background:transparent;transition:all .15s;letter-spacing:.02em}
+.eng-btn:hover,.eng-btn.active{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
 
-    /* Radar sweep animation in background */
-    .bg-radar {
-      position: fixed;
-      top: 18%;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 600px;
-      height: 600px;
-      z-index: 0;
-      opacity: 0.04;
-      pointer-events: none;
-    }
-    .bg-radar circle { fill: none; stroke: var(--intel-accent); }
-    .bg-radar .sweep {
-      transform-origin: 300px 300px;
-      animation: radar-spin 8s linear infinite;
-    }
-    @keyframes radar-spin {
-      from { transform: rotate(0deg); }
-      to   { transform: rotate(360deg); }
-    }
+/* SHORTCUTS */
+.sc-wrap{width:100%;max-width:660px;margin:0 auto;padding:0 24px;animation:rise .5s .07s cubic-bezier(.22,1,.36,1) both}
+.sc-grid{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.sc{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 6px;border-radius:10px;border:1px solid transparent;transition:all .18s;cursor:pointer;width:72px}
+.sc:hover{background:var(--surface2);border-color:var(--border);transform:translateY(-2px)}
+.sc-ico{width:42px;height:42px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);transition:all .18s;position:relative;overflow:hidden}
+.sc-ico::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--sc-c,var(--accent));opacity:0;transition:opacity .18s}
+.sc:hover .sc-ico{border-color:var(--accent-border);color:var(--accent)}
+.sc:hover .sc-ico::after{opacity:1}
+.sc-lbl{font-size:10px;font-weight:500;color:var(--text2);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;transition:color .18s}
+.sc:hover .sc-lbl{color:var(--text)}
+.sc-add .sc-ico{border-style:dashed;color:var(--text3)}
 
-    /* ── Layout ────────────────────────────────────────────── */
-    .page {
-      position: relative;
-      z-index: 1;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
+/* DIVIDER / TABS */
+.div-wrap{width:100%;max-width:1280px;margin:18px auto 0;padding:0 20px}
+.div-wrap hr{border:none;border-top:1px solid var(--border)}
+.div-label{display:flex;align-items:center;justify-content:space-between;margin-top:13px;padding:0 2px}
+.dtabs{display:flex;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:3px}
+.dtab{padding:4px 13px;font-size:11.5px;font-weight:500;border-radius:5px;color:var(--text2);background:transparent;transition:all .15s;border:1px solid transparent}
+.dtab.active{background:var(--accent-subtle);color:var(--accent);border-color:var(--accent-border)}
+.dtab:not(.active):hover{color:var(--text)}
+.div-acts{display:flex;gap:8px}
+.act-btn{display:flex;align-items:center;gap:5px;padding:4px 11px;font-size:11px;font-weight:500;color:var(--text2);background:var(--surface);border:1px solid var(--border);border-radius:6px;transition:all .15s}
+.act-btn:hover{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
 
-    /* ── Top Bar ───────────────────────────────────────────── */
-    .top-bar {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 24px;
-      border-bottom: 1px solid var(--border-subtle);
-      background: rgba(6,6,8,0.6);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-    }
+/* CONTENT GRID */
+.cgrid{width:100%;max-width:1280px;margin:14px auto 0;padding:0 20px;display:grid;grid-template-columns:1fr 1fr 316px;grid-template-rows:auto auto;gap:13px;animation:rise .5s .13s cubic-bezier(.22,1,.36,1) both}
 
-    .top-bar-logo {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      text-decoration: none;
-    }
-    .top-bar-logo svg { width: 22px; height: 22px; }
-    .top-bar-logo-text {
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--intel-accent);
-    }
+/* WIDGET SHELL */
+.wgt{border-radius:10px;border:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;overflow:hidden}
+.wgt-head{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid var(--border);flex-shrink:0}
+.wgt-title{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text2)}
+.wdot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.wgt-ctrl{display:flex;gap:6px}
+.wc-btn{display:flex;align-items:center;gap:4px;padding:3px 8px;font-size:10.5px;font-weight:500;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:5px;transition:all .15s;cursor:pointer}
+.wc-btn:hover{border-color:var(--accent-border);color:var(--accent)}
 
-    .top-bar-meta {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-    }
-    .top-bar-clock {
-      font-family: var(--font-data);
-      font-size: 12px;
-      color: var(--text-secondary);
-      letter-spacing: 0.05em;
-    }
-    .top-bar-location {
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
-    .top-bar-threat {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--cat-news);
-      background: rgba(237,137,54,0.1);
-      border: 1px solid rgba(237,137,54,0.2);
-      border-radius: 4px;
-      padding: 3px 10px;
-    }
-    .threat-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--cat-news);
-      animation: pulse-dot 2s ease-in-out infinite;
-    }
-    @keyframes pulse-dot {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.7); }
-    }
+/* MAP */
+.map-wgt{grid-column:1/2;grid-row:1/3;min-height:440px}
+.map-frame{flex:1;position:relative;min-height:380px}
+.map-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:none;filter:saturate(.55) brightness(.65) contrast(1.1);border-radius:0 0 9px 9px}
+.map-bar{position:absolute;bottom:0;left:0;right:0;padding:7px 12px;background:linear-gradient(0deg,rgba(6,6,8,.92) 0%,transparent 100%);display:flex;align-items:center;gap:12px;pointer-events:none}
+.mbar-s{display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;color:var(--text2)}
+.mbar-v{color:var(--text);font-weight:600}
 
-    /* ── Hero Section ──────────────────────────────────────── */
-    .hero {
-      width: 100%;
-      max-width: 700px;
-      padding: 60px 24px 32px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 32px;
-      animation: hero-in 0.6s cubic-bezier(0.22,1,0.36,1) both;
-    }
-    @keyframes hero-in {
-      from { opacity: 0; transform: translateY(16px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
+/* LIVE NEWS */
+.news-wgt{grid-column:2/3;grid-row:1/2}
+.news-list{overflow-y:auto;max-height:280px}
+.news-list::-webkit-scrollbar,.lnews-list::-webkit-scrollbar{width:4px}
+.news-list::-webkit-scrollbar-thumb,.lnews-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.ni{display:flex;gap:10px;padding:9px 13px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;align-items:flex-start;color:inherit;text-decoration:none;display:flex}
+.ni:last-child{border-bottom:none}
+.ni:hover{background:var(--surface2)}
+.ni-thumb{width:72px;height:52px;border-radius:6px;overflow:hidden;background:var(--surface3);flex-shrink:0;position:relative}
+.ni-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.ni-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--surface2),var(--surface3))}
+.ni-sev{position:absolute;top:0;left:0;right:0;height:2px}
+.ni-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.ni-cat{font-size:9.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase}
+.ni-title{font-size:12.5px;font-weight:500;line-height:1.38;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ni-meta{display:flex;align-items:center;gap:5px;margin-top:auto}
+.ni-src{font-size:10.5px;color:var(--text3);font-weight:500}
+.ni-sep{width:2px;height:2px;border-radius:50%;background:var(--text3)}
+.ni-time{font-family:var(--mono);font-size:10px;color:var(--text3)}
 
-    .hero-greeting {
-      font-size: 13px;
-      font-weight: 500;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--intel-accent);
-      opacity: 0.8;
-    }
+/* LOCAL */
+.loc-wgt{grid-column:2/3;grid-row:2/3}
+.wx-block{padding:13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px}
+.wx-main{display:flex;align-items:center;gap:10px}
+.wx-temp{display:flex;align-items:baseline;gap:2px}
+.wx-t{font-size:28px;font-weight:300;color:var(--text);font-family:var(--mono);line-height:1}
+.wx-u{font-size:13px;color:var(--text3);margin-top:4px}
+.wx-desc{font-size:12px;font-weight:500;color:var(--text);text-transform:capitalize}
+.wx-city{font-size:11px;color:var(--text2);margin-top:2px}
+.wx-dets{display:flex;gap:14px;margin-left:auto}
+.wxd{text-align:center}
+.wxd-v{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--text)}
+.wxd-k{font-size:10px;color:var(--text3);margin-top:2px}
+.wx-ico{color:var(--text2)}
+.lnews-list{overflow-y:auto;max-height:150px}
+.ln{display:flex;align-items:center;gap:10px;padding:8px 13px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;text-decoration:none;color:inherit}
+.ln:last-child{border-bottom:none}
+.ln:hover{background:var(--surface2)}
+.ln-thumb{width:48px;height:36px;border-radius:5px;overflow:hidden;background:var(--surface3);flex-shrink:0}
+.ln-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.ln-title{font-size:11.5px;font-weight:500;color:var(--text);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1}
+.ln-time{font-family:var(--mono);font-size:10px;color:var(--text3);flex-shrink:0}
 
-    /* ── Search Bar ────────────────────────────────────────── */
-    .search-wrap {
-      width: 100%;
-      position: relative;
-    }
-    .search-bar {
-      width: 100%;
-      height: 52px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 0 52px 0 20px;
-      font-family: var(--font-ui);
-      font-size: 15px;
-      color: var(--text-primary);
-      outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
-    }
-    .search-bar::placeholder { color: var(--text-dim); }
-    .search-bar:focus {
-      border-color: var(--intel-accent-border);
-      box-shadow: 0 0 0 3px var(--intel-accent-glow), 0 4px 20px rgba(0,0,0,0.4);
-      background: var(--surface-raised);
-    }
-    .search-icon {
-      position: absolute;
-      right: 16px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--text-dim);
-      pointer-events: none;
-      transition: color 0.2s;
-    }
-    .search-wrap:focus-within .search-icon {
-      color: var(--intel-accent);
-    }
+/* SIDEBAR */
+.sidebar{grid-column:3/4;grid-row:1/3;display:flex;flex-direction:column;gap:12px}
+.mkt-row{display:flex;align-items:center;justify-content:space-between;padding:8px 13px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
+.mkt-row:last-child{border-bottom:none}
+.mkt-row:hover{background:var(--surface2)}
+.mkt-n{font-size:12px;font-weight:500;color:var(--text)}
+.mkt-s{font-size:10px;color:var(--text3);margin-top:1px}
+.mkt-v{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text);text-align:right}
+.mkt-c{font-family:var(--mono);font-size:10px;font-weight:500;margin-top:1px;text-align:right}
+.up{color:#48bb78}.dn{color:#e53e3e}
+.al-row{display:flex;gap:9px;align-items:flex-start;padding:9px 13px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
+.al-row:last-child{border-bottom:none}
+.al-row:hover{background:var(--surface2)}
+.al-bar{width:2px;border-radius:1px;flex-shrink:0;align-self:stretch;min-height:32px}
+.al-ttl{font-size:11.5px;font-weight:500;color:var(--text);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.al-sub{display:flex;gap:5px;align-items:center;margin-top:3px}
+.al-reg{font-size:10px;color:var(--text3)}
+.al-tm{font-family:var(--mono);font-size:10px;color:var(--text3)}
+.st-row{display:flex;align-items:center;gap:9px;padding:7px 13px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
+.st-row:last-child{border-bottom:none}
+.st-row:hover{background:var(--surface2)}
+.st-ico{color:var(--text2);flex-shrink:0;display:flex}
+.st-lbl{font-size:12px;font-weight:500;color:var(--text);flex:1}
+.st-val{font-size:10.5px;color:var(--text2)}
+.st-ind{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.ind-ok{background:#48bb78}
+.ind-warn{background:#f97316;box-shadow:0 0 5px rgba(249,115,22,.4)}
+.ind-err{background:#e53e3e;box-shadow:0 0 5px rgba(229,62,62,.4);animation:blink 1.5s infinite}
 
-    /* Search engine pills */
-    .search-engines {
-      display: flex;
-      gap: 6px;
-      justify-content: center;
-      flex-wrap: wrap;
-      margin-top: 10px;
-    }
-    .engine-pill {
-      padding: 3px 12px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 500;
-      cursor: pointer;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--text-secondary);
-      font-family: var(--font-ui);
-      transition: all 0.15s;
-      letter-spacing: 0.03em;
-    }
-    .engine-pill:hover,
-    .engine-pill.active {
-      background: var(--intel-accent-subtle);
-      border-color: var(--intel-accent-border);
-      color: var(--intel-accent);
-    }
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:3px;font-size:9.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase}
+.b-red{color:var(--red);background:var(--red-bg);border:1px solid rgba(229,62,62,.18)}
+.b-amb{color:var(--accent);background:var(--accent-subtle);border:1px solid var(--accent-border)}
+.b-blu{color:var(--blue);background:var(--blue-bg);border:1px solid rgba(66,153,225,.18)}
+.b-pur{color:var(--purple);background:var(--purple-bg);border:1px solid rgba(159,122,234,.18)}
+.b-grn{color:var(--green);background:var(--green-bg);border:1px solid rgba(72,187,120,.18)}
+.b-org{color:var(--orange);background:var(--orange-bg);border:1px solid rgba(249,115,22,.18)}
 
-    /* ── Quick Links ───────────────────────────────────────── */
-    .shortcuts-section {
-      width: 100%;
-      max-width: 700px;
-      padding: 0 24px;
-      animation: hero-in 0.6s 0.1s cubic-bezier(0.22,1,0.36,1) both;
-    }
+/* MODAL */
+.modal-bg{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-bg.open{opacity:1;pointer-events:all}
+.modal{background:var(--surface2);border:1px solid var(--border2);border-radius:12px;width:460px;max-width:calc(100vw - 40px);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;transform:translateY(10px);transition:transform .22s cubic-bezier(.22,1,.36,1)}
+.modal-bg.open .modal{transform:translateY(0)}
+.modal-hd{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--border)}
+.modal-ttl{font-size:14px;font-weight:600;color:var(--text)}
+.modal-x{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text2);background:var(--surface3);border:1px solid var(--border);transition:all .15s}
+.modal-x:hover{color:var(--text);border-color:var(--border2)}
+.modal-body{padding:18px;overflow-y:auto;display:flex;flex-direction:column;gap:18px}
+.modal-body::-webkit-scrollbar{width:4px}
+.modal-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.sg{}
+.sg-lbl{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);margin-bottom:9px;display:block}
+.sg-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)}
+.sg-row:last-child{border-bottom:none}
+.sg-name{font-size:13px;color:var(--text)}
+.sg-desc{font-size:10.5px;color:var(--text2);margin-top:2px}
+.toggle{position:relative;width:36px;height:20px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.tslider{position:absolute;inset:0;border-radius:20px;background:var(--surface3);border:1px solid var(--border2);cursor:pointer;transition:all .2s}
+.tslider::before{content:'';position:absolute;width:14px;height:14px;left:2px;top:50%;transform:translateY(-50%);border-radius:50%;background:var(--text3);transition:all .2s}
+.toggle input:checked + .tslider{background:var(--accent-subtle);border-color:var(--accent-border)}
+.toggle input:checked + .tslider::before{transform:translate(16px,-50%);background:var(--accent)}
+.msel{background:var(--surface3);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:5px 10px;font-size:12px;font-family:var(--font);outline:none;cursor:pointer;transition:border-color .15s}
+.msel:focus{border-color:var(--accent-border)}
+.theme-row{display:flex;gap:8px;margin-top:8px}
+.th-opt{flex:1;padding:9px 7px;border-radius:8px;border:1px solid var(--border);text-align:center;cursor:pointer;transition:all .15s}
+.th-opt.active,.th-opt:hover{border-color:var(--accent-border);background:var(--accent-subtle)}
+.th-sw{width:100%;height:22px;border-radius:4px;margin-bottom:6px}
+.th-name{font-size:11px;font-weight:500;color:var(--text2)}
+.th-opt.active .th-name{color:var(--accent)}
 
-    .shortcuts-grid {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
+/* FOOTER */
+.footer{position:fixed;bottom:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:7px 20px;background:rgba(6,6,8,.88);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--border);z-index:50}
+.f-brand{font-size:10.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);opacity:.55}
+.f-stats{display:flex;gap:14px;align-items:center}
+.f-stat{display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;color:var(--text3)}
+.f-dot{width:5px;height:5px;border-radius:50%}
 
-    .shortcut {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 7px;
-      cursor: pointer;
-      padding: 10px 8px;
-      border-radius: 10px;
-      border: 1px solid transparent;
-      transition: all 0.18s;
-      text-decoration: none;
-      width: 76px;
-    }
-    .shortcut:hover {
-      background: var(--surface-hover);
-      border-color: var(--border);
-      transform: translateY(-2px);
-    }
-    .shortcut-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: 10px;
-      background: var(--surface-raised);
-      border: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      transition: border-color 0.18s, box-shadow 0.18s;
-      position: relative;
-      overflow: hidden;
-    }
-    .shortcut:hover .shortcut-icon {
-      border-color: var(--intel-accent-border);
-      box-shadow: 0 0 0 1px var(--intel-accent-border), 0 4px 12px rgba(0,0,0,0.3);
-    }
-    /* Color accent bar at top of icon per category */
-    .shortcut-icon::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-      background: var(--shortcut-color, var(--intel-accent));
-      opacity: 0;
-      transition: opacity 0.18s;
-    }
-    .shortcut:hover .shortcut-icon::before { opacity: 1; }
-
-    .shortcut-label {
-      font-size: 10.5px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      text-align: center;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      width: 100%;
-      transition: color 0.18s;
-    }
-    .shortcut:hover .shortcut-label { color: var(--text-primary); }
-
-    /* Add shortcut button */
-    .shortcut-add .shortcut-icon {
-      background: transparent;
-      border-style: dashed;
-      border-color: var(--border);
-      color: var(--text-dim);
-      font-size: 22px;
-    }
-
-    /* ── Divider ───────────────────────────────────────────── */
-    .section-divider {
-      width: 100%;
-      max-width: 1200px;
-      padding: 0 24px;
-      margin: 28px 0 0;
-    }
-    .divider-line {
-      border: none;
-      border-top: 1px solid var(--border-subtle);
-    }
-
-    /* ── Feed Section ──────────────────────────────────────── */
-    .feed-section {
-      width: 100%;
-      max-width: 1200px;
-      padding: 20px 24px 40px;
-      display: grid;
-      grid-template-columns: 1fr 340px;
-      gap: 20px;
-      animation: hero-in 0.6s 0.2s cubic-bezier(0.22,1,0.36,1) both;
-    }
-
-    /* Feed header */
-    .feed-header {
-      grid-column: 1 / -1;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .feed-header-left {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    .feed-tabs {
-      display: flex;
-      gap: 2px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 3px;
-    }
-    .feed-tab {
-      padding: 5px 14px;
-      font-size: 12px;
-      font-weight: 500;
-      border-radius: 6px;
-      cursor: pointer;
-      color: var(--text-secondary);
-      transition: all 0.15s;
-      border: none;
-      background: transparent;
-      font-family: var(--font-ui);
-    }
-    .feed-tab.active {
-      background: var(--intel-accent-subtle);
-      color: var(--intel-accent);
-      border: 1px solid var(--intel-accent-border);
-    }
-    .feed-tab:not(.active):hover { color: var(--text-primary); }
-
-    .feed-actions {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-    .feed-btn {
-      padding: 5px 12px;
-      font-size: 11px;
-      font-weight: 500;
-      border-radius: 6px;
-      cursor: pointer;
-      color: var(--text-secondary);
-      background: var(--surface);
-      border: 1px solid var(--border);
-      font-family: var(--font-ui);
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      transition: all 0.15s;
-    }
-    .feed-btn:hover {
-      border-color: var(--intel-accent-border);
-      color: var(--intel-accent);
-      background: var(--intel-accent-subtle);
-    }
-
-    /* ── Main Feed ─────────────────────────────────────────── */
-    .feed-main {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    /* Hero card */
-    .card-hero {
-      border-radius: 12px;
-      overflow: hidden;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      cursor: pointer;
-      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      min-height: 200px;
-      text-decoration: none;
-    }
-    .card-hero:hover {
-      border-color: var(--intel-accent-border);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    }
-    .card-hero-image {
-      background: var(--surface-raised);
-      position: relative;
-      overflow: hidden;
-    }
-    .card-hero-image img {
-      width: 100%; height: 100%;
-      object-fit: cover;
-      opacity: 0.7;
-      transition: opacity 0.3s, transform 0.3s;
-    }
-    .card-hero:hover .card-hero-image img {
-      opacity: 0.85;
-      transform: scale(1.02);
-    }
-    .card-hero-image-placeholder {
-      width: 100%; height: 100%;
-      background: linear-gradient(135deg, var(--surface-raised) 0%, var(--surface-hover) 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 48px;
-      opacity: 0.3;
-    }
-    .card-hero-content {
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-    .card-category-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 3px 8px;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-      width: fit-content;
-    }
-    .badge-threat  { background: rgba(229,62,62,0.12);   color: var(--cat-threat);   border: 1px solid rgba(229,62,62,0.2); }
-    .badge-cyber   { background: rgba(159,122,234,0.12); color: var(--cat-cyber);    border: 1px solid rgba(159,122,234,0.2); }
-    .badge-market  { background: rgba(66,153,225,0.12);  color: var(--cat-market);   border: 1px solid rgba(66,153,225,0.2); }
-    .badge-news    { background: rgba(237,137,54,0.12);  color: var(--cat-news);     border: 1px solid rgba(237,137,54,0.2); }
-    .badge-mil     { background: rgba(249,115,22,0.12);  color: var(--cat-military); border: 1px solid rgba(249,115,22,0.2); }
-    .badge-intel   { background: rgba(212,168,67,0.12);  color: var(--intel-accent); border: 1px solid var(--intel-accent-border); }
-
-    .card-hero-title {
-      font-size: 17px;
-      font-weight: 600;
-      line-height: 1.4;
-      color: var(--text-primary);
-      margin-bottom: 8px;
-    }
-    .card-hero-desc {
-      font-size: 13px;
-      line-height: 1.5;
-      color: var(--text-secondary);
-    }
-    .card-meta {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    .card-source {
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--text-dim);
-    }
-    .card-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text-dim); }
-    .card-time {
-      font-family: var(--font-data);
-      font-size: 11px;
-      color: var(--text-dim);
-    }
-
-    /* Regular cards grid */
-    .cards-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-
-    .card {
-      border-radius: 10px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      cursor: pointer;
-      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
-      text-decoration: none;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-    .card:hover {
-      border-color: var(--intel-accent-border);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
-    }
-    .card-image {
-      height: 120px;
-      background: var(--surface-raised);
-      position: relative;
-      overflow: hidden;
-    }
-    .card-image img {
-      width: 100%; height: 100%;
-      object-fit: cover;
-      opacity: 0.65;
-      transition: opacity 0.3s, transform 0.3s;
-    }
-    .card:hover .card-image img {
-      opacity: 0.8;
-      transform: scale(1.03);
-    }
-    .card-image-placeholder {
-      width: 100%; height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 32px;
-      opacity: 0.25;
-    }
-    /* Severity bar at top of card */
-    .card-severity {
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 3px;
-    }
-    .severity-critical { background: var(--cat-threat); }
-    .severity-high     { background: var(--cat-military); }
-    .severity-medium   { background: var(--intel-accent); }
-    .severity-low      { background: var(--cat-market); }
-    .severity-info     { background: var(--cat-positive); }
-
-    .card-body {
-      padding: 12px 14px;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .card-title {
-      font-size: 13px;
-      font-weight: 600;
-      line-height: 1.4;
-      color: var(--text-primary);
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-    .card-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-top: auto;
-      padding-top: 6px;
-    }
-
-    /* ── Right Sidebar ─────────────────────────────────────── */
-    .feed-sidebar {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .sidebar-widget {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
-    }
-    .widget-header {
-      padding: 11px 14px;
-      border-bottom: 1px solid var(--border-subtle);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .widget-title {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .widget-title-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--intel-accent);
-    }
-    .widget-more {
-      font-size: 11px;
-      color: var(--intel-accent);
-      cursor: pointer;
-      text-decoration: none;
-      opacity: 0.7;
-      transition: opacity 0.15s;
-    }
-    .widget-more:hover { opacity: 1; }
-
-    /* Markets widget */
-    .market-row {
-      padding: 8px 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--border-subtle);
-      transition: background 0.15s;
-      cursor: pointer;
-    }
-    .market-row:last-child { border-bottom: none; }
-    .market-row:hover { background: var(--surface-hover); }
-    .market-name {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text-primary);
-    }
-    .market-sub {
-      font-size: 10px;
-      color: var(--text-dim);
-      margin-top: 1px;
-    }
-    .market-price {
-      text-align: right;
-    }
-    .market-value {
-      font-family: var(--font-data);
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-primary);
-    }
-    .market-change {
-      font-family: var(--font-data);
-      font-size: 10px;
-      font-weight: 500;
-      margin-top: 1px;
-    }
-    .change-up   { color: #48bb78; }
-    .change-down { color: #e53e3e; }
-
-    /* Alerts widget */
-    .alert-item {
-      padding: 9px 14px;
-      border-bottom: 1px solid var(--border-subtle);
-      cursor: pointer;
-      transition: background 0.15s;
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-    }
-    .alert-item:last-child { border-bottom: none; }
-    .alert-item:hover { background: var(--surface-hover); }
-    .alert-severity-bar {
-      width: 3px;
-      border-radius: 2px;
-      flex-shrink: 0;
-      align-self: stretch;
-      min-height: 36px;
-    }
-    .alert-content {}
-    .alert-title {
-      font-size: 11.5px;
-      font-weight: 500;
-      color: var(--text-primary);
-      line-height: 1.4;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-    .alert-meta {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-      margin-top: 3px;
-    }
-    .alert-region {
-      font-size: 10px;
-      color: var(--text-dim);
-    }
-    .alert-time {
-      font-family: var(--font-data);
-      font-size: 10px;
-      color: var(--text-dim);
-    }
-
-    /* Weather / Status widget */
-    .status-row {
-      padding: 8px 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      border-bottom: 1px solid var(--border-subtle);
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .status-row:last-child { border-bottom: none; }
-    .status-row:hover { background: var(--surface-hover); }
-    .status-icon { font-size: 18px; width: 24px; text-align: center; }
-    .status-label {
-      flex: 1;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text-primary);
-    }
-    .status-value {
-      font-family: var(--font-data);
-      font-size: 11px;
-      color: var(--text-secondary);
-    }
-    .status-indicator {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-    }
-    .ind-ok     { background: #48bb78; }
-    .ind-warn   { background: #ed8936; box-shadow: 0 0 4px rgba(237,137,54,0.5); }
-    .ind-alert  { background: #e53e3e; box-shadow: 0 0 4px rgba(229,62,62,0.5); animation: pulse-dot 1.5s ease-in-out infinite; }
-
-    /* ── Footer ─────────────────────────────────────────────── */
-    .page-footer {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      padding: 8px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: rgba(6,6,8,0.8);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border-top: 1px solid var(--border-subtle);
-      z-index: 10;
-    }
-    .footer-left {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    .footer-brand {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--intel-accent);
-      opacity: 0.6;
-    }
-    .footer-version {
-      font-family: var(--font-data);
-      font-size: 10px;
-      color: var(--text-dim);
-    }
-    .footer-right {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .footer-stat {
-      font-family: var(--font-data);
-      font-size: 10px;
-      color: var(--text-dim);
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .footer-stat-dot {
-      width: 5px; height: 5px;
-      border-radius: 50%;
-    }
-
-    /* ── Scrollbar ──────────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--border-strong, #35354a); }
-
-    /* ── Responsive ─────────────────────────────────────────── */
-    @media (max-width: 900px) {
-      .feed-section { grid-template-columns: 1fr; }
-      .feed-sidebar { display: none; }
-      .card-hero { grid-template-columns: 1fr; }
-      .card-hero-image { height: 160px; }
-    }
-    @media (max-width: 600px) {
-      .cards-grid { grid-template-columns: 1fr; }
-      .shortcuts-grid { gap: 8px; }
-      .shortcut { width: 68px; }
-    }
-  </style>
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+</style>
 </head>
 <body>
 
-<!-- Background layers -->
-<div class="bg-layer"></div>
-<div class="bg-grid"></div>
-<svg class="bg-radar" viewBox="0 0 600 600">
-  <circle cx="300" cy="300" r="80"  stroke-width="0.5" opacity="0.6"/>
-  <circle cx="300" cy="300" r="150" stroke-width="0.5" opacity="0.5"/>
-  <circle cx="300" cy="300" r="220" stroke-width="0.5" opacity="0.4"/>
-  <circle cx="300" cy="300" r="290" stroke-width="0.5" opacity="0.3"/>
-  <g class="sweep">
-    <path d="M300 300 L300 10 A290 290 0 0 1 590 300 Z"
-          fill="url(#sweepGrad)" opacity="0.6"/>
-    <defs>
-      <radialGradient id="sweepGrad" cx="50%" cy="50%" r="50%">
-        <stop offset="0%"   stop-color="#d4a843" stop-opacity="0"/>
-        <stop offset="60%"  stop-color="#d4a843" stop-opacity="0.2"/>
-        <stop offset="100%" stop-color="#d4a843" stop-opacity="0.8"/>
-      </radialGradient>
-    </defs>
-  </g>
-  <circle cx="300" cy="300" r="4" fill="#d4a843" opacity="0.8"/>
-</svg>
+<div class="bg-wrap"><div class="bg-g"></div><div class="bg-grid"></div></div>
+
+<!-- CUSTOMIZATION MODAL -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="modal-hd">
+      <span class="modal-ttl">Customize New Tab</span>
+      <button class="modal-x" id="modalX"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="sg">
+        <span class="sg-lbl">Theme</span>
+        <div class="theme-row">
+          <div class="th-opt active" data-th="tactical"><div class="th-sw" style="background:linear-gradient(135deg,#060608,#181822)"></div><div class="th-name">Tactical</div></div>
+          <div class="th-opt" data-th="slate"><div class="th-sw" style="background:linear-gradient(135deg,#0f1117,#1e2230)"></div><div class="th-name">Slate</div></div>
+          <div class="th-opt" data-th="palantir"><div class="th-sw" style="background:linear-gradient(135deg,#0a0a0f,#12121f)"></div><div class="th-name">Palantir</div></div>
+        </div>
+      </div>
+      <div class="sg">
+        <span class="sg-lbl">Panels</span>
+        <div class="sg-row"><div><div class="sg-name">Live Map</div><div class="sg-desc">Embedded global intelligence map</div></div><label class="toggle"><input type="checkbox" id="tMap" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Live News</div><div class="sg-desc">Global intel feed with thumbnails</div></div><label class="toggle"><input type="checkbox" id="tNews" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Local Panel</div><div class="sg-desc">Local weather and city news</div></div><label class="toggle"><input type="checkbox" id="tLocal" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Markets</div><div class="sg-desc">Live commodity and market data</div></div><label class="toggle"><input type="checkbox" id="tMkt" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Live Alerts</div><div class="sg-desc">Real-time intelligence alerts</div></div><label class="toggle"><input type="checkbox" id="tAlerts" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Data Status</div><div class="sg-desc">Feed health indicators</div></div><label class="toggle"><input type="checkbox" id="tStatus" checked/><span class="tslider"></span></label></div>
+      </div>
+      <div class="sg">
+        <span class="sg-lbl">Search Engine</span>
+        <select class="msel" id="engSel"><option value="ddg">DuckDuckGo</option><option value="google">Google</option><option value="brave">Brave Search</option><option value="shodan">Shodan</option><option value="gdelt">GDELT</option><option value="intelx">IntelligenceX</option></select>
+      </div>
+      <div class="sg">
+        <span class="sg-lbl">Map Source</span>
+        <select class="msel" id="mapSel"><option value="osm">OpenStreetMap (Dark)</option><option value="windy">Windy Weather Map</option><option value="osintview">OSINTview Dashboard</option></select>
+      </div>
+      <div class="sg">
+        <span class="sg-lbl">Local News Region</span>
+        <select class="msel" id="regSel"><option value="memphis">Memphis / Germantown, TN</option><option value="nashville">Nashville, TN</option><option value="chicago">Chicago, IL</option><option value="newyork">New York, NY</option><option value="la">Los Angeles, CA</option><option value="houston">Houston, TX</option><option value="atlanta">Atlanta, GA</option></select>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="page">
 
-  <!-- Top Bar -->
-  <header class="top-bar">
-    <a class="top-bar-logo" href="#">
-      <svg viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="10" stroke="#d4a843" stroke-width="1.5"/>
-        <circle cx="12" cy="12" r="4"  stroke="#d4a843" stroke-width="1.5"/>
-        <line x1="12" y1="2"  x2="12" y2="8"  stroke="#d4a843" stroke-width="1.5"/>
-        <line x1="12" y1="16" x2="12" y2="22" stroke="#d4a843" stroke-width="1.5"/>
-        <line x1="2"  y1="12" x2="8"  y2="12" stroke="#d4a843" stroke-width="1.5"/>
-        <line x1="16" y1="12" x2="22" y2="12" stroke="#d4a843" stroke-width="1.5"/>
-      </svg>
-      <span class="top-bar-logo-text">Monitor</span>
-    </a>
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="tb-left">
+    <div class="logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#d4a843" stroke-width="1.5"/><circle cx="12" cy="12" r="4" stroke="#d4a843" stroke-width="1.5"/><line x1="12" y1="3" x2="12" y2="7" stroke="#d4a843" stroke-width="1.5" stroke-linecap="round"/><line x1="12" y1="17" x2="12" y2="21" stroke="#d4a843" stroke-width="1.5" stroke-linecap="round"/><line x1="3" y1="12" x2="7" y2="12" stroke="#d4a843" stroke-width="1.5" stroke-linecap="round"/><line x1="17" y1="12" x2="21" y2="12" stroke="#d4a843" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span class="logo-txt">Monitor</span>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tb-loc">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      <span id="locTxt">Detecting...</span>
+    </div>
+  </div>
+  <div class="tb-right">
+    <div class="tb-pill"><div class="pulse"></div><span>Elevated</span></div>
+    <span class="tb-clock" id="clock">00:00:00 UTC</span>
+    <button class="tb-btn" id="custBtn" title="Customize new tab"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg></button>
+    <button class="tb-btn" title="Account"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>
+  </div>
+</header>
 
-    <div class="top-bar-meta">
-      <span class="top-bar-location">📍 <span id="locationDisplay">Detecting...</span></span>
-      <div class="top-bar-threat">
-        <span class="threat-dot"></span>
-        <span>ELEVATED</span>
+<!-- HERO -->
+<div class="hero">
+  <span class="hero-greet" id="greet">Good morning, Analyst</span>
+  <div class="srch-wrap">
+    <input class="srch-in" id="srchIn" type="text" placeholder="Search or enter address..." autocomplete="off" spellcheck="false"/>
+    <button class="srch-btn" id="srchBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+  </div>
+  <div class="eng-row" id="engRow">
+    <button class="eng-btn active" data-e="ddg">DuckDuckGo</button>
+    <button class="eng-btn" data-e="google">Google</button>
+    <button class="eng-btn" data-e="brave">Brave</button>
+    <button class="eng-btn" data-e="shodan">Shodan</button>
+    <button class="eng-btn" data-e="gdelt">GDELT</button>
+    <button class="eng-btn" data-e="intelx">IntelX</button>
+  </div>
+</div>
+
+<!-- SHORTCUTS -->
+<div class="sc-wrap"><div class="sc-grid" id="scGrid"></div></div>
+
+<!-- DIVIDER -->
+<div class="div-wrap">
+  <hr/>
+  <div class="div-label">
+    <div class="dtabs" id="feedTabs">
+      <button class="dtab active" data-tab="intel">Intel</button>
+      <button class="dtab" data-tab="conflicts">Conflicts</button>
+      <button class="dtab" data-tab="markets">Markets</button>
+      <button class="dtab" data-tab="cyber">Cyber</button>
+      <button class="dtab" data-tab="world">World</button>
+    </div>
+    <div class="div-acts">
+      <button class="act-btn" id="layoutBtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Feed layout</button>
+      <button class="act-btn" id="persBtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>Personalize</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONTENT GRID -->
+<div class="cgrid" id="cgrid">
+
+  <!-- MAP -->
+  <div class="wgt map-wgt" id="mapWgt">
+    <div class="wgt-head">
+      <span class="wgt-title"><span class="wdot" style="background:var(--green);animation:blink 2s infinite"></span>Live Intelligence Map</span>
+      <div class="wgt-ctrl">
+        <button class="wc-btn" onclick="cycleMap()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg>Source</button>
+        <button class="wc-btn" onclick="openMapFull()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>Full</button>
       </div>
-      <span class="top-bar-clock" id="clockDisplay">00:00:00 UTC</span>
     </div>
-  </header>
-
-  <!-- Hero / Search -->
-  <div class="hero">
-    <span class="hero-greeting" id="greetingText">Good morning, Analyst</span>
-
-    <div class="search-wrap">
-      <input
-        class="search-bar"
-        id="searchInput"
-        type="text"
-        placeholder="Search the web or enter address..."
-        autocomplete="off"
-        spellcheck="false"
-      />
-      <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-      </svg>
-    </div>
-
-    <div class="search-engines">
-      <button class="engine-pill active" data-engine="ddg">DuckDuckGo</button>
-      <button class="engine-pill" data-engine="google">Google</button>
-      <button class="engine-pill" data-engine="brave">Brave</button>
-      <button class="engine-pill" data-engine="shodan">Shodan</button>
-      <button class="engine-pill" data-engine="gdelt">GDELT</button>
-      <button class="engine-pill" data-engine="intelx">IntelX</button>
+    <div class="map-frame">
+      <iframe id="mapIframe" src="https://www.openstreetmap.org/export/embed.html?bbox=-180,-85,180,85&layer=mapnik" allowfullscreen loading="lazy"></iframe>
+      <div class="map-bar">
+        <span class="mbar-s"><span class="mbar-v" id="mStat1">847</span> Events</span>
+        <span class="mbar-s"><span class="mbar-v" id="mStat2">12,340</span> Flights</span>
+        <span class="mbar-s"><span class="mbar-v" id="mStat3">3,218</span> Vessels</span>
+      </div>
     </div>
   </div>
 
-  <!-- Shortcuts -->
-  <div class="shortcuts-section">
-    <div class="shortcuts-grid" id="shortcutsGrid">
-      <!-- Injected by JS -->
+  <!-- LIVE NEWS -->
+  <div class="wgt news-wgt" id="newsWgt">
+    <div class="wgt-head">
+      <span class="wgt-title"><span class="wdot" style="background:var(--blue);animation:blink 2.5s infinite"></span>Live News</span>
+      <div class="wgt-ctrl"><button class="wc-btn" id="refreshBtn"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg>Refresh</button></div>
     </div>
+    <div class="news-list" id="newsList"><div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Loading feed...</div></div>
   </div>
 
-  <!-- Divider -->
-  <div class="section-divider">
-    <hr class="divider-line"/>
+  <!-- LOCAL -->
+  <div class="wgt loc-wgt" id="locWgt">
+    <div class="wgt-head">
+      <span class="wgt-title"><span class="wdot" style="background:var(--purple)"></span>Local — <span id="locCity">Germantown, TN</span></span>
+    </div>
+    <div class="wx-block">
+      <div class="wx-main">
+        <div class="wx-ico" id="wxIco"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#d4a843" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></div>
+        <div>
+          <div class="wx-temp"><span class="wx-t" id="wxT">—</span><span class="wx-u">°F</span></div>
+          <div class="wx-desc" id="wxDesc">Loading...</div>
+          <div class="wx-city" id="wxCity">Detecting location...</div>
+        </div>
+      </div>
+      <div class="wx-dets">
+        <div class="wxd"><div class="wxd-v" id="wxH">—</div><div class="wxd-k">Humidity</div></div>
+        <div class="wxd"><div class="wxd-v" id="wxW">—</div><div class="wxd-k">Wind</div></div>
+        <div class="wxd"><div class="wxd-v" id="wxUV">—</div><div class="wxd-k">UV</div></div>
+      </div>
+    </div>
+    <div class="wgt-head" style="border-top:none;padding:7px 13px"><span class="wgt-title" style="font-size:10px">Local News</span></div>
+    <div class="lnews-list" id="lnewsList"><div style="padding:12px 13px;color:var(--text3);font-size:11px">Loading local news...</div></div>
   </div>
 
-  <!-- Feed -->
-  <div class="feed-section">
-
-    <!-- Feed Header -->
-    <div class="feed-header">
-      <div class="feed-header-left">
-        <div class="feed-tabs">
-          <button class="feed-tab active" data-tab="intel">Intel</button>
-          <button class="feed-tab" data-tab="conflicts">Conflicts</button>
-          <button class="feed-tab" data-tab="markets">Markets</button>
-          <button class="feed-tab" data-tab="cyber">Cyber</button>
-          <button class="feed-tab" data-tab="world">World</button>
-        </div>
-      </div>
-      <div class="feed-actions">
-        <button class="feed-btn">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
-          Feed layout
-        </button>
-        <button class="feed-btn">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
-          Personalize
-        </button>
-      </div>
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="wgt" id="mktWgt">
+      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--blue)"></span>Markets</span><a href="https://finance.yahoo.com" target="_blank" class="wc-btn" style="font-size:10px;padding:2px 7px">All →</a></div>
+      <div id="mktList"></div>
     </div>
-
-    <!-- Main Feed -->
-    <div class="feed-main" id="feedMain">
-      <!-- Injected by JS -->
+    <div class="wgt" id="alertsWgt">
+      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--red);animation:blink 1.5s infinite"></span>Live Alerts</span></div>
+      <div id="alertList"></div>
     </div>
-
-    <!-- Right Sidebar -->
-    <div class="feed-sidebar">
-
-      <!-- Markets Widget -->
-      <div class="sidebar-widget">
-        <div class="widget-header">
-          <span class="widget-title">
-            <span class="widget-title-dot" style="background:var(--cat-market)"></span>
-            Markets
-          </span>
-          <a class="widget-more" href="#">See all →</a>
-        </div>
-        <div id="marketsWidget">
-          <!-- Injected by JS -->
-        </div>
-      </div>
-
-      <!-- Live Alerts Widget -->
-      <div class="sidebar-widget">
-        <div class="widget-header">
-          <span class="widget-title">
-            <span class="widget-title-dot" style="background:var(--cat-threat); animation: pulse-dot 1.5s ease-in-out infinite;"></span>
-            Live Alerts
-          </span>
-          <a class="widget-more" href="#">View all →</a>
-        </div>
-        <div id="alertsWidget">
-          <!-- Injected by JS -->
-        </div>
-      </div>
-
-      <!-- System Status Widget -->
-      <div class="sidebar-widget">
-        <div class="widget-header">
-          <span class="widget-title">
-            <span class="widget-title-dot" style="background:var(--cat-positive)"></span>
-            Data Status
-          </span>
-        </div>
-        <div id="statusWidget">
-          <!-- Injected by JS -->
-        </div>
-      </div>
-
+    <div class="wgt" id="statusWgt">
+      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--green)"></span>Data Status</span></div>
+      <div id="statusList"></div>
     </div>
   </div>
 
 </div>
+</div>
 
-<!-- Footer -->
-<footer class="page-footer">
-  <div class="footer-left">
-    <span class="footer-brand">Monitor Browser</span>
-    <span class="footer-version">v1.0.0 · OSINT Edition</span>
-  </div>
-  <div class="footer-right">
-    <span class="footer-stat">
-      <span class="footer-stat-dot ind-ok"></span>
-      Intel Feed Live
-    </span>
-    <span class="footer-stat">
-      <span class="footer-stat-dot ind-ok"></span>
-      <span id="footerDate"></span>
-    </span>
-    <span class="footer-stat" id="tabCount">1 tab open</span>
+<footer class="footer">
+  <span class="f-brand">Monitor Browser</span>
+  <div class="f-stats">
+    <span class="f-stat"><span class="f-dot ind-ok"></span>Intel Feed Live</span>
+    <span class="f-stat" id="fDate"></span>
   </div>
 </footer>
 
 <script>
-// ── Clock & Greeting ────────────────────────────────────────
-function updateClock() {
-  const now = new Date();
-  const utc = now.toUTCString().match(/(\d{2}:\d{2}:\d{2})/);
-  document.getElementById('clockDisplay').textContent = (utc ? utc[1] : '00:00:00') + ' UTC';
+'use strict';
 
-  const h = now.getHours();
-  const greet = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 21 ? 'Good evening' : 'Good night';
-  document.getElementById('greetingText').textContent = greet + ', Analyst';
+/* ── SETTINGS ─────────────────────────────────── */
+function loadCfg(){try{return JSON.parse(localStorage.getItem('mb-cfg')||'{}')}catch{return{}}}
+function saveCfg(c){localStorage.setItem('mb-cfg',JSON.stringify(c))}
+let cfg=loadCfg();
 
-  const dateStr = now.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
-  document.getElementById('footerDate').textContent = dateStr;
+/* ── CLOCK ────────────────────────────────────── */
+function tick(){
+  const n=new Date(),u=n.toUTCString().match(/(\d{2}:\d{2}:\d{2})/);
+  document.getElementById('clock').textContent=(u?u[1]:'00:00:00')+' UTC';
+  const h=n.getHours(),g=h<5?'Good night':h<12?'Good morning':h<17?'Good afternoon':h<21?'Good evening':'Good night';
+  document.getElementById('greet').textContent=g+', Analyst';
+  document.getElementById('fDate').textContent=n.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
 }
-updateClock();
-setInterval(updateClock, 1000);
+tick();setInterval(tick,1000);
 
-// ── Location (best-effort) ──────────────────────────────────
-if (navigator.geolocation) {
-  navigator.geolocation.getCurrentPosition(pos => {
-    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`)
-      .then(r => r.json())
-      .then(d => {
-        const city = d.address?.city || d.address?.town || d.address?.village || d.address?.county || '';
-        const state = d.address?.state || '';
-        document.getElementById('locationDisplay').textContent = city ? `${city}, ${state}` : 'Unknown';
-      }).catch(() => { document.getElementById('locationDisplay').textContent = 'Unknown'; });
-  }, () => { document.getElementById('locationDisplay').textContent = 'Unknown'; });
-} else {
-  document.getElementById('locationDisplay').textContent = 'Unknown';
+/* ── LOCATION ─────────────────────────────────── */
+let uLat=35.0867,uLon=-89.8428,uCity='Germantown, TN';
+function setLoc(lat,lon,city){
+  uLat=lat;uLon=lon;uCity=city;
+  document.getElementById('locTxt').textContent=city;
+  document.getElementById('locCity').textContent=city;
+  document.getElementById('wxCity').textContent=city;
+  fetchWeather(lat,lon);
+}
+if(navigator.geolocation){
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const{latitude:lat,longitude:lon}=pos.coords;
+    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`)
+      .then(r=>r.json()).then(d=>{
+        const c=d.address?.city||d.address?.town||d.address?.village||'',s=d.address?.state_code||'';
+        setLoc(lat,lon,c?(c+', '+s):'Unknown');
+      }).catch(()=>setLoc(lat,lon,'Unknown'));
+  },()=>setLoc(uLat,uLon,uCity));
+}else{setLoc(uLat,uLon,uCity);}
+
+/* ── WEATHER (Open-Meteo, free, no key) ───────── */
+const WMO={0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Foggy',48:'Icy fog',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',80:'Showers',81:'Rain showers',82:'Heavy showers',95:'Thunderstorm',96:'Thunderstorm+hail',99:'Severe storm'};
+function wxSVG(c){
+  const SUN=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#d4a843" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+  const CLOUD=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#8888a0" stroke-width="1.5"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`;
+  const RAIN=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#4299e1" stroke-width="1.5"><line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>`;
+  const SNOW=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#a0c8ff" stroke-width="1.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5l-5 5-5-5"/><path d="M17 19l-5-5-5 5"/><path d="M1 12l4 2-4 2"/><path d="M23 12l-4 2 4 2"/></svg>`;
+  const STORM=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#9f7aea" stroke-width="1.5"><path d="M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 9"/><polyline points="13 11 9 17 15 17 11 23"/></svg>`;
+  if([0,1].includes(c))return SUN;
+  if([2,3,45,48].includes(c))return CLOUD;
+  if([71,73,75].includes(c))return SNOW;
+  if([95,96,99].includes(c))return STORM;
+  return RAIN;
+}
+function fetchWeather(lat,lon){
+  fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,uv_index,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`)
+    .then(r=>r.json()).then(d=>{
+      const c=d.current;
+      document.getElementById('wxT').textContent=Math.round(c.temperature_2m);
+      document.getElementById('wxDesc').textContent=WMO[c.weather_code]||'Clear';
+      document.getElementById('wxH').textContent=c.relative_humidity_2m+'%';
+      document.getElementById('wxW').textContent=Math.round(c.wind_speed_10m)+' mph';
+      document.getElementById('wxUV').textContent=c.uv_index??'—';
+      document.getElementById('wxIco').innerHTML=wxSVG(c.weather_code);
+    }).catch(()=>{document.getElementById('wxDesc').textContent='Unavailable'});
 }
 
-// ── Search Engine Logic ─────────────────────────────────────
-const ENGINES = {
-  ddg:    q => `https://duckduckgo.com/?q=${encodeURIComponent(q)}`,
-  google: q => `https://www.google.com/search?q=${encodeURIComponent(q)}`,
-  brave:  q => `https://search.brave.com/search?q=${encodeURIComponent(q)}`,
-  shodan: q => `https://www.shodan.io/search?query=${encodeURIComponent(q)}`,
-  gdelt:  q => `https://gdeltproject.org/data/#googlebigquery&q=${encodeURIComponent(q)}`,
-  intelx: q => `https://intelx.io/?s=${encodeURIComponent(q)}`,
+/* ── SVG ICON LIBRARY ─────────────────────────── */
+const I={
+  globe:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+  shield:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  plane:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21 4 19.5 2.5S18 2 16.5 3.5L13 7 4.8 5.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>`,
+  anchor:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>`,
+  search:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+  eye:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  map:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>`,
+  cpu:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>`,
+  activity:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
+  server:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>`,
+  archive:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>`,
+  plus:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
 };
-let activeEngine = 'ddg';
 
-document.querySelectorAll('.engine-pill').forEach(pill => {
-  pill.addEventListener('click', () => {
-    document.querySelectorAll('.engine-pill').forEach(p => p.classList.remove('active'));
-    pill.classList.add('active');
-    activeEngine = pill.dataset.engine;
-    document.getElementById('searchInput').focus();
-  });
-});
-
-const searchInput = document.getElementById('searchInput');
-searchInput.addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return;
-  const q = searchInput.value.trim();
-  if (!q) return;
-  // If it looks like a URL, navigate directly
-  const isUrl = /^(https?:\/\/|www\.)/.test(q) || /^[a-z0-9-]+\.[a-z]{2,}(\/.*)?$/.test(q);
-  const url = isUrl ? (q.startsWith('http') ? q : 'https://' + q) : ENGINES[activeEngine](q);
-  // In Tauri: invoke('navigate', { url }); For now open in same window
-  window.location.href = url;
-});
-
-// ── Shortcuts ───────────────────────────────────────────────
-const SHORTCUTS = [
-  { label: 'GDELT',       icon: '🌐', url: 'https://gdeltproject.org',           color: 'var(--intel-accent)' },
-  { label: 'ACLED',       icon: '⚔️',  url: 'https://acleddata.com',               color: 'var(--cat-threat)' },
-  { label: 'ISW',         icon: '🗺️',  url: 'https://www.understandingwar.org',    color: 'var(--cat-military)' },
-  { label: 'Shodan',      icon: '🔍', url: 'https://www.shodan.io',               color: 'var(--cat-cyber)' },
-  { label: 'Bellingcat',  icon: '🔎', url: 'https://www.bellingcat.com',          color: 'var(--cat-news)' },
-  { label: 'FlightRadar', icon: '✈️',  url: 'https://www.flightradar24.com',       color: 'var(--cat-market)' },
-  { label: 'MarineTraffic',icon:'🚢', url: 'https://www.marinetraffic.com',       color: 'var(--cat-market)' },
-  { label: 'GreyNoise',   icon: '🛡️',  url: 'https://www.greynoise.io',            color: 'var(--cat-cyber)' },
-  { label: 'OSINTfmwk',  icon: '🧩', url: 'https://osintframework.com',          color: 'var(--intel-accent)' },
-  { label: 'IntelX',      icon: '💾', url: 'https://intelx.io',                   color: 'var(--cat-cyber)' },
-  { label: 'Windy',       icon: '🌩️',  url: 'https://www.windy.com',               color: 'var(--cat-positive)' },
-  { label: 'Add',         icon: '+',  url: null,                                  color: 'var(--text-dim)', add: true },
+/* ── SHORTCUTS ────────────────────────────────── */
+const SHORTCUTS=[
+  {label:'GDELT',       icon:'globe',   url:'https://gdeltproject.org',         color:'var(--accent)'},
+  {label:'ACLED',       icon:'shield',  url:'https://acleddata.com',             color:'var(--red)'},
+  {label:'FlightRadar', icon:'plane',   url:'https://www.flightradar24.com',     color:'var(--blue)'},
+  {label:'MarineTraff', icon:'anchor',  url:'https://www.marinetraffic.com',     color:'var(--blue)'},
+  {label:'Shodan',      icon:'search',  url:'https://www.shodan.io',             color:'var(--purple)'},
+  {label:'Bellingcat',  icon:'eye',     url:'https://www.bellingcat.com',        color:'var(--orange)'},
+  {label:'ISW',         icon:'map',     url:'https://understandingwar.org',      color:'var(--orange)'},
+  {label:'GreyNoise',   icon:'cpu',     url:'https://www.greynoise.io',          color:'var(--purple)'},
+  {label:'ISC SANS',    icon:'activity',url:'https://isc.sans.edu',             color:'var(--red)'},
+  {label:'IntelX',      icon:'server',  url:'https://intelx.io',                color:'var(--purple)'},
+  {label:'Wayback',     icon:'archive', url:'https://web.archive.org',           color:'var(--accent)'},
+  {label:'Add',         icon:'plus',    url:null,add:true},
 ];
-
-const grid = document.getElementById('shortcutsGrid');
-SHORTCUTS.forEach(s => {
-  const el = document.createElement(s.url ? 'a' : 'div');
-  if (s.url) { el.href = s.url; el.target = '_blank'; el.rel = 'noopener'; }
-  el.className = 'shortcut' + (s.add ? ' shortcut-add' : '');
-  el.style.setProperty('--shortcut-color', s.color);
-  el.innerHTML = `
-    <div class="shortcut-icon">${s.icon}</div>
-    <span class="shortcut-label">${s.label}</span>
-  `;
-  grid.appendChild(el);
+const sg=document.getElementById('scGrid');
+SHORTCUTS.forEach(s=>{
+  const el=s.url?document.createElement('a'):document.createElement('div');
+  if(s.url){el.href=s.url;el.target='_blank';el.rel='noopener'}
+  el.className='sc'+(s.add?' sc-add':'');
+  el.style.setProperty('--sc-c',s.color||'var(--accent)');
+  el.innerHTML=`<div class="sc-ico">${I[s.icon]}</div><span class="sc-lbl">${s.label}</span>`;
+  sg.appendChild(el);
 });
 
-// ── Feed Data ───────────────────────────────────────────────
-const FEED_DATA = {
-  intel: [
-    {
-      type: 'hero',
-      category: 'INTELLIGENCE', badgeClass: 'badge-intel',
-      title: 'Autonomous Hypothesis Engine: 3 High-Probability Scenarios Generated',
-      desc: 'AI analysis of GDELT signal drift and correlation patterns has surfaced three escalation scenarios with probability scores above 70%. Hormuz corridor showing elevated military posture signatures.',
-      source: 'Monitor AI', time: '2m ago', emoji: '🔮',
-      severity: 'medium'
-    },
-    {
-      type: 'card',
-      category: 'CONFLICT', badgeClass: 'badge-threat',
-      title: 'UCDP records 14 new conflict events across 6 active theaters in 24h window',
-      source: 'UCDP', time: '18m ago', emoji: '⚔️', severity: 'high'
-    },
-    {
-      type: 'card',
-      category: 'CYBER', badgeClass: 'badge-cyber',
-      title: 'GreyNoise: 340% spike in ICS/SCADA scanner activity targeting energy sector',
-      source: 'GreyNoise', time: '34m ago', emoji: '💻', severity: 'critical'
-    },
-    {
-      type: 'card',
-      category: 'MARITIME', badgeClass: 'badge-mil',
-      title: 'AIS tracking gap: 3 tankers went dark near Strait of Hormuz entry corridor',
-      source: 'AIS Monitor', time: '51m ago', emoji: '🚢', severity: 'high'
-    },
-    {
-      type: 'card',
-      category: 'INTEL', badgeClass: 'badge-intel',
-      title: 'Narrative drift: "nuclear" topic velocity up 280% vs 24h baseline — SURGING',
-      source: 'GDELT NLP', time: '1h ago', emoji: '📡', severity: 'medium'
-    },
-  ],
-  conflicts: [
-    {
-      type: 'hero', category: 'CONFLICT', badgeClass: 'badge-threat',
-      title: 'Eastern European Front: Correlation Engine Detects Multi-Source Escalation Signal',
-      desc: 'Cross-source signal fusion has triggered an auto-brief. Artillery activity, displacement data, and social media volume are converging above the 85-point threshold.',
-      source: 'ACLED + Monitor AI', time: '7m ago', emoji: '⚔️', severity: 'critical'
-    },
-    { type:'card', category:'CONFLICT', badgeClass:'badge-threat', title:'ACLED: 22 fatalities reported across 3 events in Sub-Saharan Africa — 6h window', source:'ACLED', time:'22m ago', emoji:'📍', severity:'high' },
-    { type:'card', category:'MILITARY', badgeClass:'badge-mil', title:'Military flight anomaly: C-17 patterns suggest forward logistics deployment', source:'ADS-B', time:'45m ago', emoji:'✈️', severity:'medium' },
-    { type:'card', category:'CONFLICT', badgeClass:'badge-threat', title:'Population exposure model: 2.1M civilians within active conflict radius', source:'ACLED+GHSL', time:'2h ago', emoji:'👥', severity:'high' },
-    { type:'card', category:'CONFLICT', badgeClass:'badge-threat', title:'CII score update: 4 countries moved to ELEVATED tier in 48h reassessment', source:'CII Engine', time:'3h ago', emoji:'🌍', severity:'medium' },
-  ],
-  markets: [
-    { type:'hero', category:'MARKETS', badgeClass:'badge-market', title:'Commodity Correlation Alert: Crude Oil + Shipping Index Moving in Lockstep with Conflict Indicators', desc:'Supply chain correlation engine has detected a statistically significant 87-point alignment between Brent crude price movement and active chokepoint risk scores. Auto-brief generated.', source:'Monitor Markets', time:'12m ago', emoji:'📈', severity:'high' },
-    { type:'card', category:'MARKETS', badgeClass:'badge-market', title:'Brent crude up 3.2% on Hormuz corridor risk premium expansion', source:'Commodities', time:'28m ago', emoji:'🛢️', severity:'medium' },
-    { type:'card', category:'MARKETS', badgeClass:'badge-market', title:'Stablecoin on-chain volume spike: $2.1B USDT moved in 6h — sanctions signal?', source:'On-chain', time:'44m ago', emoji:'💱', severity:'medium' },
-    { type:'card', category:'MARKETS', badgeClass:'badge-market', title:'ETF flow alert: $890M outflow from EM equities in single session', source:'ETF Monitor', time:'1h ago', emoji:'📊', severity:'low' },
-    { type:'card', category:'MARKETS', badgeClass:'badge-market', title:'Polymarket: Taiwan conflict probability crossed 18% — highest since 2024', source:'Polymarket', time:'2h ago', emoji:'🎯', severity:'medium' },
-  ],
-  cyber: [
-    { type:'hero', category:'CYBER', badgeClass:'badge-cyber', title:'OTX AlienVault: Nation-State APT Campaign Targeting Critical Infrastructure — 14 IOCs Published', desc:'New threat intelligence from AlienVault OTX correlates with ongoing CISA advisories. Indicators target power grid SCADA systems across three NATO member states. Monitor OSINT Toolkit updated.', source:'AlienVault OTX', time:'5m ago', emoji:'🛡️', severity:'critical' },
-    { type:'card', category:'CYBER', badgeClass:'badge-cyber', title:'AbuseIPDB: 1,240 new IPs flagged for coordinated scanning — botnet expansion', source:'AbuseIPDB', time:'19m ago', emoji:'🔴', severity:'high' },
-    { type:'card', category:'CYBER', badgeClass:'badge-cyber', title:'URLhaus: 34 new malicious URLs uploaded — phishing campaign detected', source:'URLhaus', time:'38m ago', emoji:'⚠️', severity:'high' },
-    { type:'card', category:'CYBER', badgeClass:'badge-cyber', title:'GPSJAM: GPS interference detected across 3 regions — possible electronic warfare', source:'GPSJam', time:'1h ago', emoji:'📡', severity:'medium' },
-    { type:'card', category:'CYBER', badgeClass:'badge-cyber', title:'Internet outage monitor: BGP hijack affecting 2 ASNs in Central Asia', source:'Outages', time:'1h ago', emoji:'🌐', severity:'medium' },
-  ],
-  world: [
-    { type:'hero', category:'WORLD NEWS', badgeClass:'badge-news', title:'Agent Council Synthesis: Three AI Analysts Reach Consensus on Indo-Pacific Risk Trajectory', desc:'The agent council running llama-3.3-70b has generated a synthesis brief after 4 rounds of debate. Consensus probability on near-term escalation: 62%. Minority dissent noted at 38%.', source:'Monitor Agent Council', time:'9m ago', emoji:'🤖', severity:'medium' },
-    { type:'card', category:'WORLD', badgeClass:'badge-news', title:'Displacement tracker: 180,000 new IDPs recorded — Horn of Africa climate-conflict overlap', source:'UNHCR+ACLED', time:'31m ago', emoji:'🏕️', severity:'high' },
-    { type:'card', category:'WORLD', badgeClass:'badge-news', title:'Earthquake: M5.8 — 45km NW of seismically active zone, depth 12km', source:'USGS', time:'52m ago', emoji:'🌋', severity:'medium' },
-    { type:'card', category:'WORLD', badgeClass:'badge-news', title:'Wildfire satellite detection: FIRMS flags 340 new active fire pixels across Amazon basin', source:'NASA FIRMS', time:'1h ago', emoji:'🔥', severity:'medium' },
-    { type:'card', category:'WORLD', badgeClass:'badge-news', title:'Prediction markets: G7 emergency session probability at 23% following energy shock', source:'Kalshi', time:'2h ago', emoji:'🎲', severity:'low' },
-  ],
+/* ── SEARCH ───────────────────────────────────── */
+const ENGINES={
+  ddg:q=>`https://duckduckgo.com/?q=${encodeURIComponent(q)}`,
+  google:q=>`https://www.google.com/search?q=${encodeURIComponent(q)}`,
+  brave:q=>`https://search.brave.com/search?q=${encodeURIComponent(q)}`,
+  shodan:q=>`https://www.shodan.io/search?query=${encodeURIComponent(q)}`,
+  gdelt:q=>`https://gdeltproject.org/data/#googlebigquery&q=${encodeURIComponent(q)}`,
+  intelx:q=>`https://intelx.io/?s=${encodeURIComponent(q)}`,
 };
+let activeEng=cfg.engine||'ddg';
+function setEng(e){activeEng=e;document.querySelectorAll('.eng-btn').forEach(b=>b.classList.toggle('active',b.dataset.e===e));cfg.engine=e;saveCfg(cfg);}
+document.querySelectorAll('.eng-btn').forEach(b=>{
+  if(b.dataset.e===activeEng)b.classList.add('active');else b.classList.remove('active');
+  b.addEventListener('click',()=>{setEng(b.dataset.e);document.getElementById('srchIn').focus();});
+});
+function doSearch(){
+  const q=document.getElementById('srchIn').value.trim();if(!q)return;
+  const isUrl=/^(https?:\/\/|www\.)/.test(q)||/^[a-z0-9\-]+\.[a-z]{2,}(\/.*)?$/i.test(q);
+  window.location.href=isUrl?(q.startsWith('http')?q:'https://'+q):ENGINES[activeEng](q);
+}
+document.getElementById('srchIn').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
+document.getElementById('srchBtn').addEventListener('click',doSearch);
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  if((e.metaKey||e.ctrlKey)&&e.key==='l'){e.preventDefault();const i=document.getElementById('srchIn');i.focus();i.select();}
+});
 
-let activeTab = 'intel';
+/* ── MAP ──────────────────────────────────────── */
+const MAPS={
+  osm:'https://www.openstreetmap.org/export/embed.html?bbox=-180,-85,180,85&layer=mapnik',
+  windy:'https://embed.windy.com/embed2.html?lat=20&lon=0&detailLat=20&detailLon=0&width=650&height=450&zoom=3&level=surface&overlay=wind&product=ecmwf&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=kt&metricTemp=%C2%B0F&radarRange=-1',
+  osintview:'https://osintview.app',
+};
+const mapKeys=Object.keys(MAPS);let mapIdx=0;
+function cycleMap(){mapIdx=(mapIdx+1)%mapKeys.length;document.getElementById('mapIframe').src=MAPS[mapKeys[mapIdx]];}
+function openMapFull(){window.open(MAPS[mapKeys[mapIdx]],'_blank');}
+if(cfg.mapSrc){document.getElementById('mapIframe').src=MAPS[cfg.mapSrc]||MAPS.osm;mapIdx=mapKeys.indexOf(cfg.mapSrc)||0;}
 
-function renderFeed(tab) {
-  const data = FEED_DATA[tab] || FEED_DATA.intel;
-  const container = document.getElementById('feedMain');
-  container.innerHTML = '';
+/* ── NEWS (GDELT RSS via allorigins proxy) ────── */
+const FEEDS={
+  intel:'https://api.gdeltproject.org/api/v2/doc/doc?query=intelligence+security+military+geopolitical&mode=artlist&maxrecords=10&format=rss',
+  conflicts:'https://api.gdeltproject.org/api/v2/doc/doc?query=conflict+war+military+attack+battle&mode=artlist&maxrecords=10&format=rss',
+  markets:'https://api.gdeltproject.org/api/v2/doc/doc?query=oil+market+commodity+trade+sanctions+economy&mode=artlist&maxrecords=10&format=rss',
+  cyber:'https://api.gdeltproject.org/api/v2/doc/doc?query=cyberattack+malware+hacking+ransomware+cyber&mode=artlist&maxrecords=10&format=rss',
+  world:'https://api.gdeltproject.org/api/v2/doc/doc?query=geopolitics+international+crisis+diplomacy&mode=artlist&maxrecords=10&format=rss',
+};
+const LFEEDS={
+  memphis:'https://api.gdeltproject.org/api/v2/doc/doc?query=Memphis+Tennessee+Shelby+Germantown&mode=artlist&maxrecords=6&format=rss',
+  nashville:'https://api.gdeltproject.org/api/v2/doc/doc?query=Nashville+Tennessee&mode=artlist&maxrecords=6&format=rss',
+  chicago:'https://api.gdeltproject.org/api/v2/doc/doc?query=Chicago+Illinois&mode=artlist&maxrecords=6&format=rss',
+  newyork:'https://api.gdeltproject.org/api/v2/doc/doc?query=New+York+City+Manhattan&mode=artlist&maxrecords=6&format=rss',
+  la:'https://api.gdeltproject.org/api/v2/doc/doc?query=Los+Angeles+California&mode=artlist&maxrecords=6&format=rss',
+  houston:'https://api.gdeltproject.org/api/v2/doc/doc?query=Houston+Texas&mode=artlist&maxrecords=6&format=rss',
+  atlanta:'https://api.gdeltproject.org/api/v2/doc/doc?query=Atlanta+Georgia&mode=artlist&maxrecords=6&format=rss',
+};
+const TBADGE={
+  intel:{cls:'b-amb',label:'INTELLIGENCE',color:'var(--accent)'},
+  conflicts:{cls:'b-red',label:'CONFLICT',color:'var(--red)'},
+  markets:{cls:'b-blu',label:'MARKETS',color:'var(--blue)'},
+  cyber:{cls:'b-pur',label:'CYBER',color:'var(--purple)'},
+  world:{cls:'b-org',label:'WORLD',color:'var(--orange)'},
+};
+const PROXY=u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`;
 
-  data.forEach((item, i) => {
-    if (item.type === 'hero') {
-      const el = document.createElement('div');
-      el.className = 'card-hero';
-      el.style.animationDelay = (i * 0.05) + 's';
-      el.innerHTML = `
-        <div class="card-hero-image">
-          <div class="card-hero-image-placeholder">${item.emoji}</div>
-          <div class="card-severity severity-${item.severity}"></div>
-        </div>
-        <div class="card-hero-content">
-          <div>
-            <span class="card-category-badge ${item.badgeClass}">${item.category}</span>
-            <div class="card-hero-title">${item.title}</div>
-            <div class="card-hero-desc">${item.desc}</div>
-          </div>
-          <div class="card-meta">
-            <span class="card-source">${item.source}</span>
-            <span class="card-dot"></span>
-            <span class="card-time">${item.time}</span>
-          </div>
-        </div>
-      `;
-      container.appendChild(el);
+function parseRSS(xml){
+  const doc=new DOMParser().parseFromString(xml,'text/xml');
+  return Array.from(doc.querySelectorAll('item')).map(it=>({
+    title:it.querySelector('title')?.textContent||'',
+    link:it.querySelector('link')?.textContent||'#',
+    source:it.querySelector('source')?.textContent||(() => {try{return new URL(it.querySelector('link')?.textContent||'').hostname.replace('www.','')}catch{return'Unknown'}})(),
+    pubDate:it.querySelector('pubDate')?.textContent||'',
+    thumb:it.querySelector('enclosure')?.getAttribute('url')||it.querySelector('media\\:thumbnail,thumbnail')?.getAttribute('url')||null,
+  }));
+}
+
+function relTime(s){
+  if(!s)return'';const d=new Date(s),diff=(Date.now()-d.getTime())/1000;
+  if(diff<60)return'just now';if(diff<3600)return Math.round(diff/60)+'m ago';
+  if(diff<86400)return Math.round(diff/3600)+'h ago';return Math.round(diff/86400)+'d ago';
+}
+
+function renderNews(items,badge,container,local=false){
+  container.innerHTML='';
+  if(!items.length){container.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">No items found</div>`;return;}
+  items.forEach(item=>{
+    const a=document.createElement('a');
+    a.href=item.link;a.target='_blank';a.rel='noopener noreferrer';
+    if(local){
+      a.className='ln';
+      a.innerHTML=`<div class="ln-thumb">${item.thumb?`<img src="${item.thumb}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:'<div style="width:100%;height:100%;background:var(--surface3)"></div>'}</div><div class="ln-title">${item.title}</div><div class="ln-time">${relTime(item.pubDate)}</div>`;
+    }else{
+      a.className='ni';
+      const thumbPH=`<div class="ni-ph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--border2)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`;
+      a.innerHTML=`<div class="ni-thumb">${item.thumb?`<img src="${item.thumb}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:thumbPH}<div class="ni-sev" style="background:${badge.color}"></div></div><div class="ni-body"><span class="badge ${badge.cls} ni-cat">${badge.label}</span><div class="ni-title">${item.title}</div><div class="ni-meta"><span class="ni-src">${item.source}</span><span class="ni-sep"></span><span class="ni-time">${relTime(item.pubDate)}</span></div></div>`;
     }
+    container.appendChild(a);
   });
-
-  // Cards grid
-  const cards = data.filter(d => d.type === 'card');
-  if (cards.length) {
-    const grid = document.createElement('div');
-    grid.className = 'cards-grid';
-    cards.forEach((item, i) => {
-      const el = document.createElement('div');
-      el.className = 'card';
-      el.innerHTML = `
-        <div class="card-image">
-          <div class="card-image-placeholder">${item.emoji}</div>
-          <div class="card-severity severity-${item.severity}"></div>
-        </div>
-        <div class="card-body">
-          <span class="card-category-badge ${item.badgeClass}" style="font-size:9px;padding:2px 6px">${item.category}</span>
-          <div class="card-title">${item.title}</div>
-          <div class="card-footer">
-            <span class="card-source">${item.source}</span>
-            <span class="card-time">${item.time}</span>
-          </div>
-        </div>
-      `;
-      grid.appendChild(el);
-    });
-    container.appendChild(grid);
-  }
 }
 
-// Feed tab switching
-document.querySelectorAll('.feed-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    activeTab = tab.dataset.tab;
-    renderFeed(activeTab);
+function loadFeed(tab){
+  const badge=TBADGE[tab];
+  const list=document.getElementById('newsList');
+  list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>`;
+  fetch(PROXY(FEEDS[tab])).then(r=>r.json()).then(d=>{renderNews(parseRSS(d.contents||''),badge,list);}).catch(()=>{list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable</div>`;});
+}
+function loadLocal(reg){
+  const list=document.getElementById('lnewsList');
+  list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Loading...</div>`;
+  fetch(PROXY(LFEEDS[reg]||LFEEDS.memphis)).then(r=>r.json()).then(d=>{renderNews(parseRSS(d.contents||''),{},'',list,true);}).catch(()=>{list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Feed unavailable</div>`;});
+}
+
+// Fix: local uses container param correctly
+function renderNews(items,badge,container,altContainer,local=false){
+  const c=altContainer||container;
+  if(typeof c==='string'){const el=document.getElementById(c);if(el)renderNewsInto(items,badge,el,local);}
+  else renderNewsInto(items,badge,c,local);
+}
+function renderNewsInto(items,badge,container,local){
+  container.innerHTML='';
+  if(!items.length){container.innerHTML=`<div style="padding:${local?'12px 13px':'24px'};text-align:center;color:var(--text3);font-size:${local?'11':'12'}px">No items found</div>`;return;}
+  items.slice(0,local?5:8).forEach(item=>{
+    const a=document.createElement('a');
+    a.href=item.link;a.target='_blank';a.rel='noopener noreferrer';
+    if(local){
+      a.className='ln';
+      a.innerHTML=`<div class="ln-thumb">${item.thumb?`<img src="${item.thumb}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:'<div style="width:100%;height:100%;background:var(--surface3)"></div>'}</div><div class="ln-title">${item.title}</div><div class="ln-time">${relTime(item.pubDate)}</div>`;
+    }else{
+      a.className='ni';
+      const thumbPH=`<div class="ni-ph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--border2)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`;
+      a.innerHTML=`<div class="ni-thumb">${item.thumb?`<img src="${item.thumb}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:thumbPH}<div class="ni-sev" style="background:${badge.color||'var(--accent)'}"></div></div><div class="ni-body"><span class="badge ${badge.cls||'b-amb'} ni-cat">${badge.label||'NEWS'}</span><div class="ni-title">${item.title}</div><div class="ni-meta"><span class="ni-src">${item.source}</span><span class="ni-sep"></span><span class="ni-time">${relTime(item.pubDate)}</span></div></div>`;
+    }
+    container.appendChild(a);
   });
+}
+
+function loadFeed(tab){
+  const badge=TBADGE[tab];
+  const list=document.getElementById('newsList');
+  list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>`;
+  fetch(PROXY(FEEDS[tab])).then(r=>r.json()).then(d=>{renderNewsInto(parseRSS(d.contents||''),badge,list,false);}).catch(()=>{list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable — check network</div>`;});
+}
+function loadLocal(reg){
+  const list=document.getElementById('lnewsList');
+  list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Loading local news...</div>`;
+  fetch(PROXY(LFEEDS[reg]||LFEEDS.memphis)).then(r=>r.json()).then(d=>{renderNewsInto(parseRSS(d.contents||''),{cls:'b-pur',label:'LOCAL',color:'var(--purple)'},list,true);}).catch(()=>{list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Local feed unavailable</div>`;});
+}
+
+let activeTab='intel';
+document.querySelectorAll('.dtab').forEach(t=>{
+  t.addEventListener('click',()=>{document.querySelectorAll('.dtab').forEach(x=>x.classList.remove('active'));t.classList.add('active');activeTab=t.dataset.tab;loadFeed(activeTab);});
 });
+document.getElementById('refreshBtn').addEventListener('click',()=>loadFeed(activeTab));
+loadFeed('intel');
+loadLocal(cfg.region||'memphis');
 
-renderFeed('intel');
+/* ── MARKETS ──────────────────────────────────── */
+[{n:'Brent Crude',s:'ICE · USD/bbl',v:'$87.34',c:'+2.1%',u:true},
+ {n:'S&P 500',s:'SPX',v:'5,204',c:'-0.4%',u:false},
+ {n:'Gold',s:'XAU/USD',v:'$2,318',c:'+0.8%',u:true},
+ {n:'Bitcoin',s:'BTC/USD',v:'$63,420',c:'+1.2%',u:true},
+ {n:'EUR/USD',s:'FX',v:'1.0842',c:'-0.2%',u:false},
+ {n:'Nat Gas',s:'NYMEX',v:'$1.98',c:'-1.1%',u:false}
+].forEach(m=>{const r=document.createElement('div');r.className='mkt-row';r.innerHTML=`<div><div class="mkt-n">${m.n}</div><div class="mkt-s">${m.s}</div></div><div><div class="mkt-v">${m.v}</div><div class="mkt-c ${m.u?'up':'dn'}">${m.u?'▲':'▼'} ${m.c}</div></div>`;document.getElementById('mktList').appendChild(r);});
 
-// ── Markets Widget ──────────────────────────────────────────
-const MARKETS = [
-  { name: 'Brent Crude', sub: 'ICE · USD/bbl', value: '$87.34', change: '+2.1%', up: true },
-  { name: 'S&P 500',     sub: 'SPX · USD',      value: '5,204',  change: '-0.4%', up: false },
-  { name: 'Gold',        sub: 'XAU · USD/oz',   value: '$2,318', change: '+0.8%', up: true },
-  { name: 'BTC',         sub: 'Bitcoin · USD',  value: '$63,420',change: '+1.2%', up: true },
-  { name: 'EUR/USD',     sub: 'FX',             value: '1.0842', change: '-0.2%', up: false },
-  { name: 'Natural Gas', sub: 'NYMEX · USD',    value: '$1.98',  change: '-1.1%', up: false },
-];
+/* ── ALERTS ───────────────────────────────────── */
+[{t:'OREF: Rocket alert — northern sector',r:'Israel/Lebanon',tm:'1m ago',c:'var(--red)'},
+ {t:'CII escalation: Country moved to CRITICAL',r:'Horn of Africa',tm:'8m ago',c:'var(--orange)'},
+ {t:'Radiation reading 40% above baseline',r:'Eastern Europe',tm:'22m ago',c:'var(--accent)'},
+ {t:'AIS gap: Tanker transponder lost near Hormuz',r:'Persian Gulf',tm:'35m ago',c:'var(--blue)'}
+].forEach(a=>{const r=document.createElement('div');r.className='al-row';r.innerHTML=`<div class="al-bar" style="background:${a.c}"></div><div><div class="al-ttl">${a.t}</div><div class="al-sub"><span class="al-reg">${a.r}</span><span class="ni-sep"></span><span class="al-tm">${a.tm}</span></div></div>`;document.getElementById('alertList').appendChild(r);});
 
-const mw = document.getElementById('marketsWidget');
-MARKETS.forEach(m => {
-  const row = document.createElement('div');
-  row.className = 'market-row';
-  row.innerHTML = `
-    <div>
-      <div class="market-name">${m.name}</div>
-      <div class="market-sub">${m.sub}</div>
-    </div>
-    <div class="market-price">
-      <div class="market-value">${m.value}</div>
-      <div class="market-change ${m.up ? 'change-up' : 'change-down'}">${m.up ? '▲' : '▼'} ${m.change}</div>
-    </div>
-  `;
-  mw.appendChild(row);
-});
+/* ── DATA STATUS ──────────────────────────────── */
+[{ico:I.globe,l:'GDELT Feed',v:'Live',ind:'ind-ok'},
+ {ico:I.plane,l:'ADS-B Tracker',v:'Live',ind:'ind-ok'},
+ {ico:I.anchor,l:'AIS Relay',v:'Delayed',ind:'ind-warn'},
+ {ico:I.shield,l:'Threat Intel',v:'Live',ind:'ind-ok'},
+ {ico:I.activity,l:'AI Insights',v:'Live',ind:'ind-ok'},
+ {ico:I.server,l:'Telegram Feed',v:'Offline',ind:'ind-err'}
+].forEach(s=>{const r=document.createElement('div');r.className='st-row';r.innerHTML=`<span class="st-ico">${s.ico}</span><span class="st-lbl">${s.l}</span><span class="st-val">${s.v}</span><span class="st-ind ${s.ind}"></span>`;document.getElementById('statusList').appendChild(r);});
 
-// ── Alerts Widget ───────────────────────────────────────────
-const ALERTS = [
-  { title: 'OREF: Rocket alerts active — northern sector', region: 'Israel/Lebanon border', time: '1m ago', sev: 'var(--cat-threat)' },
-  { title: 'CII escalation: Country moved to CRITICAL tier', region: 'Horn of Africa', time: '8m ago', sev: 'var(--cat-military)' },
-  { title: 'Radiation anomaly: Reading 40% above baseline', region: 'Eastern Europe', time: '22m ago', sev: 'var(--intel-accent)' },
-  { title: 'AIS gap: Vessel transponder off near Hormuz', region: 'Persian Gulf', time: '35m ago', sev: 'var(--cat-news)' },
-];
+/* ── MODAL ────────────────────────────────────── */
+const modal=document.getElementById('modal');
+function openModal(){modal.classList.add('open')}
+function closeModal(){modal.classList.remove('open')}
+['custBtn','layoutBtn','persBtn'].forEach(id=>document.getElementById(id)?.addEventListener('click',openModal));
+document.getElementById('modalX').addEventListener('click',closeModal);
+modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
-const aw = document.getElementById('alertsWidget');
-ALERTS.forEach(a => {
-  const row = document.createElement('div');
-  row.className = 'alert-item';
-  row.innerHTML = `
-    <div class="alert-severity-bar" style="background:${a.sev}"></div>
-    <div class="alert-content">
-      <div class="alert-title">${a.title}</div>
-      <div class="alert-meta">
-        <span class="alert-region">${a.region}</span>
-        <span class="card-dot"></span>
-        <span class="alert-time">${a.time}</span>
-      </div>
-    </div>
-  `;
-  aw.appendChild(row);
-});
-
-// ── Status Widget ───────────────────────────────────────────
-const STATUSES = [
-  { icon: '🌐', label: 'GDELT Feed',      value: 'Live',    ind: 'ind-ok' },
-  { icon: '✈️',  label: 'ADS-B Tracker',  value: 'Live',    ind: 'ind-ok' },
-  { icon: '🚢', label: 'AIS Relay',       value: 'Delayed', ind: 'ind-warn' },
-  { icon: '🛡️',  label: 'Threat Intel',   value: 'Live',    ind: 'ind-ok' },
-  { icon: '💡', label: 'AI Insights',     value: 'Live',    ind: 'ind-ok' },
-  { icon: '📡', label: 'Telegram Feed',   value: 'Offline', ind: 'ind-alert' },
-];
-
-const sw = document.getElementById('statusWidget');
-STATUSES.forEach(s => {
-  const row = document.createElement('div');
-  row.className = 'status-row';
-  row.innerHTML = `
-    <span class="status-icon">${s.icon}</span>
-    <span class="status-label">${s.label}</span>
-    <span class="status-value">${s.value}</span>
-    <span class="status-indicator ${s.ind}"></span>
-  `;
-  sw.appendChild(row);
-});
-
-// ── Keyboard shortcut: focus search on any key ──────────────
-document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT') return;
-  if (e.key === 'F6' || (e.metaKey || e.ctrlKey) && e.key === 'l') {
-    e.preventDefault();
-    searchInput.focus();
-    searchInput.select();
+/* Visibility toggles */
+function bindTog(togId,wgtId,cfgKey){
+  const tog=document.getElementById(togId),wgt=document.getElementById(wgtId);
+  if(!tog||!wgt)return;
+  if(cfg[cfgKey]===false){wgt.style.display='none';tog.checked=false;}
+  tog.addEventListener('change',()=>{
+    wgt.style.display=tog.checked?'':'none';
+    cfg[cfgKey]=tog.checked;saveCfg(cfg);
+    if(togId==='tMap')reflow();
+  });
+}
+function reflow(){
+  const mapOn=document.getElementById('tMap')?.checked;
+  const grid=document.getElementById('cgrid');
+  if(mapOn){
+    grid.style.gridTemplateColumns='1fr 1fr 316px';
+    document.getElementById('mapWgt').style.gridColumn='1/2';
+    document.getElementById('newsWgt').style.gridColumn='2/3';
+    document.getElementById('locWgt').style.gridColumn='2/3';
+    document.getElementById('sidebar').style.gridColumn='3/4';
+  }else{
+    grid.style.gridTemplateColumns='1fr 316px';
+    document.getElementById('newsWgt').style.gridColumn='1/2';
+    document.getElementById('locWgt').style.gridColumn='1/2';
+    document.getElementById('sidebar').style.gridColumn='2/3';
   }
+}
+bindTog('tMap','mapWgt','showMap');
+bindTog('tNews','newsWgt','showNews');
+bindTog('tLocal','locWgt','showLocal');
+bindTog('tMkt','mktWgt','showMkt');
+bindTog('tAlerts','alertsWgt','showAlerts');
+bindTog('tStatus','statusWgt','showStatus');
+reflow();
+
+/* Engine select sync */
+const esel=document.getElementById('engSel');
+esel.value=activeEng;
+esel.addEventListener('change',()=>{setEng(esel.value);document.querySelectorAll('.eng-btn').forEach(b=>b.classList.toggle('active',b.dataset.e===esel.value));});
+
+/* Map select */
+const msel=document.getElementById('mapSel');
+if(cfg.mapSrc)msel.value=cfg.mapSrc;
+msel.addEventListener('change',()=>{document.getElementById('mapIframe').src=MAPS[msel.value]||MAPS.osm;cfg.mapSrc=msel.value;saveCfg(cfg);});
+
+/* Region select */
+const rsel=document.getElementById('regSel');
+rsel.value=cfg.region||'memphis';
+rsel.addEventListener('change',()=>{cfg.region=rsel.value;saveCfg(cfg);loadLocal(rsel.value);});
+
+/* Theme */
+document.querySelectorAll('.th-opt').forEach(o=>{
+  if(cfg.theme)o.classList.toggle('active',o.dataset.th===cfg.theme);
+  o.addEventListener('click',()=>{document.querySelectorAll('.th-opt').forEach(x=>x.classList.remove('active'));o.classList.add('active');cfg.theme=o.dataset.th;saveCfg(cfg);});
 });
 </script>
 </body>

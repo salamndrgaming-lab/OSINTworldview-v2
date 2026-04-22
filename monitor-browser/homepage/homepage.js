@@ -1045,20 +1045,27 @@
   // --------------------------------------------------------------------------
 
   const NEWS_SOURCES = [
-    { id: 'bbc',      label: 'BBC',      url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
-    { id: 'reuters',  label: 'Reuters',  url: 'https://moxie.foxnews.com/google-publisher/world.xml' }, // Reuters blocked RSS; fallback
+    { id: 'bbc',      label: 'BBC',        url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
     { id: 'aljaz',    label: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
-    { id: 'dw',       label: 'DW',       url: 'https://rss.dw.com/rdf/rss-en-all' },
-    { id: 'ap',       label: 'AP',       url: 'https://rsshub.app/apnews/topics/world-news' },
-    { id: 'cnbc',     label: 'CNBC',     url: 'https://www.cnbc.com/id/100727362/device/rss/rss.html' },
+    { id: 'dw',       label: 'DW',         url: 'https://rss.dw.com/rdf/rss-en-all' },
+    { id: 'ap',       label: 'AP',         url: 'https://rsshub.app/apnews/topics/world-news' },
+    { id: 'cnbc',     label: 'CNBC',       url: 'https://www.cnbc.com/id/100727362/device/rss/rss.html' },
+    { id: 'npr',      label: 'NPR',        url: 'https://feeds.npr.org/1001/rss.xml' },
   ];
 
   PANELS.news = {
     title: 'Live News',
     icon: '&#9636;',
     size: 'lg',
-    desc: 'Breaking world news from major wires (BBC, Al Jazeera, DW, AP, CNBC).',
+    desc: 'Breaking world news from major wires (BBC, Al Jazeera, DW, AP, CNBC, NPR).',
     render: (body, panel) => {
+      // If the intel proxy is not available, show a clear message immediately.
+      if (!hasApi) {
+        body.innerHTML = '<div class="panel-empty">Intel proxy unavailable — open in Monitor Browser to load live news.</div>';
+        setPanelStatus(panel, 'error', 'NO-PROXY');
+        return;
+      }
+
       // Source tabs + list
       const tabsHtml = NEWS_SOURCES.map((s) =>
         '<button data-src="' + s.id + '" class="' + (s.id === state.newsSource ? 'is-active' : '') + '">' +
@@ -1080,6 +1087,12 @@
       let timer = null;
 
       function renderNewsList(text, src, out) {
+        // Detect if we got an HTML error page instead of XML
+        var trimmed = text.trim();
+        if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || trimmed.startsWith('<HTML')) {
+          console.warn('[news] received HTML instead of RSS from', src.id);
+          return false;
+        }
         var items = parseRss(text).slice(0, 14);
         if (items.length === 0) return false;
         var list = items.map(function (it) {
@@ -1116,7 +1129,7 @@
           .then(function (text) {
             if (killed) return;
             if (!renderNewsList(text, src, out)) {
-              out.innerHTML = '<div class="panel-empty">No items returned.</div>';
+              out.innerHTML = '<div class="panel-empty">Feed returned no articles — try another source.</div>';
               setPanelStatus(panel, 'error', 'EMPTY');
               return;
             }
@@ -2516,7 +2529,7 @@
   }
 
   async function ipGeo(ip) {
-    const url = 'http://ip-api.com/json/' + encodeURIComponent(ip) + '?fields=66846719';
+    const url = 'https://ip-api.com/json/' + encodeURIComponent(ip) + '?fields=66846719';
     const text = await fetchIntel(url);
     return JSON.parse(text);
   }
@@ -2681,20 +2694,24 @@
       body.innerHTML = '<div class="panel-loading">Detecting location&hellip;</div>';
       setPanelStatus(panel, 'loading', 'GEO');
 
+      function tryIpGeoFallback() {
+        fetchIntel('https://ip-api.com/json/?fields=lat,lon,city,country')
+          .then((t) => { const d = JSON.parse(t); if (!killed) start(d.lat, d.lon); })
+          .catch((err) => { if (!killed) { renderErrorInto(body, err); setPanelStatus(panel, 'error', 'ERR'); } });
+      }
+
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => { if (!killed) start(pos.coords.latitude, pos.coords.longitude); },
-          () => {
-            fetchIntel('http://ip-api.com/json/?fields=lat,lon,city,country')
-              .then((t) => { const d = JSON.parse(t); if (!killed) start(d.lat, d.lon); })
-              .catch((err) => { if (!killed) { renderErrorInto(body, err); setPanelStatus(panel, 'error', 'ERR'); } });
+          (geoErr) => {
+            // Geolocation denied or unavailable — fall back to IP-based location
+            console.warn('[weather] geolocation failed:', geoErr.message, '— falling back to IP geo');
+            tryIpGeoFallback();
           },
-          { timeout: 8000 }
+          { timeout: 12000, enableHighAccuracy: false, maximumAge: 300000 }
         );
       } else {
-        fetchIntel('http://ip-api.com/json/?fields=lat,lon,city,country')
-          .then((t) => { const d = JSON.parse(t); if (!killed) start(d.lat, d.lon); })
-          .catch((err) => { if (!killed) { renderErrorInto(body, err); setPanelStatus(panel, 'error', 'ERR'); } });
+        tryIpGeoFallback();
       }
 
       return () => { killed = true; if (timer) clearInterval(timer); };
@@ -2747,7 +2764,7 @@
       let activeSrc = 0;
 
       function detectCountry() {
-        return fetchIntel('http://ip-api.com/json/?fields=countryCode')
+        return fetchIntel('https://ip-api.com/json/?fields=countryCode')
           .then(function (t) { return JSON.parse(t).countryCode || '_default'; })
           .catch(function () { return '_default'; });
       }

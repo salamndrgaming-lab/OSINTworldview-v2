@@ -1642,6 +1642,12 @@ function setupPermissionHandlers() {
     try {
       if (ALWAYS_ALLOW_PERMISSIONS.has(permission)) { callback(true); return; }
       const url = wc.getURL();
+      // Auto-grant geolocation for the built-in homepage (file:// origin)
+      // so the Weather panel can use the device's actual GPS/network location.
+      if (permission === 'geolocation' && url.startsWith('file://')) {
+        callback(true);
+        return;
+      }
       const origin = new URL(url).origin;
       const perms = getOriginPerms(origin);
       if (perms[permission] === 'allow') { callback(true); return; }
@@ -1652,8 +1658,12 @@ function setupPermissionHandlers() {
     }
   });
 
-  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, _origin, details) => {
     if (ALWAYS_ALLOW_PERMISSIONS.has(permission)) return true;
+    // Allow geolocation checks from the file:// homepage
+    if (permission === 'geolocation' && details && details.requestingUrl && details.requestingUrl.startsWith('file://')) {
+      return true;
+    }
     return false;
   });
 }

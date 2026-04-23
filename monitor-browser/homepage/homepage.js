@@ -1057,155 +1057,239 @@
     title: 'Live News',
     icon: '&#9636;',
     size: 'lg',
-    desc: 'Breaking world news from major wires (BBC, Al Jazeera, DW, AP, CNBC, NPR).',
+    desc: 'Breaking world news aggregated from BBC, Al Jazeera, DW, AP, CNBC, NPR.',
     render: (body, panel) => {
-      // If the intel proxy is not available, show a clear message immediately.
       if (!hasApi) {
         body.innerHTML = '<div class="panel-empty">Intel proxy unavailable — open in Monitor Browser to load live news.</div>';
         setPanelStatus(panel, 'error', 'NO-PROXY');
         return;
       }
 
-      // Source tabs + list
-      const tabsHtml = NEWS_SOURCES.map((s) =>
-        '<button data-src="' + s.id + '" class="' + (s.id === state.newsSource ? 'is-active' : '') + '">' +
-        escapeHtml(s.label) + '</button>'
-      ).join('');
-      body.innerHTML =
-        '<div class="news-tabs">' + tabsHtml + '</div>' +
-        '<div class="news-body"><div class="panel-loading">Fetching headlines&hellip;</div></div>';
-      body.querySelectorAll('.news-tabs button').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          state.newsSource = btn.dataset.src;
-          saveState();
-          body.querySelectorAll('.news-tabs button').forEach((b) => b.classList.toggle('is-active', b === btn));
-          loadNews();
-        });
-      });
+      body.innerHTML = '<div class="panel-loading">Fetching headlines&hellip;</div>';
+      setPanelStatus(panel, 'loading', 'FETCH');
 
-      let killed = false;
-      let timer = null;
+      var killed = false;
+      var timer = null;
 
-      function renderNewsList(text, src, out) {
-        // Detect if we got an HTML error page instead of XML
-        var trimmed = text.trim();
-        if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || trimmed.startsWith('<HTML')) {
-          console.warn('[news] received HTML instead of RSS from', src.id);
-          return false;
-        }
-        var items = parseRss(text).slice(0, 14);
-        if (items.length === 0) return false;
-        var list = items.map(function (it) {
+      function renderMerged(allItems) {
+        if (allItems.length === 0) return false;
+        // Sort by date descending
+        allItems.sort(function (a, b) { return b.date - a.date; });
+        var shown = allItems.slice(0, 30);
+        var list = shown.map(function (it) {
           var thumbHtml = it.thumb
-            ? '<img class="news-thumb" src="' + escapeHtml(it.thumb) + '" alt="" loading="lazy" />'
+            ? '<img class="news-thumb" src="' + escapeHtml(it.thumb) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">'
             : '';
           return '<li><a href="' + escapeHtml(it.link) + '" target="_blank" rel="noopener">' +
             thumbHtml +
             '<div class="news-text">' +
             '<span class="news-title">' + escapeHtml(it.title) + '</span>' +
-            '<span class="news-meta"><span class="src">' + escapeHtml(src.label) + '</span>' +
+            '<span class="news-meta"><span class="src">' + escapeHtml(it.source) + '</span>' +
             escapeHtml(formatRelTime(it.date)) + '</span>' +
             '</div></a></li>';
         }).join('');
-        out.innerHTML = '<ul class="news-list">' + list + '</ul>';
+        body.innerHTML = '<ul class="news-list">' + list + '</ul>';
         return true;
       }
 
-      function loadNews() {
+      function loadAllNews() {
         if (killed) return;
-        var src = NEWS_SOURCES.find(function (s) { return s.id === state.newsSource; }) || NEWS_SOURCES[0];
-        var out = body.querySelector('.news-body');
 
-        // Show cached data immediately while fetching
-        var cachedText = getCachedResponse(src.url);
-        if (cachedText && renderNewsList(cachedText, src, out)) {
+        // Show any cached data immediately across all sources
+        var cachedItems = [];
+        NEWS_SOURCES.forEach(function (src) {
+          var cached = getCachedResponse(src.url);
+          if (cached) {
+            var items = parseRss(cached);
+            items.forEach(function (it) { it.source = src.label; });
+            cachedItems = cachedItems.concat(items);
+          }
+        });
+        if (cachedItems.length > 0) {
+          renderMerged(cachedItems);
           setPanelStatus(panel, 'loading', 'UPDATING');
-        } else {
-          out.innerHTML = '<div class="panel-loading">Fetching headlines&hellip;</div>';
-          setPanelStatus(panel, 'loading', 'FETCH');
         }
 
-        fetchIntel(src.url)
-          .then(function (text) {
-            if (killed) return;
-            if (!renderNewsList(text, src, out)) {
-              out.innerHTML = '<div class="panel-empty">Feed returned no articles — try another source.</div>';
-              setPanelStatus(panel, 'error', 'EMPTY');
-              return;
-            }
-            setPanelStatus(panel, 'live', 'LIVE');
-          })
-          .catch(function (err) {
-            if (killed) return;
-            // If we already showed cached data, keep it and just update status
-            if (cachedText) {
-              setPanelStatus(panel, 'live', 'CACHED');
-            } else {
-              renderErrorInto(out, err, loadNews);
-              setPanelStatus(panel, 'error', 'ERR');
-            }
+        // Fetch all sources in parallel; show results as they arrive
+        var allItems = [];
+        var completed = 0;
+        var total = NEWS_SOURCES.length;
+
+        NEWS_SOURCES.forEach(function (src) {
+          // Race each fetch against a 20s timeout so slow feeds don't block others
+          var timeoutPromise = new Promise(function (_, rej) {
+            setTimeout(function () { rej(new Error('timeout')); }, 20000);
           });
+          Promise.race([fetchIntel(src.url), timeoutPromise])
+            .then(function (text) {
+              if (killed) return;
+              var items = parseRss(text);
+              if (items.length > 0) {
+                items.forEach(function (it) { it.source = src.label; });
+                allItems = allItems.concat(items);
+                // Render incrementally as each feed arrives
+                renderMerged(allItems);
+                setPanelStatus(panel, 'loading', completed + '/' + total);
+              }
+            })
+            .catch(function (err) {
+              console.warn('[news] feed failed:', src.id, err.message);
+            })
+            .finally(function () {
+              if (killed) return;
+              completed++;
+              if (completed === total) {
+                if (allItems.length > 0) {
+                  renderMerged(allItems);
+                  setPanelStatus(panel, 'live', 'LIVE');
+                } else if (cachedItems.length > 0) {
+                  setPanelStatus(panel, 'live', 'CACHED');
+                } else {
+                  body.innerHTML = '<div class="panel-empty">All feeds failed — check network or try refreshing.</div>';
+                  setPanelStatus(panel, 'error', 'ERR');
+                }
+              }
+            });
+        });
       }
 
-      loadNews();
-      timer = setInterval(loadNews, 10 * 60 * 1000);
-      return () => { killed = true; if (timer) clearInterval(timer); };
+      loadAllNews();
+      timer = setInterval(loadAllNews, 10 * 60 * 1000);
+      return function () { killed = true; if (timer) clearInterval(timer); };
     },
   };
 
   function parseRss(text) {
     try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(text, 'text/xml');
-      if (doc.querySelector('parsererror')) {
-        // Try as text/html — some feeds are served oddly.
-        const doc2 = parser.parseFromString(text, 'text/html');
-        return extractRssItems(doc2);
+      var clean = text.replace(/^\uFEFF/, '').trim();
+      if (/^<!DOCTYPE/i.test(clean) || /^<html[\s>]/i.test(clean)) {
+        console.warn('[news] parseRss: got HTML not XML');
+        return [];
       }
-      return extractRssItems(doc);
+      var parser = new DOMParser();
+      var doc = parser.parseFromString(clean, 'text/xml');
+      // If XML is malformed, strip namespace declarations and retry
+      if (doc.querySelector('parsererror')) {
+        var stripped = clean
+          .replace(/\s+xmlns(?::\w+)?="[^"]*"/g, '')
+          .replace(/\s+xmlns(?::\w+)?='[^']*'/g, '');
+        doc = parser.parseFromString(stripped, 'text/xml');
+      }
+      var items = extractRssItems(doc, clean);
+      // If DOM found nothing, use regex fallback
+      if (items.length === 0) items = extractRssItemsRegex(clean);
+      return items;
     } catch (err) {
       console.warn('[news] parse failed', err);
-      return [];
+      return extractRssItemsRegex(text || '');
     }
   }
 
-  function extractRssItems(doc) {
-    const nodes = doc.querySelectorAll('item, entry');
-    const out = [];
-    nodes.forEach((n) => {
-      const title = (n.querySelector('title')?.textContent || '').trim();
-      let link = n.querySelector('link')?.textContent?.trim() || '';
+  function _gt(el, tag) {
+    // Get first child by tag name, works with or without namespace prefix
+    return el.getElementsByTagName(tag)[0] ||
+           el.getElementsByTagName(tag.replace(/^.*:/, ''))[0] || null;
+  }
+
+  function extractRssItems(doc, rawText) {
+    var nodes = Array.from(doc.querySelectorAll('item, entry'));
+    if (nodes.length === 0) nodes = Array.from(doc.getElementsByTagName('item'));
+    if (nodes.length === 0) nodes = Array.from(doc.getElementsByTagName('entry'));
+    if (nodes.length === 0) return [];
+
+    var mediaNS = 'http://search.yahoo.com/mrss/';
+    var out = [];
+
+    nodes.forEach(function (n) {
+      // Title
+      var titleEl = _gt(n, 'title');
+      var title = titleEl ? titleEl.textContent.trim() : '';
+
+      // Link — RSS uses text content, Atom uses href attr
+      var link = '';
+      var linkEls = n.getElementsByTagName('link');
+      for (var li = 0; li < linkEls.length; li++) {
+        var le = linkEls[li];
+        var href = le.getAttribute('href');
+        if (href) { link = href; break; }
+        var tc = le.textContent.trim();
+        if (tc && tc.startsWith('http')) { link = tc; break; }
+      }
+      // feedburner original link fallback
       if (!link) {
-        const linkEl = n.querySelector('link[href]');
-        if (linkEl) link = linkEl.getAttribute('href');
+        var orig = _gt(n, 'origLink') || _gt(n, 'feedburner:origLink');
+        if (orig) link = orig.textContent.trim();
       }
-      const date =
-        n.querySelector('pubDate')?.textContent ||
-        n.querySelector('published')?.textContent ||
-        n.querySelector('updated')?.textContent || '';
-      let thumb = '';
-      const mediaThumbnail = n.querySelector('thumbnail');
-      if (mediaThumbnail) thumb = mediaThumbnail.getAttribute('url') || '';
+
+      // Date
+      var dateEl = _gt(n, 'pubDate') || _gt(n, 'published') ||
+                   _gt(n, 'updated') || _gt(n, 'dc:date');
+      var dateStr = dateEl ? dateEl.textContent.trim() : '';
+
+      // Thumbnail — try media namespace, then enclosure, then description img
+      var thumb = '';
+      var mt = n.getElementsByTagNameNS(mediaNS, 'thumbnail')[0] ||
+               _gt(n, 'media:thumbnail') || _gt(n, 'thumbnail');
+      if (mt) thumb = mt.getAttribute('url') || '';
+
       if (!thumb) {
-        const enclosure = n.querySelector('enclosure[type^="image"]');
-        if (enclosure) thumb = enclosure.getAttribute('url') || '';
-      }
-      if (!thumb) {
-        const mediaContent = n.querySelector('content[url]');
-        if (mediaContent && /image/i.test(mediaContent.getAttribute('type') || mediaContent.getAttribute('medium') || '')) {
-          thumb = mediaContent.getAttribute('url') || '';
+        var mc = n.getElementsByTagNameNS(mediaNS, 'content')[0] ||
+                 _gt(n, 'media:content');
+        if (mc) {
+          var mcType = mc.getAttribute('type') || mc.getAttribute('medium') || 'image';
+          if (/image/i.test(mcType)) thumb = mc.getAttribute('url') || '';
         }
-        if (!thumb && mediaContent) thumb = mediaContent.getAttribute('url') || '';
       }
+
       if (!thumb) {
-        const desc = n.querySelector('description')?.textContent || '';
-        const imgMatch = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
-        if (imgMatch) thumb = imgMatch[1];
+        var encEls = n.getElementsByTagName('enclosure');
+        for (var ei = 0; ei < encEls.length; ei++) {
+          if (/image/i.test(encEls[ei].getAttribute('type') || '')) {
+            thumb = encEls[ei].getAttribute('url') || '';
+            break;
+          }
+        }
       }
+
+      if (!thumb) {
+        var descEl = _gt(n, 'description') || _gt(n, 'content:encoded') ||
+                     _gt(n, 'summary');
+        if (descEl) {
+          var imgM = descEl.textContent.match(/<img[^>]+src=["']([^"']+)["']/i);
+          if (imgM) thumb = imgM[1];
+        }
+      }
+
       if (title && link) {
-        out.push({ title, link, date: date ? new Date(date) : new Date(), thumb });
+        out.push({ title: title, link: link, date: dateStr ? new Date(dateStr) : new Date(), thumb: thumb });
       }
     });
+    return out;
+  }
+
+  // Regex fallback — used when DOM parsing yields 0 items
+  function extractRssItemsRegex(text) {
+    var out = [];
+    var itemRx = /<(?:item|entry)[\s>]([\s\S]*?)<\/(?:item|entry)>/gi;
+    var m;
+    while ((m = itemRx.exec(text)) !== null && out.length < 20) {
+      var block = m[1];
+      var titleM = block.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i);
+      var linkM = block.match(/<link[^>]+href=["']([^"']+)["']/i) ||
+                  block.match(/<(?:origLink|feedburner:origLink)>([^<]+)<\//i) ||
+                  block.match(/<link[^>]*>(?:<!\[CDATA\[)?(https?:\/\/[^<\]]+?)(?:\]\]>)?<\/link>/i);
+      var dateM = block.match(/<(?:pubDate|published|updated|dc:date)[^>]*>([\s\S]*?)<\/(?:pubDate|published|updated|dc:date)>/i);
+      var thumbM = block.match(/(?:media:thumbnail|thumbnail)[^>]+url=["']([^"']+)["']/i) ||
+                   block.match(/<enclosure[^>]+type=["']image[^"']*["'][^>]+url=["']([^"']+)["']/i) ||
+                   block.match(/<enclosure[^>]+url=["']([^"']+)["'][^>]*type=["']image/i);
+      var title = titleM ? titleM[1].replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, '').trim() : '';
+      var link = linkM ? linkM[1].trim() : '';
+      var thumb = thumbM ? thumbM[1] : '';
+      var dateStr = dateM ? dateM[1].trim() : '';
+      if (title && link) {
+        out.push({ title: title, link: link, date: dateStr ? new Date(dateStr) : new Date(), thumb: thumb });
+      }
+    }
     return out;
   }
 
@@ -1222,7 +1306,7 @@
   // PANEL: Intel Feed (multi-source security RSS)
   // --------------------------------------------------------------------------
   const INTEL_SOURCES = [
-    { id: 'reuters',   label: 'Reuters World', url: 'https://feeds.reuters.com/Reuters/worldNews' },
+    { id: 'guardian',  label: 'Guardian',      url: 'https://www.theguardian.com/world/rss' },
     { id: 'bbc-world', label: 'BBC World',     url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
     { id: 'dw-world',  label: 'DW World',      url: 'https://rss.dw.com/rdf/rss-en-all' },
     { id: 'aljaz',     label: 'Al Jazeera',    url: 'https://www.aljazeera.com/xml/rss/all.xml' },

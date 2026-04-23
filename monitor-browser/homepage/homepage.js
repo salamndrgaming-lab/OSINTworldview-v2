@@ -295,6 +295,70 @@
 
   let dragSrcId = null;
 
+  function addResizeHandles(panelEl, panelId) {
+    var handleR = document.createElement('div');
+    handleR.className = 'panel-resize-handle panel-resize-right';
+    panelEl.appendChild(handleR);
+
+    var handleB = document.createElement('div');
+    handleB.className = 'panel-resize-handle panel-resize-bottom';
+    panelEl.appendChild(handleB);
+
+    var handleBR = document.createElement('div');
+    handleBR.className = 'panel-resize-handle panel-resize-corner';
+    panelEl.appendChild(handleBR);
+
+    function startResize(e, dir) {
+      e.preventDefault();
+      e.stopPropagation();
+      var startX = e.clientX;
+      var startY = e.clientY;
+      var startW = panelEl.offsetWidth;
+      var startH = panelEl.offsetHeight;
+      panelEl.classList.add('resizing');
+
+      function onMove(ev) {
+        var dx = ev.clientX - startX;
+        var dy = ev.clientY - startY;
+        if (dir === 'right' || dir === 'corner') {
+          panelEl.style.width = Math.max(200, startW + dx) + 'px';
+        }
+        if (dir === 'bottom' || dir === 'corner') {
+          panelEl.style.height = Math.max(150, startH + dy) + 'px';
+        }
+        var mapCanvas = panelEl.querySelector('.map-canvas');
+        if (mapCanvas) {
+          window.dispatchEvent(new Event('resize'));
+        }
+      }
+
+      function onUp() {
+        panelEl.classList.remove('resizing');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (!state.panelCustomSizes) state.panelCustomSizes = {};
+        state.panelCustomSizes[panelId] = {
+          w: panelEl.style.width || null,
+          h: panelEl.style.height || null,
+        };
+        saveState();
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    }
+
+    handleR.addEventListener('mousedown', function(e) { startResize(e, 'right'); });
+    handleB.addEventListener('mousedown', function(e) { startResize(e, 'bottom'); });
+    handleBR.addEventListener('mousedown', function(e) { startResize(e, 'corner'); });
+
+    if (state.panelCustomSizes && state.panelCustomSizes[panelId]) {
+      var cs = state.panelCustomSizes[panelId];
+      if (cs.w) panelEl.style.width = cs.w;
+      if (cs.h) panelEl.style.height = cs.h;
+    }
+  }
+
   function renderDashboard() {
     runCleanups();
     dashboardEl.innerHTML = '';
@@ -311,6 +375,14 @@
       const panelEl = buildPanel(id, def);
       panelEl.setAttribute('draggable', 'true');
       panelEl.addEventListener('dragstart', (e) => {
+        var target = e.target;
+        var fromHead = false;
+        var node = e.target;
+        while (node && node !== panelEl) {
+          if (node.classList && node.classList.contains('panel-head')) { fromHead = true; break; }
+          node = node.parentElement;
+        }
+        if (!fromHead) { e.preventDefault(); return; }
         dragSrcId = id;
         panelEl.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
@@ -335,14 +407,17 @@
         e.preventDefault();
         panelEl.classList.remove('drag-over');
         if (!dragSrcId || dragSrcId === id) return;
-        const fromIdx = state.panels.indexOf(dragSrcId);
-        const toIdx = state.panels.indexOf(id);
+        var fromIdx = state.panels.indexOf(dragSrcId);
+        var toIdx = state.panels.indexOf(id);
         if (fromIdx === -1 || toIdx === -1) return;
         state.panels.splice(fromIdx, 1);
         state.panels.splice(toIdx, 0, dragSrcId);
         saveState();
         renderDashboard();
       });
+
+      // Resize handles (right and bottom edges)
+      addResizeHandles(panelEl, id);
 
       dashboardEl.appendChild(panelEl);
       try {

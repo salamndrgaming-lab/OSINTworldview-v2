@@ -1390,6 +1390,12 @@
         '<div class="intel-reading-time">' + readTime.minutes + ' min read · ' + readTime.words.toLocaleString() + ' words</div></div>';
     }
 
+    // Annotation tool
+    html += '<div class="intel-section"><div class="intel-section-title">Annotate</div>' +
+      '<div class="intel-annotate-form">' +
+      '<textarea class="intel-annotate-input" placeholder="Select text on page, then paste or type notes here…" rows="2"></textarea>' +
+      '<button class="intel-annotate-btn" disabled>Add to Operation</button></div></div>';
+
     // Page URL info
     if (active && !active.isHomepage) {
       html += '<div class="intel-section"><div class="intel-section-title">Page Info</div>' +
@@ -1407,14 +1413,6 @@
         performOsintLookup(val, type);
       });
     });
-
-    // Annotation tool
-    html += '<div class="intel-section"><div class="intel-section-title">Annotate</div>' +
-      '<div class="intel-annotate-form">' +
-      '<textarea class="intel-annotate-input" placeholder="Select text on page, then paste or type notes here…" rows="2"></textarea>' +
-      '<button class="intel-annotate-btn" disabled>Add to Operation</button></div></div>';
-
-    body.innerHTML = html;
 
     // Wire annotation
     const annotateInput = body.querySelector('.intel-annotate-input');

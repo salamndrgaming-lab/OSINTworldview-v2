@@ -177,6 +177,22 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .ind-warn{background:#f97316;box-shadow:0 0 5px rgba(249,115,22,.4)}
 .ind-err{background:#e53e3e;box-shadow:0 0 5px rgba(229,62,62,.4);animation:blink 1.5s infinite}
 
+/* SECONDARY GRID */
+.sgrid{width:100%;max-width:1280px;margin:14px auto 0;padding:0 20px;display:grid;grid-template-columns:2fr 1fr 1fr;gap:13px;animation:rise .5s .2s cubic-bezier(.22,1,.36,1) both}
+@media (max-width:900px){.sgrid{grid-template-columns:1fr}}
+.thr-row{display:flex;align-items:center;gap:10px;padding:9px 13px;border-bottom:1px solid var(--border)}
+.thr-row:last-child{border-bottom:none}
+.thr-bar{flex:1;height:5px;border-radius:3px;background:var(--surface3);overflow:hidden;position:relative}
+.thr-fill{position:absolute;inset:0;border-radius:3px;transition:width .4s}
+.thr-lbl{font-size:11.5px;font-weight:500;color:var(--text);min-width:98px}
+.thr-v{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--text2);min-width:26px;text-align:right}
+.ot-row{display:flex;align-items:center;gap:9px;padding:8px 13px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;text-decoration:none;color:inherit}
+.ot-row:last-child{border-bottom:none}
+.ot-row:hover{background:var(--surface2)}
+.ot-ico{color:var(--text2);display:flex;flex-shrink:0}
+.ot-lbl{font-size:11.5px;font-weight:500;color:var(--text);flex:1}
+.ot-sub{font-size:10px;color:var(--text3)}
+
 /* BADGES */
 .badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:3px;font-size:9.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase}
 .b-red{color:var(--red);background:var(--red-bg);border:1px solid rgba(229,62,62,.18)}
@@ -409,6 +425,48 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
   </div>
 
 </div>
+
+<!-- SECONDARY GRID: GEOPOLITICS + THREAT MONITOR + OSINT TOOLS -->
+<div class="div-wrap" style="margin-top:22px">
+  <hr/>
+  <div class="div-label">
+    <div class="dtabs">
+      <button class="dtab active" data-stab="geo">Regional Intel</button>
+    </div>
+    <div class="div-acts">
+      <button class="act-btn" onclick="loadGeo()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg>Refresh</button>
+    </div>
+  </div>
+</div>
+<div class="sgrid" id="sgrid">
+  <div class="wgt" id="geoWgt">
+    <div class="wgt-head">
+      <span class="wgt-title"><span class="wdot" style="background:var(--accent)"></span>Geopolitics · Regional</span>
+      <div class="wgt-ctrl">
+        <select class="msel" id="geoReg" style="padding:3px 8px;font-size:11px">
+          <option value="mideast">Middle East</option>
+          <option value="eeurope">Eastern Europe</option>
+          <option value="asiapac">Asia-Pacific</option>
+          <option value="africa">Africa</option>
+          <option value="americas">Americas</option>
+        </select>
+      </div>
+    </div>
+    <div class="news-list" id="geoList" style="max-height:360px"><div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading regional feed...</div></div>
+  </div>
+  <div class="wgt" id="threatWgt">
+    <div class="wgt-head">
+      <span class="wgt-title"><span class="wdot" style="background:var(--red);animation:blink 2s infinite"></span>Global Threat Monitor</span>
+    </div>
+    <div id="threatList"></div>
+  </div>
+  <div class="wgt" id="osintWgt">
+    <div class="wgt-head">
+      <span class="wgt-title"><span class="wdot" style="background:var(--purple)"></span>OSINT Tools</span>
+    </div>
+    <div id="osintList"></div>
+  </div>
+</div>
 </div>
 
 <footer class="footer">
@@ -446,15 +504,19 @@ function setLoc(lat,lon,city){
   document.getElementById('wxCity').textContent=city;
   fetchWeather(lat,lon);
 }
+function revGeo(lat,lon){
+  const url=`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`;
+  const p=window.monitorApi?.fetchIntel?intelFetchJSON(url):fetch(url).then(r=>r.json());
+  p.then(d=>{
+    const c=d?.address?.city||d?.address?.town||d?.address?.village||'',s=d?.address?.state_code||'';
+    setLoc(lat,lon,c?(c+', '+s):'Unknown');
+  }).catch(()=>setLoc(lat,lon,'Unknown'));
+}
 if(navigator.geolocation){
   navigator.geolocation.getCurrentPosition(pos=>{
     const{latitude:lat,longitude:lon}=pos.coords;
-    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`)
-      .then(r=>r.json()).then(d=>{
-        const c=d.address?.city||d.address?.town||d.address?.village||'',s=d.address?.state_code||'';
-        setLoc(lat,lon,c?(c+', '+s):'Unknown');
-      }).catch(()=>setLoc(lat,lon,'Unknown'));
-  },()=>setLoc(uLat,uLon,uCity));
+    revGeo(lat,lon);
+  },()=>setLoc(uLat,uLon,uCity),{timeout:4000,maximumAge:600000});
 }else{setLoc(uLat,uLon,uCity);}
 
 /* ── WEATHER (Open-Meteo, free, no key) ───────── */
@@ -472,8 +534,10 @@ function wxSVG(c){
   return RAIN;
 }
 function fetchWeather(lat,lon){
-  fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,uv_index,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`)
-    .then(r=>r.json()).then(d=>{
+  const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,uv_index,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`;
+  const p=HAS_INTEL?intelFetchJSON(url):fetch(url).then(r=>r.json());
+  p.then(d=>{
+      if(!d||!d.current)throw new Error('no data');
       const c=d.current;
       document.getElementById('wxT').textContent=Math.round(c.temperature_2m);
       document.getElementById('wxDesc').textContent=WMO[c.weather_code]||'Clear';
@@ -587,7 +651,17 @@ const TBADGE={
   cyber:{cls:'b-pur',label:'CYBER',color:'var(--purple)'},
   world:{cls:'b-org',label:'WORLD',color:'var(--orange)'},
 };
+/* Prefer the Electron main-process fetch proxy (bypasses CORS, serialises per-domain, caches).
+   Fall back to allorigins when the page is opened outside the browser (dev/testing). */
+const HAS_INTEL=!!(window.monitorApi&&typeof window.monitorApi.fetchIntel==='function');
 const PROXY=u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`;
+function intelFetch(url){
+  if(HAS_INTEL)return window.monitorApi.fetchIntel(url);
+  return fetch(PROXY(url)).then(r=>r.json()).then(d=>d.contents||'');
+}
+function intelFetchJSON(url){
+  return intelFetch(url).then(txt=>{try{return JSON.parse(txt);}catch{return null;}});
+}
 
 function parseRSS(xml){
   const doc=new DOMParser().parseFromString(xml,'text/xml');
@@ -624,17 +698,9 @@ function renderNews(items,badge,container,local=false){
   });
 }
 
-function loadFeed(tab){
-  const badge=TBADGE[tab];
-  const list=document.getElementById('newsList');
-  list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>`;
-  fetch(PROXY(FEEDS[tab])).then(r=>r.json()).then(d=>{renderNews(parseRSS(d.contents||''),badge,list);}).catch(()=>{list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable</div>`;});
-}
-function loadLocal(reg){
-  const list=document.getElementById('lnewsList');
-  list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Loading...</div>`;
-  fetch(PROXY(LFEEDS[reg]||LFEEDS.memphis)).then(r=>r.json()).then(d=>{renderNews(parseRSS(d.contents||''),{},'',list,true);}).catch(()=>{list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Feed unavailable</div>`;});
-}
+// Legacy stubs (superseded below)
+function loadFeed(){}
+function loadLocal(){}
 
 // Fix: local uses container param correctly
 function renderNews(items,badge,container,altContainer,local=false){
@@ -664,12 +730,16 @@ function loadFeed(tab){
   const badge=TBADGE[tab];
   const list=document.getElementById('newsList');
   list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>`;
-  fetch(PROXY(FEEDS[tab])).then(r=>r.json()).then(d=>{renderNewsInto(parseRSS(d.contents||''),badge,list,false);}).catch(()=>{list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable — check network</div>`;});
+  intelFetch(FEEDS[tab])
+    .then(xml=>{renderNewsInto(parseRSS(xml),badge,list,false);})
+    .catch(()=>{list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable — check network</div>`;});
 }
 function loadLocal(reg){
   const list=document.getElementById('lnewsList');
   list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Loading local news...</div>`;
-  fetch(PROXY(LFEEDS[reg]||LFEEDS.memphis)).then(r=>r.json()).then(d=>{renderNewsInto(parseRSS(d.contents||''),{cls:'b-pur',label:'LOCAL',color:'var(--purple)'},list,true);}).catch(()=>{list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Local feed unavailable</div>`;});
+  intelFetch(LFEEDS[reg]||LFEEDS.memphis)
+    .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-pur',label:'LOCAL',color:'var(--purple)'},list,true);})
+    .catch(()=>{list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Local feed unavailable</div>`;});
 }
 
 let activeTab='intel';
@@ -680,14 +750,50 @@ document.getElementById('refreshBtn').addEventListener('click',()=>loadFeed(acti
 loadFeed('intel');
 loadLocal(cfg.region||'memphis');
 
-/* ── MARKETS ──────────────────────────────────── */
-[{n:'Brent Crude',s:'ICE · USD/bbl',v:'$87.34',c:'+2.1%',u:true},
- {n:'S&P 500',s:'SPX',v:'5,204',c:'-0.4%',u:false},
- {n:'Gold',s:'XAU/USD',v:'$2,318',c:'+0.8%',u:true},
- {n:'Bitcoin',s:'BTC/USD',v:'$63,420',c:'+1.2%',u:true},
- {n:'EUR/USD',s:'FX',v:'1.0842',c:'-0.2%',u:false},
- {n:'Nat Gas',s:'NYMEX',v:'$1.98',c:'-1.1%',u:false}
-].forEach(m=>{const r=document.createElement('div');r.className='mkt-row';r.innerHTML=`<div><div class="mkt-n">${m.n}</div><div class="mkt-s">${m.s}</div></div><div><div class="mkt-v">${m.v}</div><div class="mkt-c ${m.u?'up':'dn'}">${m.u?'▲':'▼'} ${m.c}</div></div>`;document.getElementById('mktList').appendChild(r);});
+/* ── MARKETS (live via Yahoo Finance quote API, intel-fetched) ──────── */
+const MKT_SYMS=[
+  {sym:'BZ=F',n:'Brent Crude',s:'ICE · USD/bbl',prefix:'$'},
+  {sym:'^GSPC',n:'S&P 500',s:'SPX',prefix:''},
+  {sym:'GC=F',n:'Gold',s:'XAU/USD',prefix:'$'},
+  {sym:'BTC-USD',n:'Bitcoin',s:'BTC/USD',prefix:'$'},
+  {sym:'EURUSD=X',n:'EUR/USD',s:'FX',prefix:'',digits:4},
+  {sym:'NG=F',n:'Nat Gas',s:'NYMEX',prefix:'$'},
+];
+function fmtNum(v,digits){
+  if(v==null||!isFinite(v))return'—';
+  if(digits!=null)return v.toFixed(digits);
+  if(v>=1000)return v.toLocaleString('en-US',{maximumFractionDigits:0});
+  if(v>=100)return v.toFixed(1);
+  return v.toFixed(2);
+}
+function renderMarkets(rows){
+  const c=document.getElementById('mktList');
+  c.innerHTML='';
+  rows.forEach(m=>{
+    const up=(m.change??0)>=0;
+    const changePct=m.changePct==null?'—':(up?'+':'')+m.changePct.toFixed(2)+'%';
+    const r=document.createElement('div');r.className='mkt-row';
+    r.innerHTML=`<div><div class="mkt-n">${m.n}</div><div class="mkt-s">${m.s}</div></div><div><div class="mkt-v">${m.prefix}${fmtNum(m.price,m.digits)}</div><div class="mkt-c ${up?'up':'dn'}">${up?'▲':'▼'} ${changePct}</div></div>`;
+    c.appendChild(r);
+  });
+}
+// Initial placeholder render
+renderMarkets(MKT_SYMS.map(s=>({...s,price:null,change:null,changePct:null})));
+function loadMarkets(){
+  const syms=MKT_SYMS.map(m=>m.sym).join(',');
+  const url=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(syms)}`;
+  intelFetchJSON(url).then(d=>{
+    const quotes=d?.quoteResponse?.result||[];
+    const byS=Object.fromEntries(quotes.map(q=>[q.symbol,q]));
+    const rows=MKT_SYMS.map(m=>{
+      const q=byS[m.sym];
+      return{...m,price:q?.regularMarketPrice,change:q?.regularMarketChange,changePct:q?.regularMarketChangePercent};
+    });
+    renderMarkets(rows);
+  }).catch(()=>{/* keep placeholders */});
+}
+loadMarkets();
+setInterval(loadMarkets,60000);
 
 /* ── ALERTS ───────────────────────────────────── */
 [{t:'OREF: Rocket alert — northern sector',r:'Israel/Lebanon',tm:'1m ago',c:'var(--red)'},
@@ -704,6 +810,70 @@ loadLocal(cfg.region||'memphis');
  {ico:I.activity,l:'AI Insights',v:'Live',ind:'ind-ok'},
  {ico:I.server,l:'Telegram Feed',v:'Offline',ind:'ind-err'}
 ].forEach(s=>{const r=document.createElement('div');r.className='st-row';r.innerHTML=`<span class="st-ico">${s.ico}</span><span class="st-lbl">${s.l}</span><span class="st-val">${s.v}</span><span class="st-ind ${s.ind}"></span>`;document.getElementById('statusList').appendChild(r);});
+
+/* ── GEOPOLITICS (regional) ────────────────────── */
+const GEO_FEEDS={
+  mideast:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Israel+OR+Gaza+OR+Iran+OR+Syria+OR+Lebanon+OR+Yemen+OR+"Red+Sea"+OR+Hormuz)&mode=artlist&maxrecords=12&format=rss',
+  eeurope:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Ukraine+OR+Russia+OR+Belarus+OR+Moldova+OR+Crimea+OR+Donbas)&mode=artlist&maxrecords=12&format=rss',
+  asiapac:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Taiwan+OR+China+OR+Korea+OR+"South+China+Sea"+OR+Philippines+OR+Japan)&mode=artlist&maxrecords=12&format=rss',
+  africa:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Sahel+OR+Sudan+OR+Ethiopia+OR+Somalia+OR+Nigeria+OR+Mali+OR+DRC)&mode=artlist&maxrecords=12&format=rss',
+  americas:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Venezuela+OR+Haiti+OR+Mexico+OR+Colombia+OR+Ecuador+OR+cartel)&mode=artlist&maxrecords=12&format=rss',
+};
+function loadGeo(){
+  const reg=document.getElementById('geoReg')?.value||'mideast';
+  const list=document.getElementById('geoList');
+  list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>`;
+  intelFetch(GEO_FEEDS[reg])
+    .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-amb',label:'REGIONAL',color:'var(--accent)'},list,false);})
+    .catch(()=>{list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable</div>`;});
+}
+document.getElementById('geoReg')?.addEventListener('change',()=>{cfg.geoRegion=document.getElementById('geoReg').value;saveCfg(cfg);loadGeo();});
+if(cfg.geoRegion)document.getElementById('geoReg').value=cfg.geoRegion;
+loadGeo();
+
+/* ── GLOBAL THREAT MONITOR ─────────────────────── */
+const THREAT_BARS=[
+  {lbl:'Middle East',  v:82,c:'var(--red)'},
+  {lbl:'E. Europe',    v:74,c:'var(--orange)'},
+  {lbl:'Asia-Pacific', v:58,c:'var(--accent)'},
+  {lbl:'Africa',       v:51,c:'var(--accent)'},
+  {lbl:'Cyber',        v:68,c:'var(--purple)'},
+  {lbl:'Americas',     v:39,c:'var(--green)'},
+  {lbl:'Nuclear',      v:44,c:'var(--orange)'},
+];
+(function renderThreats(){
+  const c=document.getElementById('threatList');if(!c)return;
+  c.innerHTML='';
+  THREAT_BARS.forEach(t=>{
+    const r=document.createElement('div');r.className='thr-row';
+    r.innerHTML=`<span class="thr-lbl">${t.lbl}</span><div class="thr-bar"><div class="thr-fill" style="background:${t.c};width:${t.v}%"></div></div><span class="thr-v">${t.v}</span>`;
+    c.appendChild(r);
+  });
+})();
+
+/* ── OSINT TOOLS PANEL ─────────────────────────── */
+const OSINT_TOOLS=[
+  {l:'GDELT Events',      s:'Global events DB',     u:'https://gdeltproject.org',         i:I.globe},
+  {l:'ACLED',             s:'Armed conflict data',  u:'https://acleddata.com',             i:I.shield},
+  {l:'FlightRadar24',     s:'Live air traffic',     u:'https://www.flightradar24.com',     i:I.plane},
+  {l:'MarineTraffic',     s:'Live maritime',        u:'https://www.marinetraffic.com',     i:I.anchor},
+  {l:'Shodan',            s:'Exposed devices',      u:'https://www.shodan.io',             i:I.search},
+  {l:'IntelX',            s:'Leak archive',         u:'https://intelx.io',                 i:I.server},
+  {l:'Bellingcat',        s:'Open-source invest.',  u:'https://www.bellingcat.com',        i:I.eye},
+  {l:'ISW',               s:'War assessments',      u:'https://understandingwar.org',      i:I.map},
+  {l:'GreyNoise',         s:'Internet noise',       u:'https://www.greynoise.io',          i:I.cpu},
+  {l:'ISC SANS',          s:'Cyber threat center',  u:'https://isc.sans.edu',              i:I.activity},
+  {l:'Wayback Machine',   s:'Web archive',          u:'https://web.archive.org',           i:I.archive},
+];
+(function renderOSINT(){
+  const c=document.getElementById('osintList');if(!c)return;
+  c.innerHTML='';
+  OSINT_TOOLS.forEach(t=>{
+    const a=document.createElement('a');a.href=t.u;a.target='_blank';a.rel='noopener';a.className='ot-row';
+    a.innerHTML=`<span class="ot-ico">${t.i}</span><div style="flex:1;min-width:0"><div class="ot-lbl">${t.l}</div><div class="ot-sub">${t.s}</div></div>`;
+    c.appendChild(a);
+  });
+})();
 
 /* ── MODAL ────────────────────────────────────── */
 const modal=document.getElementById('modal');

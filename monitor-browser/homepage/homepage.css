@@ -277,17 +277,43 @@ html, body {
   background: var(--surface-raised);
   border: 1px solid var(--surface-border);
   border-radius: var(--panel-radius, 10px);
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 220px;
   transition: border-color var(--dur-fast) var(--easing-out), opacity 0.15s, transform 0.15s;
-  cursor: grab;
 }
+.panel .panel-body { overflow: hidden; flex: 1; }
+.panel .panel-head { cursor: grab; }
+.panel .panel-head:active { cursor: grabbing; }
 .panel:hover { border-color: var(--surface-border-strong); }
 .panel.dragging { opacity: 0.4; transform: scale(0.97); }
 .panel.drag-over { border-color: var(--intel-accent); box-shadow: 0 0 0 2px var(--intel-accent-glow); }
-.panel:active { cursor: grabbing; }
+.panel.resizing { transition: none; }
+
+/* Panel resize handles */
+.panel-resize-handle { position: absolute; z-index: 5; }
+.panel-resize-right {
+  top: 0; right: -4px; width: 8px; height: 100%;
+  cursor: ew-resize;
+}
+.panel-resize-bottom {
+  bottom: -4px; left: 0; width: 100%; height: 8px;
+  cursor: ns-resize;
+}
+.panel-resize-corner {
+  bottom: -4px; right: -4px; width: 14px; height: 14px;
+  cursor: nwse-resize;
+}
+.panel-resize-corner::after {
+  content: ''; position: absolute; bottom: 3px; right: 3px;
+  width: 8px; height: 8px;
+  border-right: 2px solid var(--surface-border-strong);
+  border-bottom: 2px solid var(--surface-border-strong);
+  opacity: 0; transition: opacity 0.15s;
+}
+.panel:hover .panel-resize-corner::after { opacity: 0.5; }
 
 .panel-sm { grid-column: span 3; }
 .panel-md { grid-column: span 4; }

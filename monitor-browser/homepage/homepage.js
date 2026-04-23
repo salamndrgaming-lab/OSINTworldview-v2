@@ -1059,24 +1059,40 @@
     size: 'lg',
     desc: 'Breaking world news aggregated from BBC, Al Jazeera, DW, AP, CNBC, NPR.',
     render: (body, panel) => {
-      if (!hasApi) {
-        body.innerHTML = '<div class="panel-empty">Intel proxy unavailable — open in Monitor Browser to load live news.</div>';
-        setPanelStatus(panel, 'error', 'NO-PROXY');
-        return;
-      }
+      body.innerHTML =
+        '<div class="news-status-bar" style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 0 8px;font-size:10px;font-family:monospace;opacity:0.7"></div>' +
+        '<div class="news-list-wrap"><div class="panel-loading">Fetching headlines\u2026</div></div>';
 
-      body.innerHTML = '<div class="panel-loading">Fetching headlines&hellip;</div>';
-      setPanelStatus(panel, 'loading', 'FETCH');
+      var statusBar = body.querySelector('.news-status-bar');
+      var listWrap  = body.querySelector('.news-list-wrap');
+
+      // Per-feed status dots
+      var dots = {};
+      NEWS_SOURCES.forEach(function (src) {
+        var dot = document.createElement('span');
+        dot.textContent = src.label + ' \u25CF';
+        dot.style.cssText = 'color:#888;padding:1px 4px;border:1px solid #333;border-radius:3px';
+        dot.title = src.url;
+        statusBar.appendChild(dot);
+        dots[src.id] = dot;
+      });
+
+      function setDot(id, state, msg) {
+        var d = dots[id];
+        if (!d) return;
+        var colors = { fetch: '#888', ok: '#4caf50', empty: '#ff9800', err: '#f44336', timeout: '#9c27b0' };
+        d.style.color = colors[state] || '#888';
+        d.title = msg || '';
+      }
 
       var killed = false;
       var timer = null;
+      var allItems = [];
 
-      function renderMerged(allItems) {
-        if (allItems.length === 0) return false;
-        // Sort by date descending
-        allItems.sort(function (a, b) { return b.date - a.date; });
-        var shown = allItems.slice(0, 30);
-        var list = shown.map(function (it) {
+      function renderMerged() {
+        if (allItems.length === 0) return;
+        var sorted = allItems.slice().sort(function (a, b) { return b.date - a.date; });
+        var html = sorted.slice(0, 40).map(function (it) {
           var thumbHtml = it.thumb
             ? '<img class="news-thumb" src="' + escapeHtml(it.thumb) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">'
             : '';
@@ -1088,64 +1104,83 @@
             escapeHtml(formatRelTime(it.date)) + '</span>' +
             '</div></a></li>';
         }).join('');
-        body.innerHTML = '<ul class="news-list">' + list + '</ul>';
-        return true;
+        listWrap.innerHTML = '<ul class="news-list">' + html + '</ul>';
+      }
+
+      // Try fetching via intel proxy first, then direct CORS fetch as fallback
+      function fetchFeed(src) {
+        setDot(src.id, 'fetch', 'Fetching\u2026');
+
+        var intelP = hasApi
+          ? Promise.race([
+              window.monitorApi.fetchIntel(src.url),
+              new Promise(function (_, rej) { setTimeout(function () { rej(new Error('IPC timeout')); }, 18000); })
+            ])
+          : Promise.reject(new Error('no proxy'));
+
+        return intelP.catch(function (ipcErr) {
+          // Fallback: direct fetch (works for feeds with permissive CORS)
+          console.warn('[news] intel:fetch failed for', src.id, ipcErr.message, '— trying direct fetch');
+          return Promise.race([
+            fetch(src.url, { headers: { 'Accept': 'application/rss+xml, application/xml, text/xml, */*' } })
+              .then(function (r) { return r.text(); }),
+            new Promise(function (_, rej) { setTimeout(function () { rej(new Error('direct timeout')); }, 10000); })
+          ]);
+        });
       }
 
       function loadAllNews() {
         if (killed) return;
+        allItems = [];
 
-        // Show any cached data immediately across all sources
-        var cachedItems = [];
+        // Immediately show any cached items
+        var cachedAny = false;
         NEWS_SOURCES.forEach(function (src) {
-          var cached = getCachedResponse(src.url);
-          if (cached) {
-            var items = parseRss(cached);
+          var c = getCachedResponse(src.url);
+          if (!c) return;
+          var items = parseRss(c);
+          if (items.length > 0) {
             items.forEach(function (it) { it.source = src.label; });
-            cachedItems = cachedItems.concat(items);
+            allItems = allItems.concat(items);
+            cachedAny = true;
           }
         });
-        if (cachedItems.length > 0) {
-          renderMerged(cachedItems);
-          setPanelStatus(panel, 'loading', 'UPDATING');
-        }
+        if (cachedAny) { renderMerged(); setPanelStatus(panel, 'loading', 'CACHED'); }
 
-        // Fetch all sources in parallel; show results as they arrive
-        var allItems = [];
         var completed = 0;
         var total = NEWS_SOURCES.length;
 
         NEWS_SOURCES.forEach(function (src) {
-          // Race each fetch against a 20s timeout so slow feeds don't block others
-          var timeoutPromise = new Promise(function (_, rej) {
-            setTimeout(function () { rej(new Error('timeout')); }, 20000);
-          });
-          Promise.race([fetchIntel(src.url), timeoutPromise])
+          fetchFeed(src)
             .then(function (text) {
               if (killed) return;
               var items = parseRss(text);
               if (items.length > 0) {
                 items.forEach(function (it) { it.source = src.label; });
+                // Remove old items from this source and replace with fresh
+                allItems = allItems.filter(function (it) { return it.source !== src.label; });
                 allItems = allItems.concat(items);
-                // Render incrementally as each feed arrives
-                renderMerged(allItems);
-                setPanelStatus(panel, 'loading', completed + '/' + total);
+                renderMerged();
+                setDot(src.id, 'ok', items.length + ' items');
+              } else {
+                setDot(src.id, 'empty', 'Feed returned 0 items');
               }
             })
             .catch(function (err) {
-              console.warn('[news] feed failed:', src.id, err.message);
+              if (killed) return;
+              var isTimeout = /timeout/i.test(err.message);
+              setDot(src.id, isTimeout ? 'timeout' : 'err', err.message);
+              console.warn('[news] feed error:', src.id, err.message);
             })
             .finally(function () {
               if (killed) return;
               completed++;
               if (completed === total) {
                 if (allItems.length > 0) {
-                  renderMerged(allItems);
-                  setPanelStatus(panel, 'live', 'LIVE');
-                } else if (cachedItems.length > 0) {
-                  setPanelStatus(panel, 'live', 'CACHED');
-                } else {
-                  body.innerHTML = '<div class="panel-empty">All feeds failed — check network or try refreshing.</div>';
+                  renderMerged();
+                  setPanelStatus(panel, 'live', 'LIVE \u00b7 ' + allItems.length + ' items');
+                } else if (!cachedAny) {
+                  listWrap.innerHTML = '<div class="panel-empty">All feeds failed — check the status dots above for details.</div>';
                   setPanelStatus(panel, 'error', 'ERR');
                 }
               }

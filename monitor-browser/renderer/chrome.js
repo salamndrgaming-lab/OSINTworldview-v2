@@ -1297,6 +1297,8 @@
   async function openIntelSidebar() {
     if (intelSidebar) intelSidebar.remove();
 
+    browser.settingsExpand();
+
     intelSidebar = document.createElement('div');
     intelSidebar.className = 'intel-sidebar';
     intelSidebar.innerHTML =
@@ -1477,6 +1479,7 @@
   function closeIntelSidebar() {
     if (intelSidebar) { intelSidebar.remove(); intelSidebar = null; }
     intelVisible = false;
+    browser.settingsCollapse();
   }
 
   // Quick OSINT lookup (Ctrl+Shift+O)

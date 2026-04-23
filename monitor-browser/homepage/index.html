@@ -680,34 +680,6 @@ function relTime(s){
   if(diff<86400)return Math.round(diff/3600)+'h ago';return Math.round(diff/86400)+'d ago';
 }
 
-function renderNews(items,badge,container,local=false){
-  container.innerHTML='';
-  if(!items.length){container.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">No items found</div>`;return;}
-  items.forEach(item=>{
-    const a=document.createElement('a');
-    a.href=item.link;a.target='_blank';a.rel='noopener noreferrer';
-    if(local){
-      a.className='ln';
-      a.innerHTML=`<div class="ln-thumb">${item.thumb?`<img src="${item.thumb}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:'<div style="width:100%;height:100%;background:var(--surface3)"></div>'}</div><div class="ln-title">${item.title}</div><div class="ln-time">${relTime(item.pubDate)}</div>`;
-    }else{
-      a.className='ni';
-      const thumbPH=`<div class="ni-ph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--border2)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`;
-      a.innerHTML=`<div class="ni-thumb">${item.thumb?`<img src="${item.thumb}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:thumbPH}<div class="ni-sev" style="background:${badge.color}"></div></div><div class="ni-body"><span class="badge ${badge.cls} ni-cat">${badge.label}</span><div class="ni-title">${item.title}</div><div class="ni-meta"><span class="ni-src">${item.source}</span><span class="ni-sep"></span><span class="ni-time">${relTime(item.pubDate)}</span></div></div>`;
-    }
-    container.appendChild(a);
-  });
-}
-
-// Legacy stubs (superseded below)
-function loadFeed(){}
-function loadLocal(){}
-
-// Fix: local uses container param correctly
-function renderNews(items,badge,container,altContainer,local=false){
-  const c=altContainer||container;
-  if(typeof c==='string'){const el=document.getElementById(c);if(el)renderNewsInto(items,badge,el,local);}
-  else renderNewsInto(items,badge,c,local);
-}
 function renderNewsInto(items,badge,container,local){
   container.innerHTML='';
   if(!items.length){container.innerHTML=`<div style="padding:${local?'12px 13px':'24px'};text-align:center;color:var(--text3);font-size:${local?'11':'12'}px">No items found</div>`;return;}
@@ -730,16 +702,43 @@ function loadFeed(tab){
   const badge=TBADGE[tab];
   const list=document.getElementById('newsList');
   list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>`;
+  console.log('[feed] loading', tab, FEEDS[tab], 'HAS_INTEL=', HAS_INTEL);
   intelFetch(FEEDS[tab])
-    .then(xml=>{renderNewsInto(parseRSS(xml),badge,list,false);})
-    .catch(()=>{list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable — check network</div>`;});
+    .then(xml=>{
+      console.log('[feed] got', tab, typeof xml, xml?.length);
+      const items=parseRSS(xml);
+      console.log('[feed] parsed', items.length, 'items');
+      renderNewsInto(items,badge,list,false);
+    })
+    .catch(err=>{
+      console.error('[feed] error', tab, err);
+      list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable — retrying…</div>`;
+      setTimeout(()=>loadFeedFallback(tab,badge,list),2000);
+    });
+}
+function loadFeedFallback(tab,badge,list){
+  const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(FEEDS[tab])}`;
+  fetch(proxy).then(r=>r.json()).then(d=>{
+    const items=parseRSS(d.contents||'');
+    renderNewsInto(items,badge,list,false);
+  }).catch(()=>{
+    list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable — check network</div>`;
+  });
 }
 function loadLocal(reg){
   const list=document.getElementById('lnewsList');
   list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Loading local news...</div>`;
   intelFetch(LFEEDS[reg]||LFEEDS.memphis)
     .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-pur',label:'LOCAL',color:'var(--purple)'},list,true);})
-    .catch(()=>{list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Local feed unavailable</div>`;});
+    .catch(err=>{
+      console.error('[local] error', err);
+      const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(LFEEDS[reg]||LFEEDS.memphis)}`;
+      fetch(proxy).then(r=>r.json()).then(d=>{
+        renderNewsInto(parseRSS(d.contents||''),{cls:'b-pur',label:'LOCAL',color:'var(--purple)'},list,true);
+      }).catch(()=>{
+        list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Local feed unavailable</div>`;
+      });
+    });
 }
 
 let activeTab='intel';
@@ -825,7 +824,15 @@ function loadGeo(){
   list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>`;
   intelFetch(GEO_FEEDS[reg])
     .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-amb',label:'REGIONAL',color:'var(--accent)'},list,false);})
-    .catch(()=>{list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable</div>`;});
+    .catch(err=>{
+      console.error('[geo] error', err);
+      const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(GEO_FEEDS[reg])}`;
+      fetch(proxy).then(r=>r.json()).then(d=>{
+        renderNewsInto(parseRSS(d.contents||''),{cls:'b-amb',label:'REGIONAL',color:'var(--accent)'},list,false);
+      }).catch(()=>{
+        list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable</div>`;
+      });
+    });
 }
 document.getElementById('geoReg')?.addEventListener('change',()=>{cfg.geoRegion=document.getElementById('geoReg').value;saveCfg(cfg);loadGeo();});
 if(cfg.geoRegion)document.getElementById('geoReg').value=cfg.geoRegion;

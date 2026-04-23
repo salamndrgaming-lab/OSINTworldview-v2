@@ -5,20 +5,29 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Monitor Browser — New Tab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 <style>
 :root {
-  --accent:#d4a843;--accent-dim:#b8922f;--accent-glow:rgba(212,168,67,.18);
-  --accent-subtle:rgba(212,168,67,.07);--accent-border:rgba(212,168,67,.16);
-  --bg:#060608;--bg2:#0c0c10;--surface:#111118;--surface2:#17171f;--surface3:#1c1c26;
-  --border:#22222e;--border2:#2a2a38;
-  --text:#e4e4f0;--text2:#80809a;--text3:#484860;
-  --font:'Geist',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
-  --red:#e53e3e;--red-bg:rgba(229,62,62,.1);
+  /* Spec tokens */
+  --bg:#0a0c10;--bg2:#0f1219;--bg3:#141820;
+  --panel:#111520;--panel-border:rgba(255,255,255,0.06);
+  --accent:#00d4ff;--accent2:#ff4757;--accent3:#2ed573;--accent4:#ffa502;
+  --text:#e8eaf0;--text-dim:#6b7280;--text-mid:#9ca3af;
+
+  /* Derived (kept for legacy selectors in the file) */
+  --accent-dim:#0891a8;--accent-glow:rgba(0,212,255,.18);
+  --accent-subtle:rgba(0,212,255,.07);--accent-border:rgba(0,212,255,.2);
+  --surface:var(--panel);--surface2:var(--bg3);--surface3:#1b2030;
+  --border:var(--panel-border);--border2:rgba(255,255,255,.1);
+  --text2:var(--text-mid);--text3:var(--text-dim);
+  --font:'DM Sans',system-ui,sans-serif;
+  --font-head:'Syne',system-ui,sans-serif;
+  --mono:'Space Mono',ui-monospace,monospace;
+  --red:var(--accent2);--red-bg:rgba(255,71,87,.1);
   --blue:#4299e1;--blue-bg:rgba(66,153,225,.1);
   --purple:#9f7aea;--purple-bg:rgba(159,122,234,.1);
-  --green:#48bb78;--green-bg:rgba(72,187,120,.1);
-  --orange:#f97316;--orange-bg:rgba(249,115,22,.1);
+  --green:var(--accent3);--green-bg:rgba(46,213,115,.1);
+  --orange:var(--accent4);--orange-bg:rgba(255,165,2,.1);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text);overflow-x:hidden}
@@ -26,7 +35,13 @@ button{font-family:var(--font);cursor:pointer;border:none;background:none}
 a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:block;flex-shrink:0}
 
 .bg-wrap{position:fixed;inset:0;z-index:0;pointer-events:none}
-.bg-g{position:absolute;inset:0;background:radial-gradient(ellipse 70% 40% at 50% 0%,rgba(212,168,67,.055) 0%,transparent 65%),linear-gradient(180deg,#060608 0%,#08080f 100%)}
+.scanline{position:fixed;left:0;right:0;top:-4px;height:2px;z-index:200;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(0,212,255,.55),transparent);box-shadow:0 0 18px rgba(0,212,255,.35);animation:scan 3.6s cubic-bezier(.55,.05,.55,.95) 1;animation-delay:.2s;opacity:0}
+@keyframes scan{0%{top:-4px;opacity:0}8%{opacity:1}92%{opacity:1}100%{top:100vh;opacity:0}}
+.wgt{animation:riseIn .55s cubic-bezier(.22,1,.36,1) both}
+.wgt:nth-of-type(1){animation-delay:.05s}.wgt:nth-of-type(2){animation-delay:.12s}.wgt:nth-of-type(3){animation-delay:.19s}
+.wgt:nth-of-type(4){animation-delay:.26s}.wgt:nth-of-type(5){animation-delay:.33s}.wgt:nth-of-type(6){animation-delay:.4s}
+@keyframes riseIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.bg-g{position:absolute;inset:0;background:radial-gradient(ellipse 70% 40% at 50% 0%,rgba(0,212,255,.06) 0%,transparent 65%),linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%)}
 .bg-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.012) 1px,transparent 1px);background-size:52px 52px;mask-image:radial-gradient(ellipse 75% 55% at 50% 25%,black 0%,transparent 100%)}
 
 .page{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;padding-bottom:44px}
@@ -91,7 +106,7 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 /* WIDGET SHELL */
 .wgt{border-radius:10px;border:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;overflow:hidden}
 .wgt-head{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid var(--border);flex-shrink:0}
-.wgt-title{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text2)}
+.wgt-title{display:flex;align-items:center;gap:6px;font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text)}
 .wdot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .wgt-ctrl{display:flex;gap:6px}
 .wc-btn{display:flex;align-items:center;gap:4px;padding:3px 8px;font-size:10.5px;font-weight:500;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:5px;transition:all .15s;cursor:pointer}
@@ -250,6 +265,7 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 <body>
 
 <div class="bg-wrap"><div class="bg-g"></div><div class="bg-grid"></div></div>
+<div class="scanline" aria-hidden="true"></div>
 
 <!-- CUSTOMIZATION MODAL -->
 <div class="modal-bg" id="modal">
@@ -298,7 +314,7 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 <header class="topbar">
   <div class="tb-left">
     <div class="logo">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#d4a843" stroke-width="1.5"/><circle cx="12" cy="12" r="4" stroke="#d4a843" stroke-width="1.5"/><line x1="12" y1="3" x2="12" y2="7" stroke="#d4a843" stroke-width="1.5" stroke-linecap="round"/><line x1="12" y1="17" x2="12" y2="21" stroke="#d4a843" stroke-width="1.5" stroke-linecap="round"/><line x1="3" y1="12" x2="7" y2="12" stroke="#d4a843" stroke-width="1.5" stroke-linecap="round"/><line x1="17" y1="12" x2="21" y2="12" stroke="#d4a843" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#00d4ff" stroke-width="1.5"/><circle cx="12" cy="12" r="4" stroke="#00d4ff" stroke-width="1.5"/><line x1="12" y1="3" x2="12" y2="7" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/><line x1="12" y1="17" x2="12" y2="21" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/><line x1="3" y1="12" x2="7" y2="12" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/><line x1="17" y1="12" x2="21" y2="12" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/></svg>
       <span class="logo-txt">Monitor</span>
     </div>
     <div class="tb-sep"></div>
@@ -391,7 +407,7 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
     </div>
     <div class="wx-block">
       <div class="wx-main">
-        <div class="wx-ico" id="wxIco"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#d4a843" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></div>
+        <div class="wx-ico" id="wxIco"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></div>
         <div>
           <div class="wx-temp"><span class="wx-t" id="wxT">—</span><span class="wx-u">°F</span></div>
           <div class="wx-desc" id="wxDesc">Loading...</div>
@@ -522,7 +538,7 @@ if(navigator.geolocation){
 /* ── WEATHER (Open-Meteo, free, no key) ───────── */
 const WMO={0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Foggy',48:'Icy fog',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',80:'Showers',81:'Rain showers',82:'Heavy showers',95:'Thunderstorm',96:'Thunderstorm+hail',99:'Severe storm'};
 function wxSVG(c){
-  const SUN=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#d4a843" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+  const SUN=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
   const CLOUD=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#8888a0" stroke-width="1.5"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`;
   const RAIN=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#4299e1" stroke-width="1.5"><line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>`;
   const SNOW=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#a0c8ff" stroke-width="1.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5l-5 5-5-5"/><path d="M17 19l-5-5-5 5"/><path d="M1 12l4 2-4 2"/><path d="M23 12l-4 2 4 2"/></svg>`;

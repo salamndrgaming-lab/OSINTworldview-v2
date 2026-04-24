@@ -273,6 +273,40 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .th-name{font-size:11px;font-weight:500;color:var(--text2)}
 .th-opt.active .th-name{color:var(--accent)}
 
+/* EXPANDABLE PILL ROW */
+.pill-row{width:100%;max-width:1380px;margin:18px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap;animation:rise .5s .35s cubic-bezier(.22,1,.36,1) both}
+.pill{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;border:1px solid var(--panel-border);background:var(--panel);color:var(--text-mid);font-family:var(--font-head);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .18s;user-select:none}
+.pill:hover{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
+.pill.open{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
+.pill-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.pill-expand{width:100%;max-width:1380px;margin:10px auto 0;padding:0 20px;display:none;animation:riseIn .3s cubic-bezier(.22,1,.36,1) both}
+.pill-expand.open{display:block}
+.pill-expand .wgt{max-height:380px}
+
+/* LIVESTREAM GRID */
+.ls-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px}
+.ls-card{border-radius:8px;overflow:hidden;background:var(--bg3);border:1px solid var(--panel-border);position:relative}
+.ls-card iframe{width:100%;aspect-ratio:16/9;border:none;display:block}
+.ls-bar{display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:11px}
+.ls-name{font-weight:600;color:var(--text);flex:1}
+.ls-live{font-family:var(--font-head);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--accent2);background:var(--red-bg);border:1px solid rgba(255,71,87,.2);padding:1px 6px;border-radius:3px}
+
+/* PREDICTION MARKET */
+.pm-row{display:flex;align-items:center;gap:10px;padding:9px 13px;border-bottom:1px solid var(--border)}
+.pm-row:last-child{border-bottom:none}
+.pm-q{font-size:12px;font-weight:500;color:var(--text);flex:1;line-height:1.35}
+.pm-bar{width:80px;height:6px;border-radius:3px;background:var(--bg3);overflow:hidden;flex-shrink:0}
+.pm-fill{height:100%;border-radius:3px;background:var(--accent)}
+.pm-pct{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent);min-width:38px;text-align:right}
+
+/* DIPLOMATIC TRACKER */
+.dip-row{display:flex;gap:9px;align-items:flex-start;padding:9px 13px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;text-decoration:none;color:inherit}
+.dip-row:last-child{border-bottom:none}
+.dip-row:hover{background:var(--surface2)}
+.dip-bar{width:3px;border-radius:2px;flex-shrink:0;align-self:stretch;min-height:28px}
+.dip-ttl{font-size:11.5px;font-weight:500;color:var(--text);line-height:1.35}
+.dip-src{font-size:10px;color:var(--text-dim);margin-top:2px}
+
 /* FOOTER */
 .footer{position:fixed;bottom:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:7px 20px;background:rgba(6,6,8,.88);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--border);z-index:50}
 .f-brand{font-size:10.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);opacity:.55}
@@ -473,47 +507,55 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 
 </div>
 
-<!-- SECONDARY GRID: GEOPOLITICS + THREAT MONITOR + OSINT TOOLS -->
-<div class="div-wrap" style="margin-top:22px">
-  <hr/>
-  <div class="div-label">
-    <div class="dtabs">
-      <button class="dtab active" data-stab="geo">Regional Intel</button>
-    </div>
-    <div class="div-acts">
-      <button class="act-btn" onclick="loadGeo()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg>Refresh</button>
-    </div>
+<!-- EXPANDABLE PILL ROW -->
+<div class="pill-row" id="pillRow">
+  <button class="pill" data-pill="osint"><span class="pill-dot" style="background:var(--purple)"></span>OSINT Tools</button>
+  <button class="pill" data-pill="streams"><span class="pill-dot" style="background:var(--accent2)"></span>Livestreams</button>
+  <button class="pill" data-pill="threats"><span class="pill-dot" style="background:var(--accent2);animation:blink 2s infinite"></span>Threat Monitor</button>
+  <button class="pill" data-pill="predict"><span class="pill-dot" style="background:var(--accent)"></span>Prediction Markets</button>
+  <button class="pill" data-pill="diplo"><span class="pill-dot" style="background:var(--accent4)"></span>Diplomatic Tracker</button>
+</div>
+
+<!-- OSINT Tools expand -->
+<div class="pill-expand" id="pill-osint">
+  <div class="wgt">
+    <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--purple)"></span>OSINT Tools</span></div>
+    <div id="osintList" style="padding:8px"></div>
   </div>
 </div>
-<div class="sgrid" id="sgrid">
-  <div class="wgt" id="geoWgt">
-    <div class="wgt-head">
-      <span class="wgt-title"><span class="wdot" style="background:var(--accent)"></span>Geopolitics · Regional</span>
-      <div class="wgt-ctrl">
-        <select class="msel" id="geoReg" style="padding:3px 8px;font-size:11px">
-          <option value="mideast">Middle East</option>
-          <option value="eeurope">Eastern Europe</option>
-          <option value="asiapac">Asia-Pacific</option>
-          <option value="africa">Africa</option>
-          <option value="americas">Americas</option>
-        </select>
-      </div>
-    </div>
-    <div class="news-list" id="geoList" style="max-height:360px"><div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading regional feed...</div></div>
+
+<!-- Livestreams expand -->
+<div class="pill-expand" id="pill-streams">
+  <div class="wgt">
+    <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent2)"></span>News Livestreams</span></div>
+    <div class="ls-grid" id="streamGrid"></div>
   </div>
-  <div class="wgt" id="threatWgt">
-    <div class="wgt-head">
-      <span class="wgt-title"><span class="wdot" style="background:var(--red);animation:blink 2s infinite"></span>Global Threat Monitor</span>
-    </div>
+</div>
+
+<!-- Threat Monitor expand -->
+<div class="pill-expand" id="pill-threats">
+  <div class="wgt">
+    <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent2);animation:blink 2s infinite"></span>Global Threat Monitor</span></div>
     <div id="threatList"></div>
   </div>
-  <div class="wgt" id="osintWgt">
-    <div class="wgt-head">
-      <span class="wgt-title"><span class="wdot" style="background:var(--purple)"></span>OSINT Tools</span>
-    </div>
-    <div id="osintList"></div>
+</div>
+
+<!-- Prediction Markets expand -->
+<div class="pill-expand" id="pill-predict">
+  <div class="wgt">
+    <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent)"></span>Prediction Markets</span></div>
+    <div id="predictList"></div>
   </div>
 </div>
+
+<!-- Diplomatic Tracker expand -->
+<div class="pill-expand" id="pill-diplo">
+  <div class="wgt">
+    <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent4)"></span>Diplomatic Tracker</span></div>
+    <div id="diploList" style="max-height:320px;overflow-y:auto"></div>
+  </div>
+</div>
+
 </div>
 
 <footer class="footer">
@@ -899,43 +941,60 @@ document.getElementById('geoMainReg')?.addEventListener('change',()=>{cfg.geoMai
 if(cfg.geoMainRegion&&document.getElementById('geoMainReg'))document.getElementById('geoMainReg').value=cfg.geoMainRegion;
 loadGeoMain();
 
-/* ── GEOPOLITICS (regional) ────────────────────── */
-const GEO_FEEDS={
-  mideast:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Israel+OR+Gaza+OR+Iran+OR+Syria+OR+Lebanon+OR+Yemen+OR+"Red+Sea"+OR+Hormuz)&mode=artlist&maxrecords=12&format=rss',
-  eeurope:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Ukraine+OR+Russia+OR+Belarus+OR+Moldova+OR+Crimea+OR+Donbas)&mode=artlist&maxrecords=12&format=rss',
-  asiapac:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Taiwan+OR+China+OR+Korea+OR+"South+China+Sea"+OR+Philippines+OR+Japan)&mode=artlist&maxrecords=12&format=rss',
-  africa:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Sahel+OR+Sudan+OR+Ethiopia+OR+Somalia+OR+Nigeria+OR+Mali+OR+DRC)&mode=artlist&maxrecords=12&format=rss',
-  americas:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Venezuela+OR+Haiti+OR+Mexico+OR+Colombia+OR+Ecuador+OR+cartel)&mode=artlist&maxrecords=12&format=rss',
-};
-function loadGeo(){
-  const reg=document.getElementById('geoReg')?.value||'mideast';
-  const list=document.getElementById('geoList');
-  list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>`;
-  intelFetch(GEO_FEEDS[reg])
-    .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-amb',label:'REGIONAL',color:'var(--accent)'},list,false);})
-    .catch(err=>{
-      console.error('[geo] error', err);
-      const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(GEO_FEEDS[reg])}`;
-      fetch(proxy).then(r=>r.json()).then(d=>{
-        renderNewsInto(parseRSS(d.contents||''),{cls:'b-amb',label:'REGIONAL',color:'var(--accent)'},list,false);
-      }).catch(()=>{
-        list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable</div>`;
-      });
-    });
-}
-document.getElementById('geoReg')?.addEventListener('change',()=>{cfg.geoRegion=document.getElementById('geoReg').value;saveCfg(cfg);loadGeo();});
-if(cfg.geoRegion)document.getElementById('geoReg').value=cfg.geoRegion;
-loadGeo();
+/* ── PILL PANEL TOGGLE ────────────────────────── */
+document.querySelectorAll('.pill[data-pill]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const key=btn.dataset.pill;
+    const panel=document.getElementById('pill-'+key);
+    if(!panel)return;
+    const isOpen=panel.classList.contains('open');
+    // close all
+    document.querySelectorAll('.pill-expand').forEach(p=>p.classList.remove('open'));
+    document.querySelectorAll('.pill').forEach(p=>p.classList.remove('open'));
+    if(!isOpen){
+      panel.classList.add('open');
+      btn.classList.add('open');
+      // lazy-load content
+      if(key==='streams'&&!panel.dataset.loaded){panel.dataset.loaded='1';renderStreams();}
+      if(key==='predict'&&!panel.dataset.loaded){panel.dataset.loaded='1';loadPredictions();}
+      if(key==='diplo'&&!panel.dataset.loaded){panel.dataset.loaded='1';loadDiplo();}
+    }
+  });
+});
+
+/* ── OSINT TOOLS (launcher grid) ─────────────── */
+const OSINT_TOOLS=[
+  {l:'Shodan',        s:'Exposed devices & services',u:'https://www.shodan.io',        i:I.search},
+  {l:'Wayback Machine',s:'Web page archive',         u:'https://web.archive.org',       i:I.archive},
+  {l:'WHOIS Lookup',  s:'Domain ownership',          u:'https://who.is',                i:I.globe},
+  {l:'Censys',        s:'Internet device search',    u:'https://censys.io',             i:I.cpu},
+  {l:'VirusTotal',    s:'Malware & URL analysis',    u:'https://www.virustotal.com',    i:I.shield},
+  {l:'FlightAware',   s:'Real-time flight tracking', u:'https://www.flightaware.com',   i:I.plane},
+  {l:'MarineTraffic', s:'Live vessel positions',     u:'https://www.marinetraffic.com', i:I.anchor},
+  {l:'IntelX',        s:'Data leak archive',         u:'https://intelx.io',             i:I.server},
+  {l:'GreyNoise',     s:'Internet noise intel',      u:'https://www.greynoise.io',      i:I.cpu},
+];
+(function renderOSINT(){
+  const c=document.getElementById('osintList');if(!c)return;
+  c.innerHTML='';
+  c.style.display='grid';c.style.gridTemplateColumns='repeat(3,1fr)';c.style.gap='8px';
+  OSINT_TOOLS.forEach(t=>{
+    const a=document.createElement('a');a.href=t.u;a.target='_blank';a.rel='noopener';a.className='ot-row';
+    a.style.cssText='flex-direction:column;align-items:center;text-align:center;padding:14px 8px;border-radius:8px;border:1px solid var(--panel-border)';
+    a.innerHTML=`<span class="ot-ico" style="margin-bottom:6px">${t.i}</span><div class="ot-lbl">${t.l}</div><div class="ot-sub">${t.s}</div>`;
+    c.appendChild(a);
+  });
+})();
 
 /* ── GLOBAL THREAT MONITOR ─────────────────────── */
 const THREAT_BARS=[
-  {lbl:'Middle East',  v:82,c:'var(--red)'},
-  {lbl:'E. Europe',    v:74,c:'var(--orange)'},
+  {lbl:'Middle East',  v:82,c:'var(--accent2)'},
+  {lbl:'E. Europe',    v:74,c:'var(--accent4)'},
   {lbl:'Asia-Pacific', v:58,c:'var(--accent)'},
   {lbl:'Africa',       v:51,c:'var(--accent)'},
   {lbl:'Cyber',        v:68,c:'var(--purple)'},
-  {lbl:'Americas',     v:39,c:'var(--green)'},
-  {lbl:'Nuclear',      v:44,c:'var(--orange)'},
+  {lbl:'Americas',     v:39,c:'var(--accent3)'},
+  {lbl:'Nuclear',      v:44,c:'var(--accent4)'},
 ];
 (function renderThreats(){
   const c=document.getElementById('threatList');if(!c)return;
@@ -947,29 +1006,69 @@ const THREAT_BARS=[
   });
 })();
 
-/* ── OSINT TOOLS PANEL ─────────────────────────── */
-const OSINT_TOOLS=[
-  {l:'GDELT Events',      s:'Global events DB',     u:'https://gdeltproject.org',         i:I.globe},
-  {l:'ACLED',             s:'Armed conflict data',  u:'https://acleddata.com',             i:I.shield},
-  {l:'FlightRadar24',     s:'Live air traffic',     u:'https://www.flightradar24.com',     i:I.plane},
-  {l:'MarineTraffic',     s:'Live maritime',        u:'https://www.marinetraffic.com',     i:I.anchor},
-  {l:'Shodan',            s:'Exposed devices',      u:'https://www.shodan.io',             i:I.search},
-  {l:'IntelX',            s:'Leak archive',         u:'https://intelx.io',                 i:I.server},
-  {l:'Bellingcat',        s:'Open-source invest.',  u:'https://www.bellingcat.com',        i:I.eye},
-  {l:'ISW',               s:'War assessments',      u:'https://understandingwar.org',      i:I.map},
-  {l:'GreyNoise',         s:'Internet noise',       u:'https://www.greynoise.io',          i:I.cpu},
-  {l:'ISC SANS',          s:'Cyber threat center',  u:'https://isc.sans.edu',              i:I.activity},
-  {l:'Wayback Machine',   s:'Web archive',          u:'https://web.archive.org',           i:I.archive},
+/* ── NEWS LIVESTREAMS (2×2 YouTube embeds) ────── */
+const STREAMS=[
+  {name:'CNN',           id:'h3MuIUNCCzI'},
+  {name:'BBC World',     id:'_3AaFkeMvhI'},
+  {name:'Al Jazeera',    id:'F-POY4Q0QSI'},
+  {name:'Bloomberg',     id:'dp8PhLsUcFE'},
 ];
-(function renderOSINT(){
-  const c=document.getElementById('osintList');if(!c)return;
-  c.innerHTML='';
-  OSINT_TOOLS.forEach(t=>{
-    const a=document.createElement('a');a.href=t.u;a.target='_blank';a.rel='noopener';a.className='ot-row';
-    a.innerHTML=`<span class="ot-ico">${t.i}</span><div style="flex:1;min-width:0"><div class="ot-lbl">${t.l}</div><div class="ot-sub">${t.s}</div></div>`;
-    c.appendChild(a);
+function renderStreams(){
+  const g=document.getElementById('streamGrid');if(!g)return;
+  g.innerHTML='';
+  STREAMS.forEach(s=>{
+    const d=document.createElement('div');d.className='ls-card';
+    d.innerHTML=`<iframe src="https://www.youtube.com/embed/${s.id}?autoplay=0&mute=1" allow="autoplay;encrypted-media" allowfullscreen loading="lazy"></iframe><div class="ls-bar"><span class="ls-name">${s.name}</span><span class="ls-live">LIVE</span></div>`;
+    g.appendChild(d);
   });
-})();
+}
+
+/* ── PREDICTION MARKETS ──────────────────────── */
+const PREDICTIONS=[
+  {q:'Will the US enter a recession by Q4 2026?',pct:32},
+  {q:'Will there be a Taiwan Strait military incident in 2026?',pct:18},
+  {q:'Will oil prices exceed $120/bbl by year end?',pct:24},
+  {q:'Will Ukraine and Russia reach a ceasefire in 2026?',pct:41},
+  {q:'Will AI regulation pass in the US Senate by 2026?',pct:55},
+  {q:'Will Bitcoin exceed $150K in 2026?',pct:28},
+];
+function loadPredictions(){
+  const c=document.getElementById('predictList');if(!c)return;
+  c.innerHTML='';
+  PREDICTIONS.forEach(p=>{
+    const r=document.createElement('div');r.className='pm-row';
+    r.innerHTML=`<div class="pm-q">${p.q}</div><div class="pm-bar"><div class="pm-fill" style="width:${p.pct}%"></div></div><span class="pm-pct">${p.pct}%</span>`;
+    c.appendChild(r);
+  });
+}
+
+/* ── DIPLOMATIC TRACKER (UN/StateDept/EU RSS) ── */
+const DIPLO_FEEDS=[
+  'https://news.un.org/feed/subscribe/en/news/all/rss.xml',
+  'https://www.state.gov/rss-feed/press-releases/feed/',
+];
+function loadDiplo(){
+  const c=document.getElementById('diploList');if(!c)return;
+  c.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>';
+  const colors=['var(--accent)','var(--accent4)'];
+  Promise.allSettled(DIPLO_FEEDS.map(u=>intelFetch(u)))
+    .then(results=>{
+      const all=[];
+      results.forEach((r,i)=>{
+        if(r.status==='fulfilled'){
+          parseRSS(r.value).forEach(item=>{item._color=colors[i];all.push(item);});
+        }
+      });
+      all.sort((a,b)=>new Date(b.pubDate)-new Date(a.pubDate));
+      c.innerHTML='';
+      if(!all.length){c.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">No items</div>';return;}
+      all.slice(0,12).forEach(item=>{
+        const a=document.createElement('a');a.href=item.link;a.target='_blank';a.rel='noopener';a.className='dip-row';
+        a.innerHTML=`<div class="dip-bar" style="background:${item._color}"></div><div><div class="dip-ttl">${item.title}</div><div class="dip-src">${item.source} · ${relTime(item.pubDate)}</div></div>`;
+        c.appendChild(a);
+      });
+    });
+}
 
 /* ── MODAL ────────────────────────────────────── */
 const modal=document.getElementById('modal');

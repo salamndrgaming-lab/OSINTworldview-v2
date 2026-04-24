@@ -61,16 +61,25 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .pulse{width:6px;height:6px;border-radius:50%;background:var(--orange);animation:blink 2s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
 
-/* HERO */
-.hero{display:flex;flex-direction:column;align-items:center;padding:44px 24px 24px;gap:18px;max-width:660px;width:100%;margin:0 auto;animation:rise .5s cubic-bezier(.22,1,.36,1) both}
+/* HERO — three-column: clock left / search center / weather right */
+.hero{display:grid;grid-template-columns:200px 1fr 200px;align-items:center;padding:28px 24px 20px;gap:20px;max-width:1280px;width:100%;margin:0 auto;animation:rise .5s cubic-bezier(.22,1,.36,1) both}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-.hero-greet{font-size:12px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);opacity:.7}
-.srch-wrap{width:100%;position:relative}
+.hero-clock{display:flex;flex-direction:column;gap:2px}
+.hero-time{font-family:var(--mono);font-size:38px;font-weight:700;color:var(--text);letter-spacing:.04em;line-height:1}
+.hero-date{font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:.03em}
+.hero-center{display:flex;flex-direction:column;align-items:center;gap:12px}
+.hero-greet{font-family:var(--font-head);font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);opacity:.7}
+.srch-wrap{width:100%;position:relative;max-width:580px}
 .srch-in{width:100%;height:50px;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:0 48px 0 18px;font-size:14.5px;color:var(--text);outline:none;transition:border-color .2s,box-shadow .2s,background .2s}
 .srch-in::placeholder{color:var(--text3)}
 .srch-in:focus{border-color:var(--accent-border);box-shadow:0 0 0 3px var(--accent-glow),0 4px 20px rgba(0,0,0,.4);background:var(--surface3)}
 .srch-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:var(--surface3);border:1px solid var(--border2);color:var(--text2);transition:all .15s}
 .srch-wrap:focus-within .srch-btn{border-color:var(--accent-border);color:var(--accent)}
+.hero-wx{display:flex;align-items:center;gap:10px;justify-content:flex-end}
+.hero-wx-temp{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--text);line-height:1}
+.hero-wx-info{display:flex;flex-direction:column;gap:1px}
+.hero-wx-desc{font-size:12px;font-weight:500;color:var(--text-mid);text-transform:capitalize}
+.hero-wx-loc{font-size:10px;color:var(--text-dim)}
 .eng-row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
 .eng-btn{padding:3px 11px;border-radius:20px;font-size:11px;font-weight:500;border:1px solid var(--border);color:var(--text2);background:transparent;transition:all .15s;letter-spacing:.02em}
 .eng-btn:hover,.eng-btn.active{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
@@ -88,6 +97,15 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .sc:hover .sc-lbl{color:var(--text)}
 .sc-add .sc-ico{border-style:dashed;color:var(--text3)}
 
+/* SPORT SCORES */
+.score-row{display:flex;align-items:center;gap:8px;padding:8px 13px;border-bottom:1px solid var(--border)}
+.score-row:last-child{border-bottom:none}
+.score-teams{flex:1;min-width:0}
+.score-team{font-size:11.5px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.score-vs{font-size:9px;color:var(--text-dim);margin:1px 0}
+.score-val{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent3)}
+.score-status{font-size:9px;font-weight:600;text-transform:uppercase;color:var(--accent2);letter-spacing:.05em}
+
 /* DIVIDER / TABS */
 .div-wrap{width:100%;max-width:1280px;margin:18px auto 0;padding:0 20px}
 .div-wrap hr{border:none;border-top:1px solid var(--border)}
@@ -95,13 +113,14 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .dtabs{display:flex;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:3px}
 .dtab{padding:4px 13px;font-size:11.5px;font-weight:500;border-radius:5px;color:var(--text2);background:transparent;transition:all .15s;border:1px solid transparent}
 .dtab.active{background:var(--accent-subtle);color:var(--accent);border-color:var(--accent-border)}
+.dtabs-sm{padding:2px}.dtabs-sm .dtab{padding:2px 8px;font-size:10px}
 .dtab:not(.active):hover{color:var(--text)}
 .div-acts{display:flex;gap:8px}
 .act-btn{display:flex;align-items:center;gap:5px;padding:4px 11px;font-size:11px;font-weight:500;color:var(--text2);background:var(--surface);border:1px solid var(--border);border-radius:6px;transition:all .15s}
 .act-btn:hover{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
 
-/* CONTENT GRID */
-.cgrid{width:100%;max-width:1280px;margin:14px auto 0;padding:0 20px;display:grid;grid-template-columns:1fr 1fr 316px;grid-template-rows:auto auto;gap:13px;animation:rise .5s .13s cubic-bezier(.22,1,.36,1) both}
+/* CONTENT GRID — spec: 4 cols × 2 rows */
+.cgrid{width:100%;max-width:1380px;margin:14px auto 0;padding:0 20px;display:grid;grid-template-columns:300px 1fr 1fr 300px;grid-template-rows:280px 280px;gap:12px;animation:rise .5s .13s cubic-bezier(.22,1,.36,1) both}
 
 /* WIDGET SHELL */
 .wgt{border-radius:10px;border:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;overflow:hidden}
@@ -112,16 +131,20 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .wc-btn{display:flex;align-items:center;gap:4px;padding:3px 8px;font-size:10.5px;font-weight:500;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:5px;transition:all .15s;cursor:pointer}
 .wc-btn:hover{border-color:var(--accent-border);color:var(--accent)}
 
-/* MAP */
-.map-wgt{grid-column:1/2;grid-row:1/3;min-height:440px}
-.map-frame{flex:1;position:relative;min-height:380px}
+/* NEWS — col 1, spans both rows */
+.news-wgt{grid-column:1/2;grid-row:1/3}
+/* MAP — cols 2-3, row 1 */
+.map-wgt{grid-column:2/4;grid-row:1/2}
+.map-frame{flex:1;position:relative;min-height:0}
 .map-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:none;filter:saturate(.55) brightness(.65) contrast(1.1);border-radius:0 0 9px 9px}
 .map-bar{position:absolute;bottom:0;left:0;right:0;padding:7px 12px;background:linear-gradient(0deg,rgba(6,6,8,.92) 0%,transparent 100%);display:flex;align-items:center;gap:12px;pointer-events:none}
 .mbar-s{display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;color:var(--text2)}
 .mbar-v{color:var(--text);font-weight:600}
 
-/* LIVE NEWS */
-.news-wgt{grid-column:2/3;grid-row:1/2}
+/* SPORTS — col 2, row 2 */
+.sports-wgt{grid-column:2/3;grid-row:2/3}
+/* GEOPOLITICS — col 3, row 2 */
+.geo-main-wgt{grid-column:3/4;grid-row:2/3}
 .news-list{overflow-y:auto;max-height:280px}
 .news-list::-webkit-scrollbar,.lnews-list::-webkit-scrollbar{width:4px}
 .news-list::-webkit-scrollbar-thumb,.lnews-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
@@ -140,8 +163,8 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .ni-sep{width:2px;height:2px;border-radius:50%;background:var(--text3)}
 .ni-time{font-family:var(--mono);font-size:10px;color:var(--text3)}
 
-/* LOCAL */
-.loc-wgt{grid-column:2/3;grid-row:2/3}
+/* LOCAL (moved into news column, no grid placement) */
+.loc-wgt{}
 .wx-block{padding:13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px}
 .wx-main{display:flex;align-items:center;gap:10px}
 .wx-temp{display:flex;align-items:baseline;gap:2px}
@@ -163,8 +186,8 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .ln-title{font-size:11.5px;font-weight:500;color:var(--text);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1}
 .ln-time{font-family:var(--mono);font-size:10px;color:var(--text3);flex-shrink:0}
 
-/* SIDEBAR */
-.sidebar{grid-column:3/4;grid-row:1/3;display:flex;flex-direction:column;gap:12px}
+/* SIDEBAR (markets) — col 4, spans both rows */
+.sidebar{grid-column:4/5;grid-row:1/3;display:flex;flex-direction:column;gap:12px}
 .mkt-row{display:flex;align-items:center;justify-content:space-between;padding:8px 13px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
 .mkt-row:last-child{border-bottom:none}
 .mkt-row:hover{background:var(--surface2)}
@@ -331,51 +354,66 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
   </div>
 </header>
 
-<!-- HERO -->
+<!-- HERO: clock left / search center / weather right -->
 <div class="hero">
-  <span class="hero-greet" id="greet">Good morning, Analyst</span>
-  <div class="srch-wrap">
-    <input class="srch-in" id="srchIn" type="text" placeholder="Search or enter address..." autocomplete="off" spellcheck="false"/>
-    <button class="srch-btn" id="srchBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+  <div class="hero-clock">
+    <div class="hero-time" id="heroTime">00:00:00</div>
+    <div class="hero-date" id="heroDate">—</div>
   </div>
-  <div class="eng-row" id="engRow">
-    <button class="eng-btn active" data-e="ddg">DuckDuckGo</button>
-    <button class="eng-btn" data-e="google">Google</button>
-    <button class="eng-btn" data-e="brave">Brave</button>
-    <button class="eng-btn" data-e="shodan">Shodan</button>
-    <button class="eng-btn" data-e="gdelt">GDELT</button>
-    <button class="eng-btn" data-e="intelx">IntelX</button>
+  <div class="hero-center">
+    <span class="hero-greet" id="greet">Good morning, Analyst</span>
+    <div class="srch-wrap">
+      <input class="srch-in" id="srchIn" type="text" placeholder="Search or enter address..." autocomplete="off" spellcheck="false"/>
+      <button class="srch-btn" id="srchBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+    </div>
+    <div class="eng-row" id="engRow">
+      <button class="eng-btn active" data-e="ddg">DuckDuckGo</button>
+      <button class="eng-btn" data-e="google">Google</button>
+      <button class="eng-btn" data-e="brave">Brave</button>
+      <button class="eng-btn" data-e="shodan">Shodan</button>
+      <button class="eng-btn" data-e="gdelt">GDELT</button>
+      <button class="eng-btn" data-e="intelx">IntelX</button>
+    </div>
+  </div>
+  <div class="hero-wx">
+    <div id="wxIcoHero"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><circle cx="12" cy="12" r="5"/></svg></div>
+    <div>
+      <div class="hero-wx-temp"><span id="wxTHero">—</span><span style="font-size:14px;color:var(--text-dim)">°F</span></div>
+      <div class="hero-wx-info">
+        <div class="hero-wx-desc" id="wxDescHero">Loading...</div>
+        <div class="hero-wx-loc" id="wxCityHero">Detecting...</div>
+      </div>
+    </div>
   </div>
 </div>
 
 <!-- SHORTCUTS -->
 <div class="sc-wrap"><div class="sc-grid" id="scGrid"></div></div>
 
-<!-- DIVIDER -->
-<div class="div-wrap">
-  <hr/>
-  <div class="div-label">
-    <div class="dtabs" id="feedTabs">
-      <button class="dtab active" data-tab="intel">Intel</button>
-      <button class="dtab" data-tab="conflicts">Conflicts</button>
-      <button class="dtab" data-tab="markets">Markets</button>
-      <button class="dtab" data-tab="cyber">Cyber</button>
-      <button class="dtab" data-tab="world">World</button>
-    </div>
-    <div class="div-acts">
-      <button class="act-btn" id="layoutBtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Feed layout</button>
-      <button class="act-btn" id="persBtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>Personalize</button>
-    </div>
-  </div>
-</div>
-
-<!-- CONTENT GRID -->
+<!-- CONTENT GRID: 4 cols × 2 rows per spec -->
 <div class="cgrid" id="cgrid">
 
-  <!-- MAP -->
+  <!-- NEWS — col 1, spans both rows -->
+  <div class="wgt news-wgt" id="newsWgt">
+    <div class="wgt-head">
+      <span class="wgt-title"><span class="wdot" style="background:var(--accent);animation:blink 2.5s infinite"></span>Live News</span>
+      <div class="wgt-ctrl">
+        <div class="dtabs dtabs-sm" id="feedTabs">
+          <button class="dtab active" data-tab="intel">Intel</button>
+          <button class="dtab" data-tab="conflicts">Conflict</button>
+          <button class="dtab" data-tab="cyber">Cyber</button>
+          <button class="dtab" data-tab="world">World</button>
+        </div>
+        <button class="wc-btn" id="refreshBtn"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg></button>
+      </div>
+    </div>
+    <div class="news-list" id="newsList" style="max-height:none;flex:1;overflow-y:auto"><div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Loading feed...</div></div>
+  </div>
+
+  <!-- MAP — cols 2-3, row 1 -->
   <div class="wgt map-wgt" id="mapWgt">
     <div class="wgt-head">
-      <span class="wgt-title"><span class="wdot" style="background:var(--green);animation:blink 2s infinite"></span>Live Intelligence Map</span>
+      <span class="wgt-title"><span class="wdot" style="background:var(--green);animation:blink 2s infinite"></span>Intelligence Map</span>
       <div class="wgt-ctrl">
         <button class="wc-btn" onclick="cycleMap()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg>Source</button>
         <button class="wc-btn" onclick="openMapFull()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>Full</button>
@@ -391,51 +429,44 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
     </div>
   </div>
 
-  <!-- LIVE NEWS -->
-  <div class="wgt news-wgt" id="newsWgt">
+  <!-- SPORTS — col 2, row 2 -->
+  <div class="wgt sports-wgt" id="sportsWgt">
     <div class="wgt-head">
-      <span class="wgt-title"><span class="wdot" style="background:var(--blue);animation:blink 2.5s infinite"></span>Live News</span>
-      <div class="wgt-ctrl"><button class="wc-btn" id="refreshBtn"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg>Refresh</button></div>
+      <span class="wgt-title"><span class="wdot" style="background:var(--green)"></span>Sports &amp; Odds</span>
+      <div class="wgt-ctrl"><button class="wc-btn" onclick="loadSports()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg></button></div>
     </div>
-    <div class="news-list" id="newsList"><div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Loading feed...</div></div>
+    <div id="sportsList" style="overflow-y:auto;flex:1"><div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading sports...</div></div>
   </div>
 
-  <!-- LOCAL -->
-  <div class="wgt loc-wgt" id="locWgt">
+  <!-- GEOPOLITICS — col 3, row 2 -->
+  <div class="wgt geo-main-wgt" id="geoMainWgt">
     <div class="wgt-head">
-      <span class="wgt-title"><span class="wdot" style="background:var(--purple)"></span>Local — <span id="locCity">Germantown, TN</span></span>
-    </div>
-    <div class="wx-block">
-      <div class="wx-main">
-        <div class="wx-ico" id="wxIco"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></div>
-        <div>
-          <div class="wx-temp"><span class="wx-t" id="wxT">—</span><span class="wx-u">°F</span></div>
-          <div class="wx-desc" id="wxDesc">Loading...</div>
-          <div class="wx-city" id="wxCity">Detecting location...</div>
-        </div>
-      </div>
-      <div class="wx-dets">
-        <div class="wxd"><div class="wxd-v" id="wxH">—</div><div class="wxd-k">Humidity</div></div>
-        <div class="wxd"><div class="wxd-v" id="wxW">—</div><div class="wxd-k">Wind</div></div>
-        <div class="wxd"><div class="wxd-v" id="wxUV">—</div><div class="wxd-k">UV</div></div>
+      <span class="wgt-title"><span class="wdot" style="background:var(--accent4)"></span>Geopolitics</span>
+      <div class="wgt-ctrl">
+        <select class="msel" id="geoMainReg" style="padding:2px 6px;font-size:10px">
+          <option value="mideast">Middle East</option>
+          <option value="eeurope">E. Europe</option>
+          <option value="asiapac">Asia-Pacific</option>
+          <option value="africa">Africa</option>
+          <option value="americas">Americas</option>
+        </select>
       </div>
     </div>
-    <div class="wgt-head" style="border-top:none;padding:7px 13px"><span class="wgt-title" style="font-size:10px">Local News</span></div>
-    <div class="lnews-list" id="lnewsList"><div style="padding:12px 13px;color:var(--text3);font-size:11px">Loading local news...</div></div>
+    <div id="geoMainList" class="news-list" style="max-height:none;flex:1;overflow-y:auto"><div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading...</div></div>
   </div>
 
-  <!-- SIDEBAR -->
+  <!-- MARKETS — col 4, spans both rows -->
   <div class="sidebar" id="sidebar">
     <div class="wgt" id="mktWgt">
-      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--blue)"></span>Markets</span><a href="https://finance.yahoo.com" target="_blank" class="wc-btn" style="font-size:10px;padding:2px 7px">All →</a></div>
+      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent)"></span>Markets</span><a href="https://finance.yahoo.com" target="_blank" class="wc-btn" style="font-size:10px;padding:2px 7px">All →</a></div>
       <div id="mktList"></div>
     </div>
     <div class="wgt" id="alertsWgt">
-      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--red);animation:blink 1.5s infinite"></span>Live Alerts</span></div>
+      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent2);animation:blink 1.5s infinite"></span>Live Alerts</span></div>
       <div id="alertList"></div>
     </div>
     <div class="wgt" id="statusWgt">
-      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--green)"></span>Data Status</span></div>
+      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent3)"></span>Data Status</span></div>
       <div id="statusList"></div>
     </div>
   </div>
@@ -501,13 +532,18 @@ function loadCfg(){try{return JSON.parse(localStorage.getItem('mb-cfg')||'{}')}c
 function saveCfg(c){localStorage.setItem('mb-cfg',JSON.stringify(c))}
 let cfg=loadCfg();
 
-/* ── CLOCK ────────────────────────────────────── */
+/* ── CLOCK (hero + topbar) ─────────────────────── */
 function tick(){
-  const n=new Date(),u=n.toUTCString().match(/(\d{2}:\d{2}:\d{2})/);
-  document.getElementById('clock').textContent=(u?u[1]:'00:00:00')+' UTC';
+  const n=new Date();
+  const u=n.toUTCString().match(/(\d{2}:\d{2}:\d{2})/);
+  const el=id=>document.getElementById(id);
+  el('clock').textContent=(u?u[1]:'00:00:00')+' UTC';
+  const pad=v=>String(v).padStart(2,'0');
+  el('heroTime').textContent=pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds());
+  el('heroDate').textContent=n.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
   const h=n.getHours(),g=h<5?'Good night':h<12?'Good morning':h<17?'Good afternoon':h<21?'Good evening':'Good night';
-  document.getElementById('greet').textContent=g+', Analyst';
-  document.getElementById('fDate').textContent=n.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  el('greet').textContent=g+', Analyst';
+  el('fDate').textContent=n.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
 }
 tick();setInterval(tick,1000);
 
@@ -555,13 +591,15 @@ function fetchWeather(lat,lon){
   p.then(d=>{
       if(!d||!d.current)throw new Error('no data');
       const c=d.current;
-      document.getElementById('wxT').textContent=Math.round(c.temperature_2m);
-      document.getElementById('wxDesc').textContent=WMO[c.weather_code]||'Clear';
-      document.getElementById('wxH').textContent=c.relative_humidity_2m+'%';
-      document.getElementById('wxW').textContent=Math.round(c.wind_speed_10m)+' mph';
-      document.getElementById('wxUV').textContent=c.uv_index??'—';
-      document.getElementById('wxIco').innerHTML=wxSVG(c.weather_code);
-    }).catch(()=>{document.getElementById('wxDesc').textContent='Unavailable'});
+      const t=Math.round(c.temperature_2m);
+      const desc=WMO[c.weather_code]||'Clear';
+      const el=id=>document.getElementById(id);
+      // Hero weather
+      el('wxTHero').textContent=t;
+      el('wxDescHero').textContent=desc;
+      el('wxCityHero').textContent=uCity;
+      el('wxIcoHero').innerHTML=wxSVG(c.weather_code);
+    }).catch(()=>{document.getElementById('wxDescHero').textContent='Unavailable'});
 }
 
 /* ── SVG ICON LIBRARY ─────────────────────────── */
@@ -826,6 +864,41 @@ setInterval(loadMarkets,60000);
  {ico:I.server,l:'Telegram Feed',v:'Offline',ind:'ind-err'}
 ].forEach(s=>{const r=document.createElement('div');r.className='st-row';r.innerHTML=`<span class="st-ico">${s.ico}</span><span class="st-lbl">${s.l}</span><span class="st-val">${s.v}</span><span class="st-ind ${s.ind}"></span>`;document.getElementById('statusList').appendChild(r);});
 
+/* ── SPORTS (ESPN headlines via GDELT) ─────────── */
+const SPORTS_FEED='https://api.gdeltproject.org/api/v2/doc/doc?query=(NFL+OR+NBA+OR+MLB+OR+UFC+OR+Premier+League+OR+Champions+League)&mode=artlist&maxrecords=8&format=rss';
+function loadSports(){
+  const list=document.getElementById('sportsList');
+  if(!list)return;
+  list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>';
+  intelFetch(SPORTS_FEED)
+    .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-grn',label:'SPORTS',color:'var(--accent3)'},list,false);})
+    .catch(err=>{
+      console.error('[sports]',err);
+      list.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Sports feed unavailable</div>';
+    });
+}
+loadSports();
+
+/* ── GEOPOLITICS MAIN GRID (separate from the secondary grid) ──── */
+function loadGeoMain(){
+  const reg=document.getElementById('geoMainReg')?.value||'mideast';
+  const list=document.getElementById('geoMainList');
+  if(!list)return;
+  list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>';
+  intelFetch(GEO_FEEDS[reg])
+    .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-org',label:'GEOPOLITICS',color:'var(--accent4)'},list,false);})
+    .catch(err=>{
+      console.error('[geoMain]',err);
+      const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(GEO_FEEDS[reg])}`;
+      fetch(proxy).then(r=>r.json()).then(d=>{
+        renderNewsInto(parseRSS(d.contents||''),{cls:'b-org',label:'GEOPOLITICS',color:'var(--accent4)'},list,false);
+      }).catch(()=>{list.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable</div>';});
+    });
+}
+document.getElementById('geoMainReg')?.addEventListener('change',()=>{cfg.geoMainRegion=document.getElementById('geoMainReg').value;saveCfg(cfg);loadGeoMain();});
+if(cfg.geoMainRegion&&document.getElementById('geoMainReg'))document.getElementById('geoMainReg').value=cfg.geoMainRegion;
+loadGeoMain();
+
 /* ── GEOPOLITICS (regional) ────────────────────── */
 const GEO_FEEDS={
   mideast:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Israel+OR+Gaza+OR+Iran+OR+Syria+OR+Lebanon+OR+Yemen+OR+"Red+Sea"+OR+Hormuz)&mode=artlist&maxrecords=12&format=rss',
@@ -902,7 +975,7 @@ const OSINT_TOOLS=[
 const modal=document.getElementById('modal');
 function openModal(){modal.classList.add('open')}
 function closeModal(){modal.classList.remove('open')}
-['custBtn','layoutBtn','persBtn'].forEach(id=>document.getElementById(id)?.addEventListener('click',openModal));
+['custBtn'].forEach(id=>document.getElementById(id)?.addEventListener('click',openModal));
 document.getElementById('modalX').addEventListener('click',closeModal);
 modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
@@ -918,29 +991,12 @@ function bindTog(togId,wgtId,cfgKey){
     if(togId==='tMap')reflow();
   });
 }
-function reflow(){
-  const mapOn=document.getElementById('tMap')?.checked;
-  const grid=document.getElementById('cgrid');
-  if(mapOn){
-    grid.style.gridTemplateColumns='1fr 1fr 316px';
-    document.getElementById('mapWgt').style.gridColumn='1/2';
-    document.getElementById('newsWgt').style.gridColumn='2/3';
-    document.getElementById('locWgt').style.gridColumn='2/3';
-    document.getElementById('sidebar').style.gridColumn='3/4';
-  }else{
-    grid.style.gridTemplateColumns='1fr 316px';
-    document.getElementById('newsWgt').style.gridColumn='1/2';
-    document.getElementById('locWgt').style.gridColumn='1/2';
-    document.getElementById('sidebar').style.gridColumn='2/3';
-  }
-}
+function reflow(){}
 bindTog('tMap','mapWgt','showMap');
 bindTog('tNews','newsWgt','showNews');
-bindTog('tLocal','locWgt','showLocal');
 bindTog('tMkt','mktWgt','showMkt');
 bindTog('tAlerts','alertsWgt','showAlerts');
 bindTog('tStatus','statusWgt','showStatus');
-reflow();
 
 /* Engine select sync */
 const esel=document.getElementById('engSel');

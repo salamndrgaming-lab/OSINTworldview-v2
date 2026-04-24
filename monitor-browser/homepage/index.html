@@ -758,21 +758,100 @@ function openMapFull(){window.open(MAPS[mapKeys[mapIdx]],'_blank');}
 if(cfg.mapSrc){document.getElementById('mapIframe').src=MAPS[cfg.mapSrc]||MAPS.osm;mapIdx=mapKeys.indexOf(cfg.mapSrc)||0;}
 
 /* ── NEWS (GDELT RSS via allorigins proxy) ────── */
+/* Multi-source feeds: each category has several RSS URLs. loadFeed races them
+   and uses the first successful response. GDELT is unreliable so we always
+   pair it with direct-from-publisher feeds. */
 const FEEDS={
-  intel:'https://api.gdeltproject.org/api/v2/doc/doc?query=intelligence+security+military+geopolitical&mode=artlist&maxrecords=10&format=rss',
-  conflicts:'https://api.gdeltproject.org/api/v2/doc/doc?query=conflict+war+military+attack+battle&mode=artlist&maxrecords=10&format=rss',
-  markets:'https://api.gdeltproject.org/api/v2/doc/doc?query=oil+market+commodity+trade+sanctions+economy&mode=artlist&maxrecords=10&format=rss',
-  cyber:'https://api.gdeltproject.org/api/v2/doc/doc?query=cyberattack+malware+hacking+ransomware+cyber&mode=artlist&maxrecords=10&format=rss',
-  world:'https://api.gdeltproject.org/api/v2/doc/doc?query=geopolitics+international+crisis+diplomacy&mode=artlist&maxrecords=10&format=rss',
+  intel:[
+    'https://feeds.bbci.co.uk/news/world/rss.xml',
+    'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=intelligence+security+military&mode=artlist&maxrecords=10&format=rss',
+  ],
+  conflicts:[
+    'https://www.aljazeera.com/xml/rss/all.xml',
+    'https://feeds.bbci.co.uk/news/world/rss.xml',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=conflict+war+military+attack&mode=artlist&maxrecords=10&format=rss',
+  ],
+  markets:[
+    'https://feeds.bbci.co.uk/news/business/rss.xml',
+    'https://rss.nytimes.com/services/xml/rss/nyt/Business.xml',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=oil+market+commodity+trade+economy&mode=artlist&maxrecords=10&format=rss',
+  ],
+  cyber:[
+    'https://krebsonsecurity.com/feed/',
+    'https://www.bleepingcomputer.com/feed/',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=cyberattack+malware+ransomware&mode=artlist&maxrecords=10&format=rss',
+  ],
+  world:[
+    'https://rss.dw.com/xml/rss-en-all',
+    'https://feeds.bbci.co.uk/news/world/rss.xml',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=geopolitics+diplomacy+crisis&mode=artlist&maxrecords=10&format=rss',
+  ],
 };
+/* Local news: direct RSS from local stations/papers when available, GDELT as a
+   fallback for smaller regions. */
 const LFEEDS={
-  memphis:'https://api.gdeltproject.org/api/v2/doc/doc?query=Memphis+Tennessee+Shelby+Germantown&mode=artlist&maxrecords=6&format=rss',
-  nashville:'https://api.gdeltproject.org/api/v2/doc/doc?query=Nashville+Tennessee&mode=artlist&maxrecords=6&format=rss',
-  chicago:'https://api.gdeltproject.org/api/v2/doc/doc?query=Chicago+Illinois&mode=artlist&maxrecords=6&format=rss',
-  newyork:'https://api.gdeltproject.org/api/v2/doc/doc?query=New+York+City+Manhattan&mode=artlist&maxrecords=6&format=rss',
-  la:'https://api.gdeltproject.org/api/v2/doc/doc?query=Los+Angeles+California&mode=artlist&maxrecords=6&format=rss',
-  houston:'https://api.gdeltproject.org/api/v2/doc/doc?query=Houston+Texas&mode=artlist&maxrecords=6&format=rss',
-  atlanta:'https://api.gdeltproject.org/api/v2/doc/doc?query=Atlanta+Georgia&mode=artlist&maxrecords=6&format=rss',
+  memphis:[
+    'https://www.fox13memphis.com/feed/',
+    'https://wreg.com/feed/',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=Memphis+Tennessee&mode=artlist&maxrecords=6&format=rss',
+  ],
+  nashville:[
+    'https://fox17.com/news/local.rss',
+    'https://www.wsmv.com/arcio/rss/category/news/',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=Nashville+Tennessee&mode=artlist&maxrecords=6&format=rss',
+  ],
+  chicago:[
+    'https://chicago.suntimes.com/rss/news.xml',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=Chicago+Illinois&mode=artlist&maxrecords=6&format=rss',
+  ],
+  newyork:[
+    'https://rss.nytimes.com/services/xml/rss/nyt/NYRegion.xml',
+    'https://nypost.com/metro/feed/',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=New+York+City&mode=artlist&maxrecords=6&format=rss',
+  ],
+  la:[
+    'https://www.latimes.com/local/rss2.0.xml',
+    'https://abc7.com/feed/',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=Los+Angeles+California&mode=artlist&maxrecords=6&format=rss',
+  ],
+  houston:[
+    'https://www.khou.com/feeds/syndication/rss/news/local',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=Houston+Texas&mode=artlist&maxrecords=6&format=rss',
+  ],
+  atlanta:[
+    'https://www.ajc.com/arc/outboundfeeds/rss/?outputType=xml',
+    'https://www.11alive.com/feeds/syndication/rss/news/local',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=Atlanta+Georgia&mode=artlist&maxrecords=6&format=rss',
+  ],
+};
+/* Geopolitics regional feeds — direct from major world broadcasters. */
+const GEO_FEEDS={
+  mideast:[
+    'https://www.aljazeera.com/xml/rss/all.xml',
+    'https://www.timesofisrael.com/feed/',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=Middle+East+Israel+Iran+Gaza&mode=artlist&maxrecords=10&format=rss',
+  ],
+  europe:[
+    'https://rss.dw.com/xml/rss-en-eu',
+    'https://feeds.bbci.co.uk/news/world/europe/rss.xml',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=Europe+Ukraine+Russia+EU&mode=artlist&maxrecords=10&format=rss',
+  ],
+  asia:[
+    'https://www3.nhk.or.jp/nhkworld/en/news/feed/rss/',
+    'https://feeds.bbci.co.uk/news/world/asia/rss.xml',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=China+Taiwan+Korea+Japan+India&mode=artlist&maxrecords=10&format=rss',
+  ],
+  africa:[
+    'https://feeds.bbci.co.uk/news/world/africa/rss.xml',
+    'https://rss.dw.com/xml/rss-en-af',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=Africa+Sahel+Sudan+Nigeria+Ethiopia&mode=artlist&maxrecords=10&format=rss',
+  ],
+  americas:[
+    'https://feeds.bbci.co.uk/news/world/latin_america/rss.xml',
+    'https://rss.nytimes.com/services/xml/rss/nyt/Americas.xml',
+    'https://api.gdeltproject.org/api/v2/doc/doc?query=Latin+America+Mexico+Brazil+Venezuela&mode=artlist&maxrecords=10&format=rss',
+  ],
 };
 const TBADGE={
   intel:{cls:'b-amb',label:'INTELLIGENCE',color:'var(--accent)'},
@@ -828,46 +907,56 @@ function renderNewsInto(items,badge,container,local){
   });
 }
 
+/* Fetch one URL through intel:fetch, falling back to allorigins. Resolves only
+   if parseable RSS items come back; rejects on empty/parse-fail so the caller
+   can move on to the next source. */
+function fetchFeedOne(url){
+  return intelFetch(url)
+    .catch(()=>fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`).then(r=>r.json()).then(d=>d.contents||''))
+    .then(xml=>{
+      const items=parseRSS(xml||'');
+      if(!items.length)throw new Error('empty feed');
+      return items;
+    });
+}
+/* Race an array of feed URLs in parallel; resolve with the first that returns
+   items, reject only if every source fails. */
+function fetchFeedAny(urls){
+  if(!urls||!urls.length)return Promise.reject(new Error('no sources'));
+  return new Promise((resolve,reject)=>{
+    let settled=false,failed=0;
+    urls.forEach(u=>{
+      fetchFeedOne(u).then(items=>{
+        if(settled)return;settled=true;resolve(items);
+      }).catch(err=>{
+        failed++;
+        console.warn('[feed] source failed',u,err.message);
+        if(failed===urls.length&&!settled)reject(new Error('all sources failed'));
+      });
+    });
+  });
+}
 function loadFeed(tab){
   const badge=TBADGE[tab];
   const list=document.getElementById('newsList');
+  const urls=FEEDS[tab]||[];
   list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>`;
-  console.log('[feed] loading', tab, FEEDS[tab], 'HAS_INTEL=', HAS_INTEL);
-  intelFetch(FEEDS[tab])
-    .then(xml=>{
-      console.log('[feed] got', tab, typeof xml, xml?.length);
-      const items=parseRSS(xml);
-      console.log('[feed] parsed', items.length, 'items');
-      renderNewsInto(items,badge,list,false);
-    })
+  fetchFeedAny(urls)
+    .then(items=>{renderNewsInto(items,badge,list,false);})
     .catch(err=>{
-      console.error('[feed] error', tab, err);
-      list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable — retrying…</div>`;
-      setTimeout(()=>loadFeedFallback(tab,badge,list),2000);
+      console.error('[feed] all sources failed',tab,err);
+      list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable — check network</div>`;
     });
-}
-function loadFeedFallback(tab,badge,list){
-  const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(FEEDS[tab])}`;
-  fetch(proxy).then(r=>r.json()).then(d=>{
-    const items=parseRSS(d.contents||'');
-    renderNewsInto(items,badge,list,false);
-  }).catch(()=>{
-    list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable — check network</div>`;
-  });
 }
 function loadLocal(reg){
   const list=document.getElementById('lnewsList');
+  const urls=LFEEDS[reg]||LFEEDS.memphis;
   list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Loading local news...</div>`;
-  intelFetch(LFEEDS[reg]||LFEEDS.memphis)
-    .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-pur',label:'LOCAL',color:'var(--purple)'},list,true);})
+  fetchFeedAny(urls)
+    .then(items=>renderNewsInto(items,{cls:'b-pur',label:'LOCAL',color:'var(--purple)'},list,true))
     .catch(err=>{
-      console.error('[local] error', err);
-      const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(LFEEDS[reg]||LFEEDS.memphis)}`;
-      fetch(proxy).then(r=>r.json()).then(d=>{
-        renderNewsInto(parseRSS(d.contents||''),{cls:'b-pur',label:'LOCAL',color:'var(--purple)'},list,true);
-      }).catch(()=>{
-        list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Local feed unavailable</div>`;
-      });
+      console.error('[local] all sources failed',err);
+      list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Local feed unavailable</div>`;
     });
 }
 
@@ -913,13 +1002,30 @@ function loadMarkets(){
   const url=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(syms)}`;
   intelFetchJSON(url).then(d=>{
     const quotes=d?.quoteResponse?.result||[];
+    if(!quotes.length)throw new Error('empty');
     const byS=Object.fromEntries(quotes.map(q=>[q.symbol,q]));
     const rows=MKT_SYMS.map(m=>{
       const q=byS[m.sym];
       return{...m,price:q?.regularMarketPrice,change:q?.regularMarketChange,changePct:q?.regularMarketChangePercent};
     });
     renderMarkets(rows);
-  }).catch(()=>{/* keep placeholders */});
+  }).catch(()=>{
+    /* Stooq fallback — CSV endpoint that doesn't require auth. Maps our
+       Yahoo symbols to Stooq tickers where possible. */
+    const stooqMap={'BZ=F':'cb.f','^GSPC':'^spx','GC=F':'gc.f','BTC-USD':'btcusd','EURUSD=X':'eurusd','NG=F':'ng.f'};
+    const tickers=MKT_SYMS.map(m=>stooqMap[m.sym]).filter(Boolean).join(',');
+    if(!tickers)return;
+    intelFetch(`https://stooq.com/q/l/?s=${tickers}&f=sd2t2ohlcv&h&e=csv`).then(csv=>{
+      const lines=(csv||'').trim().split('\n').slice(1);
+      const byS={};
+      lines.forEach(line=>{const[s,,,o,,,c]=line.split(',');if(s&&c)byS[s.toLowerCase()]={price:parseFloat(c),change:parseFloat(c)-parseFloat(o),changePct:(parseFloat(c)-parseFloat(o))/parseFloat(o)*100};});
+      const rows=MKT_SYMS.map(m=>{
+        const q=byS[stooqMap[m.sym]];
+        return{...m,price:q?.price,change:q?.change,changePct:q?.changePct};
+      });
+      renderMarkets(rows);
+    }).catch(()=>{/* keep placeholders */});
+  });
 }
 loadMarkets();
 setInterval(loadMarkets,60000);
@@ -940,14 +1046,18 @@ setInterval(loadMarkets,60000);
  {ico:I.server,l:'Telegram Feed',v:'Offline',ind:'ind-err'}
 ].forEach(s=>{const r=document.createElement('div');r.className='st-row';r.innerHTML=`<span class="st-ico">${s.ico}</span><span class="st-lbl">${s.l}</span><span class="st-val">${s.v}</span><span class="st-ind ${s.ind}"></span>`;document.getElementById('statusList').appendChild(r);});
 
-/* ── SPORTS (ESPN headlines via GDELT) ─────────── */
-const SPORTS_FEED='https://api.gdeltproject.org/api/v2/doc/doc?query=(NFL+OR+NBA+OR+MLB+OR+UFC+OR+Premier+League+OR+Champions+League)&mode=artlist&maxrecords=8&format=rss';
+/* ── SPORTS (ESPN + BBC Sport + GDELT fallback) ─────────── */
+const SPORTS_FEEDS=[
+  'https://www.espn.com/espn/rss/news',
+  'https://feeds.bbci.co.uk/sport/rss.xml',
+  'https://api.gdeltproject.org/api/v2/doc/doc?query=(NFL+OR+NBA+OR+MLB+OR+UFC+OR+Premier+League)&mode=artlist&maxrecords=8&format=rss',
+];
 function loadSports(){
   const list=document.getElementById('sportsList');
   if(!list)return;
   list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>';
-  intelFetch(SPORTS_FEED)
-    .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-grn',label:'SPORTS',color:'var(--accent3)'},list,false);})
+  fetchFeedAny(SPORTS_FEEDS)
+    .then(items=>renderNewsInto(items,{cls:'b-grn',label:'SPORTS',color:'var(--accent3)'},list,false))
     .catch(err=>{
       console.error('[sports]',err);
       list.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Sports feed unavailable</div>';
@@ -955,20 +1065,17 @@ function loadSports(){
 }
 loadSports();
 
-/* ── GEOPOLITICS MAIN GRID (separate from the secondary grid) ──── */
+/* ── GEOPOLITICS MAIN GRID ──── */
 function loadGeoMain(){
   const reg=document.getElementById('geoMainReg')?.value||'mideast';
   const list=document.getElementById('geoMainList');
   if(!list)return;
   list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>';
-  intelFetch(GEO_FEEDS[reg])
-    .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-org',label:'GEOPOLITICS',color:'var(--accent4)'},list,false);})
+  fetchFeedAny(GEO_FEEDS[reg]||GEO_FEEDS.mideast)
+    .then(items=>renderNewsInto(items,{cls:'b-org',label:'GEOPOLITICS',color:'var(--accent4)'},list,false))
     .catch(err=>{
       console.error('[geoMain]',err);
-      const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(GEO_FEEDS[reg])}`;
-      fetch(proxy).then(r=>r.json()).then(d=>{
-        renderNewsInto(parseRSS(d.contents||''),{cls:'b-org',label:'GEOPOLITICS',color:'var(--accent4)'},list,false);
-      }).catch(()=>{list.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable</div>';});
+      list.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable</div>';
     });
 }
 document.getElementById('geoMainReg')?.addEventListener('change',()=>{cfg.geoMainRegion=document.getElementById('geoMainReg').value;saveCfg(cfg);loadGeoMain();});
@@ -1057,45 +1164,69 @@ function renderStreams(){
   });
 }
 
-/* ── PREDICTION MARKETS ──────────────────────── */
-const PREDICTIONS=[
-  {q:'Will the US enter a recession by Q4 2026?',pct:32},
-  {q:'Will there be a Taiwan Strait military incident in 2026?',pct:18},
-  {q:'Will oil prices exceed $120/bbl by year end?',pct:24},
-  {q:'Will Ukraine and Russia reach a ceasefire in 2026?',pct:41},
-  {q:'Will AI regulation pass in the US Senate by 2026?',pct:55},
-  {q:'Will Bitcoin exceed $150K in 2026?',pct:28},
+/* ── PREDICTION MARKETS (live Metaculus API) ──── */
+const PREDICTIONS_FALLBACK=[
+  {q:'US recession by Q4 2026',pct:32},
+  {q:'Taiwan Strait military incident 2026',pct:18},
+  {q:'Oil > $120/bbl by year end',pct:24},
+  {q:'Ukraine/Russia ceasefire 2026',pct:41},
+  {q:'US AI regulation passes 2026',pct:55},
+  {q:'Bitcoin > $150K in 2026',pct:28},
 ];
-function loadPredictions(){
+function renderPredictions(rows){
   const c=document.getElementById('predictList');if(!c)return;
   c.innerHTML='';
-  PREDICTIONS.forEach(p=>{
+  rows.forEach(p=>{
     const r=document.createElement('div');r.className='pm-row';
-    r.innerHTML=`<div class="pm-q">${p.q}</div><div class="pm-bar"><div class="pm-fill" style="width:${p.pct}%"></div></div><span class="pm-pct">${p.pct}%</span>`;
+    const link=p.link?`<a href="${p.link}" target="_blank" rel="noopener" class="pm-q" style="text-decoration:none;color:inherit">${p.q}</a>`:`<div class="pm-q">${p.q}</div>`;
+    r.innerHTML=`${link}<div class="pm-bar"><div class="pm-fill" style="width:${p.pct}%"></div></div><span class="pm-pct">${p.pct}%</span>`;
     c.appendChild(r);
   });
 }
+function loadPredictions(){
+  const c=document.getElementById('predictList');if(!c)return;
+  c.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>';
+  /* Metaculus public API: open questions sorted by activity. */
+  const url='https://www.metaculus.com/api2/questions/?status=open&order_by=-activity&limit=6&forecast_type=binary';
+  intelFetchJSON(url).then(d=>{
+    const results=d?.results||[];
+    if(!results.length)throw new Error('empty');
+    const rows=results.map(q=>({
+      q:q.title,
+      pct:Math.round(((q.community_prediction?.full?.q2??q.community_prediction?.full?.mean??0.5))*100),
+      link:`https://www.metaculus.com${q.page_url||'/questions/'+q.id+'/'}`,
+    }));
+    renderPredictions(rows);
+  }).catch(err=>{
+    console.warn('[predictions] Metaculus unavailable, using static',err);
+    renderPredictions(PREDICTIONS_FALLBACK);
+  });
+}
 
-/* ── DIPLOMATIC TRACKER (UN/StateDept/EU RSS) ── */
+/* ── DIPLOMATIC TRACKER (UN + StateDept + NATO + EU) ── */
 const DIPLO_FEEDS=[
-  'https://news.un.org/feed/subscribe/en/news/all/rss.xml',
-  'https://www.state.gov/rss-feed/press-releases/feed/',
+  {url:'https://news.un.org/feed/subscribe/en/news/all/rss.xml',color:'var(--accent)'},
+  {url:'https://www.state.gov/rss-feed/press-releases/feed/',color:'var(--accent4)'},
+  {url:'https://www.nato.int/cps/en/natohq/news.rss',color:'var(--blue)'},
+  {url:'https://www.reuters.com/world/rss',color:'var(--accent3)'},
 ];
 function loadDiplo(){
   const c=document.getElementById('diploList');if(!c)return;
   c.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>';
-  const colors=['var(--accent)','var(--accent4)'];
-  Promise.allSettled(DIPLO_FEEDS.map(u=>intelFetch(u)))
+  Promise.allSettled(DIPLO_FEEDS.map(f=>
+    intelFetch(f.url)
+      .catch(()=>fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(f.url)}`).then(r=>r.json()).then(d=>d.contents||''))
+  ))
     .then(results=>{
       const all=[];
       results.forEach((r,i)=>{
-        if(r.status==='fulfilled'){
-          parseRSS(r.value).forEach(item=>{item._color=colors[i];all.push(item);});
+        if(r.status==='fulfilled'&&r.value){
+          parseRSS(r.value).forEach(item=>{item._color=DIPLO_FEEDS[i].color;all.push(item);});
         }
       });
       all.sort((a,b)=>new Date(b.pubDate)-new Date(a.pubDate));
       c.innerHTML='';
-      if(!all.length){c.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">No items</div>';return;}
+      if(!all.length){c.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Feeds unavailable</div>';return;}
       all.slice(0,12).forEach(item=>{
         const a=document.createElement('a');a.href=item.link;a.target='_blank';a.rel='noopener';a.className='dip-row';
         a.innerHTML=`<div class="dip-bar" style="background:${item._color}"></div><div><div class="dip-ttl">${item.title}</div><div class="dip-src">${item.source} · ${relTime(item.pubDate)}</div></div>`;

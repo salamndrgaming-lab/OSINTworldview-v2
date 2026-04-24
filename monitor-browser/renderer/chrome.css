@@ -1,53 +1,58 @@
 :root {
-  --intel-accent: #d4a843;
-  --intel-accent-dim: #a07820;
-  --intel-accent-glow: rgba(212, 168, 67, 0.18);
-  --surface-base: #060608;
-  --surface-raised: #0e0e14;
-  --surface-panel: #181822;
-  --surface-border: #2a2a3a;
-  --surface-hover: rgba(212, 168, 67, 0.08);
-  --text-primary: #e8e8f0;
-  --text-secondary: #8888a0;
-  --text-tertiary: #606070;
-  --text-data: #a0c8ff;
-  --text-success: #2ecc71;
-  --text-danger: #ff4e4e;
-  --font-ui: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-data: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  --intel-accent: #00d4ff;
+  --intel-accent-dim: #0891a8;
+  --intel-accent-glow: rgba(0, 212, 255, 0.18);
+  --surface-base: #0a0c10;
+  --surface-raised: #0f1219;
+  --surface-panel: #141820;
+  --surface-border: rgba(255, 255, 255, 0.06);
+  --surface-hover: rgba(0, 212, 255, 0.08);
+  --text-primary: #e8eaf0;
+  --text-secondary: #9ca3af;
+  --text-tertiary: #6b7280;
+  --text-data: #00d4ff;
+  --text-success: #2ed573;
+  --text-danger: #ff4757;
+  --text-warning: #ffa502;
+  --font-ui: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-head: 'Syne', system-ui, sans-serif;
+  --font-data: 'Space Mono', 'JetBrains Mono', Consolas, monospace;
   --dur-fast: 120ms;
   --dur-base: 180ms;
   --easing-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ---------- Theme overrides ---------- */
-/* Amber is `:root` default. Each data-theme overrides the accent palette. */
+/* Cyan is `:root` default. Each data-theme overrides the accent palette. */
 :root[data-theme='cyber'] {
-  --intel-accent: #3aff8a;
+  --intel-accent: #2ed573;
   --intel-accent-dim: #1a9950;
-  --intel-accent-glow: rgba(58, 255, 138, 0.15);
-  --surface-hover: rgba(58, 255, 138, 0.08);
-  --text-success: #3aff8a;
+  --intel-accent-glow: rgba(46, 213, 115, 0.15);
+  --surface-hover: rgba(46, 213, 115, 0.08);
 }
 :root[data-theme='palantir'] {
   --intel-accent: #4a90e2;
   --intel-accent-dim: #2b6cb5;
   --intel-accent-glow: rgba(74, 144, 226, 0.15);
   --surface-hover: rgba(74, 144, 226, 0.08);
-  --text-data: #93c5fd;
 }
 :root[data-theme='crimson'] {
-  --intel-accent: #ff4e4e;
+  --intel-accent: #ff4757;
   --intel-accent-dim: #b33636;
-  --intel-accent-glow: rgba(255, 78, 78, 0.15);
-  --surface-hover: rgba(255, 78, 78, 0.08);
+  --intel-accent-glow: rgba(255, 71, 87, 0.15);
+  --surface-hover: rgba(255, 71, 87, 0.08);
+}
+:root[data-theme='amber'] {
+  --intel-accent: #ffa502;
+  --intel-accent-dim: #c07e00;
+  --intel-accent-glow: rgba(255, 165, 2, 0.15);
+  --surface-hover: rgba(255, 165, 2, 0.08);
 }
 :root[data-theme='mono'] {
-  --intel-accent: #e8e8f0;
+  --intel-accent: #e8eaf0;
   --intel-accent-dim: #a0a0b0;
-  --intel-accent-glow: rgba(232, 232, 240, 0.1);
-  --surface-hover: rgba(232, 232, 240, 0.06);
-  --text-data: #c0c0d0;
+  --intel-accent-glow: rgba(232, 234, 240, 0.1);
+  --surface-hover: rgba(232, 234, 240, 0.06);
 }
 
 *,
@@ -106,11 +111,11 @@ input {
 /* ---------------- Titlebar + tab strip ---------------- */
 
 .titlebar {
-  height: 32px;
+  height: 34px;
   display: flex;
   align-items: stretch;
   justify-content: space-between;
-  background: var(--surface-base);
+  background: #07090d;
   border-bottom: 1px solid var(--surface-border);
   padding-left: 12px;
   flex-shrink: 0;
@@ -158,7 +163,8 @@ input {
   cursor: pointer;
   position: relative;
   color: var(--text-secondary);
-  border-top: 1px solid transparent;
+  border-top: 2px solid transparent;
+  border-radius: 8px 8px 0 0;
   transition: background var(--dur-fast) var(--easing-out);
   -webkit-app-region: no-drag;
 }
@@ -348,8 +354,8 @@ input {
   height: 32px;
   background: var(--surface-base);
   border: 1px solid var(--surface-border);
-  border-radius: 6px;
-  padding: 0 4px 0 12px;
+  border-radius: 16px;
+  padding: 0 10px 0 12px;
   transition: border-color var(--dur-fast) var(--easing-out),
     box-shadow var(--dur-fast) var(--easing-out);
 }
@@ -597,6 +603,66 @@ input {
 body.is-incognito .titlebar { background: #0c0c14; }
 body.is-incognito .toolbar { background: #10101a; }
 body.is-incognito .wordmark { color: #a0a0c0; }
+
+/* ---------------- VPN Badge ---------------- */
+.vpn-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: rgba(46, 213, 115, 0.1);
+  border: 1px solid rgba(46, 213, 115, 0.2);
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-success);
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+  cursor: default;
+}
+.vpn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-success);
+  animation: vpnPulse 2s ease-in-out infinite;
+}
+@keyframes vpnPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--text-success); }
+  50% { opacity: 0.5; box-shadow: none; }
+}
+.vpn-badge.off {
+  background: rgba(107, 114, 128, 0.1);
+  border-color: rgba(107, 114, 128, 0.2);
+  color: var(--text-tertiary);
+}
+.vpn-badge.off .vpn-dot {
+  background: var(--text-tertiary);
+  animation: none;
+}
+
+/* ---------------- Profile Button ---------------- */
+.profile-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--intel-accent-dim), var(--intel-accent));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--surface-base);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--easing-out), box-shadow var(--dur-fast);
+}
+.profile-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 10px var(--intel-accent-glow);
+}
 
 /* ---------------- Bookmarks bar ---------------- */
 

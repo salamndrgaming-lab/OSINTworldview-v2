@@ -5,20 +5,29 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Monitor Browser — New Tab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 <style>
 :root {
-  --accent:#d4a843;--accent-dim:#b8922f;--accent-glow:rgba(212,168,67,.18);
-  --accent-subtle:rgba(212,168,67,.07);--accent-border:rgba(212,168,67,.16);
-  --bg:#060608;--bg2:#0c0c10;--surface:#111118;--surface2:#17171f;--surface3:#1c1c26;
-  --border:#22222e;--border2:#2a2a38;
-  --text:#e4e4f0;--text2:#80809a;--text3:#484860;
-  --font:'Geist',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
-  --red:#e53e3e;--red-bg:rgba(229,62,62,.1);
+  /* Spec tokens */
+  --bg:#0a0c10;--bg2:#0f1219;--bg3:#141820;
+  --panel:#111520;--panel-border:rgba(255,255,255,0.06);
+  --accent:#00d4ff;--accent2:#ff4757;--accent3:#2ed573;--accent4:#ffa502;
+  --text:#e8eaf0;--text-dim:#6b7280;--text-mid:#9ca3af;
+
+  /* Derived (kept for legacy selectors in the file) */
+  --accent-dim:#0891a8;--accent-glow:rgba(0,212,255,.18);
+  --accent-subtle:rgba(0,212,255,.07);--accent-border:rgba(0,212,255,.2);
+  --surface:var(--panel);--surface2:var(--bg3);--surface3:#1b2030;
+  --border:var(--panel-border);--border2:rgba(255,255,255,.1);
+  --text2:var(--text-mid);--text3:var(--text-dim);
+  --font:'DM Sans',system-ui,sans-serif;
+  --font-head:'Syne',system-ui,sans-serif;
+  --mono:'Space Mono',ui-monospace,monospace;
+  --red:var(--accent2);--red-bg:rgba(255,71,87,.1);
   --blue:#4299e1;--blue-bg:rgba(66,153,225,.1);
   --purple:#9f7aea;--purple-bg:rgba(159,122,234,.1);
-  --green:#48bb78;--green-bg:rgba(72,187,120,.1);
-  --orange:#f97316;--orange-bg:rgba(249,115,22,.1);
+  --green:var(--accent3);--green-bg:rgba(46,213,115,.1);
+  --orange:var(--accent4);--orange-bg:rgba(255,165,2,.1);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text);overflow-x:hidden}
@@ -26,7 +35,13 @@ button{font-family:var(--font);cursor:pointer;border:none;background:none}
 a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:block;flex-shrink:0}
 
 .bg-wrap{position:fixed;inset:0;z-index:0;pointer-events:none}
-.bg-g{position:absolute;inset:0;background:radial-gradient(ellipse 70% 40% at 50% 0%,rgba(212,168,67,.055) 0%,transparent 65%),linear-gradient(180deg,#060608 0%,#08080f 100%)}
+.scanline{position:fixed;left:0;right:0;top:-4px;height:2px;z-index:200;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(0,212,255,.55),transparent);box-shadow:0 0 18px rgba(0,212,255,.35);animation:scan 3.6s cubic-bezier(.55,.05,.55,.95) 1;animation-delay:.2s;opacity:0}
+@keyframes scan{0%{top:-4px;opacity:0}8%{opacity:1}92%{opacity:1}100%{top:100vh;opacity:0}}
+.wgt{animation:riseIn .55s cubic-bezier(.22,1,.36,1) both}
+.wgt:nth-of-type(1){animation-delay:.05s}.wgt:nth-of-type(2){animation-delay:.12s}.wgt:nth-of-type(3){animation-delay:.19s}
+.wgt:nth-of-type(4){animation-delay:.26s}.wgt:nth-of-type(5){animation-delay:.33s}.wgt:nth-of-type(6){animation-delay:.4s}
+@keyframes riseIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.bg-g{position:absolute;inset:0;background:radial-gradient(ellipse 70% 40% at 50% 0%,rgba(0,212,255,.06) 0%,transparent 65%),linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%)}
 .bg-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.012) 1px,transparent 1px);background-size:52px 52px;mask-image:radial-gradient(ellipse 75% 55% at 50% 25%,black 0%,transparent 100%)}
 
 .page{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;padding-bottom:44px}
@@ -46,16 +61,25 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .pulse{width:6px;height:6px;border-radius:50%;background:var(--orange);animation:blink 2s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
 
-/* HERO */
-.hero{display:flex;flex-direction:column;align-items:center;padding:44px 24px 24px;gap:18px;max-width:660px;width:100%;margin:0 auto;animation:rise .5s cubic-bezier(.22,1,.36,1) both}
+/* HERO — three-column: clock left / search center / weather right */
+.hero{display:grid;grid-template-columns:200px 1fr 200px;align-items:center;padding:28px 24px 20px;gap:20px;max-width:1280px;width:100%;margin:0 auto;animation:rise .5s cubic-bezier(.22,1,.36,1) both}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-.hero-greet{font-size:12px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);opacity:.7}
-.srch-wrap{width:100%;position:relative}
+.hero-clock{display:flex;flex-direction:column;gap:2px}
+.hero-time{font-family:var(--mono);font-size:38px;font-weight:700;color:var(--text);letter-spacing:.04em;line-height:1}
+.hero-date{font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:.03em}
+.hero-center{display:flex;flex-direction:column;align-items:center;gap:12px}
+.hero-greet{font-family:var(--font-head);font-size:12px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);opacity:.7}
+.srch-wrap{width:100%;position:relative;max-width:580px}
 .srch-in{width:100%;height:50px;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:0 48px 0 18px;font-size:14.5px;color:var(--text);outline:none;transition:border-color .2s,box-shadow .2s,background .2s}
 .srch-in::placeholder{color:var(--text3)}
 .srch-in:focus{border-color:var(--accent-border);box-shadow:0 0 0 3px var(--accent-glow),0 4px 20px rgba(0,0,0,.4);background:var(--surface3)}
 .srch-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:var(--surface3);border:1px solid var(--border2);color:var(--text2);transition:all .15s}
 .srch-wrap:focus-within .srch-btn{border-color:var(--accent-border);color:var(--accent)}
+.hero-wx{display:flex;align-items:center;gap:10px;justify-content:flex-end}
+.hero-wx-temp{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--text);line-height:1}
+.hero-wx-info{display:flex;flex-direction:column;gap:1px}
+.hero-wx-desc{font-size:12px;font-weight:500;color:var(--text-mid);text-transform:capitalize}
+.hero-wx-loc{font-size:10px;color:var(--text-dim)}
 .eng-row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
 .eng-btn{padding:3px 11px;border-radius:20px;font-size:11px;font-weight:500;border:1px solid var(--border);color:var(--text2);background:transparent;transition:all .15s;letter-spacing:.02em}
 .eng-btn:hover,.eng-btn.active{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
@@ -73,6 +97,15 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .sc:hover .sc-lbl{color:var(--text)}
 .sc-add .sc-ico{border-style:dashed;color:var(--text3)}
 
+/* SPORT SCORES */
+.score-row{display:flex;align-items:center;gap:8px;padding:8px 13px;border-bottom:1px solid var(--border)}
+.score-row:last-child{border-bottom:none}
+.score-teams{flex:1;min-width:0}
+.score-team{font-size:11.5px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.score-vs{font-size:9px;color:var(--text-dim);margin:1px 0}
+.score-val{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent3)}
+.score-status{font-size:9px;font-weight:600;text-transform:uppercase;color:var(--accent2);letter-spacing:.05em}
+
 /* DIVIDER / TABS */
 .div-wrap{width:100%;max-width:1280px;margin:18px auto 0;padding:0 20px}
 .div-wrap hr{border:none;border-top:1px solid var(--border)}
@@ -80,33 +113,38 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .dtabs{display:flex;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:3px}
 .dtab{padding:4px 13px;font-size:11.5px;font-weight:500;border-radius:5px;color:var(--text2);background:transparent;transition:all .15s;border:1px solid transparent}
 .dtab.active{background:var(--accent-subtle);color:var(--accent);border-color:var(--accent-border)}
+.dtabs-sm{padding:2px}.dtabs-sm .dtab{padding:2px 8px;font-size:10px}
 .dtab:not(.active):hover{color:var(--text)}
 .div-acts{display:flex;gap:8px}
 .act-btn{display:flex;align-items:center;gap:5px;padding:4px 11px;font-size:11px;font-weight:500;color:var(--text2);background:var(--surface);border:1px solid var(--border);border-radius:6px;transition:all .15s}
 .act-btn:hover{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
 
-/* CONTENT GRID */
-.cgrid{width:100%;max-width:1280px;margin:14px auto 0;padding:0 20px;display:grid;grid-template-columns:1fr 1fr 316px;grid-template-rows:auto auto;gap:13px;animation:rise .5s .13s cubic-bezier(.22,1,.36,1) both}
+/* CONTENT GRID — spec: 4 cols × 2 rows */
+.cgrid{width:100%;max-width:1380px;margin:14px auto 0;padding:0 20px;display:grid;grid-template-columns:300px 1fr 1fr 300px;grid-template-rows:280px 280px;gap:12px;animation:rise .5s .13s cubic-bezier(.22,1,.36,1) both}
 
 /* WIDGET SHELL */
 .wgt{border-radius:10px;border:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;overflow:hidden}
 .wgt-head{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid var(--border);flex-shrink:0}
-.wgt-title{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text2)}
+.wgt-title{display:flex;align-items:center;gap:6px;font-family:var(--font-head);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text)}
 .wdot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .wgt-ctrl{display:flex;gap:6px}
 .wc-btn{display:flex;align-items:center;gap:4px;padding:3px 8px;font-size:10.5px;font-weight:500;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:5px;transition:all .15s;cursor:pointer}
 .wc-btn:hover{border-color:var(--accent-border);color:var(--accent)}
 
-/* MAP */
-.map-wgt{grid-column:1/2;grid-row:1/3;min-height:440px}
-.map-frame{flex:1;position:relative;min-height:380px}
+/* NEWS — col 1, spans both rows */
+.news-wgt{grid-column:1/2;grid-row:1/3}
+/* MAP — cols 2-3, row 1 */
+.map-wgt{grid-column:2/4;grid-row:1/2}
+.map-frame{flex:1;position:relative;min-height:0}
 .map-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:none;filter:saturate(.55) brightness(.65) contrast(1.1);border-radius:0 0 9px 9px}
 .map-bar{position:absolute;bottom:0;left:0;right:0;padding:7px 12px;background:linear-gradient(0deg,rgba(6,6,8,.92) 0%,transparent 100%);display:flex;align-items:center;gap:12px;pointer-events:none}
 .mbar-s{display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;color:var(--text2)}
 .mbar-v{color:var(--text);font-weight:600}
 
-/* LIVE NEWS */
-.news-wgt{grid-column:2/3;grid-row:1/2}
+/* SPORTS — col 2, row 2 */
+.sports-wgt{grid-column:2/3;grid-row:2/3}
+/* GEOPOLITICS — col 3, row 2 */
+.geo-main-wgt{grid-column:3/4;grid-row:2/3}
 .news-list{overflow-y:auto;max-height:280px}
 .news-list::-webkit-scrollbar,.lnews-list::-webkit-scrollbar{width:4px}
 .news-list::-webkit-scrollbar-thumb,.lnews-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
@@ -125,8 +163,8 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .ni-sep{width:2px;height:2px;border-radius:50%;background:var(--text3)}
 .ni-time{font-family:var(--mono);font-size:10px;color:var(--text3)}
 
-/* LOCAL */
-.loc-wgt{grid-column:2/3;grid-row:2/3}
+/* LOCAL (moved into news column, no grid placement) */
+.loc-wgt{}
 .wx-block{padding:13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px}
 .wx-main{display:flex;align-items:center;gap:10px}
 .wx-temp{display:flex;align-items:baseline;gap:2px}
@@ -148,8 +186,8 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .ln-title{font-size:11.5px;font-weight:500;color:var(--text);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1}
 .ln-time{font-family:var(--mono);font-size:10px;color:var(--text3);flex-shrink:0}
 
-/* SIDEBAR */
-.sidebar{grid-column:3/4;grid-row:1/3;display:flex;flex-direction:column;gap:12px}
+/* SIDEBAR (markets) — col 4, spans both rows */
+.sidebar{grid-column:4/5;grid-row:1/3;display:flex;flex-direction:column;gap:12px}
 .mkt-row{display:flex;align-items:center;justify-content:space-between;padding:8px 13px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
 .mkt-row:last-child{border-bottom:none}
 .mkt-row:hover{background:var(--surface2)}
@@ -235,6 +273,60 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .th-name{font-size:11px;font-weight:500;color:var(--text2)}
 .th-opt.active .th-name{color:var(--accent)}
 
+/* EXPANDABLE PILL ROW */
+.pill-row{width:100%;max-width:1380px;margin:18px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap;animation:rise .5s .35s cubic-bezier(.22,1,.36,1) both}
+.pill{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;border:1px solid var(--panel-border);background:var(--panel);color:var(--text-mid);font-family:var(--font-head);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .18s;user-select:none}
+.pill:hover{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
+.pill.open{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
+.pill-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.pill-expand{width:100%;max-width:1380px;margin:10px auto 0;padding:0 20px;display:none;animation:riseIn .3s cubic-bezier(.22,1,.36,1) both}
+.pill-expand.open{display:block}
+.pill-expand .wgt{max-height:380px}
+
+/* LIVESTREAM GRID */
+.ls-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px}
+.ls-card{border-radius:8px;overflow:hidden;background:var(--bg3);border:1px solid var(--panel-border);position:relative}
+.ls-card iframe{width:100%;aspect-ratio:16/9;border:none;display:block}
+.ls-bar{display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:11px}
+.ls-name{font-weight:600;color:var(--text);flex:1}
+.ls-live{font-family:var(--font-head);font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--accent2);background:var(--red-bg);border:1px solid rgba(255,71,87,.2);padding:1px 6px;border-radius:3px}
+
+/* PREDICTION MARKET */
+.pm-row{display:flex;align-items:center;gap:10px;padding:9px 13px;border-bottom:1px solid var(--border)}
+.pm-row:last-child{border-bottom:none}
+.pm-q{font-size:12px;font-weight:500;color:var(--text);flex:1;line-height:1.35}
+.pm-bar{width:80px;height:6px;border-radius:3px;background:var(--bg3);overflow:hidden;flex-shrink:0}
+.pm-fill{height:100%;border-radius:3px;background:var(--accent)}
+.pm-pct{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent);min-width:38px;text-align:right}
+
+/* DIPLOMATIC TRACKER */
+.dip-row{display:flex;gap:9px;align-items:flex-start;padding:9px 13px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;text-decoration:none;color:inherit}
+.dip-row:last-child{border-bottom:none}
+.dip-row:hover{background:var(--surface2)}
+.dip-bar{width:3px;border-radius:2px;flex-shrink:0;align-self:stretch;min-height:28px}
+.dip-ttl{font-size:11.5px;font-weight:500;color:var(--text);line-height:1.35}
+.dip-src{font-size:10px;color:var(--text-dim);margin-top:2px}
+
+/* CUSTOMIZATION FLOAT ROW */
+.cust-row{position:fixed;top:60px;right:20px;z-index:90;display:flex;gap:6px;animation:rise .5s .4s cubic-bezier(.22,1,.36,1) both}
+.cust-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;border:1px solid var(--panel-border);background:rgba(17,21,32,.85);backdrop-filter:blur(10px);color:var(--text-mid);font-family:var(--font-head);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .18s}
+.cust-btn:hover{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
+.cust-btn svg{flex-shrink:0}
+
+/* ACCENT SWATCHES */
+.acc-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.acc-sw{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:all .15s;position:relative}
+.acc-sw:hover{transform:scale(1.15)}
+.acc-sw.active{border-color:var(--text);box-shadow:0 0 8px var(--accent-glow)}
+
+/* BG PRESETS */
+.bg-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.bg-opt{width:64px;height:40px;border-radius:6px;border:1px solid var(--border);cursor:pointer;transition:all .15s;overflow:hidden}
+.bg-opt:hover{border-color:var(--accent-border);transform:scale(1.05)}
+.bg-opt.active{border-color:var(--accent);box-shadow:0 0 6px var(--accent-glow)}
+.bg-upload{width:64px;height:40px;border-radius:6px;border:1px dashed var(--border2);display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:18px;cursor:pointer;transition:all .15s}
+.bg-upload:hover{border-color:var(--accent-border);color:var(--accent)}
+
 /* FOOTER */
 .footer{position:fixed;bottom:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:7px 20px;background:rgba(6,6,8,.88);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--border);z-index:50}
 .f-brand{font-size:10.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);opacity:.55}
@@ -250,43 +342,51 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 <body>
 
 <div class="bg-wrap"><div class="bg-g"></div><div class="bg-grid"></div></div>
+<div class="scanline" aria-hidden="true"></div>
 
 <!-- CUSTOMIZATION MODAL -->
 <div class="modal-bg" id="modal">
-  <div class="modal">
+  <div class="modal" style="width:520px">
     <div class="modal-hd">
-      <span class="modal-ttl">Customize New Tab</span>
+      <span class="modal-ttl">Customize Dashboard</span>
       <button class="modal-x" id="modalX"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="modal-body">
-      <div class="sg">
-        <span class="sg-lbl">Theme</span>
-        <div class="theme-row">
-          <div class="th-opt active" data-th="tactical"><div class="th-sw" style="background:linear-gradient(135deg,#060608,#181822)"></div><div class="th-name">Tactical</div></div>
-          <div class="th-opt" data-th="slate"><div class="th-sw" style="background:linear-gradient(135deg,#0f1117,#1e2230)"></div><div class="th-name">Slate</div></div>
-          <div class="th-opt" data-th="palantir"><div class="th-sw" style="background:linear-gradient(135deg,#0a0a0f,#12121f)"></div><div class="th-name">Palantir</div></div>
-        </div>
+
+      <!-- BACKGROUND PRESETS -->
+      <div class="sg" id="sgBg">
+        <span class="sg-lbl">Background</span>
+        <div class="bg-row" id="bgRow"></div>
       </div>
-      <div class="sg">
+
+      <!-- ACCENT COLOR -->
+      <div class="sg" id="sgAccent">
+        <span class="sg-lbl">Accent Color</span>
+        <div class="acc-row" id="accRow"></div>
+      </div>
+
+      <!-- PANEL TOGGLES -->
+      <div class="sg" id="sgPanels">
         <span class="sg-lbl">Panels</span>
-        <div class="sg-row"><div><div class="sg-name">Live Map</div><div class="sg-desc">Embedded global intelligence map</div></div><label class="toggle"><input type="checkbox" id="tMap" checked/><span class="tslider"></span></label></div>
-        <div class="sg-row"><div><div class="sg-name">Live News</div><div class="sg-desc">Global intel feed with thumbnails</div></div><label class="toggle"><input type="checkbox" id="tNews" checked/><span class="tslider"></span></label></div>
-        <div class="sg-row"><div><div class="sg-name">Local Panel</div><div class="sg-desc">Local weather and city news</div></div><label class="toggle"><input type="checkbox" id="tLocal" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Intelligence Map</div><div class="sg-desc">Global map widget</div></div><label class="toggle"><input type="checkbox" id="tMap" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Live News</div><div class="sg-desc">GDELT intel feed</div></div><label class="toggle"><input type="checkbox" id="tNews" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Sports &amp; Odds</div><div class="sg-desc">Sports headlines</div></div><label class="toggle"><input type="checkbox" id="tSports" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Geopolitics</div><div class="sg-desc">Regional intel feed</div></div><label class="toggle"><input type="checkbox" id="tGeo" checked/><span class="tslider"></span></label></div>
         <div class="sg-row"><div><div class="sg-name">Markets</div><div class="sg-desc">Live commodity and market data</div></div><label class="toggle"><input type="checkbox" id="tMkt" checked/><span class="tslider"></span></label></div>
-        <div class="sg-row"><div><div class="sg-name">Live Alerts</div><div class="sg-desc">Real-time intelligence alerts</div></div><label class="toggle"><input type="checkbox" id="tAlerts" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Live Alerts</div><div class="sg-desc">Real-time alerts</div></div><label class="toggle"><input type="checkbox" id="tAlerts" checked/><span class="tslider"></span></label></div>
         <div class="sg-row"><div><div class="sg-name">Data Status</div><div class="sg-desc">Feed health indicators</div></div><label class="toggle"><input type="checkbox" id="tStatus" checked/><span class="tslider"></span></label></div>
       </div>
+
+      <!-- SEARCH ENGINE -->
       <div class="sg">
         <span class="sg-lbl">Search Engine</span>
         <select class="msel" id="engSel"><option value="ddg">DuckDuckGo</option><option value="google">Google</option><option value="brave">Brave Search</option><option value="shodan">Shodan</option><option value="gdelt">GDELT</option><option value="intelx">IntelligenceX</option></select>
       </div>
+
+      <!-- MAP SOURCE -->
       <div class="sg">
         <span class="sg-lbl">Map Source</span>
         <select class="msel" id="mapSel"><option value="osm">OpenStreetMap (Dark)</option><option value="windy">Windy Weather Map</option><option value="osintview">OSINTview Dashboard</option></select>
-      </div>
-      <div class="sg">
-        <span class="sg-lbl">Local News Region</span>
-        <select class="msel" id="regSel"><option value="memphis">Memphis / Germantown, TN</option><option value="nashville">Nashville, TN</option><option value="chicago">Chicago, IL</option><option value="newyork">New York, NY</option><option value="la">Los Angeles, CA</option><option value="houston">Houston, TX</option><option value="atlanta">Atlanta, GA</option></select>
       </div>
     </div>
   </div>
@@ -298,7 +398,7 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 <header class="topbar">
   <div class="tb-left">
     <div class="logo">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#d4a843" stroke-width="1.5"/><circle cx="12" cy="12" r="4" stroke="#d4a843" stroke-width="1.5"/><line x1="12" y1="3" x2="12" y2="7" stroke="#d4a843" stroke-width="1.5" stroke-linecap="round"/><line x1="12" y1="17" x2="12" y2="21" stroke="#d4a843" stroke-width="1.5" stroke-linecap="round"/><line x1="3" y1="12" x2="7" y2="12" stroke="#d4a843" stroke-width="1.5" stroke-linecap="round"/><line x1="17" y1="12" x2="21" y2="12" stroke="#d4a843" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#00d4ff" stroke-width="1.5"/><circle cx="12" cy="12" r="4" stroke="#00d4ff" stroke-width="1.5"/><line x1="12" y1="3" x2="12" y2="7" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/><line x1="12" y1="17" x2="12" y2="21" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/><line x1="3" y1="12" x2="7" y2="12" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/><line x1="17" y1="12" x2="21" y2="12" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/></svg>
       <span class="logo-txt">Monitor</span>
     </div>
     <div class="tb-sep"></div>
@@ -315,51 +415,73 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
   </div>
 </header>
 
-<!-- HERO -->
+<!-- CUSTOMIZATION FLOAT -->
+<div class="cust-row">
+  <button class="cust-btn" id="custBg"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Background</button>
+  <button class="cust-btn" id="custTheme"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>Theme</button>
+  <button class="cust-btn" id="custPanels"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Panels</button>
+</div>
+
+<!-- HERO: clock left / search center / weather right -->
 <div class="hero">
-  <span class="hero-greet" id="greet">Good morning, Analyst</span>
-  <div class="srch-wrap">
-    <input class="srch-in" id="srchIn" type="text" placeholder="Search or enter address..." autocomplete="off" spellcheck="false"/>
-    <button class="srch-btn" id="srchBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+  <div class="hero-clock">
+    <div class="hero-time" id="heroTime">00:00:00</div>
+    <div class="hero-date" id="heroDate">—</div>
   </div>
-  <div class="eng-row" id="engRow">
-    <button class="eng-btn active" data-e="ddg">DuckDuckGo</button>
-    <button class="eng-btn" data-e="google">Google</button>
-    <button class="eng-btn" data-e="brave">Brave</button>
-    <button class="eng-btn" data-e="shodan">Shodan</button>
-    <button class="eng-btn" data-e="gdelt">GDELT</button>
-    <button class="eng-btn" data-e="intelx">IntelX</button>
+  <div class="hero-center">
+    <span class="hero-greet" id="greet">Good morning, Analyst</span>
+    <div class="srch-wrap">
+      <input class="srch-in" id="srchIn" type="text" placeholder="Search or enter address..." autocomplete="off" spellcheck="false"/>
+      <button class="srch-btn" id="srchBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+    </div>
+    <div class="eng-row" id="engRow">
+      <button class="eng-btn active" data-e="ddg">DuckDuckGo</button>
+      <button class="eng-btn" data-e="google">Google</button>
+      <button class="eng-btn" data-e="brave">Brave</button>
+      <button class="eng-btn" data-e="shodan">Shodan</button>
+      <button class="eng-btn" data-e="gdelt">GDELT</button>
+      <button class="eng-btn" data-e="intelx">IntelX</button>
+    </div>
+  </div>
+  <div class="hero-wx">
+    <div id="wxIcoHero"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><circle cx="12" cy="12" r="5"/></svg></div>
+    <div>
+      <div class="hero-wx-temp"><span id="wxTHero">—</span><span style="font-size:14px;color:var(--text-dim)">°F</span></div>
+      <div class="hero-wx-info">
+        <div class="hero-wx-desc" id="wxDescHero">Loading...</div>
+        <div class="hero-wx-loc" id="wxCityHero">Detecting...</div>
+      </div>
+    </div>
   </div>
 </div>
 
 <!-- SHORTCUTS -->
 <div class="sc-wrap"><div class="sc-grid" id="scGrid"></div></div>
 
-<!-- DIVIDER -->
-<div class="div-wrap">
-  <hr/>
-  <div class="div-label">
-    <div class="dtabs" id="feedTabs">
-      <button class="dtab active" data-tab="intel">Intel</button>
-      <button class="dtab" data-tab="conflicts">Conflicts</button>
-      <button class="dtab" data-tab="markets">Markets</button>
-      <button class="dtab" data-tab="cyber">Cyber</button>
-      <button class="dtab" data-tab="world">World</button>
-    </div>
-    <div class="div-acts">
-      <button class="act-btn" id="layoutBtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Feed layout</button>
-      <button class="act-btn" id="persBtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>Personalize</button>
-    </div>
-  </div>
-</div>
-
-<!-- CONTENT GRID -->
+<!-- CONTENT GRID: 4 cols × 2 rows per spec -->
 <div class="cgrid" id="cgrid">
 
-  <!-- MAP -->
+  <!-- NEWS — col 1, spans both rows -->
+  <div class="wgt news-wgt" id="newsWgt">
+    <div class="wgt-head">
+      <span class="wgt-title"><span class="wdot" style="background:var(--accent);animation:blink 2.5s infinite"></span>Live News</span>
+      <div class="wgt-ctrl">
+        <div class="dtabs dtabs-sm" id="feedTabs">
+          <button class="dtab active" data-tab="intel">Intel</button>
+          <button class="dtab" data-tab="conflicts">Conflict</button>
+          <button class="dtab" data-tab="cyber">Cyber</button>
+          <button class="dtab" data-tab="world">World</button>
+        </div>
+        <button class="wc-btn" id="refreshBtn"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg></button>
+      </div>
+    </div>
+    <div class="news-list" id="newsList" style="max-height:none;flex:1;overflow-y:auto"><div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Loading feed...</div></div>
+  </div>
+
+  <!-- MAP — cols 2-3, row 1 -->
   <div class="wgt map-wgt" id="mapWgt">
     <div class="wgt-head">
-      <span class="wgt-title"><span class="wdot" style="background:var(--green);animation:blink 2s infinite"></span>Live Intelligence Map</span>
+      <span class="wgt-title"><span class="wdot" style="background:var(--green);animation:blink 2s infinite"></span>Intelligence Map</span>
       <div class="wgt-ctrl">
         <button class="wc-btn" onclick="cycleMap()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg>Source</button>
         <button class="wc-btn" onclick="openMapFull()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>Full</button>
@@ -375,98 +497,99 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
     </div>
   </div>
 
-  <!-- LIVE NEWS -->
-  <div class="wgt news-wgt" id="newsWgt">
+  <!-- SPORTS — col 2, row 2 -->
+  <div class="wgt sports-wgt" id="sportsWgt">
     <div class="wgt-head">
-      <span class="wgt-title"><span class="wdot" style="background:var(--blue);animation:blink 2.5s infinite"></span>Live News</span>
-      <div class="wgt-ctrl"><button class="wc-btn" id="refreshBtn"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg>Refresh</button></div>
+      <span class="wgt-title"><span class="wdot" style="background:var(--green)"></span>Sports &amp; Odds</span>
+      <div class="wgt-ctrl"><button class="wc-btn" onclick="loadSports()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg></button></div>
     </div>
-    <div class="news-list" id="newsList"><div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Loading feed...</div></div>
+    <div id="sportsList" style="overflow-y:auto;flex:1"><div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading sports...</div></div>
   </div>
 
-  <!-- LOCAL -->
-  <div class="wgt loc-wgt" id="locWgt">
+  <!-- GEOPOLITICS — col 3, row 2 -->
+  <div class="wgt geo-main-wgt" id="geoMainWgt">
     <div class="wgt-head">
-      <span class="wgt-title"><span class="wdot" style="background:var(--purple)"></span>Local — <span id="locCity">Germantown, TN</span></span>
-    </div>
-    <div class="wx-block">
-      <div class="wx-main">
-        <div class="wx-ico" id="wxIco"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#d4a843" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></div>
-        <div>
-          <div class="wx-temp"><span class="wx-t" id="wxT">—</span><span class="wx-u">°F</span></div>
-          <div class="wx-desc" id="wxDesc">Loading...</div>
-          <div class="wx-city" id="wxCity">Detecting location...</div>
-        </div>
-      </div>
-      <div class="wx-dets">
-        <div class="wxd"><div class="wxd-v" id="wxH">—</div><div class="wxd-k">Humidity</div></div>
-        <div class="wxd"><div class="wxd-v" id="wxW">—</div><div class="wxd-k">Wind</div></div>
-        <div class="wxd"><div class="wxd-v" id="wxUV">—</div><div class="wxd-k">UV</div></div>
-      </div>
-    </div>
-    <div class="wgt-head" style="border-top:none;padding:7px 13px"><span class="wgt-title" style="font-size:10px">Local News</span></div>
-    <div class="lnews-list" id="lnewsList"><div style="padding:12px 13px;color:var(--text3);font-size:11px">Loading local news...</div></div>
-  </div>
-
-  <!-- SIDEBAR -->
-  <div class="sidebar" id="sidebar">
-    <div class="wgt" id="mktWgt">
-      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--blue)"></span>Markets</span><a href="https://finance.yahoo.com" target="_blank" class="wc-btn" style="font-size:10px;padding:2px 7px">All →</a></div>
-      <div id="mktList"></div>
-    </div>
-    <div class="wgt" id="alertsWgt">
-      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--red);animation:blink 1.5s infinite"></span>Live Alerts</span></div>
-      <div id="alertList"></div>
-    </div>
-    <div class="wgt" id="statusWgt">
-      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--green)"></span>Data Status</span></div>
-      <div id="statusList"></div>
-    </div>
-  </div>
-
-</div>
-
-<!-- SECONDARY GRID: GEOPOLITICS + THREAT MONITOR + OSINT TOOLS -->
-<div class="div-wrap" style="margin-top:22px">
-  <hr/>
-  <div class="div-label">
-    <div class="dtabs">
-      <button class="dtab active" data-stab="geo">Regional Intel</button>
-    </div>
-    <div class="div-acts">
-      <button class="act-btn" onclick="loadGeo()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg>Refresh</button>
-    </div>
-  </div>
-</div>
-<div class="sgrid" id="sgrid">
-  <div class="wgt" id="geoWgt">
-    <div class="wgt-head">
-      <span class="wgt-title"><span class="wdot" style="background:var(--accent)"></span>Geopolitics · Regional</span>
+      <span class="wgt-title"><span class="wdot" style="background:var(--accent4)"></span>Geopolitics</span>
       <div class="wgt-ctrl">
-        <select class="msel" id="geoReg" style="padding:3px 8px;font-size:11px">
+        <select class="msel" id="geoMainReg" style="padding:2px 6px;font-size:10px">
           <option value="mideast">Middle East</option>
-          <option value="eeurope">Eastern Europe</option>
+          <option value="eeurope">E. Europe</option>
           <option value="asiapac">Asia-Pacific</option>
           <option value="africa">Africa</option>
           <option value="americas">Americas</option>
         </select>
       </div>
     </div>
-    <div class="news-list" id="geoList" style="max-height:360px"><div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading regional feed...</div></div>
+    <div id="geoMainList" class="news-list" style="max-height:none;flex:1;overflow-y:auto"><div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading...</div></div>
   </div>
-  <div class="wgt" id="threatWgt">
-    <div class="wgt-head">
-      <span class="wgt-title"><span class="wdot" style="background:var(--red);animation:blink 2s infinite"></span>Global Threat Monitor</span>
+
+  <!-- MARKETS — col 4, spans both rows -->
+  <div class="sidebar" id="sidebar">
+    <div class="wgt" id="mktWgt">
+      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent)"></span>Markets</span><a href="https://finance.yahoo.com" target="_blank" class="wc-btn" style="font-size:10px;padding:2px 7px">All →</a></div>
+      <div id="mktList"></div>
     </div>
-    <div id="threatList"></div>
+    <div class="wgt" id="alertsWgt">
+      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent2);animation:blink 1.5s infinite"></span>Live Alerts</span></div>
+      <div id="alertList"></div>
+    </div>
+    <div class="wgt" id="statusWgt">
+      <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent3)"></span>Data Status</span></div>
+      <div id="statusList"></div>
+    </div>
   </div>
-  <div class="wgt" id="osintWgt">
-    <div class="wgt-head">
-      <span class="wgt-title"><span class="wdot" style="background:var(--purple)"></span>OSINT Tools</span>
-    </div>
-    <div id="osintList"></div>
+
+</div>
+
+<!-- EXPANDABLE PILL ROW -->
+<div class="pill-row" id="pillRow">
+  <button class="pill" data-pill="osint"><span class="pill-dot" style="background:var(--purple)"></span>OSINT Tools</button>
+  <button class="pill" data-pill="streams"><span class="pill-dot" style="background:var(--accent2)"></span>Livestreams</button>
+  <button class="pill" data-pill="threats"><span class="pill-dot" style="background:var(--accent2);animation:blink 2s infinite"></span>Threat Monitor</button>
+  <button class="pill" data-pill="predict"><span class="pill-dot" style="background:var(--accent)"></span>Prediction Markets</button>
+  <button class="pill" data-pill="diplo"><span class="pill-dot" style="background:var(--accent4)"></span>Diplomatic Tracker</button>
+</div>
+
+<!-- OSINT Tools expand -->
+<div class="pill-expand" id="pill-osint">
+  <div class="wgt">
+    <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--purple)"></span>OSINT Tools</span></div>
+    <div id="osintList" style="padding:8px"></div>
   </div>
 </div>
+
+<!-- Livestreams expand -->
+<div class="pill-expand" id="pill-streams">
+  <div class="wgt">
+    <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent2)"></span>News Livestreams</span></div>
+    <div class="ls-grid" id="streamGrid"></div>
+  </div>
+</div>
+
+<!-- Threat Monitor expand -->
+<div class="pill-expand" id="pill-threats">
+  <div class="wgt">
+    <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent2);animation:blink 2s infinite"></span>Global Threat Monitor</span></div>
+    <div id="threatList"></div>
+  </div>
+</div>
+
+<!-- Prediction Markets expand -->
+<div class="pill-expand" id="pill-predict">
+  <div class="wgt">
+    <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent)"></span>Prediction Markets</span></div>
+    <div id="predictList"></div>
+  </div>
+</div>
+
+<!-- Diplomatic Tracker expand -->
+<div class="pill-expand" id="pill-diplo">
+  <div class="wgt">
+    <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent4)"></span>Diplomatic Tracker</span></div>
+    <div id="diploList" style="max-height:320px;overflow-y:auto"></div>
+  </div>
+</div>
+
 </div>
 
 <footer class="footer">
@@ -485,13 +608,18 @@ function loadCfg(){try{return JSON.parse(localStorage.getItem('mb-cfg')||'{}')}c
 function saveCfg(c){localStorage.setItem('mb-cfg',JSON.stringify(c))}
 let cfg=loadCfg();
 
-/* ── CLOCK ────────────────────────────────────── */
+/* ── CLOCK (hero + topbar) ─────────────────────── */
 function tick(){
-  const n=new Date(),u=n.toUTCString().match(/(\d{2}:\d{2}:\d{2})/);
-  document.getElementById('clock').textContent=(u?u[1]:'00:00:00')+' UTC';
+  const n=new Date();
+  const u=n.toUTCString().match(/(\d{2}:\d{2}:\d{2})/);
+  const el=id=>document.getElementById(id);
+  el('clock').textContent=(u?u[1]:'00:00:00')+' UTC';
+  const pad=v=>String(v).padStart(2,'0');
+  el('heroTime').textContent=pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds());
+  el('heroDate').textContent=n.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
   const h=n.getHours(),g=h<5?'Good night':h<12?'Good morning':h<17?'Good afternoon':h<21?'Good evening':'Good night';
-  document.getElementById('greet').textContent=g+', Analyst';
-  document.getElementById('fDate').textContent=n.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  el('greet').textContent=g+', Analyst';
+  el('fDate').textContent=n.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
 }
 tick();setInterval(tick,1000);
 
@@ -522,7 +650,7 @@ if(navigator.geolocation){
 /* ── WEATHER (Open-Meteo, free, no key) ───────── */
 const WMO={0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Foggy',48:'Icy fog',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',80:'Showers',81:'Rain showers',82:'Heavy showers',95:'Thunderstorm',96:'Thunderstorm+hail',99:'Severe storm'};
 function wxSVG(c){
-  const SUN=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#d4a843" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+  const SUN=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="1.5"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
   const CLOUD=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#8888a0" stroke-width="1.5"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`;
   const RAIN=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#4299e1" stroke-width="1.5"><line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>`;
   const SNOW=`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#a0c8ff" stroke-width="1.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5l-5 5-5-5"/><path d="M17 19l-5-5-5 5"/><path d="M1 12l4 2-4 2"/><path d="M23 12l-4 2 4 2"/></svg>`;
@@ -539,13 +667,15 @@ function fetchWeather(lat,lon){
   p.then(d=>{
       if(!d||!d.current)throw new Error('no data');
       const c=d.current;
-      document.getElementById('wxT').textContent=Math.round(c.temperature_2m);
-      document.getElementById('wxDesc').textContent=WMO[c.weather_code]||'Clear';
-      document.getElementById('wxH').textContent=c.relative_humidity_2m+'%';
-      document.getElementById('wxW').textContent=Math.round(c.wind_speed_10m)+' mph';
-      document.getElementById('wxUV').textContent=c.uv_index??'—';
-      document.getElementById('wxIco').innerHTML=wxSVG(c.weather_code);
-    }).catch(()=>{document.getElementById('wxDesc').textContent='Unavailable'});
+      const t=Math.round(c.temperature_2m);
+      const desc=WMO[c.weather_code]||'Clear';
+      const el=id=>document.getElementById(id);
+      // Hero weather
+      el('wxTHero').textContent=t;
+      el('wxDescHero').textContent=desc;
+      el('wxCityHero').textContent=uCity;
+      el('wxIcoHero').innerHTML=wxSVG(c.weather_code);
+    }).catch(()=>{document.getElementById('wxDescHero').textContent='Unavailable'});
 }
 
 /* ── SVG ICON LIBRARY ─────────────────────────── */
@@ -680,34 +810,6 @@ function relTime(s){
   if(diff<86400)return Math.round(diff/3600)+'h ago';return Math.round(diff/86400)+'d ago';
 }
 
-function renderNews(items,badge,container,local=false){
-  container.innerHTML='';
-  if(!items.length){container.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">No items found</div>`;return;}
-  items.forEach(item=>{
-    const a=document.createElement('a');
-    a.href=item.link;a.target='_blank';a.rel='noopener noreferrer';
-    if(local){
-      a.className='ln';
-      a.innerHTML=`<div class="ln-thumb">${item.thumb?`<img src="${item.thumb}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:'<div style="width:100%;height:100%;background:var(--surface3)"></div>'}</div><div class="ln-title">${item.title}</div><div class="ln-time">${relTime(item.pubDate)}</div>`;
-    }else{
-      a.className='ni';
-      const thumbPH=`<div class="ni-ph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--border2)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`;
-      a.innerHTML=`<div class="ni-thumb">${item.thumb?`<img src="${item.thumb}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:thumbPH}<div class="ni-sev" style="background:${badge.color}"></div></div><div class="ni-body"><span class="badge ${badge.cls} ni-cat">${badge.label}</span><div class="ni-title">${item.title}</div><div class="ni-meta"><span class="ni-src">${item.source}</span><span class="ni-sep"></span><span class="ni-time">${relTime(item.pubDate)}</span></div></div>`;
-    }
-    container.appendChild(a);
-  });
-}
-
-// Legacy stubs (superseded below)
-function loadFeed(){}
-function loadLocal(){}
-
-// Fix: local uses container param correctly
-function renderNews(items,badge,container,altContainer,local=false){
-  const c=altContainer||container;
-  if(typeof c==='string'){const el=document.getElementById(c);if(el)renderNewsInto(items,badge,el,local);}
-  else renderNewsInto(items,badge,c,local);
-}
 function renderNewsInto(items,badge,container,local){
   container.innerHTML='';
   if(!items.length){container.innerHTML=`<div style="padding:${local?'12px 13px':'24px'};text-align:center;color:var(--text3);font-size:${local?'11':'12'}px">No items found</div>`;return;}
@@ -730,16 +832,43 @@ function loadFeed(tab){
   const badge=TBADGE[tab];
   const list=document.getElementById('newsList');
   list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>`;
+  console.log('[feed] loading', tab, FEEDS[tab], 'HAS_INTEL=', HAS_INTEL);
   intelFetch(FEEDS[tab])
-    .then(xml=>{renderNewsInto(parseRSS(xml),badge,list,false);})
-    .catch(()=>{list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable — check network</div>`;});
+    .then(xml=>{
+      console.log('[feed] got', tab, typeof xml, xml?.length);
+      const items=parseRSS(xml);
+      console.log('[feed] parsed', items.length, 'items');
+      renderNewsInto(items,badge,list,false);
+    })
+    .catch(err=>{
+      console.error('[feed] error', tab, err);
+      list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable — retrying…</div>`;
+      setTimeout(()=>loadFeedFallback(tab,badge,list),2000);
+    });
+}
+function loadFeedFallback(tab,badge,list){
+  const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(FEEDS[tab])}`;
+  fetch(proxy).then(r=>r.json()).then(d=>{
+    const items=parseRSS(d.contents||'');
+    renderNewsInto(items,badge,list,false);
+  }).catch(()=>{
+    list.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable — check network</div>`;
+  });
 }
 function loadLocal(reg){
   const list=document.getElementById('lnewsList');
   list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Loading local news...</div>`;
   intelFetch(LFEEDS[reg]||LFEEDS.memphis)
     .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-pur',label:'LOCAL',color:'var(--purple)'},list,true);})
-    .catch(()=>{list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Local feed unavailable</div>`;});
+    .catch(err=>{
+      console.error('[local] error', err);
+      const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(LFEEDS[reg]||LFEEDS.memphis)}`;
+      fetch(proxy).then(r=>r.json()).then(d=>{
+        renderNewsInto(parseRSS(d.contents||''),{cls:'b-pur',label:'LOCAL',color:'var(--purple)'},list,true);
+      }).catch(()=>{
+        list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Local feed unavailable</div>`;
+      });
+    });
 }
 
 let activeTab='intel';
@@ -811,35 +940,95 @@ setInterval(loadMarkets,60000);
  {ico:I.server,l:'Telegram Feed',v:'Offline',ind:'ind-err'}
 ].forEach(s=>{const r=document.createElement('div');r.className='st-row';r.innerHTML=`<span class="st-ico">${s.ico}</span><span class="st-lbl">${s.l}</span><span class="st-val">${s.v}</span><span class="st-ind ${s.ind}"></span>`;document.getElementById('statusList').appendChild(r);});
 
-/* ── GEOPOLITICS (regional) ────────────────────── */
-const GEO_FEEDS={
-  mideast:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Israel+OR+Gaza+OR+Iran+OR+Syria+OR+Lebanon+OR+Yemen+OR+"Red+Sea"+OR+Hormuz)&mode=artlist&maxrecords=12&format=rss',
-  eeurope:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Ukraine+OR+Russia+OR+Belarus+OR+Moldova+OR+Crimea+OR+Donbas)&mode=artlist&maxrecords=12&format=rss',
-  asiapac:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Taiwan+OR+China+OR+Korea+OR+"South+China+Sea"+OR+Philippines+OR+Japan)&mode=artlist&maxrecords=12&format=rss',
-  africa:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Sahel+OR+Sudan+OR+Ethiopia+OR+Somalia+OR+Nigeria+OR+Mali+OR+DRC)&mode=artlist&maxrecords=12&format=rss',
-  americas:'https://api.gdeltproject.org/api/v2/doc/doc?query=(Venezuela+OR+Haiti+OR+Mexico+OR+Colombia+OR+Ecuador+OR+cartel)&mode=artlist&maxrecords=12&format=rss',
-};
-function loadGeo(){
-  const reg=document.getElementById('geoReg')?.value||'mideast';
-  const list=document.getElementById('geoList');
-  list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>`;
-  intelFetch(GEO_FEEDS[reg])
-    .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-amb',label:'REGIONAL',color:'var(--accent)'},list,false);})
-    .catch(()=>{list.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable</div>`;});
+/* ── SPORTS (ESPN headlines via GDELT) ─────────── */
+const SPORTS_FEED='https://api.gdeltproject.org/api/v2/doc/doc?query=(NFL+OR+NBA+OR+MLB+OR+UFC+OR+Premier+League+OR+Champions+League)&mode=artlist&maxrecords=8&format=rss';
+function loadSports(){
+  const list=document.getElementById('sportsList');
+  if(!list)return;
+  list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>';
+  intelFetch(SPORTS_FEED)
+    .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-grn',label:'SPORTS',color:'var(--accent3)'},list,false);})
+    .catch(err=>{
+      console.error('[sports]',err);
+      list.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Sports feed unavailable</div>';
+    });
 }
-document.getElementById('geoReg')?.addEventListener('change',()=>{cfg.geoRegion=document.getElementById('geoReg').value;saveCfg(cfg);loadGeo();});
-if(cfg.geoRegion)document.getElementById('geoReg').value=cfg.geoRegion;
-loadGeo();
+loadSports();
+
+/* ── GEOPOLITICS MAIN GRID (separate from the secondary grid) ──── */
+function loadGeoMain(){
+  const reg=document.getElementById('geoMainReg')?.value||'mideast';
+  const list=document.getElementById('geoMainList');
+  if(!list)return;
+  list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>';
+  intelFetch(GEO_FEEDS[reg])
+    .then(xml=>{renderNewsInto(parseRSS(xml),{cls:'b-org',label:'GEOPOLITICS',color:'var(--accent4)'},list,false);})
+    .catch(err=>{
+      console.error('[geoMain]',err);
+      const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(GEO_FEEDS[reg])}`;
+      fetch(proxy).then(r=>r.json()).then(d=>{
+        renderNewsInto(parseRSS(d.contents||''),{cls:'b-org',label:'GEOPOLITICS',color:'var(--accent4)'},list,false);
+      }).catch(()=>{list.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Feed unavailable</div>';});
+    });
+}
+document.getElementById('geoMainReg')?.addEventListener('change',()=>{cfg.geoMainRegion=document.getElementById('geoMainReg').value;saveCfg(cfg);loadGeoMain();});
+if(cfg.geoMainRegion&&document.getElementById('geoMainReg'))document.getElementById('geoMainReg').value=cfg.geoMainRegion;
+loadGeoMain();
+
+/* ── PILL PANEL TOGGLE ────────────────────────── */
+document.querySelectorAll('.pill[data-pill]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const key=btn.dataset.pill;
+    const panel=document.getElementById('pill-'+key);
+    if(!panel)return;
+    const isOpen=panel.classList.contains('open');
+    // close all
+    document.querySelectorAll('.pill-expand').forEach(p=>p.classList.remove('open'));
+    document.querySelectorAll('.pill').forEach(p=>p.classList.remove('open'));
+    if(!isOpen){
+      panel.classList.add('open');
+      btn.classList.add('open');
+      // lazy-load content
+      if(key==='streams'&&!panel.dataset.loaded){panel.dataset.loaded='1';renderStreams();}
+      if(key==='predict'&&!panel.dataset.loaded){panel.dataset.loaded='1';loadPredictions();}
+      if(key==='diplo'&&!panel.dataset.loaded){panel.dataset.loaded='1';loadDiplo();}
+    }
+  });
+});
+
+/* ── OSINT TOOLS (launcher grid) ─────────────── */
+const OSINT_TOOLS=[
+  {l:'Shodan',        s:'Exposed devices & services',u:'https://www.shodan.io',        i:I.search},
+  {l:'Wayback Machine',s:'Web page archive',         u:'https://web.archive.org',       i:I.archive},
+  {l:'WHOIS Lookup',  s:'Domain ownership',          u:'https://who.is',                i:I.globe},
+  {l:'Censys',        s:'Internet device search',    u:'https://censys.io',             i:I.cpu},
+  {l:'VirusTotal',    s:'Malware & URL analysis',    u:'https://www.virustotal.com',    i:I.shield},
+  {l:'FlightAware',   s:'Real-time flight tracking', u:'https://www.flightaware.com',   i:I.plane},
+  {l:'MarineTraffic', s:'Live vessel positions',     u:'https://www.marinetraffic.com', i:I.anchor},
+  {l:'IntelX',        s:'Data leak archive',         u:'https://intelx.io',             i:I.server},
+  {l:'GreyNoise',     s:'Internet noise intel',      u:'https://www.greynoise.io',      i:I.cpu},
+];
+(function renderOSINT(){
+  const c=document.getElementById('osintList');if(!c)return;
+  c.innerHTML='';
+  c.style.display='grid';c.style.gridTemplateColumns='repeat(3,1fr)';c.style.gap='8px';
+  OSINT_TOOLS.forEach(t=>{
+    const a=document.createElement('a');a.href=t.u;a.target='_blank';a.rel='noopener';a.className='ot-row';
+    a.style.cssText='flex-direction:column;align-items:center;text-align:center;padding:14px 8px;border-radius:8px;border:1px solid var(--panel-border)';
+    a.innerHTML=`<span class="ot-ico" style="margin-bottom:6px">${t.i}</span><div class="ot-lbl">${t.l}</div><div class="ot-sub">${t.s}</div>`;
+    c.appendChild(a);
+  });
+})();
 
 /* ── GLOBAL THREAT MONITOR ─────────────────────── */
 const THREAT_BARS=[
-  {lbl:'Middle East',  v:82,c:'var(--red)'},
-  {lbl:'E. Europe',    v:74,c:'var(--orange)'},
+  {lbl:'Middle East',  v:82,c:'var(--accent2)'},
+  {lbl:'E. Europe',    v:74,c:'var(--accent4)'},
   {lbl:'Asia-Pacific', v:58,c:'var(--accent)'},
   {lbl:'Africa',       v:51,c:'var(--accent)'},
   {lbl:'Cyber',        v:68,c:'var(--purple)'},
-  {lbl:'Americas',     v:39,c:'var(--green)'},
-  {lbl:'Nuclear',      v:44,c:'var(--orange)'},
+  {lbl:'Americas',     v:39,c:'var(--accent3)'},
+  {lbl:'Nuclear',      v:44,c:'var(--accent4)'},
 ];
 (function renderThreats(){
   const c=document.getElementById('threatList');if(!c)return;
@@ -851,40 +1040,182 @@ const THREAT_BARS=[
   });
 })();
 
-/* ── OSINT TOOLS PANEL ─────────────────────────── */
-const OSINT_TOOLS=[
-  {l:'GDELT Events',      s:'Global events DB',     u:'https://gdeltproject.org',         i:I.globe},
-  {l:'ACLED',             s:'Armed conflict data',  u:'https://acleddata.com',             i:I.shield},
-  {l:'FlightRadar24',     s:'Live air traffic',     u:'https://www.flightradar24.com',     i:I.plane},
-  {l:'MarineTraffic',     s:'Live maritime',        u:'https://www.marinetraffic.com',     i:I.anchor},
-  {l:'Shodan',            s:'Exposed devices',      u:'https://www.shodan.io',             i:I.search},
-  {l:'IntelX',            s:'Leak archive',         u:'https://intelx.io',                 i:I.server},
-  {l:'Bellingcat',        s:'Open-source invest.',  u:'https://www.bellingcat.com',        i:I.eye},
-  {l:'ISW',               s:'War assessments',      u:'https://understandingwar.org',      i:I.map},
-  {l:'GreyNoise',         s:'Internet noise',       u:'https://www.greynoise.io',          i:I.cpu},
-  {l:'ISC SANS',          s:'Cyber threat center',  u:'https://isc.sans.edu',              i:I.activity},
-  {l:'Wayback Machine',   s:'Web archive',          u:'https://web.archive.org',           i:I.archive},
+/* ── NEWS LIVESTREAMS (2×2 YouTube embeds) ────── */
+const STREAMS=[
+  {name:'CNN',           id:'h3MuIUNCCzI'},
+  {name:'BBC World',     id:'_3AaFkeMvhI'},
+  {name:'Al Jazeera',    id:'F-POY4Q0QSI'},
+  {name:'Bloomberg',     id:'dp8PhLsUcFE'},
 ];
-(function renderOSINT(){
-  const c=document.getElementById('osintList');if(!c)return;
-  c.innerHTML='';
-  OSINT_TOOLS.forEach(t=>{
-    const a=document.createElement('a');a.href=t.u;a.target='_blank';a.rel='noopener';a.className='ot-row';
-    a.innerHTML=`<span class="ot-ico">${t.i}</span><div style="flex:1;min-width:0"><div class="ot-lbl">${t.l}</div><div class="ot-sub">${t.s}</div></div>`;
-    c.appendChild(a);
+function renderStreams(){
+  const g=document.getElementById('streamGrid');if(!g)return;
+  g.innerHTML='';
+  STREAMS.forEach(s=>{
+    const d=document.createElement('div');d.className='ls-card';
+    d.innerHTML=`<iframe src="https://www.youtube.com/embed/${s.id}?autoplay=0&mute=1" allow="autoplay;encrypted-media" allowfullscreen loading="lazy"></iframe><div class="ls-bar"><span class="ls-name">${s.name}</span><span class="ls-live">LIVE</span></div>`;
+    g.appendChild(d);
   });
-})();
+}
+
+/* ── PREDICTION MARKETS ──────────────────────── */
+const PREDICTIONS=[
+  {q:'Will the US enter a recession by Q4 2026?',pct:32},
+  {q:'Will there be a Taiwan Strait military incident in 2026?',pct:18},
+  {q:'Will oil prices exceed $120/bbl by year end?',pct:24},
+  {q:'Will Ukraine and Russia reach a ceasefire in 2026?',pct:41},
+  {q:'Will AI regulation pass in the US Senate by 2026?',pct:55},
+  {q:'Will Bitcoin exceed $150K in 2026?',pct:28},
+];
+function loadPredictions(){
+  const c=document.getElementById('predictList');if(!c)return;
+  c.innerHTML='';
+  PREDICTIONS.forEach(p=>{
+    const r=document.createElement('div');r.className='pm-row';
+    r.innerHTML=`<div class="pm-q">${p.q}</div><div class="pm-bar"><div class="pm-fill" style="width:${p.pct}%"></div></div><span class="pm-pct">${p.pct}%</span>`;
+    c.appendChild(r);
+  });
+}
+
+/* ── DIPLOMATIC TRACKER (UN/StateDept/EU RSS) ── */
+const DIPLO_FEEDS=[
+  'https://news.un.org/feed/subscribe/en/news/all/rss.xml',
+  'https://www.state.gov/rss-feed/press-releases/feed/',
+];
+function loadDiplo(){
+  const c=document.getElementById('diploList');if(!c)return;
+  c.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Loading...</div>';
+  const colors=['var(--accent)','var(--accent4)'];
+  Promise.allSettled(DIPLO_FEEDS.map(u=>intelFetch(u)))
+    .then(results=>{
+      const all=[];
+      results.forEach((r,i)=>{
+        if(r.status==='fulfilled'){
+          parseRSS(r.value).forEach(item=>{item._color=colors[i];all.push(item);});
+        }
+      });
+      all.sort((a,b)=>new Date(b.pubDate)-new Date(a.pubDate));
+      c.innerHTML='';
+      if(!all.length){c.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">No items</div>';return;}
+      all.slice(0,12).forEach(item=>{
+        const a=document.createElement('a');a.href=item.link;a.target='_blank';a.rel='noopener';a.className='dip-row';
+        a.innerHTML=`<div class="dip-bar" style="background:${item._color}"></div><div><div class="dip-ttl">${item.title}</div><div class="dip-src">${item.source} · ${relTime(item.pubDate)}</div></div>`;
+        c.appendChild(a);
+      });
+    });
+}
 
 /* ── MODAL ────────────────────────────────────── */
 const modal=document.getElementById('modal');
-function openModal(){modal.classList.add('open')}
+function openModal(section){
+  modal.classList.add('open');
+  // Scroll to the requested section
+  if(section){
+    const el=document.getElementById(section);
+    if(el)setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'start'}),100);
+  }
+}
 function closeModal(){modal.classList.remove('open')}
-['custBtn','layoutBtn','persBtn'].forEach(id=>document.getElementById(id)?.addEventListener('click',openModal));
+document.getElementById('custBtn')?.addEventListener('click',()=>openModal());
+document.getElementById('custBg')?.addEventListener('click',()=>openModal('sgBg'));
+document.getElementById('custTheme')?.addEventListener('click',()=>openModal('sgAccent'));
+document.getElementById('custPanels')?.addEventListener('click',()=>openModal('sgPanels'));
 document.getElementById('modalX').addEventListener('click',closeModal);
 modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
-/* Visibility toggles */
+/* ── BACKGROUND PRESETS ──────────────────────── */
+const BG_PRESETS=[
+  {id:'default',  label:'Default',    css:'linear-gradient(180deg,#0a0c10,#0f1219)'},
+  {id:'midnight', label:'Midnight',   css:'linear-gradient(135deg,#020108,#0d0b1a,#0a0c10)'},
+  {id:'arctic',   label:'Arctic',     css:'linear-gradient(135deg,#040a12,#0b1520,#040a12)'},
+  {id:'ember',    label:'Ember',      css:'linear-gradient(135deg,#100808,#1a0c0c,#0a0c10)'},
+  {id:'matrix',   label:'Matrix',     css:'linear-gradient(135deg,#020a04,#081408,#0a0c10)'},
+  {id:'slate',    label:'Slate',      css:'linear-gradient(135deg,#0f1117,#1e2230,#0f1117)'},
+];
+(function renderBgPresets(){
+  const row=document.getElementById('bgRow');if(!row)return;
+  BG_PRESETS.forEach(p=>{
+    const d=document.createElement('div');d.className='bg-opt'+(cfg.bgPreset===p.id?' active':'');
+    d.style.background=p.css;d.title=p.label;d.dataset.bg=p.id;
+    d.addEventListener('click',()=>{
+      document.querySelectorAll('.bg-opt').forEach(x=>x.classList.remove('active'));
+      d.classList.add('active');
+      cfg.bgPreset=p.id;cfg.bgCustom=null;saveCfg(cfg);
+      document.querySelector('.bg-g').style.background=p.css;
+    });
+    row.appendChild(d);
+  });
+  // Upload button
+  const up=document.createElement('div');up.className='bg-upload';up.innerHTML='+';up.title='Upload image';
+  up.addEventListener('click',()=>{
+    const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
+    inp.addEventListener('change',()=>{
+      const f=inp.files[0];if(!f)return;
+      const reader=new FileReader();
+      reader.onload=()=>{
+        const url=reader.result;
+        cfg.bgCustom=url;cfg.bgPreset=null;saveCfg(cfg);
+        document.querySelector('.bg-g').style.background=`url(${url}) center/cover no-repeat`;
+        document.querySelectorAll('.bg-opt').forEach(x=>x.classList.remove('active'));
+      };
+      reader.readAsDataURL(f);
+    });
+    inp.click();
+  });
+  row.appendChild(up);
+  // Restore saved bg
+  if(cfg.bgCustom){
+    document.querySelector('.bg-g').style.background=`url(${cfg.bgCustom}) center/cover no-repeat`;
+  }else if(cfg.bgPreset){
+    const p=BG_PRESETS.find(b=>b.id===cfg.bgPreset);
+    if(p)document.querySelector('.bg-g').style.background=p.css;
+  }
+})();
+
+/* ── ACCENT COLOR PICKER ─────────────────────── */
+const ACCENT_COLORS=[
+  {id:'cyan',  hex:'#00d4ff'},
+  {id:'green', hex:'#2ed573'},
+  {id:'red',   hex:'#ff4757'},
+  {id:'amber', hex:'#ffa502'},
+  {id:'purple',hex:'#9f7aea'},
+  {id:'blue',  hex:'#4299e1'},
+  {id:'white', hex:'#e8eaf0'},
+  {id:'gold',  hex:'#d4a843'},
+];
+(function renderAccentPicker(){
+  const row=document.getElementById('accRow');if(!row)return;
+  const current=cfg.accentColor||'#00d4ff';
+  ACCENT_COLORS.forEach(c=>{
+    const d=document.createElement('div');d.className='acc-sw'+(c.hex===current?' active':'');
+    d.style.background=c.hex;d.title=c.id;
+    d.addEventListener('click',()=>{
+      document.querySelectorAll('.acc-sw').forEach(x=>x.classList.remove('active'));
+      d.classList.add('active');
+      cfg.accentColor=c.hex;saveCfg(cfg);
+      applyAccent(c.hex);
+    });
+    row.appendChild(d);
+  });
+  if(current!=='#00d4ff')applyAccent(current);
+})();
+function applyAccent(hex){
+  const r=document.documentElement.style;
+  r.setProperty('--accent',hex);
+  r.setProperty('--accent-glow',hex.replace('#','rgba(')+',.18)');
+  r.setProperty('--accent-subtle',hex.replace('#','rgba(')+',.07)');
+  r.setProperty('--accent-border',hex.replace('#','rgba(')+',.2)');
+  // Convert hex to rgba for glow/subtle
+  const h2r=h=>{const n=parseInt(h.slice(1),16);return[(n>>16)&255,(n>>8)&255,n&255];};
+  try{
+    const[rr,gg,bb]=h2r(hex);
+    r.setProperty('--accent-glow',`rgba(${rr},${gg},${bb},.18)`);
+    r.setProperty('--accent-subtle',`rgba(${rr},${gg},${bb},.07)`);
+    r.setProperty('--accent-border',`rgba(${rr},${gg},${bb},.2)`);
+  }catch{}
+}
+
+/* ── PANEL VISIBILITY TOGGLES ────────────────── */
 function bindTog(togId,wgtId,cfgKey){
   const tog=document.getElementById(togId),wgt=document.getElementById(wgtId);
   if(!tog||!wgt)return;
@@ -892,53 +1223,24 @@ function bindTog(togId,wgtId,cfgKey){
   tog.addEventListener('change',()=>{
     wgt.style.display=tog.checked?'':'none';
     cfg[cfgKey]=tog.checked;saveCfg(cfg);
-    if(togId==='tMap')reflow();
   });
-}
-function reflow(){
-  const mapOn=document.getElementById('tMap')?.checked;
-  const grid=document.getElementById('cgrid');
-  if(mapOn){
-    grid.style.gridTemplateColumns='1fr 1fr 316px';
-    document.getElementById('mapWgt').style.gridColumn='1/2';
-    document.getElementById('newsWgt').style.gridColumn='2/3';
-    document.getElementById('locWgt').style.gridColumn='2/3';
-    document.getElementById('sidebar').style.gridColumn='3/4';
-  }else{
-    grid.style.gridTemplateColumns='1fr 316px';
-    document.getElementById('newsWgt').style.gridColumn='1/2';
-    document.getElementById('locWgt').style.gridColumn='1/2';
-    document.getElementById('sidebar').style.gridColumn='2/3';
-  }
 }
 bindTog('tMap','mapWgt','showMap');
 bindTog('tNews','newsWgt','showNews');
-bindTog('tLocal','locWgt','showLocal');
+bindTog('tSports','sportsWgt','showSports');
+bindTog('tGeo','geoMainWgt','showGeo');
 bindTog('tMkt','mktWgt','showMkt');
 bindTog('tAlerts','alertsWgt','showAlerts');
 bindTog('tStatus','statusWgt','showStatus');
-reflow();
 
-/* Engine select sync */
+/* ── ENGINE / MAP SELECT ─────────────────────── */
 const esel=document.getElementById('engSel');
 esel.value=activeEng;
 esel.addEventListener('change',()=>{setEng(esel.value);document.querySelectorAll('.eng-btn').forEach(b=>b.classList.toggle('active',b.dataset.e===esel.value));});
 
-/* Map select */
 const msel=document.getElementById('mapSel');
 if(cfg.mapSrc)msel.value=cfg.mapSrc;
 msel.addEventListener('change',()=>{document.getElementById('mapIframe').src=MAPS[msel.value]||MAPS.osm;cfg.mapSrc=msel.value;saveCfg(cfg);});
-
-/* Region select */
-const rsel=document.getElementById('regSel');
-rsel.value=cfg.region||'memphis';
-rsel.addEventListener('change',()=>{cfg.region=rsel.value;saveCfg(cfg);loadLocal(rsel.value);});
-
-/* Theme */
-document.querySelectorAll('.th-opt').forEach(o=>{
-  if(cfg.theme)o.classList.toggle('active',o.dataset.th===cfg.theme);
-  o.addEventListener('click',()=>{document.querySelectorAll('.th-opt').forEach(x=>x.classList.remove('active'));o.classList.add('active');cfg.theme=o.dataset.th;saveCfg(cfg);});
-});
 </script>
 </body>
 </html>

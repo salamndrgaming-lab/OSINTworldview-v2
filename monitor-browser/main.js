@@ -2066,7 +2066,7 @@ ipcMain.handle('intel:fetch', async (event, url) => {
   }
 
   const isRss = url.includes('/rss') || url.includes('/feed') || url.includes('/xml') ||
-                url.includes('.xml') || url.includes('rdf/rss');
+                url.includes('.xml') || url.includes('rdf/rss') || url.includes('format=rss');
   const accept = isRss
     ? 'application/rss+xml, application/xml, text/xml, */*'
     : 'application/json, text/html, text/plain, */*';

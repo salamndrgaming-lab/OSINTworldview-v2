@@ -307,6 +307,26 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .dip-ttl{font-size:11.5px;font-weight:500;color:var(--text);line-height:1.35}
 .dip-src{font-size:10px;color:var(--text-dim);margin-top:2px}
 
+/* CUSTOMIZATION FLOAT ROW */
+.cust-row{position:fixed;top:60px;right:20px;z-index:90;display:flex;gap:6px;animation:rise .5s .4s cubic-bezier(.22,1,.36,1) both}
+.cust-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;border:1px solid var(--panel-border);background:rgba(17,21,32,.85);backdrop-filter:blur(10px);color:var(--text-mid);font-family:var(--font-head);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .18s}
+.cust-btn:hover{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
+.cust-btn svg{flex-shrink:0}
+
+/* ACCENT SWATCHES */
+.acc-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.acc-sw{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:all .15s;position:relative}
+.acc-sw:hover{transform:scale(1.15)}
+.acc-sw.active{border-color:var(--text);box-shadow:0 0 8px var(--accent-glow)}
+
+/* BG PRESETS */
+.bg-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.bg-opt{width:64px;height:40px;border-radius:6px;border:1px solid var(--border);cursor:pointer;transition:all .15s;overflow:hidden}
+.bg-opt:hover{border-color:var(--accent-border);transform:scale(1.05)}
+.bg-opt.active{border-color:var(--accent);box-shadow:0 0 6px var(--accent-glow)}
+.bg-upload{width:64px;height:40px;border-radius:6px;border:1px dashed var(--border2);display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:18px;cursor:pointer;transition:all .15s}
+.bg-upload:hover{border-color:var(--accent-border);color:var(--accent)}
+
 /* FOOTER */
 .footer{position:fixed;bottom:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:7px 20px;background:rgba(6,6,8,.88);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--border);z-index:50}
 .f-brand{font-size:10.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);opacity:.55}
@@ -326,40 +346,47 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 
 <!-- CUSTOMIZATION MODAL -->
 <div class="modal-bg" id="modal">
-  <div class="modal">
+  <div class="modal" style="width:520px">
     <div class="modal-hd">
-      <span class="modal-ttl">Customize New Tab</span>
+      <span class="modal-ttl">Customize Dashboard</span>
       <button class="modal-x" id="modalX"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="modal-body">
-      <div class="sg">
-        <span class="sg-lbl">Theme</span>
-        <div class="theme-row">
-          <div class="th-opt active" data-th="tactical"><div class="th-sw" style="background:linear-gradient(135deg,#060608,#181822)"></div><div class="th-name">Tactical</div></div>
-          <div class="th-opt" data-th="slate"><div class="th-sw" style="background:linear-gradient(135deg,#0f1117,#1e2230)"></div><div class="th-name">Slate</div></div>
-          <div class="th-opt" data-th="palantir"><div class="th-sw" style="background:linear-gradient(135deg,#0a0a0f,#12121f)"></div><div class="th-name">Palantir</div></div>
-        </div>
+
+      <!-- BACKGROUND PRESETS -->
+      <div class="sg" id="sgBg">
+        <span class="sg-lbl">Background</span>
+        <div class="bg-row" id="bgRow"></div>
       </div>
-      <div class="sg">
+
+      <!-- ACCENT COLOR -->
+      <div class="sg" id="sgAccent">
+        <span class="sg-lbl">Accent Color</span>
+        <div class="acc-row" id="accRow"></div>
+      </div>
+
+      <!-- PANEL TOGGLES -->
+      <div class="sg" id="sgPanels">
         <span class="sg-lbl">Panels</span>
-        <div class="sg-row"><div><div class="sg-name">Live Map</div><div class="sg-desc">Embedded global intelligence map</div></div><label class="toggle"><input type="checkbox" id="tMap" checked/><span class="tslider"></span></label></div>
-        <div class="sg-row"><div><div class="sg-name">Live News</div><div class="sg-desc">Global intel feed with thumbnails</div></div><label class="toggle"><input type="checkbox" id="tNews" checked/><span class="tslider"></span></label></div>
-        <div class="sg-row"><div><div class="sg-name">Local Panel</div><div class="sg-desc">Local weather and city news</div></div><label class="toggle"><input type="checkbox" id="tLocal" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Intelligence Map</div><div class="sg-desc">Global map widget</div></div><label class="toggle"><input type="checkbox" id="tMap" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Live News</div><div class="sg-desc">GDELT intel feed</div></div><label class="toggle"><input type="checkbox" id="tNews" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Sports &amp; Odds</div><div class="sg-desc">Sports headlines</div></div><label class="toggle"><input type="checkbox" id="tSports" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Geopolitics</div><div class="sg-desc">Regional intel feed</div></div><label class="toggle"><input type="checkbox" id="tGeo" checked/><span class="tslider"></span></label></div>
         <div class="sg-row"><div><div class="sg-name">Markets</div><div class="sg-desc">Live commodity and market data</div></div><label class="toggle"><input type="checkbox" id="tMkt" checked/><span class="tslider"></span></label></div>
-        <div class="sg-row"><div><div class="sg-name">Live Alerts</div><div class="sg-desc">Real-time intelligence alerts</div></div><label class="toggle"><input type="checkbox" id="tAlerts" checked/><span class="tslider"></span></label></div>
+        <div class="sg-row"><div><div class="sg-name">Live Alerts</div><div class="sg-desc">Real-time alerts</div></div><label class="toggle"><input type="checkbox" id="tAlerts" checked/><span class="tslider"></span></label></div>
         <div class="sg-row"><div><div class="sg-name">Data Status</div><div class="sg-desc">Feed health indicators</div></div><label class="toggle"><input type="checkbox" id="tStatus" checked/><span class="tslider"></span></label></div>
       </div>
+
+      <!-- SEARCH ENGINE -->
       <div class="sg">
         <span class="sg-lbl">Search Engine</span>
         <select class="msel" id="engSel"><option value="ddg">DuckDuckGo</option><option value="google">Google</option><option value="brave">Brave Search</option><option value="shodan">Shodan</option><option value="gdelt">GDELT</option><option value="intelx">IntelligenceX</option></select>
       </div>
+
+      <!-- MAP SOURCE -->
       <div class="sg">
         <span class="sg-lbl">Map Source</span>
         <select class="msel" id="mapSel"><option value="osm">OpenStreetMap (Dark)</option><option value="windy">Windy Weather Map</option><option value="osintview">OSINTview Dashboard</option></select>
-      </div>
-      <div class="sg">
-        <span class="sg-lbl">Local News Region</span>
-        <select class="msel" id="regSel"><option value="memphis">Memphis / Germantown, TN</option><option value="nashville">Nashville, TN</option><option value="chicago">Chicago, IL</option><option value="newyork">New York, NY</option><option value="la">Los Angeles, CA</option><option value="houston">Houston, TX</option><option value="atlanta">Atlanta, GA</option></select>
       </div>
     </div>
   </div>
@@ -387,6 +414,13 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
     <button class="tb-btn" title="Account"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>
   </div>
 </header>
+
+<!-- CUSTOMIZATION FLOAT -->
+<div class="cust-row">
+  <button class="cust-btn" id="custBg"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Background</button>
+  <button class="cust-btn" id="custTheme"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>Theme</button>
+  <button class="cust-btn" id="custPanels"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Panels</button>
+</div>
 
 <!-- HERO: clock left / search center / weather right -->
 <div class="hero">
@@ -1072,14 +1106,116 @@ function loadDiplo(){
 
 /* ── MODAL ────────────────────────────────────── */
 const modal=document.getElementById('modal');
-function openModal(){modal.classList.add('open')}
+function openModal(section){
+  modal.classList.add('open');
+  // Scroll to the requested section
+  if(section){
+    const el=document.getElementById(section);
+    if(el)setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'start'}),100);
+  }
+}
 function closeModal(){modal.classList.remove('open')}
-['custBtn'].forEach(id=>document.getElementById(id)?.addEventListener('click',openModal));
+document.getElementById('custBtn')?.addEventListener('click',()=>openModal());
+document.getElementById('custBg')?.addEventListener('click',()=>openModal('sgBg'));
+document.getElementById('custTheme')?.addEventListener('click',()=>openModal('sgAccent'));
+document.getElementById('custPanels')?.addEventListener('click',()=>openModal('sgPanels'));
 document.getElementById('modalX').addEventListener('click',closeModal);
 modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
-/* Visibility toggles */
+/* ── BACKGROUND PRESETS ──────────────────────── */
+const BG_PRESETS=[
+  {id:'default',  label:'Default',    css:'linear-gradient(180deg,#0a0c10,#0f1219)'},
+  {id:'midnight', label:'Midnight',   css:'linear-gradient(135deg,#020108,#0d0b1a,#0a0c10)'},
+  {id:'arctic',   label:'Arctic',     css:'linear-gradient(135deg,#040a12,#0b1520,#040a12)'},
+  {id:'ember',    label:'Ember',      css:'linear-gradient(135deg,#100808,#1a0c0c,#0a0c10)'},
+  {id:'matrix',   label:'Matrix',     css:'linear-gradient(135deg,#020a04,#081408,#0a0c10)'},
+  {id:'slate',    label:'Slate',      css:'linear-gradient(135deg,#0f1117,#1e2230,#0f1117)'},
+];
+(function renderBgPresets(){
+  const row=document.getElementById('bgRow');if(!row)return;
+  BG_PRESETS.forEach(p=>{
+    const d=document.createElement('div');d.className='bg-opt'+(cfg.bgPreset===p.id?' active':'');
+    d.style.background=p.css;d.title=p.label;d.dataset.bg=p.id;
+    d.addEventListener('click',()=>{
+      document.querySelectorAll('.bg-opt').forEach(x=>x.classList.remove('active'));
+      d.classList.add('active');
+      cfg.bgPreset=p.id;cfg.bgCustom=null;saveCfg(cfg);
+      document.querySelector('.bg-g').style.background=p.css;
+    });
+    row.appendChild(d);
+  });
+  // Upload button
+  const up=document.createElement('div');up.className='bg-upload';up.innerHTML='+';up.title='Upload image';
+  up.addEventListener('click',()=>{
+    const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
+    inp.addEventListener('change',()=>{
+      const f=inp.files[0];if(!f)return;
+      const reader=new FileReader();
+      reader.onload=()=>{
+        const url=reader.result;
+        cfg.bgCustom=url;cfg.bgPreset=null;saveCfg(cfg);
+        document.querySelector('.bg-g').style.background=`url(${url}) center/cover no-repeat`;
+        document.querySelectorAll('.bg-opt').forEach(x=>x.classList.remove('active'));
+      };
+      reader.readAsDataURL(f);
+    });
+    inp.click();
+  });
+  row.appendChild(up);
+  // Restore saved bg
+  if(cfg.bgCustom){
+    document.querySelector('.bg-g').style.background=`url(${cfg.bgCustom}) center/cover no-repeat`;
+  }else if(cfg.bgPreset){
+    const p=BG_PRESETS.find(b=>b.id===cfg.bgPreset);
+    if(p)document.querySelector('.bg-g').style.background=p.css;
+  }
+})();
+
+/* ── ACCENT COLOR PICKER ─────────────────────── */
+const ACCENT_COLORS=[
+  {id:'cyan',  hex:'#00d4ff'},
+  {id:'green', hex:'#2ed573'},
+  {id:'red',   hex:'#ff4757'},
+  {id:'amber', hex:'#ffa502'},
+  {id:'purple',hex:'#9f7aea'},
+  {id:'blue',  hex:'#4299e1'},
+  {id:'white', hex:'#e8eaf0'},
+  {id:'gold',  hex:'#d4a843'},
+];
+(function renderAccentPicker(){
+  const row=document.getElementById('accRow');if(!row)return;
+  const current=cfg.accentColor||'#00d4ff';
+  ACCENT_COLORS.forEach(c=>{
+    const d=document.createElement('div');d.className='acc-sw'+(c.hex===current?' active':'');
+    d.style.background=c.hex;d.title=c.id;
+    d.addEventListener('click',()=>{
+      document.querySelectorAll('.acc-sw').forEach(x=>x.classList.remove('active'));
+      d.classList.add('active');
+      cfg.accentColor=c.hex;saveCfg(cfg);
+      applyAccent(c.hex);
+    });
+    row.appendChild(d);
+  });
+  if(current!=='#00d4ff')applyAccent(current);
+})();
+function applyAccent(hex){
+  const r=document.documentElement.style;
+  r.setProperty('--accent',hex);
+  r.setProperty('--accent-glow',hex.replace('#','rgba(')+',.18)');
+  r.setProperty('--accent-subtle',hex.replace('#','rgba(')+',.07)');
+  r.setProperty('--accent-border',hex.replace('#','rgba(')+',.2)');
+  // Convert hex to rgba for glow/subtle
+  const h2r=h=>{const n=parseInt(h.slice(1),16);return[(n>>16)&255,(n>>8)&255,n&255];};
+  try{
+    const[rr,gg,bb]=h2r(hex);
+    r.setProperty('--accent-glow',`rgba(${rr},${gg},${bb},.18)`);
+    r.setProperty('--accent-subtle',`rgba(${rr},${gg},${bb},.07)`);
+    r.setProperty('--accent-border',`rgba(${rr},${gg},${bb},.2)`);
+  }catch{}
+}
+
+/* ── PANEL VISIBILITY TOGGLES ────────────────── */
 function bindTog(togId,wgtId,cfgKey){
   const tog=document.getElementById(togId),wgt=document.getElementById(wgtId);
   if(!tog||!wgt)return;
@@ -1087,36 +1223,24 @@ function bindTog(togId,wgtId,cfgKey){
   tog.addEventListener('change',()=>{
     wgt.style.display=tog.checked?'':'none';
     cfg[cfgKey]=tog.checked;saveCfg(cfg);
-    if(togId==='tMap')reflow();
   });
 }
-function reflow(){}
 bindTog('tMap','mapWgt','showMap');
 bindTog('tNews','newsWgt','showNews');
+bindTog('tSports','sportsWgt','showSports');
+bindTog('tGeo','geoMainWgt','showGeo');
 bindTog('tMkt','mktWgt','showMkt');
 bindTog('tAlerts','alertsWgt','showAlerts');
 bindTog('tStatus','statusWgt','showStatus');
 
-/* Engine select sync */
+/* ── ENGINE / MAP SELECT ─────────────────────── */
 const esel=document.getElementById('engSel');
 esel.value=activeEng;
 esel.addEventListener('change',()=>{setEng(esel.value);document.querySelectorAll('.eng-btn').forEach(b=>b.classList.toggle('active',b.dataset.e===esel.value));});
 
-/* Map select */
 const msel=document.getElementById('mapSel');
 if(cfg.mapSrc)msel.value=cfg.mapSrc;
 msel.addEventListener('change',()=>{document.getElementById('mapIframe').src=MAPS[msel.value]||MAPS.osm;cfg.mapSrc=msel.value;saveCfg(cfg);});
-
-/* Region select */
-const rsel=document.getElementById('regSel');
-rsel.value=cfg.region||'memphis';
-rsel.addEventListener('change',()=>{cfg.region=rsel.value;saveCfg(cfg);loadLocal(rsel.value);});
-
-/* Theme */
-document.querySelectorAll('.th-opt').forEach(o=>{
-  if(cfg.theme)o.classList.toggle('active',o.dataset.th===cfg.theme);
-  o.addEventListener('click',()=>{document.querySelectorAll('.th-opt').forEach(x=>x.classList.remove('active'));o.classList.add('active');cfg.theme=o.dataset.th;saveCfg(cfg);});
-});
 </script>
 </body>
 </html>

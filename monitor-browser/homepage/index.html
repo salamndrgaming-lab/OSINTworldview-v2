@@ -1241,6 +1241,53 @@ esel.addEventListener('change',()=>{setEng(esel.value);document.querySelectorAll
 const msel=document.getElementById('mapSel');
 if(cfg.mapSrc)msel.value=cfg.mapSrc;
 msel.addEventListener('change',()=>{document.getElementById('mapIframe').src=MAPS[msel.value]||MAPS.osm;cfg.mapSrc=msel.value;saveCfg(cfg);});
+
+/* ── SETTINGS SIDEBAR SYNC ─────────────────────── */
+const PANEL_MAP={
+  news:['#newsWgt'],
+  map:['#mapWgt'],
+  sports:['#sportsWgt'],
+  geo:['#geoMainWgt'],
+  markets:['.sidebar'],
+  osint:['.pill[data-pill="osint"]','#pill-osint'],
+  streams:['.pill[data-pill="streams"]','#pill-streams'],
+  threats:['.pill[data-pill="threats"]','#pill-threats'],
+  predict:['.pill[data-pill="predict"]','#pill-predict'],
+  diplo:['.pill[data-pill="diplo"]','#pill-diplo'],
+};
+function applySettingsToHome(s){
+  if(!s)return;
+  Object.keys(PANEL_MAP).forEach(k=>{
+    const visible=s['panel_'+k]!==false;
+    PANEL_MAP[k].forEach(sel=>{
+      document.querySelectorAll(sel).forEach(el=>{el.style.display=visible?'':'none';});
+    });
+  });
+  const bg=s.bgPreset;
+  if(bg){
+    const presets={
+      midnight:'linear-gradient(135deg, #0a0c10 0%, #0d1117 50%, #0a0c10 100%)',
+      aurora:'linear-gradient(135deg, #0a0c10 0%, #0a1628 40%, #0c2233 70%, #0a0c10 100%)',
+      ember:'linear-gradient(135deg, #0a0c10 0%, #1a0a0a 40%, #2a0f0f 70%, #0a0c10 100%)',
+      void:'linear-gradient(135deg, #050608 0%, #0a0c10 50%, #050608 100%)',
+      nebula:'linear-gradient(135deg, #0a0c10 0%, #0f0a1e 40%, #160a28 70%, #0a0c10 100%)',
+      deep:'linear-gradient(135deg, #0a0c10 0%, #041418 40%, #051a20 70%, #0a0c10 100%)',
+    };
+    const bgEl=document.querySelector('.bg-g');
+    if(bgEl&&presets[bg])bgEl.style.background=presets[bg];
+  }
+  if(s.compactMode!==undefined)document.body.classList.toggle('compact',!!s.compactMode);
+  if(s.showClock!==undefined){
+    const heroTime=document.getElementById('heroTime');
+    if(heroTime)heroTime.parentElement.style.display=s.showClock===false?'none':'';
+  }
+}
+if(window.monitorApi&&typeof window.monitorApi.getSettings==='function'){
+  window.monitorApi.getSettings().then(r=>applySettingsToHome(r&&r.settings)).catch(()=>{});
+  if(typeof window.monitorApi.onSettingsChanged==='function'){
+    window.monitorApi.onSettingsChanged(s=>applySettingsToHome(s));
+  }
+}
 </script>
 </body>
 </html>

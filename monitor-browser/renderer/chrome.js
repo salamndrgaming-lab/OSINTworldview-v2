@@ -561,18 +561,30 @@
     }
   }
 
+  function applyVpnBadge(s) {
+    const badge = document.getElementById('vpn-badge');
+    const label = document.getElementById('vpn-label');
+    if (!badge || !label) return;
+    const enabled = s.vpnEnabled !== false;
+    badge.classList.toggle('off', !enabled);
+    const loc = s.vpnLocation || 'Auto';
+    label.textContent = enabled ? (loc === 'Auto' ? 'Secure' : loc) : 'VPN Off';
+  }
+
   // Load initial settings.
   browser.getSettings().then((res) => {
     currentSettings = res.settings || {};
     settingsMeta = { searchEngines: res.searchEngines || {}, themes: res.themes || {} };
     applyThemeToChrome(currentSettings.theme);
     applyIncognitoMode(currentSettings.incognito);
+    applyVpnBadge(currentSettings);
   }).catch(() => {});
 
   browser.onSettingsChanged((s) => {
     currentSettings = s || currentSettings;
     applyThemeToChrome(currentSettings.theme);
     applyIncognitoMode(currentSettings.incognito);
+    applyVpnBadge(currentSettings);
     if (typeof refreshBookmarksBar === 'function') refreshBookmarksBar();
   });
 

@@ -476,6 +476,21 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
       </div>
     </div>
     <div class="news-list" id="newsList" style="max-height:none;flex:1;overflow-y:auto"><div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Loading feed...</div></div>
+    <div style="border-top:1px solid var(--panel-border)">
+      <div style="padding:8px 13px 4px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-family:var(--font-head);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim)">Local News</span>
+        <select class="msel" id="lnewsReg" style="padding:1px 6px;font-size:10px;width:auto">
+          <option value="memphis">Memphis</option>
+          <option value="nashville">Nashville</option>
+          <option value="chicago">Chicago</option>
+          <option value="newyork">New York</option>
+          <option value="la">Los Angeles</option>
+          <option value="houston">Houston</option>
+          <option value="atlanta">Atlanta</option>
+        </select>
+      </div>
+      <div id="lnewsList" style="max-height:200px;overflow-y:auto"><div style="padding:12px 13px;color:var(--text3);font-size:11px">Loading local news...</div></div>
+    </div>
   </div>
 
   <!-- MAP — cols 2-3, row 1 -->
@@ -513,8 +528,8 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
       <div class="wgt-ctrl">
         <select class="msel" id="geoMainReg" style="padding:2px 6px;font-size:10px">
           <option value="mideast">Middle East</option>
-          <option value="eeurope">E. Europe</option>
-          <option value="asiapac">Asia-Pacific</option>
+          <option value="europe">E. Europe</option>
+          <option value="asia">Asia-Pacific</option>
           <option value="africa">Africa</option>
           <option value="americas">Americas</option>
         </select>
@@ -623,13 +638,25 @@ function tick(){
 }
 tick();setInterval(tick,1000);
 
+/* Prefer the Electron main-process fetch proxy (bypasses CORS, serialises per-domain, caches).
+   Fall back to allorigins when the page is opened outside the browser (dev/testing). */
+const HAS_INTEL=!!(window.monitorApi&&typeof window.monitorApi.fetchIntel==='function');
+const PROXY=u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`;
+function intelFetch(url){
+  if(HAS_INTEL)return window.monitorApi.fetchIntel(url);
+  return fetch(PROXY(url)).then(r=>r.json()).then(d=>d.contents||'');
+}
+function intelFetchJSON(url){
+  return intelFetch(url).then(txt=>{try{return JSON.parse(txt);}catch{return null;}});
+}
+
 /* ── LOCATION ─────────────────────────────────── */
 let uLat=35.0867,uLon=-89.8428,uCity='Germantown, TN';
 function setLoc(lat,lon,city){
   uLat=lat;uLon=lon;uCity=city;
-  document.getElementById('locTxt').textContent=city;
-  document.getElementById('locCity').textContent=city;
-  document.getElementById('wxCity').textContent=city;
+  const el=id=>{const e=document.getElementById(id);return e;};
+  if(el('locTxt'))el('locTxt').textContent=city;
+  if(el('wxCityHero'))el('wxCityHero').textContent=city;
   fetchWeather(lat,lon);
 }
 function revGeo(lat,lon){
@@ -860,18 +887,6 @@ const TBADGE={
   cyber:{cls:'b-pur',label:'CYBER',color:'var(--purple)'},
   world:{cls:'b-org',label:'WORLD',color:'var(--orange)'},
 };
-/* Prefer the Electron main-process fetch proxy (bypasses CORS, serialises per-domain, caches).
-   Fall back to allorigins when the page is opened outside the browser (dev/testing). */
-const HAS_INTEL=!!(window.monitorApi&&typeof window.monitorApi.fetchIntel==='function');
-const PROXY=u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`;
-function intelFetch(url){
-  if(HAS_INTEL)return window.monitorApi.fetchIntel(url);
-  return fetch(PROXY(url)).then(r=>r.json()).then(d=>d.contents||'');
-}
-function intelFetchJSON(url){
-  return intelFetch(url).then(txt=>{try{return JSON.parse(txt);}catch{return null;}});
-}
-
 function parseRSS(xml){
   const doc=new DOMParser().parseFromString(xml,'text/xml');
   return Array.from(doc.querySelectorAll('item')).map(it=>({
@@ -950,6 +965,7 @@ function loadFeed(tab){
 }
 function loadLocal(reg){
   const list=document.getElementById('lnewsList');
+  if(!list)return;
   const urls=LFEEDS[reg]||LFEEDS.memphis;
   list.innerHTML=`<div style="padding:12px 13px;color:var(--text3);font-size:11px">Loading local news...</div>`;
   fetchFeedAny(urls)
@@ -966,6 +982,11 @@ document.querySelectorAll('.dtab').forEach(t=>{
 });
 document.getElementById('refreshBtn').addEventListener('click',()=>loadFeed(activeTab));
 loadFeed('intel');
+const lnewsReg=document.getElementById('lnewsReg');
+if(lnewsReg){
+  if(cfg.region)lnewsReg.value=cfg.region;
+  lnewsReg.addEventListener('change',()=>{cfg.region=lnewsReg.value;saveCfg(cfg);loadLocal(lnewsReg.value);});
+}
 loadLocal(cfg.region||'memphis');
 
 /* ── MARKETS (live via Yahoo Finance quote API, intel-fetched) ──────── */

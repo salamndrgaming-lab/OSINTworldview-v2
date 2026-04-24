@@ -578,15 +578,49 @@
 
   settingsBtn.addEventListener('click', () => openSettings());
 
+  const bgPresets = [
+    { id: 'midnight', label: 'Midnight', gradient: 'linear-gradient(135deg, #0a0c10 0%, #0d1117 50%, #0a0c10 100%)' },
+    { id: 'aurora',   label: 'Aurora',   gradient: 'linear-gradient(135deg, #0a0c10 0%, #0a1628 40%, #0c2233 70%, #0a0c10 100%)' },
+    { id: 'ember',    label: 'Ember',    gradient: 'linear-gradient(135deg, #0a0c10 0%, #1a0a0a 40%, #2a0f0f 70%, #0a0c10 100%)' },
+    { id: 'void',     label: 'Void',     gradient: 'linear-gradient(135deg, #050608 0%, #0a0c10 50%, #050608 100%)' },
+    { id: 'nebula',   label: 'Nebula',   gradient: 'linear-gradient(135deg, #0a0c10 0%, #0f0a1e 40%, #160a28 70%, #0a0c10 100%)' },
+    { id: 'deep',     label: 'Deep Sea', gradient: 'linear-gradient(135deg, #0a0c10 0%, #041418 40%, #051a20 70%, #0a0c10 100%)' },
+  ];
+
+  const searchEngineList = [
+    { id: 'brave',  label: 'Brave Search' },
+    { id: 'ddg',    label: 'DuckDuckGo' },
+    { id: 'google', label: 'Google' },
+    { id: 'bing',   label: 'Bing' },
+    { id: 'kagi',   label: 'Kagi' },
+    { id: 'searxng', label: 'SearXNG' },
+  ];
+
+  const vpnLocations = [
+    'Auto', 'United States', 'United Kingdom', 'Germany', 'Netherlands',
+    'Switzerland', 'Japan', 'Singapore', 'Canada', 'Australia',
+  ];
+
+  const homePanels = [
+    { id: 'news',    label: 'News Feed' },
+    { id: 'map',     label: 'World Map' },
+    { id: 'sports',  label: 'Sports' },
+    { id: 'geo',     label: 'Geopolitics' },
+    { id: 'markets', label: 'Markets Sidebar' },
+    { id: 'osint',   label: 'OSINT Tools' },
+    { id: 'streams', label: 'News Livestreams' },
+    { id: 'threats', label: 'Global Threat Monitor' },
+    { id: 'predict', label: 'Prediction Markets' },
+    { id: 'diplo',   label: 'Diplomatic Tracker' },
+  ];
+
   function openSettings() {
     browser.settingsExpand();
     settingsOverlay.classList.remove('hidden');
 
-    const engines = Object.entries(settingsMeta.searchEngines);
     const themes = Object.entries(settingsMeta.themes);
-
-    const zoomLabels = { '-3': '50%', '-2': '67%', '-1': '80%', '0': '100%', '1': '125%', '2': '150%', '3': '175%', '4': '200%' };
-    const startupOpts = { homepage: 'Open Monitor Home', blank: 'Open blank tab', restore: 'Restore last session' };
+    const curEngine = currentSettings.searchEngine || 'brave';
+    const savedBg = currentSettings.bgPreset || 'midnight';
 
     settingsOverlay.innerHTML =
       '<div class="settings-card">' +
@@ -597,37 +631,7 @@
       '  <div class="settings-body">' +
 
       '    <section class="settings-section">' +
-      '      <h3>On startup</h3>' +
-      '      <select id="set-startup">' +
-             Object.entries(startupOpts).map(([k, label]) =>
-               '<option value="' + k + '"' + ((currentSettings.startupBehavior || 'homepage') === k ? ' selected' : '') + '>' +
-               label + '</option>'
-             ).join('') +
-      '      </select>' +
-      '    </section>' +
-
-      '    <section class="settings-section">' +
-      '      <h3>Homepage</h3>' +
-      '      <label class="toggle-row"><input type="checkbox" id="set-use-custom-home"' +
-             (currentSettings.useCustomHomepage ? ' checked' : '') +
-      '       /> Use custom homepage URL</label>' +
-      '      <input type="text" class="settings-input" id="set-custom-home" placeholder="https://example.com"' +
-      '        value="' + escapeAttr(currentSettings.customHomepage || '') + '"' +
-             (!currentSettings.useCustomHomepage ? ' disabled' : '') + ' />' +
-      '    </section>' +
-
-      '    <section class="settings-section">' +
-      '      <h3>Search engine</h3>' +
-      '      <select id="set-engine">' +
-             engines.map(([k, v]) =>
-               '<option value="' + k + '"' + (currentSettings.searchEngine === k ? ' selected' : '') + '>' +
-               v.label + '</option>'
-             ).join('') +
-      '      </select>' +
-      '    </section>' +
-
-      '    <section class="settings-section">' +
-      '      <h3>Theme</h3>' +
+      '      <h3>Appearance</h3>' +
       '      <div class="theme-grid" id="theme-grid">' +
              themes.map(([k, v]) =>
                '<button class="theme-swatch' + (currentSettings.theme === k ? ' is-active' : '') +
@@ -635,36 +639,101 @@
                '<span class="swatch-dot"></span>' + v.label + '</button>'
              ).join('') +
       '      </div>' +
+      '      <h3 style="margin-top:14px">Background</h3>' +
+      '      <div class="bg-preset-grid" id="bg-preset-grid">' +
+             bgPresets.map((p) =>
+               '<div class="bg-preset' + (savedBg === p.id ? ' is-active' : '') +
+               '" data-bg="' + p.id + '" style="background:' + p.gradient + '" title="' + p.label + '"></div>'
+             ).join('') +
+      '      </div>' +
+      '      <label class="toggle-row" style="margin-top:10px"><input type="checkbox" id="set-clock"' +
+             (currentSettings.showClock !== false ? ' checked' : '') +
+      '       /> Show hero clock</label>' +
+      '      <label class="toggle-row"><input type="checkbox" id="set-compact"' +
+             (currentSettings.compactMode ? ' checked' : '') +
+      '       /> Compact mode</label>' +
+      '      <label class="toggle-row"><input type="checkbox" id="set-bm-bar"' +
+             (currentSettings.showBookmarksBar ? ' checked' : '') +
+      '       /> Show bookmarks bar</label>' +
       '    </section>' +
 
       '    <section class="settings-section">' +
-      '      <h3>Default zoom</h3>' +
-      '      <select id="set-zoom">' +
-             Object.entries(zoomLabels).map(([val, label]) =>
-               '<option value="' + val + '"' + (String(currentSettings.defaultZoom || 0) === val ? ' selected' : '') + '>' +
-               label + '</option>'
+      '      <h3>Search Engine</h3>' +
+      '      <ul class="radio-list" id="engine-list">' +
+             searchEngineList.map((eng) =>
+               '<li class="' + (curEngine === eng.id ? 'is-active' : '') +
+               '" data-engine="' + eng.id + '"><span class="radio-dot"></span>' + eng.label + '</li>'
              ).join('') +
-      '      </select>' +
+      '      </ul>' +
       '    </section>' +
 
       '    <section class="settings-section">' +
       '      <h3>Privacy &amp; Security</h3>' +
+      '      <label class="toggle-row"><input type="checkbox" id="set-vpn"' +
+             (currentSettings.vpnEnabled ? ' checked' : '') +
+      '       /> VPN</label>' +
+      '      <select id="set-vpn-location" style="margin-top:4px;margin-bottom:8px"' +
+             (!currentSettings.vpnEnabled ? ' disabled' : '') + '>' +
+             vpnLocations.map((loc) =>
+               '<option value="' + loc + '"' +
+               ((currentSettings.vpnLocation || 'Auto') === loc ? ' selected' : '') + '>' +
+               loc + '</option>'
+             ).join('') +
+      '      </select>' +
       '      <label class="toggle-row"><input type="checkbox" id="set-adblock"' +
              (currentSettings.adBlock !== false ? ' checked' : '') +
       '       /> Block ads &amp; trackers</label>' +
+      '      <label class="toggle-row"><input type="checkbox" id="set-fingerprint"' +
+             (currentSettings.fingerprintProtection ? ' checked' : '') +
+      '       /> Fingerprint protection</label>' +
       '      <label class="toggle-row"><input type="checkbox" id="set-https-only"' +
              (currentSettings.httpsOnly ? ' checked' : '') +
       '       /> HTTPS-only mode</label>' +
-      '      <label class="toggle-row"><input type="checkbox" id="set-branding"' +
-             (currentSettings.showBranding !== false ? ' checked' : '') +
-      '       /> Show MonitorBrowser/1.0 in user-agent</label>' +
       '    </section>' +
 
       '    <section class="settings-section">' +
-      '      <h3>Toolbar</h3>' +
-      '      <label class="toggle-row"><input type="checkbox" id="set-bm-bar"' +
-             (currentSettings.showBookmarksBar ? ' checked' : '') +
-      '       /> Show bookmarks bar</label>' +
+      '      <h3>Extensions</h3>' +
+      '      <ul class="ext-list" id="ext-list">' +
+      '        <li class="ext-item"><span class="ext-info"><span class="ext-icon">&#x1F6E1;</span> uBlock Origin</span>' +
+      '          <label class="toggle-row"><input type="checkbox" checked /></label></li>' +
+      '        <li class="ext-item"><span class="ext-info"><span class="ext-icon">&#x1F50D;</span> OSINT Framework</span>' +
+      '          <label class="toggle-row"><input type="checkbox" checked /></label></li>' +
+      '        <li class="ext-item"><span class="ext-info"><span class="ext-icon">&#x1F310;</span> User-Agent Switcher</span>' +
+      '          <label class="toggle-row"><input type="checkbox" /></label></li>' +
+      '      </ul>' +
+      '      <button class="settings-btn" id="install-ext" style="margin-top:8px">' +
+      '        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3v10M3 8h10"/></svg>' +
+      '        Install from Chrome Web Store</button>' +
+      '    </section>' +
+
+      '    <section class="settings-section">' +
+      '      <h3>Browser Migration</h3>' +
+      '      <div class="migrate-grid">' +
+      '        <button class="migrate-btn" data-source="chrome">' +
+      '          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><path d="M12 2a10 10 0 014.9 2.1L12 12"/></svg>' +
+      '          Chrome</button>' +
+      '        <button class="migrate-btn" data-source="firefox">' +
+      '          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M6 8c1-3 4-4 6-4s4 2 4 4c0 3-3 4-4 4"/></svg>' +
+      '          Firefox</button>' +
+      '        <button class="migrate-btn" data-source="brave">' +
+      '          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l4 4-1 5 5 3-4 4-4 4-4-4-4-4 5-3-1-5z"/></svg>' +
+      '          Brave</button>' +
+      '        <button class="migrate-btn" data-source="edge">' +
+      '          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14c0-3 2-6 6-6 2 0 3 1 3 3-1 3-5 3-7 3"/></svg>' +
+      '          Edge</button>' +
+      '      </div>' +
+      '    </section>' +
+
+      '    <section class="settings-section">' +
+      '      <h3>Homepage Panels</h3>' +
+      '      <ul class="panel-toggle-list" id="panel-toggles">' +
+             homePanels.map((p) =>
+               '<li class="panel-toggle-item"><span>' + p.label + '</span>' +
+               '<label class="toggle-row"><input type="checkbox" data-panel="' + p.id + '"' +
+               (currentSettings['panel_' + p.id] !== false ? ' checked' : '') +
+               ' /></label></li>'
+             ).join('') +
+      '      </ul>' +
       '    </section>' +
 
       '    <section class="settings-section">' +
@@ -674,34 +743,15 @@
       '      <button class="settings-btn" id="export-session">Export session report</button>' +
       '      <button class="settings-btn" id="archive-page">Archive current page</button>' +
       '    </section>' +
-      '    <section class="settings-section">' +
-      '      <h3>Site permissions</h3>' +
-      '      <button class="settings-btn" id="manage-perms">Manage site permissions</button>' +
-      '    </section>' +
+
       '  </div>' +
       '</div>';
+
+    requestAnimationFrame(() => settingsOverlay.classList.add('visible'));
 
     document.getElementById('settings-close').addEventListener('click', closeSettings);
     settingsOverlay.addEventListener('click', (e) => {
       if (e.target === settingsOverlay) closeSettings();
-    });
-
-    document.getElementById('set-startup').addEventListener('change', (e) => {
-      browser.setSettings({ startupBehavior: e.target.value });
-    });
-
-    const customHomeCheck = document.getElementById('set-use-custom-home');
-    const customHomeInput = document.getElementById('set-custom-home');
-    customHomeCheck.addEventListener('change', (e) => {
-      customHomeInput.disabled = !e.target.checked;
-      browser.setSettings({ useCustomHomepage: e.target.checked });
-    });
-    customHomeInput.addEventListener('change', (e) => {
-      browser.setSettings({ customHomepage: e.target.value.trim() });
-    });
-
-    document.getElementById('set-engine').addEventListener('change', (e) => {
-      browser.setSettings({ searchEngine: e.target.value });
     });
 
     document.querySelectorAll('#theme-grid .theme-swatch').forEach((btn) => {
@@ -712,24 +762,81 @@
       });
     });
 
-    document.getElementById('set-zoom').addEventListener('change', (e) => {
-      browser.setSettings({ defaultZoom: parseFloat(e.target.value) });
+    document.querySelectorAll('#bg-preset-grid .bg-preset').forEach((el) => {
+      el.addEventListener('click', () => {
+        document.querySelectorAll('#bg-preset-grid .bg-preset').forEach((b) => b.classList.remove('is-active'));
+        el.classList.add('is-active');
+        browser.setSettings({ bgPreset: el.dataset.bg });
+      });
+    });
+
+    document.getElementById('set-clock').addEventListener('change', (e) => {
+      browser.setSettings({ showClock: e.target.checked });
+    });
+
+    document.getElementById('set-compact').addEventListener('change', (e) => {
+      browser.setSettings({ compactMode: e.target.checked });
     });
 
     document.getElementById('set-bm-bar').addEventListener('change', (e) => {
       browser.setSettings({ showBookmarksBar: e.target.checked });
     });
 
+    document.querySelectorAll('#engine-list li').forEach((li) => {
+      li.addEventListener('click', () => {
+        document.querySelectorAll('#engine-list li').forEach((l) => l.classList.remove('is-active'));
+        li.classList.add('is-active');
+        browser.setSettings({ searchEngine: li.dataset.engine });
+      });
+    });
+
+    const vpnToggle = document.getElementById('set-vpn');
+    const vpnLocSel = document.getElementById('set-vpn-location');
+    vpnToggle.addEventListener('change', (e) => {
+      vpnLocSel.disabled = !e.target.checked;
+      browser.setSettings({ vpnEnabled: e.target.checked });
+      const badge = document.getElementById('vpn-badge');
+      if (badge) badge.classList.toggle('off', !e.target.checked);
+    });
+    vpnLocSel.addEventListener('change', (e) => {
+      browser.setSettings({ vpnLocation: e.target.value });
+      const label = document.getElementById('vpn-label');
+      if (label) label.textContent = e.target.value === 'Auto' ? 'Secure' : e.target.value;
+    });
+
     document.getElementById('set-adblock').addEventListener('change', (e) => {
       browser.setSettings({ adBlock: e.target.checked });
+    });
+
+    document.getElementById('set-fingerprint').addEventListener('change', (e) => {
+      browser.setSettings({ fingerprintProtection: e.target.checked });
     });
 
     document.getElementById('set-https-only').addEventListener('change', (e) => {
       browser.setSettings({ httpsOnly: e.target.checked });
     });
 
-    document.getElementById('set-branding').addEventListener('change', (e) => {
-      browser.setSettings({ showBranding: e.target.checked });
+    document.querySelectorAll('#panel-toggles input[data-panel]').forEach((inp) => {
+      inp.addEventListener('change', (e) => {
+        const key = 'panel_' + e.target.dataset.panel;
+        browser.setSettings({ [key]: e.target.checked });
+      });
+    });
+
+    document.querySelectorAll('.migrate-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const src = btn.dataset.source;
+        const label = src.charAt(0).toUpperCase() + src.slice(1);
+        if (typeof browser.importBrowserData !== 'function') {
+          btn.textContent = 'Not available';
+          setTimeout(() => { btn.textContent = label; }, 2000);
+          return;
+        }
+        btn.textContent = 'Importing...';
+        browser.importBrowserData(src).then((ok) => {
+          btn.textContent = ok ? 'Done!' : label;
+        }).catch(() => { btn.textContent = label; });
+      });
     });
 
     document.getElementById('clear-data').addEventListener('click', () => {
@@ -740,11 +847,6 @@
 
     document.getElementById('reset-settings').addEventListener('click', () => {
       browser.resetSettings().then(() => closeSettings());
-    });
-
-    document.getElementById('manage-perms').addEventListener('click', () => {
-      closeSettings();
-      togglePanel('permissions');
     });
 
     document.getElementById('export-session').addEventListener('click', () => {
@@ -765,9 +867,12 @@
   }
 
   function closeSettings() {
-    settingsOverlay.classList.add('hidden');
-    settingsOverlay.innerHTML = '';
-    browser.settingsCollapse();
+    settingsOverlay.classList.remove('visible');
+    setTimeout(() => {
+      settingsOverlay.classList.add('hidden');
+      settingsOverlay.innerHTML = '';
+      browser.settingsCollapse();
+    }, 300);
   }
 
   window.addEventListener('keydown', (e) => {
@@ -1041,13 +1146,18 @@
     else if (id === 'downloads') renderDownloadsPanel(overlay);
     else if (id === 'permissions') renderPermissionsPanel(overlay);
     else if (id === 'extensions') renderExtensionsPanel(overlay);
+
+    requestAnimationFrame(() => overlay.classList.add('visible'));
   }
 
   function closePanel() {
     activePanelId = null;
-    settingsOverlay.classList.add('hidden');
-    settingsOverlay.innerHTML = '';
-    browser.settingsCollapse();
+    settingsOverlay.classList.remove('visible');
+    setTimeout(() => {
+      settingsOverlay.classList.add('hidden');
+      settingsOverlay.innerHTML = '';
+      browser.settingsCollapse();
+    }, 300);
   }
 
   function bookmarkCurrentPage() {

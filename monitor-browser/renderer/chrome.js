@@ -561,34 +561,90 @@
     }
   }
 
-  function applyVpnBadge(s) {
+  function applyVpnBadge(vpnStatus) {
     const badge = document.getElementById('vpn-badge');
     const label = document.getElementById('vpn-label');
+    const dot = badge ? badge.querySelector('.vpn-dot') : null;
     if (!badge || !label) return;
-    const enabled = s.vpnEnabled !== false;
-    badge.classList.toggle('off', !enabled);
-    const loc = s.vpnLocation || 'Auto';
-    label.textContent = enabled ? (loc === 'Auto' ? 'Secure' : loc) : 'VPN Off';
+
+    badge.classList.remove('off', 'connecting', 'error');
+
+    const status = vpnStatus.status || 'disconnected';
+    const loc = vpnStatus.location || 'Auto';
+
+    if (status === 'connected') {
+      label.textContent = loc === 'Auto' ? 'Secure' : loc;
+      badge.title = 'VPN Connected' + (vpnStatus.proxyRule ? ' — ' + vpnStatus.proxyRule : '');
+    } else if (status === 'connecting') {
+      badge.classList.add('connecting');
+      label.textContent = 'Connecting…';
+      badge.title = 'Connecting to VPN…';
+    } else if (status === 'error') {
+      badge.classList.add('error');
+      label.textContent = 'VPN Error';
+      badge.title = vpnStatus.error || 'Connection failed';
+    } else {
+      badge.classList.add('off');
+      label.textContent = 'VPN Off';
+      badge.title = 'VPN Disconnected';
+    }
   }
 
-  // Load initial settings.
+  function applyVpnBadgeFromSettings(s) {
+    const enabled = s.vpnEnabled !== false;
+    const loc = s.vpnLocation || 'Auto';
+    applyVpnBadge({
+      status: enabled ? 'connected' : 'disconnected',
+      location: loc,
+    });
+  }
+
+  // Load initial settings + real VPN status.
   browser.getSettings().then((res) => {
     currentSettings = res.settings || {};
     settingsMeta = { searchEngines: res.searchEngines || {}, themes: res.themes || {} };
     applyThemeToChrome(currentSettings.theme);
     applyIncognitoMode(currentSettings.incognito);
-    applyVpnBadge(currentSettings);
+    // Fetch real VPN status from main process
+    if (typeof browser.vpnStatus === 'function') {
+      browser.vpnStatus().then((st) => applyVpnBadge(st)).catch(() => applyVpnBadgeFromSettings(currentSettings));
+    } else {
+      applyVpnBadgeFromSettings(currentSettings);
+    }
   }).catch(() => {});
+
+  // Listen for real-time VPN status changes from main process
+  if (typeof browser.onVpnStatusChanged === 'function') {
+    browser.onVpnStatusChanged((st) => applyVpnBadge(st));
+  }
 
   browser.onSettingsChanged((s) => {
     currentSettings = s || currentSettings;
     applyThemeToChrome(currentSettings.theme);
     applyIncognitoMode(currentSettings.incognito);
-    applyVpnBadge(currentSettings);
     if (typeof refreshBookmarksBar === 'function') refreshBookmarksBar();
   });
 
   settingsBtn.addEventListener('click', () => openSettings());
+
+  // Quick-toggle VPN by clicking badge
+  const vpnBadgeEl = document.getElementById('vpn-badge');
+  if (vpnBadgeEl) {
+    vpnBadgeEl.style.cursor = 'pointer';
+    vpnBadgeEl.addEventListener('click', async () => {
+      if (typeof browser.vpnStatus !== 'function') return;
+      try {
+        const st = await browser.vpnStatus();
+        if (st.status === 'connected') {
+          await browser.vpnDisconnect();
+        } else if (st.status === 'disconnected' || st.status === 'error') {
+          await browser.vpnConnect(currentSettings.vpnLocation || 'Auto');
+        }
+      } catch (err) {
+        console.warn('[chrome] vpn toggle error', err);
+      }
+    });
+  }
 
   const bgPresets = [
     { id: 'midnight', label: 'Midnight', gradient: 'linear-gradient(135deg, #0a0c10 0%, #0d1117 50%, #0a0c10 100%)' },
@@ -683,8 +739,8 @@
       '      <h3>Privacy &amp; Security</h3>' +
       '      <label class="toggle-row"><input type="checkbox" id="set-vpn"' +
              (currentSettings.vpnEnabled ? ' checked' : '') +
-      '       /> VPN</label>' +
-      '      <select id="set-vpn-location" style="margin-top:4px;margin-bottom:8px"' +
+      '       /> VPN / Proxy Routing</label>' +
+      '      <select id="set-vpn-location" style="margin-top:4px;margin-bottom:4px"' +
              (!currentSettings.vpnEnabled ? ' disabled' : '') + '>' +
              vpnLocations.map((loc) =>
                '<option value="' + loc + '"' +
@@ -692,6 +748,20 @@
                loc + '</option>'
              ).join('') +
       '      </select>' +
+      '      <div class="vpn-status-row" style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+      '        <span id="vpn-settings-status" style="font-size:11px;color:var(--text-secondary);flex:1">' +
+               (currentSettings.vpnEnabled ? 'Connected' : 'Disconnected') + '</span>' +
+      '        <button class="settings-btn-sm" id="vpn-test-btn" style="font-size:10px;padding:3px 10px">Test Connection</button>' +
+      '      </div>' +
+      '      <div style="margin-bottom:8px">' +
+      '        <label style="font-size:11px;color:var(--text-secondary);display:block;margin-bottom:3px">Custom proxy (SOCKS5/HTTPS)</label>' +
+      '        <div style="display:flex;gap:4px">' +
+      '          <input type="text" id="vpn-custom-proxy" placeholder="socks5://host:port" ' +
+      '                 style="flex:1;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;' +
+      '                 padding:4px 8px;font-size:11px;color:var(--text-primary);font-family:var(--font-data)" />' +
+      '          <button class="settings-btn-sm" id="vpn-custom-apply" style="font-size:10px;padding:3px 8px">Apply</button>' +
+      '        </div>' +
+      '      </div>' +
       '      <label class="toggle-row"><input type="checkbox" id="set-adblock"' +
              (currentSettings.adBlock !== false ? ' checked' : '') +
       '       /> Block ads &amp; trackers</label>' +
@@ -804,17 +874,87 @@
 
     const vpnToggle = document.getElementById('set-vpn');
     const vpnLocSel = document.getElementById('set-vpn-location');
-    vpnToggle.addEventListener('change', (e) => {
+    const vpnStatusEl = document.getElementById('vpn-settings-status');
+    const vpnTestBtn = document.getElementById('vpn-test-btn');
+    const vpnCustomInput = document.getElementById('vpn-custom-proxy');
+    const vpnCustomBtn = document.getElementById('vpn-custom-apply');
+
+    vpnToggle.addEventListener('change', async (e) => {
       vpnLocSel.disabled = !e.target.checked;
-      browser.setSettings({ vpnEnabled: e.target.checked });
-      const badge = document.getElementById('vpn-badge');
-      if (badge) badge.classList.toggle('off', !e.target.checked);
+      if (e.target.checked) {
+        if (vpnStatusEl) vpnStatusEl.textContent = 'Connecting…';
+        try {
+          const result = await browser.vpnConnect(vpnLocSel.value);
+          if (vpnStatusEl) {
+            vpnStatusEl.textContent = result.status === 'connected' ? 'Connected' :
+              result.status === 'error' ? ('Error: ' + (result.error || 'Failed')) : result.status;
+          }
+        } catch (err) {
+          if (vpnStatusEl) vpnStatusEl.textContent = 'Error: ' + (err.message || 'Failed');
+        }
+      } else {
+        if (vpnStatusEl) vpnStatusEl.textContent = 'Disconnecting…';
+        try {
+          await browser.vpnDisconnect();
+          if (vpnStatusEl) vpnStatusEl.textContent = 'Disconnected';
+        } catch {
+          if (vpnStatusEl) vpnStatusEl.textContent = 'Disconnected';
+        }
+      }
     });
-    vpnLocSel.addEventListener('change', (e) => {
-      browser.setSettings({ vpnLocation: e.target.value });
-      const label = document.getElementById('vpn-label');
-      if (label) label.textContent = e.target.value === 'Auto' ? 'Secure' : e.target.value;
+    vpnLocSel.addEventListener('change', async (e) => {
+      if (!vpnToggle.checked) return;
+      if (vpnStatusEl) vpnStatusEl.textContent = 'Reconnecting…';
+      try {
+        const result = await browser.vpnConnect(e.target.value);
+        if (vpnStatusEl) {
+          vpnStatusEl.textContent = result.status === 'connected' ? 'Connected' :
+            result.status === 'error' ? ('Error: ' + (result.error || 'Failed')) : result.status;
+        }
+      } catch (err) {
+        if (vpnStatusEl) vpnStatusEl.textContent = 'Error: ' + (err.message || 'Failed');
+      }
     });
+    if (vpnTestBtn) {
+      vpnTestBtn.addEventListener('click', async () => {
+        vpnTestBtn.disabled = true;
+        vpnTestBtn.textContent = 'Testing…';
+        try {
+          const result = await browser.vpnTest();
+          vpnTestBtn.textContent = result.reachable
+            ? ('IP: ' + (result.ip || 'Unknown'))
+            : 'Unreachable';
+        } catch {
+          vpnTestBtn.textContent = 'Test failed';
+        }
+        setTimeout(() => {
+          vpnTestBtn.textContent = 'Test Connection';
+          vpnTestBtn.disabled = false;
+        }, 4000);
+      });
+    }
+    if (vpnCustomBtn && vpnCustomInput) {
+      vpnCustomBtn.addEventListener('click', async () => {
+        const url = vpnCustomInput.value.trim();
+        if (!url) return;
+        vpnCustomBtn.disabled = true;
+        vpnCustomBtn.textContent = 'Connecting…';
+        try {
+          const result = await browser.vpnSetProxy(url);
+          vpnCustomBtn.textContent = result.success ? 'Connected' : ('Error: ' + (result.error || 'Failed'));
+          if (result.success) {
+            vpnToggle.checked = true;
+            vpnLocSel.disabled = false;
+          }
+        } catch (err) {
+          vpnCustomBtn.textContent = 'Error';
+        }
+        setTimeout(() => {
+          vpnCustomBtn.textContent = 'Apply';
+          vpnCustomBtn.disabled = false;
+        }, 3000);
+      });
+    }
 
     document.getElementById('set-adblock').addEventListener('change', (e) => {
       browser.setSettings({ adBlock: e.target.checked });

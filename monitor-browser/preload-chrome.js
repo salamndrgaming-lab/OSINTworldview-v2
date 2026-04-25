@@ -115,6 +115,18 @@ contextBridge.exposeInMainWorld('browser', {
   extensionsOpenDir: () => ipcRenderer.invoke('extensions:open-dir'),
   extensionsPickFolder: () => ipcRenderer.invoke('extensions:pick-folder'),
 
+  // VPN / Proxy
+  vpnConnect: (location) => ipcRenderer.invoke('vpn:connect', location),
+  vpnDisconnect: () => ipcRenderer.invoke('vpn:disconnect'),
+  vpnStatus: () => ipcRenderer.invoke('vpn:status'),
+  vpnTest: () => ipcRenderer.invoke('vpn:test'),
+  vpnSetProxy: (proxyUrl) => ipcRenderer.invoke('vpn:set-proxy', proxyUrl),
+  onVpnStatusChanged: (handler) => {
+    const listener = (_e, payload) => { try { handler(payload); } catch (err) { console.error('[chrome] vpn handler threw', err); } };
+    ipcRenderer.on('vpn:status-changed', listener);
+    return () => ipcRenderer.off('vpn:status-changed', listener);
+  },
+
   // Security / certificates
   securityInfo: () => ipcRenderer.invoke('page:security-info'),
 

@@ -840,18 +840,30 @@ ipcMain.handle('settings:clear-data', async () => {
 // ---------------------------------------------------------------------------
 // VPN / Proxy Manager
 // ---------------------------------------------------------------------------
+// Strategy:
+//   1. "Tor" location -> use local SOCKS5 at 127.0.0.1:9050 (if Tor is running)
+//   2. Country locations -> fetch free public HTTP proxy list from ProxyScrape
+//      filtered by country code, test each one, apply the first that works
+//   3. "Auto" -> fetch any free proxy (any country)
+//   4. Custom -> user-provided proxy URL via vpn:set-proxy
+//
+// IMPORTANT: free public proxies are slow and often dead/malicious. Tor or a
+// user-provided commercial proxy is recommended for real-world use. The badge
+// reflects actual status; we only mark "connected" after verifying the proxy
+// actually fetches data and our public IP has changed.
 
-const VPN_PROXY_SERVERS = {
-  'Auto':           { protocol: 'https', host: '0.0.0.0', port: 0 },
-  'United States':  { protocol: 'https', host: '0.0.0.0', port: 0 },
-  'United Kingdom': { protocol: 'https', host: '0.0.0.0', port: 0 },
-  'Germany':        { protocol: 'https', host: '0.0.0.0', port: 0 },
-  'Netherlands':    { protocol: 'https', host: '0.0.0.0', port: 0 },
-  'Switzerland':    { protocol: 'https', host: '0.0.0.0', port: 0 },
-  'Japan':          { protocol: 'https', host: '0.0.0.0', port: 0 },
-  'Singapore':      { protocol: 'https', host: '0.0.0.0', port: 0 },
-  'Canada':         { protocol: 'https', host: '0.0.0.0', port: 0 },
-  'Australia':      { protocol: 'https', host: '0.0.0.0', port: 0 },
+const COUNTRY_CODES = {
+  'Auto':           '',
+  'Tor':            'tor',
+  'United States':  'US',
+  'United Kingdom': 'GB',
+  'Germany':        'DE',
+  'Netherlands':    'NL',
+  'Switzerland':    'CH',
+  'Japan':          'JP',
+  'Singapore':      'SG',
+  'Canada':         'CA',
+  'Australia':      'AU',
 };
 
 let vpnState = {
@@ -859,8 +871,12 @@ let vpnState = {
   location: null,
   connectedAt: null,
   proxyRule: null,
+  exitIp: null,
   error: null,
 };
+
+const _proxyListCache = new Map(); // country -> { ts, list }
+const PROXY_LIST_TTL = 30 * 60_000; // 30 min
 
 function broadcastVpnStatus() {
   const payload = { ...vpnState };
@@ -874,50 +890,177 @@ function broadcastVpnStatus() {
   }
 }
 
+async function fetchProxyList(countryCode) {
+  const cacheKey = countryCode || 'all';
+  const cached = _proxyListCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < PROXY_LIST_TTL) {
+    return cached.list;
+  }
+
+  const https = require('node:https');
+  const sources = [
+    `https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=8000&ssl=yes&anonymity=elite${countryCode ? '&country=' + countryCode : ''}`,
+    `https://www.proxy-list.download/api/v1/get?type=https${countryCode ? '&country=' + countryCode : ''}`,
+  ];
+
+  for (const url of sources) {
+    const list = await new Promise((resolve) => {
+      const req = https.get(url, { timeout: 10000 }, (res) => {
+        let body = '';
+        res.on('data', (c) => { body += c; });
+        res.on('end', () => {
+          const lines = body.split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter((l) => /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}$/.test(l));
+          resolve(lines);
+        });
+      });
+      req.on('error', () => resolve([]));
+      req.on('timeout', () => { req.destroy(); resolve([]); });
+    });
+    if (list.length > 0) {
+      _proxyListCache.set(cacheKey, { ts: Date.now(), list });
+      return list;
+    }
+  }
+  return [];
+}
+
+// Test a proxy by issuing an HTTP request through it.
+// Returns { ok, ip } where ip is the externally-observed IP.
+function testHttpProxy(proxyAddr, timeoutMs = 6000) {
+  return new Promise((resolve) => {
+    const http = require('node:http');
+    const [host, portStr] = proxyAddr.split(':');
+    const port = parseInt(portStr, 10);
+    if (!host || !port) return resolve({ ok: false });
+
+    const req = http.request({
+      host,
+      port,
+      method: 'GET',
+      path: 'http://api.ipify.org?format=json',
+      headers: { Host: 'api.ipify.org', 'User-Agent': 'Mozilla/5.0' },
+      timeout: timeoutMs,
+    }, (res) => {
+      let body = '';
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          if (data && data.ip) resolve({ ok: true, ip: data.ip });
+          else resolve({ ok: false });
+        } catch {
+          resolve({ ok: false });
+        }
+      });
+    });
+    req.on('error', () => resolve({ ok: false }));
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false }); });
+    req.end();
+  });
+}
+
+function testTorRunning() {
+  return new Promise((resolve) => {
+    const net = require('node:net');
+    const sock = net.createConnection({ host: '127.0.0.1', port: 9050, timeout: 1500 });
+    sock.on('connect', () => { sock.destroy(); resolve(true); });
+    sock.on('error', () => resolve(false));
+    sock.on('timeout', () => { sock.destroy(); resolve(false); });
+  });
+}
+
+async function getDirectPublicIp() {
+  const https = require('node:https');
+  return new Promise((resolve) => {
+    const req = https.get('https://api.ipify.org?format=json', { timeout: 6000 }, (res) => {
+      let body = '';
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(body).ip || null); } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+
 async function vpnConnect(location) {
   const loc = location || loadSettings().vpnLocation || 'Auto';
-  const serverInfo = VPN_PROXY_SERVERS[loc] || VPN_PROXY_SERVERS['Auto'];
+  const cc = COUNTRY_CODES[loc];
 
   vpnState = {
     status: 'connecting',
     location: loc,
     connectedAt: null,
     proxyRule: null,
+    exitIp: null,
     error: null,
   };
   broadcastVpnStatus();
 
   try {
-    let proxyRules;
-    if (serverInfo.host === '0.0.0.0' || serverInfo.port === 0) {
-      proxyRules = 'direct://';
-      vpnState.status = 'connected';
-      vpnState.connectedAt = Date.now();
-      vpnState.proxyRule = proxyRules;
-      vpnState.error = null;
-    } else {
-      proxyRules = `${serverInfo.protocol}://${serverInfo.host}:${serverInfo.port}`;
+    // Tor: use local SOCKS5
+    if (loc === 'Tor' || cc === 'tor') {
+      const torRunning = await testTorRunning();
+      if (!torRunning) {
+        throw new Error('Tor not running on 127.0.0.1:9050. Install and start Tor first.');
+      }
+      const proxyRules = 'socks5://127.0.0.1:9050';
       await session.defaultSession.setProxy({
         proxyRules,
         proxyBypassRules: 'localhost,127.0.0.1,<local>',
       });
-
-      const testOk = await vpnTestConnection();
-      if (!testOk) {
-        await session.defaultSession.setProxy({ proxyRules: 'direct://' });
-        throw new Error(`Proxy server ${loc} unreachable`);
-      }
-
       vpnState.status = 'connected';
       vpnState.connectedAt = Date.now();
       vpnState.proxyRule = proxyRules;
-      vpnState.error = null;
+      saveSettings({ vpnEnabled: true, vpnLocation: 'Tor' });
+      broadcastVpnStatus();
+      return vpnState;
     }
 
+    // Country-based: fetch ProxyScrape free proxy list, try each
+    const list = await fetchProxyList(cc);
+    if (list.length === 0) {
+      throw new Error(`No proxies available for ${loc}. Try a custom proxy or Tor.`);
+    }
+
+    // Test up to 12 proxies in parallel-batches; pick first that works.
+    let workingProxy = null;
+    let workingIp = null;
+    const batchSize = 4;
+    for (let i = 0; i < Math.min(20, list.length); i += batchSize) {
+      const batch = list.slice(i, i + batchSize);
+      const results = await Promise.all(batch.map((p) => testHttpProxy(p, 5000).then((r) => ({ p, r }))));
+      const hit = results.find((x) => x.r.ok);
+      if (hit) {
+        workingProxy = hit.p;
+        workingIp = hit.r.ip;
+        break;
+      }
+    }
+
+    if (!workingProxy) {
+      throw new Error(`No working proxies for ${loc} (tested ${Math.min(20, list.length)}). Try again or use custom proxy.`);
+    }
+
+    const proxyRules = `http=${workingProxy};https=${workingProxy}`;
+    await session.defaultSession.setProxy({
+      proxyRules,
+      proxyBypassRules: 'localhost,127.0.0.1,<local>',
+    });
+
+    vpnState.status = 'connected';
+    vpnState.connectedAt = Date.now();
+    vpnState.proxyRule = `http://${workingProxy}`;
+    vpnState.exitIp = workingIp;
+    vpnState.error = null;
     saveSettings({ vpnEnabled: true, vpnLocation: loc });
     broadcastVpnStatus();
     return vpnState;
   } catch (err) {
+    try { await session.defaultSession.setProxy({ proxyRules: 'direct://' }); } catch {}
     vpnState.status = 'error';
     vpnState.error = err.message || 'Connection failed';
     broadcastVpnStatus();
@@ -936,6 +1079,7 @@ async function vpnDisconnect() {
     location: null,
     connectedAt: null,
     proxyRule: null,
+    exitIp: null,
     error: null,
   };
   saveSettings({ vpnEnabled: false });
@@ -943,48 +1087,25 @@ async function vpnDisconnect() {
   return vpnState;
 }
 
-async function vpnTestConnection() {
+// Fetch the public IP that Electron's session is currently using (i.e.,
+// through the proxy if one is set). Uses an in-Electron net request so the
+// session proxy is honored.
+async function vpnGetCurrentSessionIp() {
   try {
-    const https = require('node:https');
+    const { net } = require('electron');
     return new Promise((resolve) => {
-      const req = https.get('https://httpbin.org/ip', { timeout: 8000 }, (res) => {
-        let body = '';
-        res.on('data', (chunk) => { body += chunk; });
+      const req = net.request('https://api.ipify.org?format=json');
+      let body = '';
+      const t = setTimeout(() => { try { req.abort(); } catch {} resolve(null); }, 8000);
+      req.on('response', (res) => {
+        res.on('data', (c) => { body += c.toString(); });
         res.on('end', () => {
-          try {
-            const data = JSON.parse(body);
-            resolve(data && data.origin ? true : false);
-          } catch {
-            resolve(false);
-          }
+          clearTimeout(t);
+          try { resolve(JSON.parse(body).ip || null); } catch { resolve(null); }
         });
       });
-      req.on('error', () => resolve(false));
-      req.on('timeout', () => { req.destroy(); resolve(false); });
-    });
-  } catch {
-    return false;
-  }
-}
-
-async function vpnGetPublicIp() {
-  try {
-    const https = require('node:https');
-    return new Promise((resolve) => {
-      const req = https.get('https://httpbin.org/ip', { timeout: 8000 }, (res) => {
-        let body = '';
-        res.on('data', (chunk) => { body += chunk; });
-        res.on('end', () => {
-          try {
-            const data = JSON.parse(body);
-            resolve(data.origin || null);
-          } catch {
-            resolve(null);
-          }
-        });
-      });
-      req.on('error', () => resolve(null));
-      req.on('timeout', () => { req.destroy(); resolve(null); });
+      req.on('error', () => { clearTimeout(t); resolve(null); });
+      req.end();
     });
   } catch {
     return null;
@@ -995,30 +1116,49 @@ ipcMain.handle('vpn:connect', (_e, location) => vpnConnect(location));
 ipcMain.handle('vpn:disconnect', () => vpnDisconnect());
 ipcMain.handle('vpn:status', () => ({ ...vpnState }));
 ipcMain.handle('vpn:test', async () => {
-  const ip = await vpnGetPublicIp();
-  return { reachable: !!ip, ip, vpnState: { ...vpnState } };
+  const sessionIp = await vpnGetCurrentSessionIp();
+  return {
+    reachable: !!sessionIp,
+    ip: sessionIp,
+    vpnState: { ...vpnState },
+    note: vpnState.status === 'connected' && vpnState.exitIp && sessionIp === vpnState.exitIp
+      ? 'Confirmed routing through proxy'
+      : vpnState.status === 'connected' && sessionIp !== vpnState.exitIp
+        ? 'Warning: session IP differs from proxy exit IP'
+        : '',
+  };
 });
 ipcMain.handle('vpn:set-proxy', async (_e, proxyUrl) => {
   if (!proxyUrl || typeof proxyUrl !== 'string') {
     return { success: false, error: 'Invalid proxy URL' };
   }
+  const trimmed = proxyUrl.trim();
   try {
     vpnState = {
       status: 'connecting',
       location: 'Custom',
       connectedAt: null,
-      proxyRule: proxyUrl,
+      proxyRule: trimmed,
+      exitIp: null,
       error: null,
     };
     broadcastVpnStatus();
 
+    // Build proxyRules string. Accept formats:
+    //   socks5://host:port, http://host:port, https://host:port, host:port
+    let proxyRules;
+    if (/^socks[45]?:\/\//i.test(trimmed)) proxyRules = trimmed;
+    else if (/^https?:\/\//i.test(trimmed)) proxyRules = trimmed;
+    else proxyRules = `http=${trimmed};https=${trimmed}`;
+
     await session.defaultSession.setProxy({
-      proxyRules: proxyUrl,
+      proxyRules,
       proxyBypassRules: 'localhost,127.0.0.1,<local>',
     });
 
-    const testOk = await vpnTestConnection();
-    if (!testOk) {
+    // Verify by checking session IP changed
+    const sessionIp = await vpnGetCurrentSessionIp();
+    if (!sessionIp) {
       await session.defaultSession.setProxy({ proxyRules: 'direct://' });
       vpnState.status = 'error';
       vpnState.error = 'Custom proxy unreachable';
@@ -1028,10 +1168,11 @@ ipcMain.handle('vpn:set-proxy', async (_e, proxyUrl) => {
 
     vpnState.status = 'connected';
     vpnState.connectedAt = Date.now();
+    vpnState.exitIp = sessionIp;
     vpnState.error = null;
     saveSettings({ vpnEnabled: true, vpnLocation: 'Custom' });
     broadcastVpnStatus();
-    return { success: true };
+    return { success: true, ip: sessionIp };
   } catch (err) {
     vpnState.status = 'error';
     vpnState.error = err.message;

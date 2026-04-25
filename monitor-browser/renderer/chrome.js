@@ -574,7 +574,10 @@
 
     if (status === 'connected') {
       label.textContent = loc === 'Auto' ? 'Secure' : loc;
-      badge.title = 'VPN Connected' + (vpnStatus.proxyRule ? ' — ' + vpnStatus.proxyRule : '');
+      let tooltip = 'VPN Connected';
+      if (vpnStatus.proxyRule) tooltip += ' — ' + vpnStatus.proxyRule;
+      if (vpnStatus.exitIp) tooltip += ' (exit: ' + vpnStatus.exitIp + ')';
+      badge.title = tooltip;
     } else if (status === 'connecting') {
       badge.classList.add('connecting');
       label.textContent = 'Connecting…';
@@ -665,7 +668,7 @@
   ];
 
   const vpnLocations = [
-    'Auto', 'United States', 'United Kingdom', 'Germany', 'Netherlands',
+    'Auto', 'Tor', 'United States', 'United Kingdom', 'Germany', 'Netherlands',
     'Switzerland', 'Japan', 'Singapore', 'Canada', 'Australia',
   ];
 
@@ -921,16 +924,23 @@
         vpnTestBtn.textContent = 'Testing…';
         try {
           const result = await browser.vpnTest();
-          vpnTestBtn.textContent = result.reachable
-            ? ('IP: ' + (result.ip || 'Unknown'))
-            : 'Unreachable';
+          if (result.reachable) {
+            vpnTestBtn.textContent = 'IP: ' + result.ip;
+            if (vpnStatusEl) {
+              vpnStatusEl.textContent = result.note
+                ? (result.ip + ' — ' + result.note)
+                : ('Routing IP: ' + result.ip);
+            }
+          } else {
+            vpnTestBtn.textContent = 'Unreachable';
+          }
         } catch {
           vpnTestBtn.textContent = 'Test failed';
         }
         setTimeout(() => {
           vpnTestBtn.textContent = 'Test Connection';
           vpnTestBtn.disabled = false;
-        }, 4000);
+        }, 6000);
       });
     }
     if (vpnCustomBtn && vpnCustomInput) {

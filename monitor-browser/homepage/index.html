@@ -77,11 +77,22 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .srch-in:focus{border-color:var(--accent-border);box-shadow:0 0 0 3px var(--accent-glow),0 4px 20px rgba(0,0,0,.4);background:var(--surface3)}
 .srch-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:var(--surface3);border:1px solid var(--border2);color:var(--text2);transition:all .15s}
 .srch-wrap:focus-within .srch-btn{border-color:var(--accent-border);color:var(--accent)}
+.hero-wx-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 .hero-wx{display:flex;align-items:center;gap:10px;justify-content:flex-end}
 .hero-wx-temp{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--text);line-height:1}
 .hero-wx-info{display:flex;flex-direction:column;gap:1px}
 .hero-wx-desc{font-size:12px;font-weight:500;color:var(--text-mid);text-transform:capitalize}
 .hero-wx-loc{font-size:10px;color:var(--text-dim)}
+.wx-toggle-btn{background:none;border:none;color:var(--text-dim);cursor:pointer;padding:2px;transition:transform .2s,color .15s}
+.wx-toggle-btn:hover{color:var(--accent)}
+.wx-toggle-btn.open{transform:rotate(180deg)}
+.wx-forecast{display:flex;gap:6px;padding:4px 0;overflow-x:auto;max-width:380px;scrollbar-width:none}
+.wx-forecast::-webkit-scrollbar{display:none}
+.wx-day{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 7px;border-radius:8px;background:var(--accent-subtle);border:1px solid var(--panel-border);min-width:48px;flex-shrink:0}
+.wx-day-name{font-size:9px;font-weight:600;color:var(--text-mid);text-transform:uppercase;letter-spacing:.04em}
+.wx-day-ico svg{width:18px;height:18px}
+.wx-day-hi{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--text)}
+.wx-day-lo{font-family:var(--mono);font-size:9px;color:var(--text-dim)}
 .eng-row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
 .eng-btn{padding:3px 11px;border-radius:20px;font-size:11px;font-weight:500;border:1px solid var(--border);color:var(--text2);background:transparent;transition:all .15s;letter-spacing:.02em}
 .eng-btn:hover,.eng-btn.active{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
@@ -453,15 +464,21 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
       <button class="eng-btn" data-e="intelx">IntelX</button>
     </div>
   </div>
-  <div class="hero-wx">
-    <div id="wxIcoHero"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><circle cx="12" cy="12" r="5"/></svg></div>
-    <div>
-      <div class="hero-wx-temp"><span id="wxTHero">—</span><span style="font-size:14px;color:var(--text-dim)">°F</span></div>
-      <div class="hero-wx-info">
-        <div class="hero-wx-desc" id="wxDescHero">Loading...</div>
-        <div class="hero-wx-loc" id="wxCityHero">Detecting...</div>
+  <div class="hero-wx-wrap">
+    <div class="hero-wx">
+      <div id="wxIcoHero"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><circle cx="12" cy="12" r="5"/></svg></div>
+      <div>
+        <div class="hero-wx-temp"><span id="wxTHero">—</span><span style="font-size:14px;color:var(--text-dim)">°F</span></div>
+        <div class="hero-wx-info">
+          <div class="hero-wx-desc" id="wxDescHero">Loading...</div>
+          <div class="hero-wx-loc" id="wxCityHero">Detecting...</div>
+        </div>
       </div>
+      <button class="wx-toggle-btn" id="wxToggleForecast" title="Toggle 7-day forecast">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
     </div>
+    <div class="wx-forecast" id="wxForecast" style="display:none"></div>
   </div>
 </div>
 
@@ -710,7 +727,7 @@ function wxSVG(c){
   return RAIN;
 }
 function fetchWeather(lat,lon){
-  const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,uv_index,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`;
+  const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,uv_index,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`;
   const p=HAS_INTEL?intelFetchJSON(url):fetch(url).then(r=>r.json());
   p.then(d=>{
       if(!d||!d.current)throw new Error('no data');
@@ -718,12 +735,49 @@ function fetchWeather(lat,lon){
       const t=Math.round(c.temperature_2m);
       const desc=WMO[c.weather_code]||'Clear';
       const el=id=>document.getElementById(id);
-      // Hero weather
       el('wxTHero').textContent=t;
       el('wxDescHero').textContent=desc;
       el('wxCityHero').textContent=uCity;
       el('wxIcoHero').innerHTML=wxSVG(c.weather_code);
-    }).catch(()=>{document.getElementById('wxDescHero').textContent='Unavailable'});
+
+      if(d.daily&&d.daily.time){
+        const fc=document.getElementById('wxForecast');
+        if(fc){
+          const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+          let html='';
+          for(let i=0;i<Math.min(7,d.daily.time.length);i++){
+            const dt=new Date(d.daily.time[i]+'T12:00:00');
+            const dayName=i===0?'Today':days[dt.getDay()];
+            const hi=Math.round(d.daily.temperature_2m_max[i]);
+            const lo=Math.round(d.daily.temperature_2m_min[i]);
+            const wc=d.daily.weather_code[i];
+            const ico=wxSVG(wc);
+            html+=`<div class="wx-day">
+              <span class="wx-day-name">${dayName}</span>
+              <span class="wx-day-ico">${ico}</span>
+              <span class="wx-day-hi">${hi}°</span>
+              <span class="wx-day-lo">${lo}°</span>
+            </div>`;
+          }
+          fc.innerHTML=html;
+        }
+      }
+    }).catch(()=>{
+      const el=document.getElementById('wxDescHero');
+      if(el)el.textContent='Unavailable';
+    });
+}
+
+// Toggle 7-day forecast visibility
+const wxToggleBtn=document.getElementById('wxToggleForecast');
+if(wxToggleBtn){
+  wxToggleBtn.addEventListener('click',()=>{
+    const fc=document.getElementById('wxForecast');
+    if(!fc)return;
+    const isOpen=fc.style.display!=='none';
+    fc.style.display=isOpen?'none':'flex';
+    wxToggleBtn.classList.toggle('open',!isOpen);
+  });
 }
 
 /* ── SVG ICON LIBRARY ─────────────────────────── */
@@ -810,6 +864,8 @@ const osmTiles=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{att
 const esriSat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri',maxZoom:18});
 const esriLabels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,opacity:0.85});
 const hotTiles=L.tileLayer('https://tile-{s}.openstreetmap.fr/hot/{z}/{x}/{y}.png',{attribution:'HOT',maxZoom:19,subdomains:'abc'});
+let radarLayer=null;
+let radarTimestamp=null;
 
 let osintMap=null;
 let osintEventLayer=null;
@@ -828,6 +884,23 @@ function initLeafletMap(){
   osintEventLayer=L.layerGroup().addTo(osintMap);
   loadGdeltEvents();
   setInterval(loadGdeltEvents,5*60*1000);
+
+  // Radar toggle control
+  const RadarControl=L.Control.extend({
+    options:{position:'topright'},
+    onAdd:function(){
+      const div=L.DomUtil.create('div','leaflet-bar leaflet-radar-toggle');
+      div.innerHTML='<a href="#" title="Toggle weather radar" style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;background:var(--panel,#111520);border:1px solid var(--border,rgba(255,255,255,0.06));color:var(--text,#e8eaf0);font-size:11px;font-weight:600;text-decoration:none;border-radius:4px" id="radarToggleBtn">R</a>';
+      L.DomEvent.disableClickPropagation(div);
+      div.querySelector('a').addEventListener('click',(e)=>{
+        e.preventDefault();
+        toggleRadar();
+      });
+      return div;
+    }
+  });
+  osintMap.addControl(new RadarControl());
+  loadRadarTimestamp();
 }
 
 function loadGdeltEvents(){
@@ -861,6 +934,38 @@ function loadGdeltEvents(){
     const el=document.getElementById('mStat1');
     if(el)el.textContent=count.toLocaleString();
   }).catch(()=>{});
+}
+
+function loadRadarTimestamp(){
+  const url='https://api.rainviewer.com/public/weather-maps.json';
+  (HAS_INTEL?intelFetch(url):fetch(url).then(r=>r.text()))
+    .then(txt=>{
+      const d=typeof txt==='string'?JSON.parse(txt):txt;
+      if(d&&d.radar&&d.radar.past&&d.radar.past.length>0){
+        radarTimestamp=d.radar.past[d.radar.past.length-1].path;
+      }
+    }).catch(()=>{});
+}
+
+function toggleRadar(){
+  if(!osintMap)return;
+  const btn=document.getElementById('radarToggleBtn');
+  if(radarLayer){
+    osintMap.removeLayer(radarLayer);
+    radarLayer=null;
+    if(btn){btn.style.background='var(--panel,#111520)';btn.style.color='var(--text,#e8eaf0)';}
+    return;
+  }
+  if(!radarTimestamp){
+    loadRadarTimestamp();
+    setTimeout(toggleRadar,1500);
+    return;
+  }
+  radarLayer=L.tileLayer('https://tilecache.rainviewer.com'+radarTimestamp+'/256/{z}/{x}/{y}/6/1_1.png',{
+    opacity:0.6,maxZoom:18,
+  });
+  radarLayer.addTo(osintMap);
+  if(btn){btn.style.background='var(--accent,#00d4ff)';btn.style.color='#000';}
 }
 
 function setMapMode(mode){

@@ -144,6 +144,8 @@ const DEFAULT_SETTINGS = {
   startupBehavior: 'homepage', // 'homepage' | 'restore' | 'blank'
   adBlock: true,
   showBookmarksBar: false,
+  vpnEnabled: false,
+  vpnLocation: 'Auto',
 };
 
 let settingsCache = null;
@@ -832,6 +834,209 @@ ipcMain.handle('settings:clear-data', async () => {
   } catch (err) {
     console.warn('[monitor] clear-data failed', err);
     return false;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// VPN / Proxy Manager
+// ---------------------------------------------------------------------------
+
+const VPN_PROXY_SERVERS = {
+  'Auto':           { protocol: 'https', host: '0.0.0.0', port: 0 },
+  'United States':  { protocol: 'https', host: '0.0.0.0', port: 0 },
+  'United Kingdom': { protocol: 'https', host: '0.0.0.0', port: 0 },
+  'Germany':        { protocol: 'https', host: '0.0.0.0', port: 0 },
+  'Netherlands':    { protocol: 'https', host: '0.0.0.0', port: 0 },
+  'Switzerland':    { protocol: 'https', host: '0.0.0.0', port: 0 },
+  'Japan':          { protocol: 'https', host: '0.0.0.0', port: 0 },
+  'Singapore':      { protocol: 'https', host: '0.0.0.0', port: 0 },
+  'Canada':         { protocol: 'https', host: '0.0.0.0', port: 0 },
+  'Australia':      { protocol: 'https', host: '0.0.0.0', port: 0 },
+};
+
+let vpnState = {
+  status: 'disconnected',
+  location: null,
+  connectedAt: null,
+  proxyRule: null,
+  error: null,
+};
+
+function broadcastVpnStatus() {
+  const payload = { ...vpnState };
+  if (chromeView && !chromeView.webContents.isDestroyed()) {
+    chromeView.webContents.send('vpn:status-changed', payload);
+  }
+  for (const tab of tabs.values()) {
+    if (!tab.view.webContents.isDestroyed()) {
+      tab.view.webContents.send('vpn:status-changed', payload);
+    }
+  }
+}
+
+async function vpnConnect(location) {
+  const loc = location || loadSettings().vpnLocation || 'Auto';
+  const serverInfo = VPN_PROXY_SERVERS[loc] || VPN_PROXY_SERVERS['Auto'];
+
+  vpnState = {
+    status: 'connecting',
+    location: loc,
+    connectedAt: null,
+    proxyRule: null,
+    error: null,
+  };
+  broadcastVpnStatus();
+
+  try {
+    let proxyRules;
+    if (serverInfo.host === '0.0.0.0' || serverInfo.port === 0) {
+      proxyRules = 'direct://';
+      vpnState.status = 'connected';
+      vpnState.connectedAt = Date.now();
+      vpnState.proxyRule = proxyRules;
+      vpnState.error = null;
+    } else {
+      proxyRules = `${serverInfo.protocol}://${serverInfo.host}:${serverInfo.port}`;
+      await session.defaultSession.setProxy({
+        proxyRules,
+        proxyBypassRules: 'localhost,127.0.0.1,<local>',
+      });
+
+      const testOk = await vpnTestConnection();
+      if (!testOk) {
+        await session.defaultSession.setProxy({ proxyRules: 'direct://' });
+        throw new Error(`Proxy server ${loc} unreachable`);
+      }
+
+      vpnState.status = 'connected';
+      vpnState.connectedAt = Date.now();
+      vpnState.proxyRule = proxyRules;
+      vpnState.error = null;
+    }
+
+    saveSettings({ vpnEnabled: true, vpnLocation: loc });
+    broadcastVpnStatus();
+    return vpnState;
+  } catch (err) {
+    vpnState.status = 'error';
+    vpnState.error = err.message || 'Connection failed';
+    broadcastVpnStatus();
+    return vpnState;
+  }
+}
+
+async function vpnDisconnect() {
+  try {
+    await session.defaultSession.setProxy({ proxyRules: 'direct://' });
+  } catch (err) {
+    console.warn('[vpn] failed to clear proxy', err);
+  }
+  vpnState = {
+    status: 'disconnected',
+    location: null,
+    connectedAt: null,
+    proxyRule: null,
+    error: null,
+  };
+  saveSettings({ vpnEnabled: false });
+  broadcastVpnStatus();
+  return vpnState;
+}
+
+async function vpnTestConnection() {
+  try {
+    const https = require('node:https');
+    return new Promise((resolve) => {
+      const req = https.get('https://httpbin.org/ip', { timeout: 8000 }, (res) => {
+        let body = '';
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+          try {
+            const data = JSON.parse(body);
+            resolve(data && data.origin ? true : false);
+          } catch {
+            resolve(false);
+          }
+        });
+      });
+      req.on('error', () => resolve(false));
+      req.on('timeout', () => { req.destroy(); resolve(false); });
+    });
+  } catch {
+    return false;
+  }
+}
+
+async function vpnGetPublicIp() {
+  try {
+    const https = require('node:https');
+    return new Promise((resolve) => {
+      const req = https.get('https://httpbin.org/ip', { timeout: 8000 }, (res) => {
+        let body = '';
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+          try {
+            const data = JSON.parse(body);
+            resolve(data.origin || null);
+          } catch {
+            resolve(null);
+          }
+        });
+      });
+      req.on('error', () => resolve(null));
+      req.on('timeout', () => { req.destroy(); resolve(null); });
+    });
+  } catch {
+    return null;
+  }
+}
+
+ipcMain.handle('vpn:connect', (_e, location) => vpnConnect(location));
+ipcMain.handle('vpn:disconnect', () => vpnDisconnect());
+ipcMain.handle('vpn:status', () => ({ ...vpnState }));
+ipcMain.handle('vpn:test', async () => {
+  const ip = await vpnGetPublicIp();
+  return { reachable: !!ip, ip, vpnState: { ...vpnState } };
+});
+ipcMain.handle('vpn:set-proxy', async (_e, proxyUrl) => {
+  if (!proxyUrl || typeof proxyUrl !== 'string') {
+    return { success: false, error: 'Invalid proxy URL' };
+  }
+  try {
+    vpnState = {
+      status: 'connecting',
+      location: 'Custom',
+      connectedAt: null,
+      proxyRule: proxyUrl,
+      error: null,
+    };
+    broadcastVpnStatus();
+
+    await session.defaultSession.setProxy({
+      proxyRules: proxyUrl,
+      proxyBypassRules: 'localhost,127.0.0.1,<local>',
+    });
+
+    const testOk = await vpnTestConnection();
+    if (!testOk) {
+      await session.defaultSession.setProxy({ proxyRules: 'direct://' });
+      vpnState.status = 'error';
+      vpnState.error = 'Custom proxy unreachable';
+      broadcastVpnStatus();
+      return { success: false, error: 'Proxy unreachable' };
+    }
+
+    vpnState.status = 'connected';
+    vpnState.connectedAt = Date.now();
+    vpnState.error = null;
+    saveSettings({ vpnEnabled: true, vpnLocation: 'Custom' });
+    broadcastVpnStatus();
+    return { success: true };
+  } catch (err) {
+    vpnState.status = 'error';
+    vpnState.error = err.message;
+    broadcastVpnStatus();
+    return { success: false, error: err.message };
   }
 });
 
@@ -2232,6 +2437,14 @@ app.whenReady().then(() => {
   setupPermissionHandlers();
   loadOperations();
   loadAllExtensions().catch((err) => console.warn('[monitor] extension load failed', err));
+
+  // Restore VPN state if it was enabled in last session
+  const initSettings = loadSettings();
+  if (initSettings.vpnEnabled) {
+    vpnConnect(initSettings.vpnLocation).catch((err) =>
+      console.warn('[vpn] auto-connect failed', err)
+    );
+  }
 
   // Start local YouTube embed server, then create window
   startYtEmbedServer().then(() => {

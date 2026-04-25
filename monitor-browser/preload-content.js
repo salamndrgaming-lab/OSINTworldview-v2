@@ -19,4 +19,10 @@ contextBridge.exposeInMainWorld('monitorApi', {
     ipcRenderer.on('settings:changed', listener);
     return () => ipcRenderer.off('settings:changed', listener);
   },
+  vpnStatus: () => ipcRenderer.invoke('vpn:status'),
+  onVpnStatusChanged: (handler) => {
+    const listener = (_e, payload) => { try { handler(payload); } catch (err) { console.error('[monitor] vpn handler threw', err); } };
+    ipcRenderer.on('vpn:status-changed', listener);
+    return () => ipcRenderer.off('vpn:status-changed', listener);
+  },
 });

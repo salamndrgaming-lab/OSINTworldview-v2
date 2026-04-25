@@ -641,6 +641,42 @@ body.is-incognito .wordmark { color: #a0a0c0; }
   background: var(--text-tertiary);
   animation: none;
 }
+.vpn-badge.connecting {
+  background: rgba(255, 193, 7, 0.1);
+  border-color: rgba(255, 193, 7, 0.25);
+  color: #ffc107;
+}
+.vpn-badge.connecting .vpn-dot {
+  background: #ffc107;
+  animation: vpnPulse 0.6s ease-in-out infinite;
+}
+.vpn-badge.error {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+}
+.vpn-badge.error .vpn-dot {
+  background: #ef4444;
+  animation: none;
+}
+.settings-btn-sm {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font-data);
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.settings-btn-sm:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+.settings-btn-sm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* ---------------- Profile Button ---------------- */
 .profile-btn {

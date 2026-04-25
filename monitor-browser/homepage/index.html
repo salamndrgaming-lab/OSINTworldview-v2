@@ -86,7 +86,8 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .wx-toggle-btn{background:none;border:none;color:var(--text-dim);cursor:pointer;padding:2px;transition:transform .2s,color .15s}
 .wx-toggle-btn:hover{color:var(--accent)}
 .wx-toggle-btn.open{transform:rotate(180deg)}
-.wx-forecast{display:flex;gap:6px;padding:4px 0;overflow-x:auto;max-width:380px;scrollbar-width:none}
+.wx-forecast{display:flex;gap:6px;padding:4px 0;overflow-x:auto;max-width:420px;scrollbar-width:none;direction:rtl}
+.wx-forecast>*{direction:ltr}
 .wx-forecast::-webkit-scrollbar{display:none}
 .wx-day{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 7px;border-radius:8px;background:var(--accent-subtle);border:1px solid var(--panel-border);min-width:48px;flex-shrink:0}
 .wx-day-name{font-size:9px;font-weight:600;color:var(--text-mid);text-transform:uppercase;letter-spacing:.04em}
@@ -543,9 +544,9 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
       <div id="leafletMap" style="position:absolute;inset:0;z-index:1;border-radius:0 0 9px 9px"></div>
       <iframe id="mapIframe" src="about:blank" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade" sandbox="allow-scripts allow-same-origin allow-popups allow-forms" style="display:none"></iframe>
       <div class="map-bar" style="z-index:2">
-        <span class="mbar-s"><span class="mbar-v" id="mStat1">—</span> Events</span>
-        <span class="mbar-s"><span class="mbar-v" id="mStat2">—</span> Quakes</span>
-        <span class="mbar-s"><span class="mbar-v" id="mStat3">—</span> Disasters</span>
+        <span class="mbar-s"><span class="mbar-v" id="mStat1">—</span> Intel</span>
+        <span class="mbar-s"><span class="mbar-v" id="mStat2">—</span> Natural</span>
+        <span class="mbar-s"><span class="mbar-v" id="mStat3">—</span> Infra</span>
       </div>
     </div>
   </div>
@@ -870,10 +871,18 @@ let radarTimestamp=null;
 let osintMap=null;
 let currentMapMode='osint';
 const osintLayers={
-  events:    { layer:null, active:true,  loader:null, name:'GDELT Events',     color:'#ffa502' },
-  quakes:    { layer:null, active:true,  loader:null, name:'Earthquakes',      color:'#ff4757' },
-  disasters: { layer:null, active:true,  loader:null, name:'Active Disasters', color:'#ff6b35' },
-  flights:   { layer:null, active:false, loader:null, name:'Aircraft',         color:'#00d4ff' },
+  events:    { layer:null, active:true,  loader:null, name:'News Events',       color:'#ffa502', group:'intel' },
+  conflicts: { layer:null, active:true,  loader:null, name:'Conflicts',         color:'#dc2626', group:'intel' },
+  protests:  { layer:null, active:true,  loader:null, name:'Protests',          color:'#f59e0b', group:'intel' },
+  terror:    { layer:null, active:false, loader:null, name:'Terrorism/Security', color:'#7c3aed', group:'intel' },
+  quakes:    { layer:null, active:true,  loader:null, name:'Earthquakes',       color:'#ff4757', group:'natural' },
+  wildfires: { layer:null, active:true,  loader:null, name:'Wildfires',         color:'#f97316', group:'natural' },
+  volcanoes: { layer:null, active:true,  loader:null, name:'Volcanoes',         color:'#ef4444', group:'natural' },
+  storms:    { layer:null, active:true,  loader:null, name:'Severe Storms',     color:'#8b5cf6', group:'natural' },
+  floods:    { layer:null, active:false, loader:null, name:'Floods',            color:'#3b82f6', group:'natural' },
+  disasters: { layer:null, active:true,  loader:null, name:'Humanitarian',      color:'#ff6b35', group:'natural' },
+  nuclear:   { layer:null, active:false, loader:null, name:'Nuclear Sites',     color:'#22d3ee', group:'infra' },
+  flights:   { layer:null, active:false, loader:null, name:'Aircraft',          color:'#00d4ff', group:'infra' },
 };
 
 function initLeafletMap(){
@@ -892,40 +901,58 @@ function initLeafletMap(){
     if(osintLayers[key].active)osintLayers[key].layer.addTo(osintMap);
   });
   osintLayers.events.loader=loadGdeltEvents;
+  osintLayers.conflicts.loader=loadConflicts;
+  osintLayers.protests.loader=loadProtests;
+  osintLayers.terror.loader=loadTerror;
   osintLayers.quakes.loader=loadEarthquakes;
+  osintLayers.wildfires.loader=()=>loadEonet('wildfires');
+  osintLayers.volcanoes.loader=()=>loadEonet('volcanoes');
+  osintLayers.storms.loader=()=>loadEonet('severeStorms');
+  osintLayers.floods.loader=()=>loadEonet('floods');
   osintLayers.disasters.loader=loadDisasters;
+  osintLayers.nuclear.loader=loadNuclearSites;
   osintLayers.flights.loader=loadFlights;
 
-  // Initial load + periodic refresh
-  loadGdeltEvents();
-  loadEarthquakes();
-  loadDisasters();
+  // Initial loads
+  Object.entries(osintLayers).forEach(([key,info])=>{
+    if(info.active&&info.loader)info.loader();
+  });
+  // Periodic refresh
   setInterval(loadGdeltEvents,5*60*1000);
+  setInterval(loadConflicts,5*60*1000);
+  setInterval(loadProtests,5*60*1000);
   setInterval(loadEarthquakes,5*60*1000);
+  setInterval(()=>{loadEonet('wildfires');loadEonet('volcanoes');loadEonet('severeStorms');loadEonet('floods');},10*60*1000);
   setInterval(loadDisasters,15*60*1000);
 
-  // Layer panel control (top-right)
+  // Layer panel control (top-right) — grouped by category
+  const groups={intel:'Intelligence',natural:'Natural Events',infra:'Infrastructure'};
   const LayerPanel=L.Control.extend({
     options:{position:'topright'},
     onAdd:function(){
       const div=L.DomUtil.create('div','leaflet-bar osint-layer-panel');
-      div.style.cssText='background:var(--panel,#111520);border:1px solid var(--border,rgba(255,255,255,0.06));border-radius:6px;padding:6px 8px;font-size:11px;color:var(--text,#e8eaf0);min-width:130px';
-      let html='<div style="font-weight:600;margin-bottom:4px;color:var(--text-mid,#9ca3af);font-size:10px;text-transform:uppercase;letter-spacing:.05em">Layers</div>';
-      Object.entries(osintLayers).forEach(([key,info])=>{
-        html+='<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:2px 0">'+
-          '<input type="checkbox" data-layer="'+key+'" '+(info.active?'checked':'')+' style="margin:0">'+
-          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+info.color+'"></span>'+
-          '<span style="font-size:11px">'+info.name+'</span>'+
-        '</label>';
+      div.style.cssText='background:var(--panel,#111520);border:1px solid var(--border,rgba(255,255,255,0.06));border-radius:6px;padding:6px 8px;font-size:11px;color:var(--text,#e8eaf0);min-width:140px;max-height:340px;overflow-y:auto;scrollbar-width:thin';
+      let html='';
+      Object.entries(groups).forEach(([gKey,gLabel])=>{
+        html+='<div style="font-weight:600;margin:6px 0 3px;color:var(--text-mid,#9ca3af);font-size:9px;text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--border,rgba(255,255,255,0.06));padding-top:5px">'+gLabel+'</div>';
+        Object.entries(osintLayers).forEach(([key,info])=>{
+          if(info.group!==gKey)return;
+          html+='<label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:1.5px 0">'+
+            '<input type="checkbox" data-layer="'+key+'" '+(info.active?'checked':'')+' style="margin:0;width:12px;height:12px">'+
+            '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+info.color+';flex-shrink:0"></span>'+
+            '<span style="font-size:10px;white-space:nowrap">'+info.name+'</span>'+
+          '</label>';
+        });
       });
-      html+='<div style="border-top:1px solid var(--border,rgba(255,255,255,0.06));margin:4px 0;padding-top:4px">'+
-        '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:2px 0">'+
-        '<input type="checkbox" id="radarToggleCheck" style="margin:0">'+
-        '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4299e1"></span>'+
-        '<span style="font-size:11px">Weather Radar</span>'+
-      '</label></div>';
+      html+='<div style="font-weight:600;margin:6px 0 3px;color:var(--text-mid,#9ca3af);font-size:9px;text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--border,rgba(255,255,255,0.06));padding-top:5px">Weather</div>'+
+        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:1.5px 0">'+
+        '<input type="checkbox" id="radarToggleCheck" style="margin:0;width:12px;height:12px">'+
+        '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#4299e1;flex-shrink:0"></span>'+
+        '<span style="font-size:10px">Radar</span>'+
+      '</label>';
       div.innerHTML=html;
       L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
       div.querySelectorAll('input[data-layer]').forEach(cb=>{
         cb.addEventListener('change',(e)=>{
           const key=e.target.dataset.layer;
@@ -953,9 +980,12 @@ function updateMapStats(){
   const el1=document.getElementById('mStat1');
   const el2=document.getElementById('mStat2');
   const el3=document.getElementById('mStat3');
-  if(el1)el1.textContent=(osintLayers.events.layer?.getLayers().length||0).toLocaleString();
-  if(el2)el2.textContent=(osintLayers.quakes.layer?.getLayers().length||0).toLocaleString();
-  if(el3)el3.textContent=(osintLayers.disasters.layer?.getLayers().length||0).toLocaleString();
+  const intelCount=['events','conflicts','protests','terror'].reduce((s,k)=>s+(osintLayers[k]?.layer?.getLayers().length||0),0);
+  const naturalCount=['quakes','wildfires','volcanoes','storms','floods','disasters'].reduce((s,k)=>s+(osintLayers[k]?.layer?.getLayers().length||0),0);
+  const infraCount=['nuclear','flights'].reduce((s,k)=>s+(osintLayers[k]?.layer?.getLayers().length||0),0);
+  if(el1)el1.textContent=intelCount.toLocaleString();
+  if(el2)el2.textContent=naturalCount.toLocaleString();
+  if(el3)el3.textContent=infraCount.toLocaleString();
 }
 
 function loadGdeltEvents(){
@@ -1087,6 +1117,149 @@ function loadFlights(){
     });
     updateMapStats();
   }).catch(()=>{});
+}
+
+/* -- GDELT theme-filtered layers: Conflicts, Protests, Terrorism -- */
+function loadGdeltTheme(layerKey,query,labelColor,labelPrefix){
+  const info=osintLayers[layerKey];
+  if(!info||!info.layer)return;
+  const url='https://api.gdeltproject.org/api/v2/geo/geo?query='+encodeURIComponent(query)+'&mode=PointData&format=GeoJSON&TIMESPAN=24h&MAXROWS=150';
+  intelFetch(url).then(txt=>{
+    let gj;
+    try{gj=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
+    if(!gj||!gj.features)return;
+    info.layer.clearLayers();
+    gj.features.forEach(f=>{
+      if(!f.geometry||!f.geometry.coordinates)return;
+      const [lon,lat]=f.geometry.coordinates;
+      const p=f.properties||{};
+      const name=p.name||p.html||'Event';
+      const url=p.url||'';
+      const marker=L.circleMarker([lat,lon],{
+        radius:5,fillColor:labelColor,color:'rgba(255,255,255,0.4)',weight:1,fillOpacity:0.75,
+      });
+      let popup='<div style="max-width:240px;font-size:11px;line-height:1.4">'+
+        '<strong style="color:'+labelColor+'">'+labelPrefix+'</strong><br>'+
+        '<span>'+name.substring(0,200)+'</span>';
+      if(url)popup+='<br><a href="'+url+'" target="_blank" style="color:#00d4ff">Source</a>';
+      popup+='</div>';
+      marker.bindPopup(popup);
+      marker.addTo(info.layer);
+    });
+    updateMapStats();
+  }).catch(()=>{});
+}
+function loadConflicts(){loadGdeltTheme('conflicts','sourcelang:eng (theme:MILITARY OR theme:ARMED_CONFLICT OR theme:TAX_WEAPONS)','#dc2626','Armed Conflict');}
+function loadProtests(){loadGdeltTheme('protests','sourcelang:eng (theme:PROTEST OR theme:CIVIL_UNREST)','#f59e0b','Protest/Unrest');}
+function loadTerror(){loadGdeltTheme('terror','sourcelang:eng (theme:TERROR OR theme:EXTREMISM)','#7c3aed','Terrorism/Security');}
+
+/* -- NASA EONET: natural events (wildfires, volcanoes, storms, floods) -- */
+const EONET_CATS={
+  wildfires:    {id:'wildfires',   color:'#f97316', label:'Wildfire'},
+  volcanoes:    {id:'volcanoes',   color:'#ef4444', label:'Volcano'},
+  severeStorms: {id:'severeStorms',color:'#8b5cf6', label:'Severe Storm'},
+  floods:       {id:'floods',      color:'#3b82f6', label:'Flood'},
+};
+const _eonetCache={};
+function loadEonet(catKey){
+  const cat=EONET_CATS[catKey];
+  if(!cat)return;
+  // Map EONET cat to our layer key
+  const layerMap={wildfires:'wildfires',volcanoes:'volcanoes',severeStorms:'storms',floods:'floods'};
+  const info=osintLayers[layerMap[catKey]];
+  if(!info||!info.layer)return;
+  const url='https://eonet.gsfc.nasa.gov/api/v3/events?category='+cat.id+'&status=open&limit=100';
+  const cached=_eonetCache[catKey];
+  if(cached&&Date.now()-cached.ts<5*60*1000){renderEonet(info,cached.data,cat);return;}
+  intelFetch(url).then(txt=>{
+    let data;
+    try{data=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
+    if(!data||!data.events)return;
+    _eonetCache[catKey]={ts:Date.now(),data};
+    renderEonet(info,data,cat);
+  }).catch(()=>{});
+}
+function renderEonet(info,data,cat){
+  info.layer.clearLayers();
+  data.events.forEach(ev=>{
+    const geo=ev.geometry;
+    if(!geo||!geo.length)return;
+    // Use the most recent geometry point
+    const latest=geo[geo.length-1];
+    if(!latest||!latest.coordinates)return;
+    const [lon,lat]=latest.coordinates;
+    const marker=L.circleMarker([lat,lon],{
+      radius:6,fillColor:cat.color,color:'#fff',weight:1.5,fillOpacity:0.7,
+    });
+    const date=latest.date?new Date(latest.date).toLocaleDateString():'';
+    let popup='<div style="max-width:240px;font-size:11px;line-height:1.4">'+
+      '<strong style="color:'+cat.color+'">'+cat.label+'</strong><br>'+
+      '<span>'+(ev.title||'Unknown')+'</span>';
+    if(date)popup+='<br><span style="color:#9ca3af;font-size:10px">'+date+'</span>';
+    if(ev.sources&&ev.sources[0])popup+='<br><a href="'+ev.sources[0].url+'" target="_blank" style="color:#00d4ff">Source</a>';
+    popup+='</div>';
+    marker.bindPopup(popup);
+    marker.addTo(info.layer);
+  });
+  updateMapStats();
+}
+
+/* -- Nuclear facilities (major sites worldwide, static dataset) -- */
+const NUCLEAR_SITES=[
+  {name:'Zaporizhzhia NPP',lat:47.51,lon:34.58,country:'Ukraine',mw:5700},
+  {name:'Bruce NPP',lat:44.33,lon:-81.60,country:'Canada',mw:6384},
+  {name:'Kashiwazaki-Kariwa',lat:37.43,lon:138.60,country:'Japan',mw:7965},
+  {name:'Hanul NPP',lat:37.09,lon:129.38,country:'South Korea',mw:5881},
+  {name:'Gravelines',lat:51.01,lon:2.11,country:'France',mw:5460},
+  {name:'Cattenom',lat:49.41,lon:6.22,country:'France',mw:5448},
+  {name:'Palo Verde',lat:33.39,lon:-112.86,country:'USA',mw:3937},
+  {name:'Vogtle',lat:33.14,lon:-81.76,country:'USA',mw:4540},
+  {name:'Hinkley Point C',lat:51.21,lon:-3.13,country:'UK',mw:3260},
+  {name:'Tianwan',lat:34.69,lon:119.46,country:'China',mw:6520},
+  {name:'Yangjiang',lat:21.71,lon:111.98,country:'China',mw:6000},
+  {name:'Hongyanhe',lat:39.79,lon:121.48,country:'China',mw:6710},
+  {name:'Barakah',lat:23.96,lon:52.26,country:'UAE',mw:5600},
+  {name:'Kudankulam',lat:8.17,lon:77.71,country:'India',mw:4000},
+  {name:'Leningrad II',lat:59.85,lon:29.05,country:'Russia',mw:4680},
+  {name:'Novovoronezh II',lat:51.27,lon:39.22,country:'Russia',mw:2400},
+  {name:'Akkuyu',lat:36.15,lon:33.53,country:'Turkiye',mw:4800},
+  {name:'Olkiluoto',lat:61.24,lon:21.45,country:'Finland',mw:2860},
+  {name:'Fukushima Daiichi',lat:37.42,lon:141.03,country:'Japan',mw:0,note:'Decommissioning'},
+  {name:'Chernobyl',lat:51.39,lon:30.10,country:'Ukraine',mw:0,note:'Exclusion zone'},
+  {name:'Sellafield',lat:54.42,lon:-3.50,country:'UK',mw:0,note:'Reprocessing'},
+  {name:'Dimona',lat:31.00,lon:35.15,country:'Israel',mw:0,note:'Research reactor'},
+  {name:'Yongbyon',lat:39.80,lon:125.75,country:'DPRK',mw:0,note:'Nuclear complex'},
+  {name:'Bushehr',lat:28.83,lon:50.89,country:'Iran',mw:1000},
+  {name:'Natanz',lat:33.72,lon:51.73,country:'Iran',mw:0,note:'Enrichment facility'},
+  {name:'Parchin',lat:35.52,lon:51.77,country:'Iran',mw:0,note:'Military complex'},
+  {name:'Rokkasho',lat:40.96,lon:141.33,country:'Japan',mw:0,note:'Reprocessing'},
+  {name:'La Hague',lat:49.68,lon:-1.88,country:'France',mw:0,note:'Reprocessing'},
+  {name:'Savannah River',lat:33.34,lon:-81.74,country:'USA',mw:0,note:'DOE site'},
+  {name:'Hanford',lat:46.55,lon:-119.49,country:'USA',mw:0,note:'Cleanup site'},
+  {name:'Los Alamos',lat:35.84,lon:-106.29,country:'USA',mw:0,note:'National lab'},
+  {name:'Mayak',lat:55.71,lon:60.85,country:'Russia',mw:0,note:'Reprocessing'},
+];
+function loadNuclearSites(){
+  const info=osintLayers.nuclear;
+  if(!info||!info.layer)return;
+  info.layer.clearLayers();
+  NUCLEAR_SITES.forEach(s=>{
+    const marker=L.marker([s.lat,s.lon],{
+      icon:L.divIcon({
+        className:'',
+        html:'<div style="width:12px;height:12px;border-radius:50%;background:rgba(34,211,238,0.15);border:2px solid #22d3ee;box-shadow:0 0 8px rgba(34,211,238,0.4);display:flex;align-items:center;justify-content:center;font-size:7px;color:#22d3ee;font-weight:700">☢</div>',
+        iconSize:[12,12],iconAnchor:[6,6],
+      }),
+    });
+    let popup='<div style="max-width:220px;font-size:11px;line-height:1.4">'+
+      '<strong style="color:#22d3ee">☢ '+s.name+'</strong><br>'+
+      '<span>'+s.country+'</span>';
+    if(s.mw>0)popup+='<br><span style="color:#9ca3af;font-size:10px">Capacity: '+s.mw+' MW</span>';
+    if(s.note)popup+='<br><span style="color:#f59e0b;font-size:10px">'+s.note+'</span>';
+    popup+='</div>';
+    marker.bindPopup(popup);
+    marker.addTo(info.layer);
+  });
 }
 
 function loadRadarTimestamp(){

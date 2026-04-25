@@ -544,8 +544,8 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
       <iframe id="mapIframe" src="about:blank" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade" sandbox="allow-scripts allow-same-origin allow-popups allow-forms" style="display:none"></iframe>
       <div class="map-bar" style="z-index:2">
         <span class="mbar-s"><span class="mbar-v" id="mStat1">—</span> Events</span>
-        <span class="mbar-s"><span class="mbar-v" id="mStat2">—</span> Flights</span>
-        <span class="mbar-s"><span class="mbar-v" id="mStat3">—</span> Vessels</span>
+        <span class="mbar-s"><span class="mbar-v" id="mStat2">—</span> Quakes</span>
+        <span class="mbar-s"><span class="mbar-v" id="mStat3">—</span> Disasters</span>
       </div>
     </div>
   </div>
@@ -868,8 +868,13 @@ let radarLayer=null;
 let radarTimestamp=null;
 
 let osintMap=null;
-let osintEventLayer=null;
 let currentMapMode='osint';
+const osintLayers={
+  events:    { layer:null, active:true,  loader:null, name:'GDELT Events',     color:'#ffa502' },
+  quakes:    { layer:null, active:true,  loader:null, name:'Earthquakes',      color:'#ff4757' },
+  disasters: { layer:null, active:true,  loader:null, name:'Active Disasters', color:'#ff6b35' },
+  flights:   { layer:null, active:false, loader:null, name:'Aircraft',         color:'#00d4ff' },
+};
 
 function initLeafletMap(){
   if(osintMap)return;
@@ -881,37 +886,88 @@ function initLeafletMap(){
   });
   L.control.attribution({position:'bottomright',prefix:false}).addTo(osintMap);
 
-  osintEventLayer=L.layerGroup().addTo(osintMap);
-  loadGdeltEvents();
-  setInterval(loadGdeltEvents,5*60*1000);
+  // Initialize each OSINT layer group
+  Object.keys(osintLayers).forEach(key=>{
+    osintLayers[key].layer=L.layerGroup();
+    if(osintLayers[key].active)osintLayers[key].layer.addTo(osintMap);
+  });
+  osintLayers.events.loader=loadGdeltEvents;
+  osintLayers.quakes.loader=loadEarthquakes;
+  osintLayers.disasters.loader=loadDisasters;
+  osintLayers.flights.loader=loadFlights;
 
-  // Radar toggle control
-  const RadarControl=L.Control.extend({
+  // Initial load + periodic refresh
+  loadGdeltEvents();
+  loadEarthquakes();
+  loadDisasters();
+  setInterval(loadGdeltEvents,5*60*1000);
+  setInterval(loadEarthquakes,5*60*1000);
+  setInterval(loadDisasters,15*60*1000);
+
+  // Layer panel control (top-right)
+  const LayerPanel=L.Control.extend({
     options:{position:'topright'},
     onAdd:function(){
-      const div=L.DomUtil.create('div','leaflet-bar leaflet-radar-toggle');
-      div.innerHTML='<a href="#" title="Toggle weather radar" style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;background:var(--panel,#111520);border:1px solid var(--border,rgba(255,255,255,0.06));color:var(--text,#e8eaf0);font-size:11px;font-weight:600;text-decoration:none;border-radius:4px" id="radarToggleBtn">R</a>';
-      L.DomEvent.disableClickPropagation(div);
-      div.querySelector('a').addEventListener('click',(e)=>{
-        e.preventDefault();
-        toggleRadar();
+      const div=L.DomUtil.create('div','leaflet-bar osint-layer-panel');
+      div.style.cssText='background:var(--panel,#111520);border:1px solid var(--border,rgba(255,255,255,0.06));border-radius:6px;padding:6px 8px;font-size:11px;color:var(--text,#e8eaf0);min-width:130px';
+      let html='<div style="font-weight:600;margin-bottom:4px;color:var(--text-mid,#9ca3af);font-size:10px;text-transform:uppercase;letter-spacing:.05em">Layers</div>';
+      Object.entries(osintLayers).forEach(([key,info])=>{
+        html+='<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:2px 0">'+
+          '<input type="checkbox" data-layer="'+key+'" '+(info.active?'checked':'')+' style="margin:0">'+
+          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+info.color+'"></span>'+
+          '<span style="font-size:11px">'+info.name+'</span>'+
+        '</label>';
       });
+      html+='<div style="border-top:1px solid var(--border,rgba(255,255,255,0.06));margin:4px 0;padding-top:4px">'+
+        '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:2px 0">'+
+        '<input type="checkbox" id="radarToggleCheck" style="margin:0">'+
+        '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4299e1"></span>'+
+        '<span style="font-size:11px">Weather Radar</span>'+
+      '</label></div>';
+      div.innerHTML=html;
+      L.DomEvent.disableClickPropagation(div);
+      div.querySelectorAll('input[data-layer]').forEach(cb=>{
+        cb.addEventListener('change',(e)=>{
+          const key=e.target.dataset.layer;
+          const info=osintLayers[key];
+          info.active=e.target.checked;
+          if(e.target.checked){
+            info.layer.addTo(osintMap);
+            if(info.loader)info.loader();
+          } else {
+            osintMap.removeLayer(info.layer);
+          }
+          updateMapStats();
+        });
+      });
+      const radarCb=div.querySelector('#radarToggleCheck');
+      if(radarCb)radarCb.addEventListener('change',()=>toggleRadar());
       return div;
     }
   });
-  osintMap.addControl(new RadarControl());
+  osintMap.addControl(new LayerPanel());
   loadRadarTimestamp();
 }
 
+function updateMapStats(){
+  const el1=document.getElementById('mStat1');
+  const el2=document.getElementById('mStat2');
+  const el3=document.getElementById('mStat3');
+  if(el1)el1.textContent=(osintLayers.events.layer?.getLayers().length||0).toLocaleString();
+  if(el2)el2.textContent=(osintLayers.quakes.layer?.getLayers().length||0).toLocaleString();
+  if(el3)el3.textContent=(osintLayers.disasters.layer?.getLayers().length||0).toLocaleString();
+}
+
 function loadGdeltEvents(){
-  if(!osintEventLayer)return;
-  const url='https://api.gdeltproject.org/api/v2/geo/geo?query=&mode=PointData&format=GeoJSON&timespan=1440&MAXROWS=250';
+  const info=osintLayers.events;
+  if(!info||!info.layer)return;
+  // GDELT requires a non-empty query. Use a broad filter for major news in last 24h.
+  const url='https://api.gdeltproject.org/api/v2/geo/geo?query=sourcelang:eng&mode=PointData&format=GeoJSON&TIMESPAN=24h&MAXROWS=200';
   intelFetch(url).then(txt=>{
     let geojson;
     try{geojson=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
     if(!geojson||!geojson.features)return;
-    osintEventLayer.clearLayers();
-    let count=0;
+    info.layer.clearLayers();
     geojson.features.forEach(f=>{
       if(!f.geometry||!f.geometry.coordinates)return;
       const [lon,lat]=f.geometry.coordinates;
@@ -923,16 +979,113 @@ function loadGdeltEvents(){
       const marker=L.circleMarker([lat,lon],{
         radius:4,fillColor:color,color:'rgba(255,255,255,0.3)',weight:1,fillOpacity:0.8,
       });
-      let popup='<div style="max-width:220px;font-size:11px;line-height:1.3">'+
-        '<strong>'+name.substring(0,120)+'</strong>';
-      if(url)popup+='<br><a href="'+url+'" target="_blank" style="color:#00d4ff">Source</a>';
+      let popup='<div style="max-width:240px;font-size:11px;line-height:1.4">'+
+        '<strong style="color:#00d4ff">GDELT Event</strong><br>'+
+        '<span>'+name.substring(0,180)+'</span>';
+      if(props.tone)popup+='<br><span style="color:'+color+';font-size:10px">Tone: '+(+tone).toFixed(1)+'</span>';
+      if(url)popup+='<br><a href="'+url+'" target="_blank" style="color:#00d4ff">Read source</a>';
       popup+='</div>';
       marker.bindPopup(popup);
-      marker.addTo(osintEventLayer);
-      count++;
+      marker.addTo(info.layer);
     });
-    const el=document.getElementById('mStat1');
-    if(el)el.textContent=count.toLocaleString();
+    updateMapStats();
+  }).catch(()=>{});
+}
+
+function loadEarthquakes(){
+  const info=osintLayers.quakes;
+  if(!info||!info.layer)return;
+  // USGS earthquakes feed: M2.5+ in last 24h, GeoJSON, no key required
+  const url='https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson';
+  intelFetch(url).then(txt=>{
+    let geojson;
+    try{geojson=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
+    if(!geojson||!geojson.features)return;
+    info.layer.clearLayers();
+    geojson.features.forEach(f=>{
+      if(!f.geometry||!f.geometry.coordinates)return;
+      const [lon,lat,depth]=f.geometry.coordinates;
+      const p=f.properties||{};
+      const mag=p.mag||0;
+      const radius=Math.max(4,Math.min(18,mag*3));
+      const color=mag>=6?'#dc2626':mag>=5?'#f97316':mag>=4?'#eab308':'#facc15';
+      const marker=L.circleMarker([lat,lon],{
+        radius,fillColor:color,color:'#fff',weight:1.2,fillOpacity:0.5,
+      });
+      const time=p.time?new Date(p.time).toUTCString():'';
+      let popup='<div style="max-width:240px;font-size:11px;line-height:1.4">'+
+        '<strong style="color:'+color+'">M'+mag.toFixed(1)+' Earthquake</strong><br>'+
+        '<span>'+(p.place||'Unknown location')+'</span><br>'+
+        '<span style="color:#9ca3af;font-size:10px">Depth: '+depth.toFixed(0)+'km · '+time+'</span>';
+      if(p.url)popup+='<br><a href="'+p.url+'" target="_blank" style="color:#00d4ff">USGS detail</a>';
+      popup+='</div>';
+      marker.bindPopup(popup);
+      marker.addTo(info.layer);
+    });
+    updateMapStats();
+  }).catch(()=>{});
+}
+
+function loadDisasters(){
+  const info=osintLayers.disasters;
+  if(!info||!info.layer)return;
+  // ReliefWeb disasters API (UN OCHA), free, no key
+  const url='https://api.reliefweb.int/v1/disasters?appname=monitorbrowser&filter[field]=status&filter[value]=alert&fields[include][]=name&fields[include][]=country&fields[include][]=primary_country.location&fields[include][]=type&fields[include][]=url&limit=80&sort[]=date.created:desc';
+  intelFetch(url).then(txt=>{
+    let data;
+    try{data=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
+    if(!data||!data.data)return;
+    info.layer.clearLayers();
+    data.data.forEach(item=>{
+      const f=item.fields||{};
+      const loc=f.primary_country?.location;
+      if(!loc||!loc.lat||!loc.lon)return;
+      const lat=parseFloat(loc.lat),lon=parseFloat(loc.lon);
+      if(isNaN(lat)||isNaN(lon))return;
+      const marker=L.marker([lat,lon],{
+        icon:L.divIcon({
+          className:'osint-disaster-icon',
+          html:'<div style="width:14px;height:14px;background:#ff6b35;border:2px solid #fff;border-radius:50%;box-shadow:0 0 6px rgba(255,107,53,0.6)"></div>',
+          iconSize:[14,14],iconAnchor:[7,7],
+        }),
+      });
+      const types=(f.type||[]).map(t=>t.name).join(', ');
+      let popup='<div style="max-width:240px;font-size:11px;line-height:1.4">'+
+        '<strong style="color:#ff6b35">'+(f.name||'Disaster')+'</strong><br>'+
+        '<span>'+(f.primary_country?.name||'')+'</span>';
+      if(types)popup+='<br><span style="color:#9ca3af;font-size:10px">'+types+'</span>';
+      if(f.url)popup+='<br><a href="'+f.url+'" target="_blank" style="color:#00d4ff">ReliefWeb</a>';
+      popup+='</div>';
+      marker.bindPopup(popup);
+      marker.addTo(info.layer);
+    });
+    updateMapStats();
+  }).catch(()=>{});
+}
+
+function loadFlights(){
+  const info=osintLayers.flights;
+  if(!info||!info.layer)return;
+  // OpenSky public anonymous endpoint, limited to a bounding box for sanity.
+  // Use viewport bounds when possible, otherwise western Europe + N. America sample.
+  if(!osintMap)return;
+  const b=osintMap.getBounds();
+  const url=`https://opensky-network.org/api/states/all?lamin=${b.getSouth().toFixed(2)}&lomin=${b.getWest().toFixed(2)}&lamax=${b.getNorth().toFixed(2)}&lomax=${b.getEast().toFixed(2)}`;
+  intelFetch(url).then(txt=>{
+    let data;
+    try{data=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
+    if(!data||!Array.isArray(data.states))return;
+    info.layer.clearLayers();
+    data.states.slice(0,300).forEach(s=>{
+      const lon=s[5],lat=s[6],callsign=(s[1]||'').trim(),country=s[2];
+      if(typeof lat!=='number'||typeof lon!=='number')return;
+      const marker=L.circleMarker([lat,lon],{
+        radius:3,fillColor:'#00d4ff',color:'#fff',weight:0.5,fillOpacity:0.9,
+      });
+      marker.bindPopup('<div style="font-size:11px"><strong>'+(callsign||'Aircraft')+'</strong><br>'+(country||'')+'</div>');
+      marker.addTo(info.layer);
+    });
+    updateMapStats();
   }).catch(()=>{});
 }
 
@@ -949,11 +1102,9 @@ function loadRadarTimestamp(){
 
 function toggleRadar(){
   if(!osintMap)return;
-  const btn=document.getElementById('radarToggleBtn');
   if(radarLayer){
     osintMap.removeLayer(radarLayer);
     radarLayer=null;
-    if(btn){btn.style.background='var(--panel,#111520)';btn.style.color='var(--text,#e8eaf0)';}
     return;
   }
   if(!radarTimestamp){
@@ -965,7 +1116,6 @@ function toggleRadar(){
     opacity:0.6,maxZoom:18,
   });
   radarLayer.addTo(osintMap);
-  if(btn){btn.style.background='var(--accent,#00d4ff)';btn.style.color='#000';}
 }
 
 function setMapMode(mode){

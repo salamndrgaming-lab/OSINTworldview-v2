@@ -6,6 +6,8 @@
 <title>Monitor Browser — New Tab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <style>
 :root {
   /* Spec tokens */
@@ -137,6 +139,12 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .map-wgt{grid-column:2/4;grid-row:1/2}
 .map-frame{flex:1;position:relative;min-height:0}
 .map-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:none;filter:saturate(.55) brightness(.65) contrast(1.1);border-radius:0 0 9px 9px}
+#leafletMap{filter:brightness(.75) contrast(1.1) saturate(.6)}
+#leafletMap .leaflet-popup-content-wrapper{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;font-family:var(--font);font-size:12px}
+#leafletMap .leaflet-popup-tip{background:var(--panel)}
+#leafletMap .leaflet-popup-content a{color:var(--accent)}
+#leafletMap .leaflet-control-zoom a{background:var(--panel);color:var(--text);border-color:var(--border)}
+#leafletMap .leaflet-control-zoom a:hover{background:var(--surface2)}
 .map-bar{position:absolute;bottom:0;left:0;right:0;padding:7px 12px;background:linear-gradient(0deg,rgba(6,6,8,.92) 0%,transparent 100%);display:flex;align-items:center;gap:12px;pointer-events:none}
 .mbar-s{display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;color:var(--text2)}
 .mbar-v{color:var(--text);font-weight:600}
@@ -385,16 +393,13 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
       <div class="sg">
         <span class="sg-lbl">Map Source</span>
         <select class="msel" id="mapSel">
-          <option value="osm">OpenStreetMap</option>
-          <option value="osmCycle">OSM — Cycle</option>
-          <option value="osmTransport">OSM — Transport</option>
-          <option value="osmHumanitarian">OSM — Humanitarian</option>
+          <option value="osint">OSINT Map (Leaflet)</option>
+          <option value="satellite">Satellite View</option>
           <option value="windy">Windy — Wind</option>
           <option value="windyTemp">Windy — Temperature</option>
           <option value="windyClouds">Windy — Clouds</option>
           <option value="windyRadar">Windy — Radar</option>
           <option value="earth">Earth Wind &amp; Atmosphere</option>
-          <option value="zoomEarth">Zoom Earth — Live Satellite</option>
           <option value="liveuamap">LiveUAMap — Conflicts</option>
           <option value="airnow">AirNow — Air Quality</option>
         </select>
@@ -504,16 +509,13 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
       <span class="wgt-title"><span class="wdot" style="background:var(--green);animation:blink 2s infinite"></span>Intelligence Map</span>
       <div class="wgt-ctrl">
         <select class="msel" id="mapLayer" style="padding:2px 6px;font-size:10px;width:auto">
-          <option value="osm">OSM</option>
-          <option value="osmCycle">OSM Cycle</option>
-          <option value="osmTransport">OSM Transport</option>
-          <option value="osmHumanitarian">OSM Humanitarian</option>
+          <option value="osint">OSINT Map</option>
+          <option value="satellite">Satellite</option>
           <option value="windy">Wind</option>
           <option value="windyTemp">Temperature</option>
           <option value="windyClouds">Clouds</option>
           <option value="windyRadar">Radar</option>
           <option value="earth">Earth Wind</option>
-          <option value="zoomEarth">Live Satellite</option>
           <option value="liveuamap">Conflicts</option>
           <option value="airnow">Air Quality</option>
         </select>
@@ -521,11 +523,12 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
       </div>
     </div>
     <div class="map-frame">
-      <iframe id="mapIframe" src="https://www.openstreetmap.org/export/embed.html?bbox=-180,-65,180,75&layer=mapnik" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
-      <div class="map-bar">
-        <span class="mbar-s"><span class="mbar-v" id="mStat1">847</span> Events</span>
-        <span class="mbar-s"><span class="mbar-v" id="mStat2">12,340</span> Flights</span>
-        <span class="mbar-s"><span class="mbar-v" id="mStat3">3,218</span> Vessels</span>
+      <div id="leafletMap" style="position:absolute;inset:0;z-index:1;border-radius:0 0 9px 9px"></div>
+      <iframe id="mapIframe" src="about:blank" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade" sandbox="allow-scripts allow-same-origin allow-popups allow-forms" style="display:none"></iframe>
+      <div class="map-bar" style="z-index:2">
+        <span class="mbar-s"><span class="mbar-v" id="mStat1">—</span> Events</span>
+        <span class="mbar-s"><span class="mbar-v" id="mStat2">—</span> Flights</span>
+        <span class="mbar-s"><span class="mbar-v" id="mStat3">—</span> Vessels</span>
       </div>
     </div>
   </div>
@@ -792,35 +795,127 @@ document.addEventListener('keydown',e=>{
 });
 
 /* ── MAP ──────────────────────────────────────── */
-/* Embeddable map sources. Avoid sites that block X-Frame-Options
-   (osintview.app, flightradar24, marinetraffic public) — those won't render. */
-const MAPS={
-  osm:               'https://www.openstreetmap.org/export/embed.html?bbox=-180,-65,180,75&layer=mapnik',
-  osmCycle:          'https://www.openstreetmap.org/export/embed.html?bbox=-180,-65,180,75&layer=cyclemap',
-  osmTransport:      'https://www.openstreetmap.org/export/embed.html?bbox=-180,-65,180,75&layer=transportmap',
-  osmHumanitarian:   'https://www.openstreetmap.org/export/embed.html?bbox=-180,-65,180,75&layer=hot',
-  windy:             'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=wind&product=ecmwf&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=kt&metricTemp=%C2%B0F&radarRange=-1',
-  windyTemp:         'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=temp&product=ecmwf&menu=&message=&marker=&calendar=now&type=map&metricTemp=%C2%B0F',
-  windyClouds:       'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=clouds&product=ecmwf&menu=&message=&marker=&calendar=now&type=map',
-  windyRadar:        'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=radar&product=radar&menu=&message=&marker=&calendar=now&type=map',
-  earth:             'https://earth.nullschool.net/',
-  zoomEarth:         'https://zoom.earth/',
-  liveuamap:         'https://liveuamap.com/',
-  airnow:            'https://gispub.epa.gov/airnow/',
+const IFRAME_MAPS={
+  windy:     'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=wind&product=ecmwf&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=kt&metricTemp=%C2%B0F&radarRange=-1',
+  windyTemp: 'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=temp&product=ecmwf&menu=&message=&marker=&calendar=now&type=map&metricTemp=%C2%B0F',
+  windyClouds:'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=clouds&product=ecmwf&menu=&message=&marker=&calendar=now&type=map',
+  windyRadar:'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=radar&product=radar&menu=&message=&marker=&calendar=now&type=map',
+  earth:     'https://earth.nullschool.net/',
+  liveuamap: 'https://liveuamap.com/',
+  airnow:    'https://gispub.epa.gov/airnow/',
 };
-const mapKeys=Object.keys(MAPS);let mapIdx=0;
+const LEAFLET_MODES=['osint','satellite'];
+
+const osmTiles=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'OSM',maxZoom:19});
+const esriSat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri',maxZoom:18});
+const esriLabels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,opacity:0.85});
+const hotTiles=L.tileLayer('https://tile-{s}.openstreetmap.fr/hot/{z}/{x}/{y}.png',{attribution:'HOT',maxZoom:19,subdomains:'abc'});
+
+let osintMap=null;
+let osintEventLayer=null;
+let currentMapMode='osint';
+
+function initLeafletMap(){
+  if(osintMap)return;
+  const el=document.getElementById('leafletMap');
+  if(!el)return;
+  osintMap=L.map(el,{
+    center:[20,0],zoom:3,zoomControl:true,attributionControl:false,
+    layers:[osmTiles],
+  });
+  L.control.attribution({position:'bottomright',prefix:false}).addTo(osintMap);
+
+  osintEventLayer=L.layerGroup().addTo(osintMap);
+  loadGdeltEvents();
+  setInterval(loadGdeltEvents,5*60*1000);
+}
+
+function loadGdeltEvents(){
+  if(!osintEventLayer)return;
+  const url='https://api.gdeltproject.org/api/v2/geo/geo?query=&mode=PointData&format=GeoJSON&timespan=1440&MAXROWS=250';
+  intelFetch(url).then(txt=>{
+    let geojson;
+    try{geojson=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
+    if(!geojson||!geojson.features)return;
+    osintEventLayer.clearLayers();
+    let count=0;
+    geojson.features.forEach(f=>{
+      if(!f.geometry||!f.geometry.coordinates)return;
+      const [lon,lat]=f.geometry.coordinates;
+      const props=f.properties||{};
+      const name=props.name||props.html||'Event';
+      const url=props.url||props.shareimage||'';
+      const tone=parseFloat(props.tone)||0;
+      const color=tone<-3?'#ef4444':tone>3?'#22c55e':'#ffa502';
+      const marker=L.circleMarker([lat,lon],{
+        radius:4,fillColor:color,color:'rgba(255,255,255,0.3)',weight:1,fillOpacity:0.8,
+      });
+      let popup='<div style="max-width:220px;font-size:11px;line-height:1.3">'+
+        '<strong>'+name.substring(0,120)+'</strong>';
+      if(url)popup+='<br><a href="'+url+'" target="_blank" style="color:#00d4ff">Source</a>';
+      popup+='</div>';
+      marker.bindPopup(popup);
+      marker.addTo(osintEventLayer);
+      count++;
+    });
+    const el=document.getElementById('mStat1');
+    if(el)el.textContent=count.toLocaleString();
+  }).catch(()=>{});
+}
+
+function setMapMode(mode){
+  const leafletEl=document.getElementById('leafletMap');
+  const iframeEl=document.getElementById('mapIframe');
+  if(!leafletEl||!iframeEl)return;
+  currentMapMode=mode;
+
+  if(LEAFLET_MODES.includes(mode)){
+    leafletEl.style.display='';
+    iframeEl.style.display='none';
+    iframeEl.src='about:blank';
+    if(!osintMap)initLeafletMap();
+    if(osintMap){
+      if(mode==='satellite'){
+        if(osintMap.hasLayer(osmTiles))osintMap.removeLayer(osmTiles);
+        if(osintMap.hasLayer(hotTiles))osintMap.removeLayer(hotTiles);
+        if(!osintMap.hasLayer(esriSat))osintMap.addLayer(esriSat);
+        if(!osintMap.hasLayer(esriLabels))osintMap.addLayer(esriLabels);
+      } else {
+        if(osintMap.hasLayer(esriSat))osintMap.removeLayer(esriSat);
+        if(osintMap.hasLayer(esriLabels))osintMap.removeLayer(esriLabels);
+        if(osintMap.hasLayer(hotTiles))osintMap.removeLayer(hotTiles);
+        if(!osintMap.hasLayer(osmTiles))osintMap.addLayer(osmTiles);
+      }
+      setTimeout(()=>osintMap.invalidateSize(),100);
+    }
+  } else if(IFRAME_MAPS[mode]){
+    leafletEl.style.display='none';
+    iframeEl.style.display='';
+    iframeEl.src=IFRAME_MAPS[mode];
+  }
+  cfg.mapSrc=mode;saveCfg(cfg);
+}
+
+const ALL_MAP_KEYS=[...LEAFLET_MODES,...Object.keys(IFRAME_MAPS)];
+let mapIdx=0;
 function cycleMap(){
-  mapIdx=(mapIdx+1)%mapKeys.length;
-  document.getElementById('mapIframe').src=MAPS[mapKeys[mapIdx]];
-  const sel=document.getElementById('mapSel');if(sel)sel.value=mapKeys[mapIdx];
-  cfg.mapSrc=mapKeys[mapIdx];saveCfg(cfg);
+  mapIdx=(mapIdx+1)%ALL_MAP_KEYS.length;
+  setMapMode(ALL_MAP_KEYS[mapIdx]);
+  const sel=document.getElementById('mapSel');if(sel)sel.value=ALL_MAP_KEYS[mapIdx];
 }
-function openMapFull(){window.open(MAPS[mapKeys[mapIdx]],'_blank');}
-if(cfg.mapSrc&&MAPS[cfg.mapSrc]){
-  document.getElementById('mapIframe').src=MAPS[cfg.mapSrc];
-  mapIdx=mapKeys.indexOf(cfg.mapSrc);
-  if(mapIdx<0)mapIdx=0;
+function openMapFull(){
+  if(LEAFLET_MODES.includes(currentMapMode)){
+    window.open('https://www.openstreetmap.org/#map=3/20/0','_blank');
+  } else if(IFRAME_MAPS[currentMapMode]){
+    window.open(IFRAME_MAPS[currentMapMode],'_blank');
+  }
 }
+
+// Restore saved map source
+const savedMapSrc=cfg.mapSrc||'osint';
+mapIdx=ALL_MAP_KEYS.indexOf(savedMapSrc);
+if(mapIdx<0)mapIdx=0;
+setMapMode(ALL_MAP_KEYS[mapIdx]);
 
 /* ── NEWS (GDELT RSS via allorigins proxy) ────── */
 /* Multi-source feeds: each category has several RSS URLs. loadFeed races them
@@ -1426,10 +1521,10 @@ esel.value=activeEng;
 esel.addEventListener('change',()=>{setEng(esel.value);document.querySelectorAll('.eng-btn').forEach(b=>b.classList.toggle('active',b.dataset.e===esel.value));});
 
 function setMapSrc(key){
-  const k=MAPS[key]?key:'osm';
-  document.getElementById('mapIframe').src=MAPS[k];
-  cfg.mapSrc=k;saveCfg(cfg);
-  mapIdx=mapKeys.indexOf(k);if(mapIdx<0)mapIdx=0;
+  const validKeys=[...LEAFLET_MODES,...Object.keys(IFRAME_MAPS)];
+  const k=validKeys.includes(key)?key:'osint';
+  setMapMode(k);
+  mapIdx=ALL_MAP_KEYS.indexOf(k);if(mapIdx<0)mapIdx=0;
   const ms=document.getElementById('mapSel');if(ms)ms.value=k;
   const ml=document.getElementById('mapLayer');if(ml)ml.value=k;
 }

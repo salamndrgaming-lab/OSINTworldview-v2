@@ -120,7 +120,7 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .act-btn:hover{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
 
 /* CONTENT GRID — spec: 4 cols × 2 rows */
-.cgrid{width:100%;max-width:1380px;margin:14px auto 0;padding:0 20px;display:grid;grid-template-columns:300px 1fr 1fr 300px;grid-template-rows:280px 280px;gap:12px;animation:rise .5s .13s cubic-bezier(.22,1,.36,1) both}
+.cgrid{width:100%;max-width:1480px;margin:14px auto 0;padding:0 20px;display:grid;grid-template-columns:320px minmax(0,1fr) minmax(0,1fr) 320px;grid-template-rows:300px 300px;gap:12px;animation:rise .5s .13s cubic-bezier(.22,1,.36,1) both}
 
 /* WIDGET SHELL */
 .wgt{border-radius:10px;border:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;overflow:hidden}
@@ -187,7 +187,9 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .ln-time{font-family:var(--mono);font-size:10px;color:var(--text3);flex-shrink:0}
 
 /* SIDEBAR (markets) — col 4, spans both rows */
-.sidebar{grid-column:4/5;grid-row:1/3;display:flex;flex-direction:column;gap:12px}
+.sidebar{grid-column:4/5;grid-row:1/3;display:flex;flex-direction:column;gap:12px;min-height:0}
+.sidebar > .wgt{flex:1 1 0;min-height:0}
+.sidebar > .wgt > div:last-child{flex:1;overflow-y:auto;min-height:0}
 .mkt-row{display:flex;align-items:center;justify-content:space-between;padding:8px 13px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
 .mkt-row:last-child{border-bottom:none}
 .mkt-row:hover{background:var(--surface2)}
@@ -308,10 +310,6 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .dip-src{font-size:10px;color:var(--text-dim);margin-top:2px}
 
 /* CUSTOMIZATION FLOAT ROW */
-.cust-row{position:fixed;top:60px;right:20px;z-index:90;display:flex;gap:6px;animation:rise .5s .4s cubic-bezier(.22,1,.36,1) both}
-.cust-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;border:1px solid var(--panel-border);background:rgba(17,21,32,.85);backdrop-filter:blur(10px);color:var(--text-mid);font-family:var(--font-head);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .18s}
-.cust-btn:hover{border-color:var(--accent-border);color:var(--accent);background:var(--accent-subtle)}
-.cust-btn svg{flex-shrink:0}
 
 /* ACCENT SWATCHES */
 .acc-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
@@ -386,7 +384,20 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
       <!-- MAP SOURCE -->
       <div class="sg">
         <span class="sg-lbl">Map Source</span>
-        <select class="msel" id="mapSel"><option value="osm">OpenStreetMap (Dark)</option><option value="windy">Windy Weather Map</option><option value="osintview">OSINTview Dashboard</option></select>
+        <select class="msel" id="mapSel">
+          <option value="osm">OpenStreetMap</option>
+          <option value="osmCycle">OSM — Cycle</option>
+          <option value="osmTransport">OSM — Transport</option>
+          <option value="osmHumanitarian">OSM — Humanitarian</option>
+          <option value="windy">Windy — Wind</option>
+          <option value="windyTemp">Windy — Temperature</option>
+          <option value="windyClouds">Windy — Clouds</option>
+          <option value="windyRadar">Windy — Radar</option>
+          <option value="earth">Earth Wind &amp; Atmosphere</option>
+          <option value="zoomEarth">Zoom Earth — Live Satellite</option>
+          <option value="liveuamap">LiveUAMap — Conflicts</option>
+          <option value="airnow">AirNow — Air Quality</option>
+        </select>
       </div>
     </div>
   </div>
@@ -415,12 +426,6 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
   </div>
 </header>
 
-<!-- CUSTOMIZATION FLOAT -->
-<div class="cust-row">
-  <button class="cust-btn" id="custBg"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Background</button>
-  <button class="cust-btn" id="custTheme"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>Theme</button>
-  <button class="cust-btn" id="custPanels"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Panels</button>
-</div>
 
 <!-- HERO: clock left / search center / weather right -->
 <div class="hero">
@@ -498,12 +503,25 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
     <div class="wgt-head">
       <span class="wgt-title"><span class="wdot" style="background:var(--green);animation:blink 2s infinite"></span>Intelligence Map</span>
       <div class="wgt-ctrl">
-        <button class="wc-btn" onclick="cycleMap()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-4.5"/></svg>Source</button>
+        <select class="msel" id="mapLayer" style="padding:2px 6px;font-size:10px;width:auto">
+          <option value="osm">OSM</option>
+          <option value="osmCycle">OSM Cycle</option>
+          <option value="osmTransport">OSM Transport</option>
+          <option value="osmHumanitarian">OSM Humanitarian</option>
+          <option value="windy">Wind</option>
+          <option value="windyTemp">Temperature</option>
+          <option value="windyClouds">Clouds</option>
+          <option value="windyRadar">Radar</option>
+          <option value="earth">Earth Wind</option>
+          <option value="zoomEarth">Live Satellite</option>
+          <option value="liveuamap">Conflicts</option>
+          <option value="airnow">Air Quality</option>
+        </select>
         <button class="wc-btn" onclick="openMapFull()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>Full</button>
       </div>
     </div>
     <div class="map-frame">
-      <iframe id="mapIframe" src="https://www.openstreetmap.org/export/embed.html?bbox=-180,-85,180,85&layer=mapnik" allowfullscreen loading="lazy"></iframe>
+      <iframe id="mapIframe" src="https://www.openstreetmap.org/export/embed.html?bbox=-180,-65,180,75&layer=mapnik" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
       <div class="map-bar">
         <span class="mbar-s"><span class="mbar-v" id="mStat1">847</span> Events</span>
         <span class="mbar-s"><span class="mbar-v" id="mStat2">12,340</span> Flights</span>
@@ -774,15 +792,35 @@ document.addEventListener('keydown',e=>{
 });
 
 /* ── MAP ──────────────────────────────────────── */
+/* Embeddable map sources. Avoid sites that block X-Frame-Options
+   (osintview.app, flightradar24, marinetraffic public) — those won't render. */
 const MAPS={
-  osm:'https://www.openstreetmap.org/export/embed.html?bbox=-180,-85,180,85&layer=mapnik',
-  windy:'https://embed.windy.com/embed2.html?lat=20&lon=0&detailLat=20&detailLon=0&width=650&height=450&zoom=3&level=surface&overlay=wind&product=ecmwf&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=kt&metricTemp=%C2%B0F&radarRange=-1',
-  osintview:'https://osintview.app',
+  osm:               'https://www.openstreetmap.org/export/embed.html?bbox=-180,-65,180,75&layer=mapnik',
+  osmCycle:          'https://www.openstreetmap.org/export/embed.html?bbox=-180,-65,180,75&layer=cyclemap',
+  osmTransport:      'https://www.openstreetmap.org/export/embed.html?bbox=-180,-65,180,75&layer=transportmap',
+  osmHumanitarian:   'https://www.openstreetmap.org/export/embed.html?bbox=-180,-65,180,75&layer=hot',
+  windy:             'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=wind&product=ecmwf&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=kt&metricTemp=%C2%B0F&radarRange=-1',
+  windyTemp:         'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=temp&product=ecmwf&menu=&message=&marker=&calendar=now&type=map&metricTemp=%C2%B0F',
+  windyClouds:       'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=clouds&product=ecmwf&menu=&message=&marker=&calendar=now&type=map',
+  windyRadar:        'https://embed.windy.com/embed2.html?lat=20&lon=0&zoom=3&level=surface&overlay=radar&product=radar&menu=&message=&marker=&calendar=now&type=map',
+  earth:             'https://earth.nullschool.net/',
+  zoomEarth:         'https://zoom.earth/',
+  liveuamap:         'https://liveuamap.com/',
+  airnow:            'https://gispub.epa.gov/airnow/',
 };
 const mapKeys=Object.keys(MAPS);let mapIdx=0;
-function cycleMap(){mapIdx=(mapIdx+1)%mapKeys.length;document.getElementById('mapIframe').src=MAPS[mapKeys[mapIdx]];}
+function cycleMap(){
+  mapIdx=(mapIdx+1)%mapKeys.length;
+  document.getElementById('mapIframe').src=MAPS[mapKeys[mapIdx]];
+  const sel=document.getElementById('mapSel');if(sel)sel.value=mapKeys[mapIdx];
+  cfg.mapSrc=mapKeys[mapIdx];saveCfg(cfg);
+}
 function openMapFull(){window.open(MAPS[mapKeys[mapIdx]],'_blank');}
-if(cfg.mapSrc){document.getElementById('mapIframe').src=MAPS[cfg.mapSrc]||MAPS.osm;mapIdx=mapKeys.indexOf(cfg.mapSrc)||0;}
+if(cfg.mapSrc&&MAPS[cfg.mapSrc]){
+  document.getElementById('mapIframe').src=MAPS[cfg.mapSrc];
+  mapIdx=mapKeys.indexOf(cfg.mapSrc);
+  if(mapIdx<0)mapIdx=0;
+}
 
 /* ── NEWS (GDELT RSS via allorigins proxy) ────── */
 /* Multi-source feeds: each category has several RSS URLs. loadFeed races them
@@ -1268,9 +1306,6 @@ function openModal(section){
 }
 function closeModal(){modal.classList.remove('open')}
 document.getElementById('custBtn')?.addEventListener('click',()=>openModal());
-document.getElementById('custBg')?.addEventListener('click',()=>openModal('sgBg'));
-document.getElementById('custTheme')?.addEventListener('click',()=>openModal('sgAccent'));
-document.getElementById('custPanels')?.addEventListener('click',()=>openModal('sgPanels'));
 document.getElementById('modalX').addEventListener('click',closeModal);
 modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
@@ -1390,9 +1425,18 @@ const esel=document.getElementById('engSel');
 esel.value=activeEng;
 esel.addEventListener('change',()=>{setEng(esel.value);document.querySelectorAll('.eng-btn').forEach(b=>b.classList.toggle('active',b.dataset.e===esel.value));});
 
+function setMapSrc(key){
+  const k=MAPS[key]?key:'osm';
+  document.getElementById('mapIframe').src=MAPS[k];
+  cfg.mapSrc=k;saveCfg(cfg);
+  mapIdx=mapKeys.indexOf(k);if(mapIdx<0)mapIdx=0;
+  const ms=document.getElementById('mapSel');if(ms)ms.value=k;
+  const ml=document.getElementById('mapLayer');if(ml)ml.value=k;
+}
 const msel=document.getElementById('mapSel');
-if(cfg.mapSrc)msel.value=cfg.mapSrc;
-msel.addEventListener('change',()=>{document.getElementById('mapIframe').src=MAPS[msel.value]||MAPS.osm;cfg.mapSrc=msel.value;saveCfg(cfg);});
+if(msel){if(cfg.mapSrc)msel.value=cfg.mapSrc;msel.addEventListener('change',()=>setMapSrc(msel.value));}
+const mLayer=document.getElementById('mapLayer');
+if(mLayer){if(cfg.mapSrc)mLayer.value=cfg.mapSrc;mLayer.addEventListener('change',()=>setMapSrc(mLayer.value));}
 
 /* ── SETTINGS SIDEBAR SYNC ─────────────────────── */
 const PANEL_MAP={

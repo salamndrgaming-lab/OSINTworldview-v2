@@ -242,6 +242,7 @@
   document.getElementById('action-history').addEventListener('click', () => togglePanel('history'));
   document.getElementById('action-downloads').addEventListener('click', () => togglePanel('downloads'));
   document.getElementById('action-extensions').addEventListener('click', () => togglePanel('extensions'));
+  document.getElementById('action-profile').addEventListener('click', () => togglePanel('profile'));
 
   urlScheme.addEventListener('click', () => showSecurityPopup());
   urlScheme.style.cursor = 'pointer';
@@ -625,8 +626,23 @@
     currentSettings = s || currentSettings;
     applyThemeToChrome(currentSettings.theme);
     applyIncognitoMode(currentSettings.incognito);
+    applyProfileBadge(currentSettings);
     if (typeof refreshBookmarksBar === 'function') refreshBookmarksBar();
   });
+
+  // Apply the operator's initials + color to the chrome's profile button.
+  function applyProfileBadge(s) {
+    const btn = document.getElementById('action-profile');
+    if (!btn) return;
+    const name = (s && s.profileName) || 'Analyst';
+    const initials = name.trim().split(/\s+/).map((p) => p[0] || '').join('').slice(0, 2).toUpperCase() || 'A';
+    btn.textContent = initials;
+    const color = (s && s.profileAvatarColor) || '#00d4ff';
+    btn.style.background = 'linear-gradient(135deg,' + color + '99,' + color + ')';
+    btn.title = 'Profile — ' + name;
+  }
+  // Run once on first load too.
+  browser.getSettings().then((r) => applyProfileBadge(r && r.settings)).catch(() => {});
 
   settingsBtn.addEventListener('click', () => openSettings());
 
@@ -1299,9 +1315,12 @@
 
   let activePanelId = null;
 
+  let _closeTimer = null;
   function togglePanel(id) {
     if (activePanelId === id) { closePanel(); return; }
-    closePanel();
+    // Cancel any pending close timer so we don't wipe the just-opened panel.
+    if (_closeTimer) { clearTimeout(_closeTimer); _closeTimer = null; }
+    if (activePanelId !== null) closePanel();
     activePanelId = id;
     browser.settingsExpand();
     const overlay = settingsOverlay;
@@ -1312,17 +1331,21 @@
     else if (id === 'downloads') renderDownloadsPanel(overlay);
     else if (id === 'permissions') renderPermissionsPanel(overlay);
     else if (id === 'extensions') renderExtensionsPanel(overlay);
+    else if (id === 'profile') renderProfilePanel(overlay);
 
     requestAnimationFrame(() => overlay.classList.add('visible'));
   }
 
   function closePanel() {
+    if (activePanelId === null) return;
     activePanelId = null;
     settingsOverlay.classList.remove('visible');
-    setTimeout(() => {
+    if (_closeTimer) clearTimeout(_closeTimer);
+    _closeTimer = setTimeout(() => {
       settingsOverlay.classList.add('hidden');
       settingsOverlay.innerHTML = '';
       browser.settingsCollapse();
+      _closeTimer = null;
     }, 300);
   }
 
@@ -1360,6 +1383,127 @@
   }
 
   refreshBookmarksBar();
+
+  // --- Profile panel ---
+  const PROFILE_COLORS = ['#00d4ff','#2ed573','#ff4757','#ffa502','#9f7aea','#4299e1','#d4a843','#e8eaf0'];
+  function renderProfilePanel(container) {
+    const s = currentSettings || {};
+    const name = s.profileName || 'Analyst';
+    const handle = s.profileHandle || '';
+    const email = s.profileEmail || '';
+    const color = s.profileAvatarColor || '#00d4ff';
+    const initials = name.trim().split(/\s+/).map((p) => p[0] || '').join('').slice(0, 2).toUpperCase() || 'A';
+
+    container.innerHTML =
+      '<div class="settings-card side-panel">' +
+      '  <header class="settings-head"><h2>Operator Profile</h2>' +
+      '    <button class="settings-close panel-close-btn">&times;</button></header>' +
+      '  <div style="padding:14px 18px">' +
+      '    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">' +
+      '      <div id="prof-avatar" style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,' + color + '99,' + color + ');display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-size:24px;font-weight:700;color:#0a0c10">' + esc(initials) + '</div>' +
+      '      <div style="flex:1">' +
+      '        <div id="prof-display-name" style="font-size:16px;font-weight:600;color:var(--text-primary)">' + esc(name) + '</div>' +
+      '        <div id="prof-display-handle" style="font-size:12px;color:var(--text-secondary)">' + esc(handle ? '@' + handle.replace(/^@/, '') : 'Set a handle below') + '</div>' +
+      '      </div>' +
+      '    </div>' +
+
+      '    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin:0 0 6px">Display Name</h3>' +
+      '    <input type="text" id="prof-name" value="' + escapeAttr(name) + '" placeholder="Analyst" maxlength="40" style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text-primary);margin-bottom:10px"/>' +
+
+      '    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin:0 0 6px">Handle</h3>' +
+      '    <input type="text" id="prof-handle" value="' + escapeAttr(handle) + '" placeholder="op_analyst" maxlength="30" style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text-primary);font-family:var(--font-data);margin-bottom:10px"/>' +
+
+      '    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin:0 0 6px">Email (optional)</h3>' +
+      '    <input type="email" id="prof-email" value="' + escapeAttr(email) + '" placeholder="analyst@example.com" maxlength="120" style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text-primary);margin-bottom:14px"/>' +
+
+      '    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin:0 0 6px">Avatar Color</h3>' +
+      '    <div id="prof-color-row" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">' +
+      PROFILE_COLORS.map((c) =>
+        '<div class="prof-color-sw' + (c === color ? ' is-active' : '') + '" data-color="' + c + '" style="width:22px;height:22px;border-radius:50%;background:' + c + ';cursor:pointer;border:2px solid ' + (c === color ? 'var(--text-primary)' : 'transparent') + ';transition:border-color .15s"></div>'
+      ).join('') +
+      '    </div>' +
+
+      '    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin:0 0 8px">Operator Stats</h3>' +
+      '    <div id="prof-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px">' +
+      '      <div class="prof-stat" style="background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">Operations</div><div id="stat-ops" style="font-family:var(--font-data);font-size:20px;font-weight:700;color:var(--text-primary)">—</div></div>' +
+      '      <div class="prof-stat" style="background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">Bookmarks</div><div id="stat-bookmarks" style="font-family:var(--font-data);font-size:20px;font-weight:700;color:var(--text-primary)">—</div></div>' +
+      '      <div class="prof-stat" style="background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">History</div><div id="stat-history" style="font-family:var(--font-data);font-size:20px;font-weight:700;color:var(--text-primary)">—</div></div>' +
+      '      <div class="prof-stat" style="background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">Open Tabs</div><div id="stat-tabs" style="font-family:var(--font-data);font-size:20px;font-weight:700;color:var(--text-primary)">—</div></div>' +
+      '    </div>' +
+
+      '    <div style="display:flex;gap:6px">' +
+      '      <button class="settings-btn" id="prof-export" style="flex:1">Export Session</button>' +
+      '      <button class="settings-btn" id="prof-reset" style="flex:1;color:var(--accent-red,#ff4757)">Reset Profile</button>' +
+      '    </div>' +
+      '  </div>' +
+      '</div>';
+
+    container.querySelector('.panel-close-btn').addEventListener('click', closePanel);
+    container.addEventListener('click', (e) => { if (e.target === container) closePanel(); });
+
+    function refreshHeader() {
+      const n = document.getElementById('prof-name').value || 'Analyst';
+      const h = document.getElementById('prof-handle').value;
+      const initialsNow = n.trim().split(/\s+/).map((p) => p[0] || '').join('').slice(0, 2).toUpperCase() || 'A';
+      document.getElementById('prof-display-name').textContent = n;
+      document.getElementById('prof-display-handle').textContent = h ? '@' + h.replace(/^@/, '') : 'Set a handle below';
+      document.getElementById('prof-avatar').textContent = initialsNow;
+    }
+
+    function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+    const saveSoon = debounce(() => {
+      browser.setSettings({
+        profileName: document.getElementById('prof-name').value.trim() || 'Analyst',
+        profileHandle: document.getElementById('prof-handle').value.trim().replace(/^@/, ''),
+        profileEmail: document.getElementById('prof-email').value.trim(),
+      });
+    }, 400);
+
+    ['prof-name', 'prof-handle', 'prof-email'].forEach((id) => {
+      document.getElementById(id).addEventListener('input', () => { refreshHeader(); saveSoon(); });
+    });
+
+    container.querySelectorAll('#prof-color-row .prof-color-sw').forEach((sw) => {
+      sw.addEventListener('click', () => {
+        container.querySelectorAll('#prof-color-row .prof-color-sw').forEach((x) => {
+          x.classList.remove('is-active');
+          x.style.borderColor = 'transparent';
+        });
+        sw.classList.add('is-active');
+        sw.style.borderColor = 'var(--text-primary)';
+        const c = sw.dataset.color;
+        document.getElementById('prof-avatar').style.background = 'linear-gradient(135deg,' + c + '99,' + c + ')';
+        browser.setSettings({ profileAvatarColor: c });
+      });
+    });
+
+    document.getElementById('prof-export').addEventListener('click', () => {
+      if (typeof browser.sessionExport === 'function') {
+        browser.sessionExport().catch(() => {});
+      }
+    });
+
+    document.getElementById('prof-reset').addEventListener('click', () => {
+      browser.setSettings({
+        profileName: 'Analyst',
+        profileHandle: '',
+        profileEmail: '',
+        profileAvatarColor: '#00d4ff',
+      }).then(() => renderProfilePanel(container));
+    });
+
+    // Populate stats
+    Promise.all([
+      browser.opsList ? browser.opsList().catch(() => []) : Promise.resolve([]),
+      browser.bookmarksList().catch(() => []),
+      browser.historyList('', 9999).catch(() => []),
+    ]).then(([ops, bm, hist]) => {
+      document.getElementById('stat-ops').textContent = (ops || []).length.toLocaleString();
+      document.getElementById('stat-bookmarks').textContent = (bm || []).length.toLocaleString();
+      document.getElementById('stat-history').textContent = (hist || []).length.toLocaleString();
+      document.getElementById('stat-tabs').textContent = (typeof tabs !== 'undefined' ? tabs.length : 0).toLocaleString();
+    });
+  }
 
   // --- Bookmarks panel ---
   function renderBookmarksPanel(container) {

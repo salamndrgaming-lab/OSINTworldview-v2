@@ -53,7 +53,14 @@ function startYtEmbedServer() {
       const resHeaders = {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',
-        'Permissions-Policy': 'autoplay=*, encrypted-media=*, storage-access=(self "https://www.youtube.com")',
+        // Permissions need to cover both youtube.com and youtube-nocookie.com
+        // (live streams sometimes force the privacy domain).
+        'Permissions-Policy': 'autoplay=*, encrypted-media=*, storage-access=(self "https://www.youtube.com" "https://www.youtube-nocookie.com")',
+        // Required for live streams: without a Referrer-Policy header the
+        // request goes out with no Referer and YouTube returns Error 153.
+        // strict-origin-when-cross-origin sends just "scheme://host" so it
+        // doesn't trip YouTube's bot-detection (which previously gave 154-2).
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
         'Access-Control-Allow-Origin': '*',
       };
 
@@ -61,7 +68,14 @@ function startYtEmbedServer() {
         const videoId = (parsed.searchParams.get('videoId') || '').replace(/[^a-zA-Z0-9_-]/g, '');
         if (!videoId) { res.writeHead(400); res.end('Missing videoId'); return; }
 
-        const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}#player{width:100%;height:100%}#play-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,0.4)}#play-overlay svg{width:72px;height:72px;opacity:0.9;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5))}#play-overlay.hidden{display:none}</style></head><body><div id="player"></div><div id="play-overlay" class="hidden"><svg viewBox="0 0 68 48"><path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55C3.97 2.33 2.27 4.81 1.48 7.74.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.64-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="red"/><path d="M45 24L27 14v20" fill="#fff"/></svg></div><script>function tryStorageAccess(){if(document.requestStorageAccess){document.requestStorageAccess().catch(function(){})}}tryStorageAccess();var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);var player,overlay=document.getElementById('play-overlay'),started=false;var obs=new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var nodes=muts[i].addedNodes;for(var j=0;j<nodes.length;j++){if(nodes[j].tagName==='IFRAME'){nodes[j].setAttribute('allow','autoplay; encrypted-media; picture-in-picture; fullscreen; storage-access');nodes[j].setAttribute('referrerpolicy','strict-origin-when-cross-origin');obs.disconnect();return}}}});obs.observe(document.getElementById('player'),{childList:true,subtree:true});function hideOverlay(){overlay.classList.add('hidden')}function onYouTubeIframeAPIReady(){player=new YT.Player('player',{videoId:'${videoId}',host:'https://www.youtube.com',playerVars:{autoplay:${autoplay},mute:${mute},playsinline:1,rel:0,controls:1,modestbranding:1,enablejsapi:1,origin:'${origin}',widget_referrer:'${origin}'},events:{onReady:function(){window.parent.postMessage({type:'yt-ready'},'*');if(${autoplay}===1){try{player.mute();player.playVideo()}catch(e){}}},onError:function(e){window.parent.postMessage({type:'yt-error',code:e.data},'*')},onStateChange:function(e){window.parent.postMessage({type:'yt-state',state:e.data},'*');if(e.data===1||e.data===3){hideOverlay();started=true}}}})}overlay.addEventListener('click',function(){tryStorageAccess();if(player&&player.playVideo){player.playVideo();player.unMute();hideOverlay()}});setTimeout(function(){if(!started)overlay.classList.remove('hidden')},4000)<\/script></body></html>`;
+        // Live streams reject embeds when host=youtube.com and the parent
+        // origin is localhost. Switching to youtube-nocookie.com fixes
+        // Error 153 because the privacy-enhanced domain is meant for
+        // third-party embeds and skips the strict bot-detection that gave
+        // us Error 154-2 when we tried injecting a Referer header.
+        // If the first load fails, the inline error handler retries with
+        // the regular youtube.com host as a fallback.
+        const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}#player{width:100%;height:100%}#play-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,0.4)}#play-overlay svg{width:72px;height:72px;opacity:0.9;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5))}#play-overlay.hidden{display:none}</style></head><body><div id="player"></div><div id="play-overlay" class="hidden"><svg viewBox="0 0 68 48"><path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55C3.97 2.33 2.27 4.81 1.48 7.74.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.64-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="red"/><path d="M45 24L27 14v20" fill="#fff"/></svg></div><script>function tryStorageAccess(){if(document.requestStorageAccess){document.requestStorageAccess().catch(function(){})}}tryStorageAccess();var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);var player,overlay=document.getElementById('play-overlay'),started=false,triedFallback=false;var obs=new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var nodes=muts[i].addedNodes;for(var j=0;j<nodes.length;j++){if(nodes[j].tagName==='IFRAME'){nodes[j].setAttribute('allow','autoplay; encrypted-media; picture-in-picture; fullscreen; storage-access');nodes[j].setAttribute('referrerpolicy','strict-origin-when-cross-origin');obs.disconnect();return}}}});obs.observe(document.getElementById('player'),{childList:true,subtree:true});function hideOverlay(){overlay.classList.add('hidden')}function buildPlayer(host){return new YT.Player('player',{videoId:'${videoId}',host:host,playerVars:{autoplay:${autoplay},mute:${mute},playsinline:1,rel:0,controls:1,modestbranding:1,enablejsapi:1,origin:'${origin}',widget_referrer:'${origin}'},events:{onReady:function(){window.parent.postMessage({type:'yt-ready'},'*');if(${autoplay}===1){try{player.mute();player.playVideo()}catch(e){}}},onError:function(e){window.parent.postMessage({type:'yt-error',code:e.data},'*');if((e.data===153||e.data===150||e.data===101)&&!triedFallback){triedFallback=true;try{player.destroy()}catch(_){}document.getElementById('player').innerHTML='';player=buildPlayer('https://www.youtube.com')}},onStateChange:function(e){window.parent.postMessage({type:'yt-state',state:e.data},'*');if(e.data===1||e.data===3){hideOverlay();started=true}}}})}function onYouTubeIframeAPIReady(){player=buildPlayer('https://www.youtube-nocookie.com')}overlay.addEventListener('click',function(){tryStorageAccess();if(player&&player.playVideo){player.playVideo();player.unMute();hideOverlay()}});setTimeout(function(){if(!started)overlay.classList.remove('hidden')},4000)<\/script></body></html>`;
         res.writeHead(200, resHeaders);
         res.end(html);
         return;
@@ -151,6 +165,11 @@ const DEFAULT_SETTINGS = {
   profileHandle: '',
   profileEmail: '',
   profileAvatarColor: '#00d4ff',
+  profileRole: '',          // free-text role e.g. "OSINT Analyst"
+  profileOrg: '',           // organization / unit
+  profileLocation: '',      // city / region (free text, not GPS)
+  profileBio: '',           // free-text notes / scratchpad
+  profileBadge: 'OSINT',    // small badge under avatar
 };
 
 let settingsCache = null;
@@ -1045,6 +1064,7 @@ async function vpnConnect(location) {
       vpnState.proxyRule = proxyRules;
       saveSettings({ vpnEnabled: true, vpnLocation: 'Tor' });
       broadcastVpnStatus();
+      startVpnHealthMonitor();
       return vpnState;
     }
 
@@ -1100,6 +1120,7 @@ async function vpnConnect(location) {
     };
     saveSettings({ vpnEnabled: true, vpnLocation: loc });
     broadcastVpnStatus();
+    startVpnHealthMonitor();
     return vpnState;
   } catch (err) {
     try { await session.defaultSession.setProxy({ proxyRules: 'direct://' }); } catch {}
@@ -1111,6 +1132,7 @@ async function vpnConnect(location) {
 }
 
 async function vpnDisconnect() {
+  stopVpnHealthMonitor();
   try {
     await session.defaultSession.setProxy({ proxyRules: 'direct://' });
   } catch (err) {
@@ -1152,6 +1174,64 @@ async function vpnGetCurrentSessionIp() {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// VPN health monitor — free public proxies frequently die without warning.
+// Every minute we ping through the proxy; after 3 consecutive failures we
+// surface a "degraded" state and try a fresh proxy from the same country.
+// ---------------------------------------------------------------------------
+let vpnHealthTimer = null;
+let vpnHealthFailures = 0;
+let vpnReconnecting = false;
+
+function stopVpnHealthMonitor() {
+  if (vpnHealthTimer) { clearInterval(vpnHealthTimer); vpnHealthTimer = null; }
+  vpnHealthFailures = 0;
+}
+
+function startVpnHealthMonitor() {
+  stopVpnHealthMonitor();
+  // Tor doesn't need health checks — the local SOCKS5 either works or the
+  // user has stopped Tor (we'll fail fast on the next request).
+  if (vpnState.location === 'Tor') return;
+  vpnHealthTimer = setInterval(async () => {
+    if (vpnState.status !== 'connected' || vpnReconnecting) return;
+    const ip = await vpnGetCurrentSessionIp();
+    if (ip) {
+      if (vpnHealthFailures > 0) {
+        vpnHealthFailures = 0;
+        vpnState.error = null;
+        broadcastVpnStatus();
+      }
+      return;
+    }
+    vpnHealthFailures += 1;
+    if (vpnHealthFailures < 3) {
+      vpnState.error = `Health check missed (${vpnHealthFailures}/3)`;
+      broadcastVpnStatus();
+      return;
+    }
+    // Three consecutive misses — proxy is dead. Auto-reconnect with a fresh
+    // proxy from the same country selection.
+    if (vpnReconnecting) return;
+    vpnReconnecting = true;
+    const loc = vpnState.location;
+    vpnState.status = 'reconnecting';
+    vpnState.error = 'Proxy died — finding a new one…';
+    broadcastVpnStatus();
+    try {
+      // Force a fresh proxy list by invalidating the cache for this country
+      const cc = COUNTRY_CODES[loc] || '';
+      _proxyListCache.delete(cc || 'all');
+      await vpnConnect(loc);
+    } catch (err) {
+      console.warn('[vpn] auto-reconnect failed', err);
+    } finally {
+      vpnReconnecting = false;
+      vpnHealthFailures = 0;
+    }
+  }, 60_000);
 }
 
 ipcMain.handle('vpn:connect', (_e, location) => vpnConnect(location));
@@ -2357,6 +2437,17 @@ function extensionsDir() {
   return path.join(app.getPath('userData'), 'extensions');
 }
 
+// Returns whichever Electron extension API surface is available. The
+// `session.extensions` namespace was introduced in Electron 35 and the
+// flat methods on `session` (loadExtension / removeExtension /
+// getAllExtensions) emit deprecation warnings on Electron 41+. Prefer the
+// new namespace and fall back to the legacy methods only if it doesn't
+// exist on the runtime we're on.
+function extApi() {
+  const s = session.defaultSession;
+  return s.extensions || s;
+}
+
 async function loadAllExtensions() {
   const dir = extensionsDir();
   try { fs.mkdirSync(dir, { recursive: true }); } catch {}
@@ -2368,7 +2459,7 @@ async function loadAllExtensions() {
     const manifestPath = path.join(extPath, 'manifest.json');
     if (!fs.existsSync(manifestPath)) continue;
     try {
-      const ext = await session.defaultSession.loadExtension(extPath, { allowFileAccess: true });
+      const ext = await extApi().loadExtension(extPath, { allowFileAccess: true });
       loadedExtensions.set(ext.id, { ext, path: extPath });
       console.log('[monitor] loaded extension:', ext.name);
     } catch (err) {
@@ -2388,7 +2479,7 @@ async function installExtensionFromPath(extPath) {
       fs.rmSync(destDir, { recursive: true, force: true });
     }
     copyDirSync(extPath, destDir);
-    const ext = await session.defaultSession.loadExtension(destDir, { allowFileAccess: true });
+    const ext = await extApi().loadExtension(destDir, { allowFileAccess: true });
     loadedExtensions.set(ext.id, { ext, path: destDir });
     return { id: ext.id, name: ext.name };
   } catch (err) {
@@ -2409,14 +2500,14 @@ function copyDirSync(src, dest) {
 function removeExtension(extId) {
   const loaded = loadedExtensions.get(extId);
   if (!loaded) return false;
-  try { session.defaultSession.removeExtension(extId); } catch {}
+  try { extApi().removeExtension(extId); } catch {}
   try { fs.rmSync(loaded.path, { recursive: true, force: true }); } catch {}
   loadedExtensions.delete(extId);
   return true;
 }
 
 function listExtensions() {
-  const exts = session.defaultSession.getAllExtensions();
+  const exts = extApi().getAllExtensions();
   return exts.map((ext) => ({
     id: ext.id,
     name: ext.name,

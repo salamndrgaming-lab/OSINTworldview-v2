@@ -907,7 +907,7 @@ function initLeafletMap(){
     osintLayers[key].layer=L.layerGroup();
     if(osintLayers[key].active)osintLayers[key].layer.addTo(osintMap);
   });
-  osintLayers.events.loader=loadGdeltEvents;
+  osintLayers.events.loader=loadNewsEvents;
   osintLayers.conflicts.loader=loadConflicts;
   osintLayers.protests.loader=loadProtests;
   osintLayers.terror.loader=loadTerror;
@@ -924,10 +924,11 @@ function initLeafletMap(){
   Object.entries(osintLayers).forEach(([key,info])=>{
     if(info.active&&info.loader)info.loader();
   });
-  // Periodic refresh
-  setInterval(loadGdeltEvents,5*60*1000);
-  setInterval(loadConflicts,5*60*1000);
-  setInterval(loadProtests,5*60*1000);
+  // Periodic refresh — ReliefWeb is rate-limited so we keep these gentle.
+  setInterval(()=>{if(osintLayers.events.active)loadNewsEvents();},10*60*1000);
+  setInterval(()=>{if(osintLayers.conflicts.active)loadConflicts();},10*60*1000);
+  setInterval(()=>{if(osintLayers.protests.active)loadProtests();},10*60*1000);
+  setInterval(()=>{if(osintLayers.terror.active)loadTerror();},10*60*1000);
   setInterval(loadEarthquakes,5*60*1000);
   setInterval(()=>{loadEonet('wildfires');loadEonet('volcanoes');loadEonet('severeStorms');loadEonet('floods');},10*60*1000);
   setInterval(loadDisasters,15*60*1000);
@@ -938,7 +939,10 @@ function initLeafletMap(){
     options:{position:'topright'},
     onAdd:function(){
       const div=L.DomUtil.create('div','leaflet-bar osint-layer-panel');
-      div.style.cssText='background:var(--panel,#111520);border:1px solid var(--border,rgba(255,255,255,0.06));border-radius:6px;padding:6px 8px;font-size:11px;color:var(--text,#e8eaf0);min-width:150px;max-height:80vh;overflow-y:auto;scrollbar-width:thin';
+      // The map widget is 300px tall, so cap the panel at ~225px to fit the
+      // visible viewport. overscroll-behavior:contain stops the dashboard
+      // from scrolling once the layer list reaches its end.
+      div.style.cssText='background:var(--panel,#111520);border:1px solid var(--border,rgba(255,255,255,0.06));border-radius:6px;padding:6px 8px;font-size:11px;color:var(--text,#e8eaf0);min-width:160px;max-height:225px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;-webkit-overflow-scrolling:touch';
       // Weather radar is pinned at the top so it's always visible.
       let html='<div style="font-weight:600;margin:0 0 3px;color:var(--text-mid,#9ca3af);font-size:9px;text-transform:uppercase;letter-spacing:.06em">Weather</div>'+
         '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:1.5px 0">'+
@@ -995,69 +999,85 @@ function updateMapStats(){
   if(el3)el3.textContent=infraCount.toLocaleString();
 }
 
-function _renderGdeltFeatures(info,geojson,markerColor,popupLabel,layerKey){
-  info.layer.clearLayers();
-  let count=0;
-  geojson.features.forEach(f=>{
-    if(!f.geometry||!f.geometry.coordinates)return;
-    const [lon,lat]=f.geometry.coordinates;
-    if(lat===0&&lon===0)return;
-    const props=f.properties||{};
-    const name=props.name||props.html||props.urlpubtimeseq||'Event';
-    const link=props.url||props.shareimage||'';
-    const tone=parseFloat(props.urltone||props.tone)||0;
-    const color=tone<-3?'#ef4444':tone>3?'#22c55e':markerColor;
-    const marker=L.circleMarker([lat,lon],{
-      radius:4,fillColor:color,color:'rgba(255,255,255,0.3)',weight:1,fillOpacity:0.8,
-    });
-    let popup='<div style="max-width:240px;font-size:11px;line-height:1.4">'+
-      '<strong style="color:'+markerColor+'">'+popupLabel+'</strong><br>'+
-      '<span>'+String(name).substring(0,180)+'</span>';
-    if(tone)popup+='<br><span style="color:'+color+';font-size:10px">Tone: '+(+tone).toFixed(1)+'</span>';
-    if(link)popup+='<br><a href="'+link+'" target="_blank" style="color:#00d4ff">Read source</a>';
-    popup+='</div>';
-    marker.bindPopup(popup);
-    marker.addTo(info.layer);
-    count++;
-  });
-  updateMapStats();
-  console.log('[gdelt]',layerKey,count,'features from',geojson.features.length);
-}
-function loadGdeltGeoJSON(layerKey, query, markerColor, popupLabel){
+// Intel layers are powered by the ReliefWeb v1 reports API. GDELT was the
+// original source but its hosts (api.gdeltproject.org) are unreachable from
+// most networks (ConnectTimeoutError). ReliefWeb is geocoded at the country
+// level so we add a small jitter so multiple reports in the same country
+// don't perfectly stack on top of each other.
+function loadReliefWebReports(layerKey, opts){
   const info=osintLayers[layerKey];
   if(!info||!info.layer)return;
-  // Try v1 GKG GeoJSON first (proven in seed scripts), fall back to v2 Geo API
-  const v1Url='https://api.gdeltproject.org/api/v1/gkg_geojson?query='+encodeURIComponent(query)+'&maxrecords=250&timespan=24h&format=geojson';
-  const v2Url='https://api.gdeltproject.org/api/v2/geo/geo?query='+encodeURIComponent(query)+'&mode=PointData&format=GeoJSON&TIMESPAN=24h&MAXROWS=250';
-  function tryParse(txt){try{return typeof txt==='string'?JSON.parse(txt):txt;}catch{return null;}}
-  intelFetch(v1Url).then(txt=>{
-    const gj=tryParse(txt);
-    if(gj&&gj.features&&gj.features.length>0){
-      _renderGdeltFeatures(info,gj,markerColor,popupLabel,layerKey);
-    } else {
-      console.warn('[gdelt] v1 returned 0 for',layerKey,'— trying v2');
-      return intelFetch(v2Url).then(txt2=>{
-        const gj2=tryParse(txt2);
-        if(gj2&&gj2.features&&gj2.features.length>0){
-          _renderGdeltFeatures(info,gj2,markerColor,popupLabel,layerKey);
-        } else {
-          console.warn('[gdelt] v2 also returned 0 for',layerKey);
-        }
+  const markerColor=opts.color;
+  const popupLabel=opts.label;
+  const sinceDays=opts.sinceDays||7;
+  const sinceDate=new Date(Date.now()-sinceDays*24*60*60*1000).toISOString().split('T')[0];
+  const params=[
+    'appname=monitorbrowser',
+    'fields[include][]=title',
+    'fields[include][]=primary_country.location',
+    'fields[include][]=primary_country.name',
+    'fields[include][]=primary_country.iso3',
+    'fields[include][]=source',
+    'fields[include][]=url',
+    'fields[include][]=url_alias',
+    'fields[include][]=date',
+    'fields[include][]=theme',
+    'fields[include][]=disaster_type',
+    'sort[]=date.created:desc',
+    'limit='+(opts.limit||100),
+    'filter[field]=date.created',
+    'filter[value][from]='+sinceDate,
+  ];
+  if(opts.query)params.unshift('query[value]='+encodeURIComponent(opts.query));
+  const url='https://api.reliefweb.int/v1/reports?'+params.join('&');
+  intelFetch(url).then(txt=>{
+    let data;
+    try{data=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
+    if(!data||!data.data){console.warn('[reliefweb] no data for',layerKey);return;}
+    info.layer.clearLayers();
+    let count=0;
+    const seen={}; // track per-country count for jitter spread
+    data.data.forEach(item=>{
+      const f=item.fields||{};
+      const loc=f.primary_country?.location;
+      if(!loc||loc.lat==null||loc.lon==null)return;
+      const lat0=parseFloat(loc.lat),lon0=parseFloat(loc.lon);
+      if(isNaN(lat0)||isNaN(lon0))return;
+      const iso=f.primary_country?.iso3||'';
+      const idx=seen[iso]=(seen[iso]||0)+1;
+      // Spiral jitter: each subsequent point in same country gets pushed out
+      const ang=idx*2.4;
+      const rad=Math.min(idx*0.35,3.5);
+      const lat=lat0+Math.cos(ang)*rad;
+      const lon=lon0+Math.sin(ang)*rad;
+      const marker=L.circleMarker([lat,lon],{
+        radius:4,fillColor:markerColor,color:'rgba(255,255,255,0.3)',weight:1,fillOpacity:0.8,
       });
-    }
-  }).catch(e=>{
-    console.warn('[gdelt] v1 error for',layerKey,e,'— trying v2');
-    intelFetch(v2Url).then(txt=>{
-      const gj=tryParse(txt);
-      if(gj&&gj.features&&gj.features.length>0){
-        _renderGdeltFeatures(info,gj,markerColor,popupLabel,layerKey);
-      } else {
-        console.warn('[gdelt] v2 also failed for',layerKey);
-      }
-    }).catch(e2=>{console.warn('[gdelt] both APIs failed for',layerKey,e2);});
-  });
+      const title=f.title||'Report';
+      const country=f.primary_country?.name||'';
+      const sources=(f.source||[]).slice(0,2).map(s=>s.name).join(', ');
+      const date=f.date?.created?new Date(f.date.created).toLocaleDateString():'';
+      const link=f.url_alias||f.url||'';
+      let popup='<div style="max-width:260px;font-size:11px;line-height:1.4">'+
+        '<strong style="color:'+markerColor+'">'+popupLabel+'</strong><br>'+
+        '<span>'+String(title).substring(0,200)+'</span>';
+      if(country)popup+='<br><span style="color:#9ca3af;font-size:10px">'+country+'</span>';
+      if(sources)popup+='<br><span style="color:#9ca3af;font-size:10px">'+sources+'</span>';
+      if(date)popup+='<br><span style="color:#9ca3af;font-size:10px">'+date+'</span>';
+      if(link)popup+='<br><a href="'+link+'" target="_blank" style="color:#00d4ff">Read report</a>';
+      popup+='</div>';
+      marker.bindPopup(popup);
+      marker.addTo(info.layer);
+      count++;
+    });
+    updateMapStats();
+    console.log('[reliefweb]',layerKey,count,'reports of',data.data.length);
+  }).catch(e=>{console.warn('[reliefweb] error for',layerKey,e);});
 }
-function loadGdeltEvents(){loadGdeltGeoJSON('events','news breaking world','#ffa502','GDELT Event');}
+
+function loadNewsEvents(){
+  loadReliefWebReports('events',{color:'#ffa502',label:'News Event',sinceDays:3,limit:120});
+}
 
 function loadEarthquakes(){
   const info=osintLayers.quakes;
@@ -1156,9 +1176,27 @@ function loadFlights(){
   }).catch(()=>{});
 }
 
-function loadConflicts(){loadGdeltGeoJSON('conflicts','war conflict military airstrike','#dc2626','Armed Conflict');}
-function loadProtests(){loadGdeltGeoJSON('protests','protest riot demonstration strike','#f59e0b','Protest/Unrest');}
-function loadTerror(){loadGdeltGeoJSON('terror','terror attack bombing shooting','#7c3aed','Terrorism/Security');}
+function loadConflicts(){
+  loadReliefWebReports('conflicts',{
+    color:'#dc2626',label:'Armed Conflict',
+    query:'conflict OR war OR military OR airstrike OR offensive OR clashes',
+    sinceDays:14,limit:120,
+  });
+}
+function loadProtests(){
+  loadReliefWebReports('protests',{
+    color:'#f59e0b',label:'Protest / Civil Unrest',
+    query:'protest OR demonstration OR unrest OR strike OR riot OR civil',
+    sinceDays:14,limit:100,
+  });
+}
+function loadTerror(){
+  loadReliefWebReports('terror',{
+    color:'#7c3aed',label:'Security / Terror Incident',
+    query:'terror OR attack OR bombing OR insurgent OR shooting OR ambush',
+    sinceDays:14,limit:100,
+  });
+}
 
 /* -- NASA EONET: natural events (wildfires, volcanoes, storms, floods) -- */
 const EONET_CATS={

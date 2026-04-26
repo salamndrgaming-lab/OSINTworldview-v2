@@ -907,6 +907,10 @@ async function fetchProxyList(countryCode) {
     'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt',
     'https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt',
     'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt',
+    'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt',
+    'https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt',
+    'https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/http.txt',
+    'https://raw.githubusercontent.com/mmpx12/proxy-list/master/http.txt',
   ];
 
   const fetchOne = (url) => new Promise((resolve) => {
@@ -1045,16 +1049,14 @@ async function vpnConnect(location) {
       throw new Error(`No proxies available for ${loc}. Free proxy lists may be down — try Tor or a custom proxy.`);
     }
 
-    // Test up to 80 proxies in batches of 8 in parallel. Keep the user
-    // informed via status broadcasts so they see progress.
     let workingProxy = null;
     let workingIp = null;
-    const maxScan = Math.min(80, list.length);
-    const batchSize = 8;
+    const maxScan = Math.min(120, list.length);
+    const batchSize = 12;
     let tested = 0;
     for (let i = 0; i < maxScan; i += batchSize) {
       const batch = list.slice(i, i + batchSize);
-      const results = await Promise.all(batch.map((p) => testHttpProxy(p, 4000).then((r) => ({ p, r }))));
+      const results = await Promise.all(batch.map((p) => testHttpProxy(p, 6000).then((r) => ({ p, r }))));
       tested += batch.length;
       const hit = results.find((x) => x.r.ok);
       if (hit) {
@@ -1062,13 +1064,12 @@ async function vpnConnect(location) {
         workingIp = hit.r.ip;
         break;
       }
-      // Periodic status update (still connecting, just slow)
       vpnState.error = `Scanning proxies (${tested}/${maxScan})…`;
       broadcastVpnStatus();
     }
 
     if (!workingProxy) {
-      throw new Error(`No working ${loc} proxies (tested ${tested} of ${list.length}). Free proxies are unreliable — Tor or a custom paid proxy is recommended.`);
+      throw new Error(`No working ${loc} proxies (tested ${tested} of ${list.length}). Free proxies are unreliable — install Tor (recommended) or use a custom paid proxy.`);
     }
 
     const proxyRules = `http=${workingProxy};https=${workingProxy}`;
@@ -1077,12 +1078,19 @@ async function vpnConnect(location) {
       proxyBypassRules: 'localhost,127.0.0.1,<local>',
     });
 
+    // Verify the session actually routes through the proxy
+    const verifiedIp = await vpnGetCurrentSessionIp();
+    if (!verifiedIp) {
+      await session.defaultSession.setProxy({ proxyRules: 'direct://' });
+      throw new Error(`Proxy ${workingProxy} connected but session verification failed. Try Tor or a custom proxy.`);
+    }
+
     vpnState = {
       status: 'connected',
       location: loc,
       connectedAt: Date.now(),
       proxyRule: `http://${workingProxy}`,
-      exitIp: workingIp,
+      exitIp: verifiedIp,
       error: null,
     };
     saveSettings({ vpnEnabled: true, vpnLocation: loc });

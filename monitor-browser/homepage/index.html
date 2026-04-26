@@ -86,9 +86,7 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .wx-toggle-btn{background:none;border:none;color:var(--text-dim);cursor:pointer;padding:2px;transition:transform .2s,color .15s}
 .wx-toggle-btn:hover{color:var(--accent)}
 .wx-toggle-btn.open{transform:rotate(180deg)}
-/* Forecast row anchors to the right edge of the weather card and grows leftward
-   without pushing on the hero column layout. */
-.wx-forecast{position:absolute;top:100%;right:0;margin-top:8px;display:flex;gap:6px;padding:6px 8px;background:var(--panel);border:1px solid var(--panel-border);border-radius:10px;backdrop-filter:blur(10px);box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:50}
+.wx-forecast{position:fixed;display:flex;gap:6px;padding:6px 8px;background:var(--panel);border:1px solid var(--panel-border);border-radius:10px;backdrop-filter:blur(10px);box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:200}
 .wx-forecast::-webkit-scrollbar{display:none}
 .wx-day{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 7px;border-radius:8px;background:var(--accent-subtle);border:1px solid var(--panel-border);min-width:48px;flex-shrink:0}
 .wx-day-name{font-size:9px;font-weight:600;color:var(--text-mid);text-transform:uppercase;letter-spacing:.04em}
@@ -770,14 +768,22 @@ function fetchWeather(lat,lon){
     });
 }
 
-// Toggle 7-day forecast visibility
+// Toggle 7-day forecast visibility — position:fixed, anchored to the toggle button
 const wxToggleBtn=document.getElementById('wxToggleForecast');
 if(wxToggleBtn){
   wxToggleBtn.addEventListener('click',()=>{
     const fc=document.getElementById('wxForecast');
     if(!fc)return;
     const isOpen=fc.style.display!=='none';
-    fc.style.display=isOpen?'none':'flex';
+    if(isOpen){
+      fc.style.display='none';
+    } else {
+      const rect=wxToggleBtn.getBoundingClientRect();
+      fc.style.top=(rect.bottom+4)+'px';
+      fc.style.right=(window.innerWidth-rect.right)+'px';
+      fc.style.left='auto';
+      fc.style.display='flex';
+    }
     wxToggleBtn.classList.toggle('open',!isOpen);
   });
 }
@@ -989,39 +995,41 @@ function updateMapStats(){
   if(el3)el3.textContent=infraCount.toLocaleString();
 }
 
-function loadGdeltEvents(){
-  const info=osintLayers.events;
+function loadGdeltGeoJSON(layerKey, query, markerColor, popupLabel){
+  const info=osintLayers[layerKey];
   if(!info||!info.layer)return;
-  // GDELT Geo API: simple keyword query for global breaking news.
-  const url='https://api.gdeltproject.org/api/v2/geo/geo?query=news&format=GeoJSON&TIMESPAN=24h&MAXROWS=200';
+  const url='https://api.gdeltproject.org/api/v1/gkg_geojson?query='+encodeURIComponent(query)+'&maxrows=250&timespan=24h';
   intelFetch(url).then(txt=>{
     let geojson;
-    try{geojson=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
-    if(!geojson||!geojson.features)return;
+    try{geojson=typeof txt==='string'?JSON.parse(txt):txt;}catch(e){console.warn('[gdelt] parse error',layerKey,e);return;}
+    if(!geojson||!geojson.features){console.warn('[gdelt] no features for',layerKey);return;}
     info.layer.clearLayers();
     geojson.features.forEach(f=>{
       if(!f.geometry||!f.geometry.coordinates)return;
       const [lon,lat]=f.geometry.coordinates;
+      if(lat===0&&lon===0)return;
       const props=f.properties||{};
-      const name=props.name||props.html||'Event';
-      const url=props.url||props.shareimage||'';
-      const tone=parseFloat(props.tone)||0;
-      const color=tone<-3?'#ef4444':tone>3?'#22c55e':'#ffa502';
+      const name=props.name||props.html||props.urlpubtimeseq||'Event';
+      const link=props.url||props.shareimage||'';
+      const tone=parseFloat(props.urltone||props.tone)||0;
+      const color=tone<-3?'#ef4444':tone>3?'#22c55e':markerColor;
       const marker=L.circleMarker([lat,lon],{
         radius:4,fillColor:color,color:'rgba(255,255,255,0.3)',weight:1,fillOpacity:0.8,
       });
       let popup='<div style="max-width:240px;font-size:11px;line-height:1.4">'+
-        '<strong style="color:#00d4ff">GDELT Event</strong><br>'+
-        '<span>'+name.substring(0,180)+'</span>';
-      if(props.tone)popup+='<br><span style="color:'+color+';font-size:10px">Tone: '+(+tone).toFixed(1)+'</span>';
-      if(url)popup+='<br><a href="'+url+'" target="_blank" style="color:#00d4ff">Read source</a>';
+        '<strong style="color:'+markerColor+'">'+popupLabel+'</strong><br>'+
+        '<span>'+String(name).substring(0,180)+'</span>';
+      if(tone)popup+='<br><span style="color:'+color+';font-size:10px">Tone: '+(+tone).toFixed(1)+'</span>';
+      if(link)popup+='<br><a href="'+link+'" target="_blank" style="color:#00d4ff">Read source</a>';
       popup+='</div>';
       marker.bindPopup(popup);
       marker.addTo(info.layer);
     });
     updateMapStats();
-  }).catch(()=>{});
+    console.log('[gdelt]',layerKey,geojson.features.length,'features');
+  }).catch(e=>{console.warn('[gdelt] fetch error',layerKey,e);});
 }
+function loadGdeltEvents(){loadGdeltGeoJSON('events','news breaking world','#ffa502','GDELT Event');}
 
 function loadEarthquakes(){
   const info=osintLayers.quakes;
@@ -1120,39 +1128,9 @@ function loadFlights(){
   }).catch(()=>{});
 }
 
-/* -- GDELT theme-filtered layers: Conflicts, Protests, Terrorism -- */
-function loadGdeltTheme(layerKey,query,labelColor,labelPrefix){
-  const info=osintLayers[layerKey];
-  if(!info||!info.layer)return;
-  const url='https://api.gdeltproject.org/api/v2/geo/geo?query='+encodeURIComponent(query)+'&format=GeoJSON&TIMESPAN=24h&MAXROWS=150';
-  intelFetch(url).then(txt=>{
-    let gj;
-    try{gj=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
-    if(!gj||!gj.features)return;
-    info.layer.clearLayers();
-    gj.features.forEach(f=>{
-      if(!f.geometry||!f.geometry.coordinates)return;
-      const [lon,lat]=f.geometry.coordinates;
-      const p=f.properties||{};
-      const name=p.name||p.html||'Event';
-      const url=p.url||'';
-      const marker=L.circleMarker([lat,lon],{
-        radius:5,fillColor:labelColor,color:'rgba(255,255,255,0.4)',weight:1,fillOpacity:0.75,
-      });
-      let popup='<div style="max-width:240px;font-size:11px;line-height:1.4">'+
-        '<strong style="color:'+labelColor+'">'+labelPrefix+'</strong><br>'+
-        '<span>'+name.substring(0,200)+'</span>';
-      if(url)popup+='<br><a href="'+url+'" target="_blank" style="color:#00d4ff">Source</a>';
-      popup+='</div>';
-      marker.bindPopup(popup);
-      marker.addTo(info.layer);
-    });
-    updateMapStats();
-  }).catch(()=>{});
-}
-function loadConflicts(){loadGdeltTheme('conflicts','war OR conflict OR military OR airstrike','#dc2626','Armed Conflict');}
-function loadProtests(){loadGdeltTheme('protests','protest OR rally OR demonstration','#f59e0b','Protest/Unrest');}
-function loadTerror(){loadGdeltTheme('terror','terror OR attack OR bombing OR shooting','#7c3aed','Terrorism/Security');}
+function loadConflicts(){loadGdeltGeoJSON('conflicts','war conflict military airstrike','#dc2626','Armed Conflict');}
+function loadProtests(){loadGdeltGeoJSON('protests','protest riot demonstration strike','#f59e0b','Protest/Unrest');}
+function loadTerror(){loadGdeltGeoJSON('terror','terror attack bombing shooting','#7c3aed','Terrorism/Security');}
 
 /* -- NASA EONET: natural events (wildfires, volcanoes, storms, floods) -- */
 const EONET_CATS={
@@ -1265,15 +1243,28 @@ function loadNuclearSites(){
 
 function loadRadarTimestamp(){
   const url='https://api.rainviewer.com/public/weather-maps.json';
-  (HAS_INTEL?intelFetch(url):fetch(url).then(r=>r.text()))
-    .then(txt=>{
-      const d=typeof txt==='string'?JSON.parse(txt):txt;
+  const tryFetch=HAS_INTEL
+    ? intelFetch(url).catch(()=>fetch(url).then(r=>r.text()))
+    : fetch(url).then(r=>r.text());
+  return tryFetch.then(txt=>{
+    const d=typeof txt==='string'?JSON.parse(txt):txt;
+    if(d&&d.radar&&d.radar.past&&d.radar.past.length>0){
+      radarTimestamp=d.radar.past[d.radar.past.length-1].path;
+      console.log('[radar] timestamp loaded:',radarTimestamp);
+    } else {
+      console.warn('[radar] unexpected API response shape',d);
+    }
+  }).catch(e=>{console.warn('[radar] timestamp fetch failed, retrying with direct fetch',e);
+    return fetch(url).then(r=>r.json()).then(d=>{
       if(d&&d.radar&&d.radar.past&&d.radar.past.length>0){
         radarTimestamp=d.radar.past[d.radar.past.length-1].path;
+        console.log('[radar] timestamp loaded via fallback:',radarTimestamp);
       }
-    }).catch(()=>{});
+    }).catch(e2=>{console.warn('[radar] fallback also failed',e2);});
+  });
 }
 
+let _radarLoading=false;
 function toggleRadar(){
   if(!osintMap)return;
   if(radarLayer){
@@ -1282,13 +1273,20 @@ function toggleRadar(){
     return;
   }
   if(!radarTimestamp){
-    loadRadarTimestamp();
-    setTimeout(toggleRadar,1500);
+    if(_radarLoading)return;
+    _radarLoading=true;
+    loadRadarTimestamp().then(()=>{
+      _radarLoading=false;
+      if(radarTimestamp){
+        radarLayer=L.tileLayer('https://tilecache.rainviewer.com'+radarTimestamp+'/256/{z}/{x}/{y}/6/1_1.png',{opacity:0.6,maxZoom:18});
+        radarLayer.addTo(osintMap);
+      } else {
+        console.warn('[radar] no timestamp after fetch — radar unavailable');
+      }
+    });
     return;
   }
-  radarLayer=L.tileLayer('https://tilecache.rainviewer.com'+radarTimestamp+'/256/{z}/{x}/{y}/6/1_1.png',{
-    opacity:0.6,maxZoom:18,
-  });
+  radarLayer=L.tileLayer('https://tilecache.rainviewer.com'+radarTimestamp+'/256/{z}/{x}/{y}/6/1_1.png',{opacity:0.6,maxZoom:18});
   radarLayer.addTo(osintMap);
 }
 

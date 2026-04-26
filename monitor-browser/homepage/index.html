@@ -995,39 +995,67 @@ function updateMapStats(){
   if(el3)el3.textContent=infraCount.toLocaleString();
 }
 
+function _renderGdeltFeatures(info,geojson,markerColor,popupLabel,layerKey){
+  info.layer.clearLayers();
+  let count=0;
+  geojson.features.forEach(f=>{
+    if(!f.geometry||!f.geometry.coordinates)return;
+    const [lon,lat]=f.geometry.coordinates;
+    if(lat===0&&lon===0)return;
+    const props=f.properties||{};
+    const name=props.name||props.html||props.urlpubtimeseq||'Event';
+    const link=props.url||props.shareimage||'';
+    const tone=parseFloat(props.urltone||props.tone)||0;
+    const color=tone<-3?'#ef4444':tone>3?'#22c55e':markerColor;
+    const marker=L.circleMarker([lat,lon],{
+      radius:4,fillColor:color,color:'rgba(255,255,255,0.3)',weight:1,fillOpacity:0.8,
+    });
+    let popup='<div style="max-width:240px;font-size:11px;line-height:1.4">'+
+      '<strong style="color:'+markerColor+'">'+popupLabel+'</strong><br>'+
+      '<span>'+String(name).substring(0,180)+'</span>';
+    if(tone)popup+='<br><span style="color:'+color+';font-size:10px">Tone: '+(+tone).toFixed(1)+'</span>';
+    if(link)popup+='<br><a href="'+link+'" target="_blank" style="color:#00d4ff">Read source</a>';
+    popup+='</div>';
+    marker.bindPopup(popup);
+    marker.addTo(info.layer);
+    count++;
+  });
+  updateMapStats();
+  console.log('[gdelt]',layerKey,count,'features from',geojson.features.length);
+}
 function loadGdeltGeoJSON(layerKey, query, markerColor, popupLabel){
   const info=osintLayers[layerKey];
   if(!info||!info.layer)return;
-  const url='https://api.gdeltproject.org/api/v1/gkg_geojson?query='+encodeURIComponent(query)+'&maxrows=250&timespan=24h';
-  intelFetch(url).then(txt=>{
-    let geojson;
-    try{geojson=typeof txt==='string'?JSON.parse(txt):txt;}catch(e){console.warn('[gdelt] parse error',layerKey,e);return;}
-    if(!geojson||!geojson.features){console.warn('[gdelt] no features for',layerKey);return;}
-    info.layer.clearLayers();
-    geojson.features.forEach(f=>{
-      if(!f.geometry||!f.geometry.coordinates)return;
-      const [lon,lat]=f.geometry.coordinates;
-      if(lat===0&&lon===0)return;
-      const props=f.properties||{};
-      const name=props.name||props.html||props.urlpubtimeseq||'Event';
-      const link=props.url||props.shareimage||'';
-      const tone=parseFloat(props.urltone||props.tone)||0;
-      const color=tone<-3?'#ef4444':tone>3?'#22c55e':markerColor;
-      const marker=L.circleMarker([lat,lon],{
-        radius:4,fillColor:color,color:'rgba(255,255,255,0.3)',weight:1,fillOpacity:0.8,
+  // Try v1 GKG GeoJSON first (proven in seed scripts), fall back to v2 Geo API
+  const v1Url='https://api.gdeltproject.org/api/v1/gkg_geojson?query='+encodeURIComponent(query)+'&maxrecords=250&timespan=24h&format=geojson';
+  const v2Url='https://api.gdeltproject.org/api/v2/geo/geo?query='+encodeURIComponent(query)+'&mode=PointData&format=GeoJSON&TIMESPAN=24h&MAXROWS=250';
+  function tryParse(txt){try{return typeof txt==='string'?JSON.parse(txt):txt;}catch{return null;}}
+  intelFetch(v1Url).then(txt=>{
+    const gj=tryParse(txt);
+    if(gj&&gj.features&&gj.features.length>0){
+      _renderGdeltFeatures(info,gj,markerColor,popupLabel,layerKey);
+    } else {
+      console.warn('[gdelt] v1 returned 0 for',layerKey,'— trying v2');
+      return intelFetch(v2Url).then(txt2=>{
+        const gj2=tryParse(txt2);
+        if(gj2&&gj2.features&&gj2.features.length>0){
+          _renderGdeltFeatures(info,gj2,markerColor,popupLabel,layerKey);
+        } else {
+          console.warn('[gdelt] v2 also returned 0 for',layerKey);
+        }
       });
-      let popup='<div style="max-width:240px;font-size:11px;line-height:1.4">'+
-        '<strong style="color:'+markerColor+'">'+popupLabel+'</strong><br>'+
-        '<span>'+String(name).substring(0,180)+'</span>';
-      if(tone)popup+='<br><span style="color:'+color+';font-size:10px">Tone: '+(+tone).toFixed(1)+'</span>';
-      if(link)popup+='<br><a href="'+link+'" target="_blank" style="color:#00d4ff">Read source</a>';
-      popup+='</div>';
-      marker.bindPopup(popup);
-      marker.addTo(info.layer);
-    });
-    updateMapStats();
-    console.log('[gdelt]',layerKey,geojson.features.length,'features');
-  }).catch(e=>{console.warn('[gdelt] fetch error',layerKey,e);});
+    }
+  }).catch(e=>{
+    console.warn('[gdelt] v1 error for',layerKey,e,'— trying v2');
+    intelFetch(v2Url).then(txt=>{
+      const gj=tryParse(txt);
+      if(gj&&gj.features&&gj.features.length>0){
+        _renderGdeltFeatures(info,gj,markerColor,popupLabel,layerKey);
+      } else {
+        console.warn('[gdelt] v2 also failed for',layerKey);
+      }
+    }).catch(e2=>{console.warn('[gdelt] both APIs failed for',layerKey,e2);});
+  });
 }
 function loadGdeltEvents(){loadGdeltGeoJSON('events','news breaking world','#ffa502','GDELT Event');}
 
@@ -1851,6 +1879,7 @@ const BG_PRESETS=[
       d.classList.add('active');
       cfg.bgPreset=p.id;cfg.bgCustom=null;saveCfg(cfg);
       document.querySelector('.bg-g').style.background=p.css;
+      if(window.monitorApi&&window.monitorApi.setSettings)window.monitorApi.setSettings({bgPreset:p.id,bgCustom:null});
     });
     row.appendChild(d);
   });
@@ -1866,6 +1895,7 @@ const BG_PRESETS=[
         cfg.bgCustom=url;cfg.bgPreset=null;saveCfg(cfg);
         document.querySelector('.bg-g').style.background=`url(${url}) center/cover no-repeat`;
         document.querySelectorAll('.bg-opt').forEach(x=>x.classList.remove('active'));
+        if(window.monitorApi&&window.monitorApi.setSettings)window.monitorApi.setSettings({bgPreset:null,bgCustom:url});
       };
       reader.readAsDataURL(f);
     });
@@ -1903,6 +1933,7 @@ const ACCENT_COLORS=[
       d.classList.add('active');
       cfg.accentColor=c.hex;saveCfg(cfg);
       applyAccent(c.hex);
+      if(window.monitorApi&&window.monitorApi.setSettings)window.monitorApi.setSettings({accentColor:c.hex});
     });
     row.appendChild(d);
   });
@@ -1981,8 +2012,11 @@ function applySettingsToHome(s){
       document.querySelectorAll(sel).forEach(el=>{el.style.display=visible?'':'none';});
     });
   });
-  const bg=s.bgPreset;
-  if(bg){
+  const bgEl=document.querySelector('.bg-g');
+  if(s.bgCustom&&bgEl){
+    bgEl.style.background=`url(${s.bgCustom}) center/cover no-repeat`;
+    cfg.bgCustom=s.bgCustom;cfg.bgPreset=null;saveCfg(cfg);
+  } else if(s.bgPreset){
     const presets={
       midnight:'linear-gradient(135deg, #0a0c10 0%, #0d1117 50%, #0a0c10 100%)',
       aurora:'linear-gradient(135deg, #0a0c10 0%, #0a1628 40%, #0c2233 70%, #0a0c10 100%)',
@@ -1991,8 +2025,15 @@ function applySettingsToHome(s){
       nebula:'linear-gradient(135deg, #0a0c10 0%, #0f0a1e 40%, #160a28 70%, #0a0c10 100%)',
       deep:'linear-gradient(135deg, #0a0c10 0%, #041418 40%, #051a20 70%, #0a0c10 100%)',
     };
-    const bgEl=document.querySelector('.bg-g');
-    if(bgEl&&presets[bg])bgEl.style.background=presets[bg];
+    // Also check the homepage BG_PRESETS
+    const homePre=typeof BG_PRESETS!=='undefined'?BG_PRESETS.find(p=>p.id===s.bgPreset):null;
+    if(bgEl&&presets[s.bgPreset])bgEl.style.background=presets[s.bgPreset];
+    else if(bgEl&&homePre)bgEl.style.background=homePre.css;
+    cfg.bgPreset=s.bgPreset;cfg.bgCustom=null;saveCfg(cfg);
+  }
+  if(s.accentColor){
+    applyAccent(s.accentColor);
+    cfg.accentColor=s.accentColor;saveCfg(cfg);
   }
   if(s.compactMode!==undefined)document.body.classList.toggle('compact',!!s.compactMode);
   if(s.showClock!==undefined){

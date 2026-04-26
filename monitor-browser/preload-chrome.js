@@ -115,6 +115,9 @@ contextBridge.exposeInMainWorld('browser', {
   extensionsOpenDir: () => ipcRenderer.invoke('extensions:open-dir'),
   extensionsPickFolder: () => ipcRenderer.invoke('extensions:pick-folder'),
 
+  // Browser data import (Chrome, Brave, Edge, Firefox)
+  importBrowserData: (source) => ipcRenderer.invoke('browser:import', source),
+
   // VPN / Proxy
   vpnConnect: (location) => ipcRenderer.invoke('vpn:connect', location),
   vpnDisconnect: () => ipcRenderer.invoke('vpn:disconnect'),

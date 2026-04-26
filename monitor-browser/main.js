@@ -898,32 +898,51 @@ async function fetchProxyList(countryCode) {
   }
 
   const https = require('node:https');
+  // Multiple free proxy list sources. We dedupe and try each in turn.
+  // GitHub-hosted lists tend to be the most reliable; aggregator APIs
+  // (proxyscrape, proxy-list.download) often time out or return empty.
   const sources = [
-    `https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=8000&ssl=yes&anonymity=elite${countryCode ? '&country=' + countryCode : ''}`,
+    `https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=8000&ssl=yes${countryCode ? '&country=' + countryCode : ''}`,
     `https://www.proxy-list.download/api/v1/get?type=https${countryCode ? '&country=' + countryCode : ''}`,
+    'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt',
+    'https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt',
+    'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt',
   ];
 
-  for (const url of sources) {
-    const list = await new Promise((resolve) => {
-      const req = https.get(url, { timeout: 10000 }, (res) => {
-        let body = '';
-        res.on('data', (c) => { body += c; });
-        res.on('end', () => {
-          const lines = body.split(/\r?\n/)
-            .map((l) => l.trim())
-            .filter((l) => /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}$/.test(l));
-          resolve(lines);
-        });
+  const fetchOne = (url) => new Promise((resolve) => {
+    const req = https.get(url, {
+      timeout: 10000,
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/plain, */*' },
+    }, (res) => {
+      // Follow simple redirects
+      if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+        return fetchOne(res.headers.location).then(resolve);
+      }
+      let body = '';
+      res.on('data', (c) => { body += c; });
+      res.on('end', () => {
+        const lines = body.split(/\r?\n/)
+          .map((l) => l.trim().replace(/^https?:\/\//i, ''))
+          .filter((l) => /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}$/.test(l));
+        resolve(lines);
       });
-      req.on('error', () => resolve([]));
-      req.on('timeout', () => { req.destroy(); resolve([]); });
     });
-    if (list.length > 0) {
-      _proxyListCache.set(cacheKey, { ts: Date.now(), list });
-      return list;
+    req.on('error', () => resolve([]));
+    req.on('timeout', () => { req.destroy(); resolve([]); });
+  });
+
+  // Fetch all sources in parallel, merge & dedupe.
+  const results = await Promise.all(sources.map(fetchOne));
+  const merged = [...new Set(results.flat())];
+  if (merged.length > 0) {
+    // Shuffle so we don't hammer the same dead proxies first every time.
+    for (let i = merged.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [merged[i], merged[j]] = [merged[j], merged[i]];
     }
+    _proxyListCache.set(cacheKey, { ts: Date.now(), list: merged });
   }
-  return [];
+  return merged;
 }
 
 // Test a proxy by issuing an HTTP request through it.
@@ -1020,29 +1039,36 @@ async function vpnConnect(location) {
       return vpnState;
     }
 
-    // Country-based: fetch ProxyScrape free proxy list, try each
+    // Country-based: fetch free proxy list and test in parallel.
     const list = await fetchProxyList(cc);
     if (list.length === 0) {
-      throw new Error(`No proxies available for ${loc}. Try a custom proxy or Tor.`);
+      throw new Error(`No proxies available for ${loc}. Free proxy lists may be down — try Tor or a custom proxy.`);
     }
 
-    // Test up to 12 proxies in parallel-batches; pick first that works.
+    // Test up to 80 proxies in batches of 8 in parallel. Keep the user
+    // informed via status broadcasts so they see progress.
     let workingProxy = null;
     let workingIp = null;
-    const batchSize = 4;
-    for (let i = 0; i < Math.min(20, list.length); i += batchSize) {
+    const maxScan = Math.min(80, list.length);
+    const batchSize = 8;
+    let tested = 0;
+    for (let i = 0; i < maxScan; i += batchSize) {
       const batch = list.slice(i, i + batchSize);
-      const results = await Promise.all(batch.map((p) => testHttpProxy(p, 5000).then((r) => ({ p, r }))));
+      const results = await Promise.all(batch.map((p) => testHttpProxy(p, 4000).then((r) => ({ p, r }))));
+      tested += batch.length;
       const hit = results.find((x) => x.r.ok);
       if (hit) {
         workingProxy = hit.p;
         workingIp = hit.r.ip;
         break;
       }
+      // Periodic status update (still connecting, just slow)
+      vpnState.error = `Scanning proxies (${tested}/${maxScan})…`;
+      broadcastVpnStatus();
     }
 
     if (!workingProxy) {
-      throw new Error(`No working proxies for ${loc} (tested ${Math.min(20, list.length)}). Try again or use custom proxy.`);
+      throw new Error(`No working ${loc} proxies (tested ${tested} of ${list.length}). Free proxies are unreliable — Tor or a custom paid proxy is recommended.`);
     }
 
     const proxyRules = `http=${workingProxy};https=${workingProxy}`;
@@ -1051,11 +1077,14 @@ async function vpnConnect(location) {
       proxyBypassRules: 'localhost,127.0.0.1,<local>',
     });
 
-    vpnState.status = 'connected';
-    vpnState.connectedAt = Date.now();
-    vpnState.proxyRule = `http://${workingProxy}`;
-    vpnState.exitIp = workingIp;
-    vpnState.error = null;
+    vpnState = {
+      status: 'connected',
+      location: loc,
+      connectedAt: Date.now(),
+      proxyRule: `http://${workingProxy}`,
+      exitIp: workingIp,
+      error: null,
+    };
     saveSettings({ vpnEnabled: true, vpnLocation: loc });
     broadcastVpnStatus();
     return vpnState;
@@ -2058,6 +2087,144 @@ ipcMain.handle('bookmarks:move', (_e, url, folder) => {
 });
 
 // ---------------------------------------------------------------------------
+// Browser data importer (Chrome / Brave / Edge / Firefox)
+// ---------------------------------------------------------------------------
+// Chrome-family browsers store bookmarks in a JSON file; Firefox uses
+// places.sqlite. We import bookmarks from Chrome-family directly. Firefox
+// users are pointed at the bookmarks.html export they can produce from
+// their browser (we parse that too).
+
+function browserDataPaths(source) {
+  const home = require('node:os').homedir();
+  const platform = process.platform;
+  const paths = { chrome: [], brave: [], edge: [], firefox: [] };
+
+  if (platform === 'linux') {
+    paths.chrome = [
+      path.join(home, '.config/google-chrome/Default/Bookmarks'),
+      path.join(home, '.config/google-chrome-beta/Default/Bookmarks'),
+      path.join(home, '.config/chromium/Default/Bookmarks'),
+    ];
+    paths.brave = [path.join(home, '.config/BraveSoftware/Brave-Browser/Default/Bookmarks')];
+    paths.edge = [path.join(home, '.config/microsoft-edge/Default/Bookmarks')];
+    paths.firefox = [path.join(home, '.mozilla/firefox')];
+  } else if (platform === 'darwin') {
+    paths.chrome = [path.join(home, 'Library/Application Support/Google/Chrome/Default/Bookmarks')];
+    paths.brave = [path.join(home, 'Library/Application Support/BraveSoftware/Brave-Browser/Default/Bookmarks')];
+    paths.edge = [path.join(home, 'Library/Application Support/Microsoft Edge/Default/Bookmarks')];
+    paths.firefox = [path.join(home, 'Library/Application Support/Firefox/Profiles')];
+  } else if (platform === 'win32') {
+    const local = process.env.LOCALAPPDATA || path.join(home, 'AppData/Local');
+    const appdata = process.env.APPDATA || path.join(home, 'AppData/Roaming');
+    paths.chrome = [path.join(local, 'Google/Chrome/User Data/Default/Bookmarks')];
+    paths.brave = [path.join(local, 'BraveSoftware/Brave-Browser/User Data/Default/Bookmarks')];
+    paths.edge = [path.join(local, 'Microsoft/Edge/User Data/Default/Bookmarks')];
+    paths.firefox = [path.join(appdata, 'Mozilla/Firefox/Profiles')];
+  }
+  return paths[source] || [];
+}
+
+// Walk Chrome's nested bookmark folder structure and flatten to entries.
+function chromeBookmarksFlatten(node, folder, out) {
+  if (!node) return;
+  if (node.type === 'url' && node.url) {
+    out.push({ url: node.url, title: node.name || node.url, folder: folder || '' });
+  } else if (node.type === 'folder' && Array.isArray(node.children)) {
+    const f = folder ? folder + '/' + (node.name || '') : (node.name || '');
+    node.children.forEach((c) => chromeBookmarksFlatten(c, f, out));
+  }
+}
+
+function importChromeFamily(filePath) {
+  const raw = fs.readFileSync(filePath, 'utf8');
+  const data = JSON.parse(raw);
+  const out = [];
+  if (data.roots) {
+    Object.entries(data.roots).forEach(([rootName, rootNode]) => {
+      chromeBookmarksFlatten(rootNode, rootName, out);
+    });
+  }
+  return out;
+}
+
+// Parse a Firefox bookmarks.html export (Netscape Bookmark format) — the
+// most reliable cross-platform import path that doesn't require sqlite.
+function importFirefoxHtml(filePath) {
+  const raw = fs.readFileSync(filePath, 'utf8');
+  const out = [];
+  // Match all <A HREF="..." ...>title</A> entries, with optional folder context.
+  // Build folder stack from <DT><H3>folder</H3>...<DL>...</DL>
+  const re = /<DT>\s*<A\s+HREF="([^"]+)"[^>]*>([\s\S]*?)<\/A>/gi;
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    const url = m[1];
+    const title = m[2].replace(/<[^>]+>/g, '').trim();
+    if (url && /^https?:/.test(url)) {
+      out.push({ url, title: title || url, folder: 'Firefox' });
+    }
+  }
+  return out;
+}
+
+ipcMain.handle('browser:import', async (_e, source) => {
+  if (!source) return { success: false, error: 'No source specified', count: 0 };
+  let imported = [];
+  try {
+    if (source === 'firefox') {
+      // Firefox uses places.sqlite which requires a native sqlite module.
+      // Show the user how to export instead.
+      const { dialog } = require('electron');
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Select Firefox bookmarks export (bookmarks.html)',
+        properties: ['openFile'],
+        filters: [{ name: 'HTML', extensions: ['html', 'htm'] }],
+      });
+      if (result.canceled || !result.filePaths.length) {
+        return { success: false, error: 'No file selected', count: 0 };
+      }
+      imported = importFirefoxHtml(result.filePaths[0]);
+    } else {
+      const candidates = browserDataPaths(source);
+      let used = null;
+      for (const p of candidates) {
+        try {
+          const stat = fs.statSync(p);
+          if (stat.isFile()) { used = p; break; }
+        } catch {}
+      }
+      if (!used) {
+        return { success: false, error: `${source} bookmarks file not found in default location`, count: 0 };
+      }
+      imported = importChromeFamily(used);
+    }
+
+    if (imported.length === 0) {
+      return { success: false, error: 'No bookmarks found', count: 0 };
+    }
+
+    // Merge into our store, dedupe by URL
+    const bm = loadBookmarks();
+    const existingUrls = new Set(bm.map((b) => b.url));
+    let added = 0;
+    imported.forEach((entry) => {
+      if (existingUrls.has(entry.url)) return;
+      bm.push({
+        id: randomUUID(),
+        url: entry.url,
+        title: entry.title,
+        folder: entry.folder || source,
+        createdAt: Date.now(),
+      });
+      added++;
+    });
+    saveBookmarks(bm);
+    return { success: true, count: added, total: imported.length };
+  } catch (err) {
+    return { success: false, error: err.message, count: 0 };
+  }
+});
+
+// ---------------------------------------------------------------------------
 // History store
 // ---------------------------------------------------------------------------
 function historyPath() {
@@ -2516,27 +2683,18 @@ app.whenReady().then(() => {
   //    file:// — YouTube rejects embeds without a web origin.
   //  - googlevideo (HLS streams): needs same YouTube referer.
   try {
+    // Only inject Referer for OpenStreetMap tile requests (their usage policy
+    // requires a real Referer). Do NOT spoof Referer/Origin for YouTube —
+    // YouTube's bot detection triggers error 152-4 when these are forged.
     const filter = {
       urls: [
         'https://*.tile.openstreetmap.org/*',
         'https://tile.openstreetmap.org/*',
-        'https://*.youtube.com/*',
-        'https://youtube.com/*',
-        'https://*.youtube-nocookie.com/*',
-        'https://youtube-nocookie.com/*',
-        'https://*.googlevideo.com/*',
-        'https://*.ytimg.com/*',
       ],
     };
     session.defaultSession.webRequest.onBeforeSendHeaders(filter, (details, cb) => {
       const headers = { ...details.requestHeaders };
-      const url = details.url || '';
-      if (url.includes('openstreetmap.org')) {
-        headers['Referer'] = 'https://www.openstreetmap.org/';
-      } else if (url.includes('youtube.com') || url.includes('youtube-nocookie.com') || url.includes('googlevideo.com') || url.includes('ytimg.com')) {
-        headers['Referer'] = 'https://www.youtube.com/';
-        headers['Origin'] = 'https://www.youtube.com';
-      }
+      headers['Referer'] = 'https://www.openstreetmap.org/';
       cb({ requestHeaders: headers });
     });
 

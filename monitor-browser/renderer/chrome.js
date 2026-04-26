@@ -988,16 +988,20 @@
     document.querySelectorAll('.migrate-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         const src = btn.dataset.source;
-        const label = src.charAt(0).toUpperCase() + src.slice(1);
-        if (typeof browser.importBrowserData !== 'function') {
-          btn.textContent = 'Not available';
-          setTimeout(() => { btn.textContent = label; }, 2000);
-          return;
-        }
-        btn.textContent = 'Importing...';
-        browser.importBrowserData(src).then((ok) => {
-          btn.textContent = ok ? 'Done!' : label;
-        }).catch(() => { btn.textContent = label; });
+        const label = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = src === 'firefox' ? 'Pick file…' : 'Importing…';
+        browser.importBrowserData(src).then((res) => {
+          if (res && res.success) {
+            btn.textContent = 'Imported ' + res.count + ' new';
+          } else {
+            btn.textContent = (res && res.error) ? res.error.substring(0, 30) : 'Failed';
+          }
+          setTimeout(() => { btn.textContent = label; btn.disabled = false; }, 5000);
+        }).catch((err) => {
+          btn.textContent = 'Error';
+          setTimeout(() => { btn.textContent = label; btn.disabled = false; }, 3000);
+        });
       });
     });
 

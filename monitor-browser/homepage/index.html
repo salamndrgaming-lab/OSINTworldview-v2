@@ -77,7 +77,7 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .srch-in:focus{border-color:var(--accent-border);box-shadow:0 0 0 3px var(--accent-glow),0 4px 20px rgba(0,0,0,.4);background:var(--surface3)}
 .srch-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:var(--surface3);border:1px solid var(--border2);color:var(--text2);transition:all .15s}
 .srch-wrap:focus-within .srch-btn{border-color:var(--accent-border);color:var(--accent)}
-.hero-wx-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.hero-wx-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:6px;position:relative}
 .hero-wx{display:flex;align-items:center;gap:10px;justify-content:flex-end}
 .hero-wx-temp{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--text);line-height:1}
 .hero-wx-info{display:flex;flex-direction:column;gap:1px}
@@ -86,8 +86,9 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 .wx-toggle-btn{background:none;border:none;color:var(--text-dim);cursor:pointer;padding:2px;transition:transform .2s,color .15s}
 .wx-toggle-btn:hover{color:var(--accent)}
 .wx-toggle-btn.open{transform:rotate(180deg)}
-.wx-forecast{display:flex;gap:6px;padding:4px 0;overflow-x:auto;max-width:420px;scrollbar-width:none;direction:rtl}
-.wx-forecast>*{direction:ltr}
+/* Forecast row anchors to the right edge of the weather card and grows leftward
+   without pushing on the hero column layout. */
+.wx-forecast{position:absolute;top:100%;right:0;margin-top:8px;display:flex;gap:6px;padding:6px 8px;background:var(--panel);border:1px solid var(--panel-border);border-radius:10px;backdrop-filter:blur(10px);box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:50}
 .wx-forecast::-webkit-scrollbar{display:none}
 .wx-day{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 7px;border-radius:8px;background:var(--accent-subtle);border:1px solid var(--panel-border);min-width:48px;flex-shrink:0}
 .wx-day-name{font-size:9px;font-weight:600;color:var(--text-mid);text-transform:uppercase;letter-spacing:.04em}
@@ -931,8 +932,14 @@ function initLeafletMap(){
     options:{position:'topright'},
     onAdd:function(){
       const div=L.DomUtil.create('div','leaflet-bar osint-layer-panel');
-      div.style.cssText='background:var(--panel,#111520);border:1px solid var(--border,rgba(255,255,255,0.06));border-radius:6px;padding:6px 8px;font-size:11px;color:var(--text,#e8eaf0);min-width:140px;max-height:340px;overflow-y:auto;scrollbar-width:thin';
-      let html='';
+      div.style.cssText='background:var(--panel,#111520);border:1px solid var(--border,rgba(255,255,255,0.06));border-radius:6px;padding:6px 8px;font-size:11px;color:var(--text,#e8eaf0);min-width:150px;max-height:80vh;overflow-y:auto;scrollbar-width:thin';
+      // Weather radar is pinned at the top so it's always visible.
+      let html='<div style="font-weight:600;margin:0 0 3px;color:var(--text-mid,#9ca3af);font-size:9px;text-transform:uppercase;letter-spacing:.06em">Weather</div>'+
+        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:1.5px 0">'+
+        '<input type="checkbox" id="radarToggleCheck" style="margin:0;width:12px;height:12px">'+
+        '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#4299e1;flex-shrink:0"></span>'+
+        '<span style="font-size:10px">Radar</span>'+
+      '</label>';
       Object.entries(groups).forEach(([gKey,gLabel])=>{
         html+='<div style="font-weight:600;margin:6px 0 3px;color:var(--text-mid,#9ca3af);font-size:9px;text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--border,rgba(255,255,255,0.06));padding-top:5px">'+gLabel+'</div>';
         Object.entries(osintLayers).forEach(([key,info])=>{
@@ -944,12 +951,6 @@ function initLeafletMap(){
           '</label>';
         });
       });
-      html+='<div style="font-weight:600;margin:6px 0 3px;color:var(--text-mid,#9ca3af);font-size:9px;text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--border,rgba(255,255,255,0.06));padding-top:5px">Weather</div>'+
-        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:1.5px 0">'+
-        '<input type="checkbox" id="radarToggleCheck" style="margin:0;width:12px;height:12px">'+
-        '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#4299e1;flex-shrink:0"></span>'+
-        '<span style="font-size:10px">Radar</span>'+
-      '</label>';
       div.innerHTML=html;
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.disableScrollPropagation(div);
@@ -991,8 +992,8 @@ function updateMapStats(){
 function loadGdeltEvents(){
   const info=osintLayers.events;
   if(!info||!info.layer)return;
-  // GDELT requires a non-empty query. Use a broad filter for major news in last 24h.
-  const url='https://api.gdeltproject.org/api/v2/geo/geo?query=sourcelang:eng&mode=PointData&format=GeoJSON&TIMESPAN=24h&MAXROWS=200';
+  // GDELT Geo API: simple keyword query for global breaking news.
+  const url='https://api.gdeltproject.org/api/v2/geo/geo?query=news&format=GeoJSON&TIMESPAN=24h&MAXROWS=200';
   intelFetch(url).then(txt=>{
     let geojson;
     try{geojson=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
@@ -1123,7 +1124,7 @@ function loadFlights(){
 function loadGdeltTheme(layerKey,query,labelColor,labelPrefix){
   const info=osintLayers[layerKey];
   if(!info||!info.layer)return;
-  const url='https://api.gdeltproject.org/api/v2/geo/geo?query='+encodeURIComponent(query)+'&mode=PointData&format=GeoJSON&TIMESPAN=24h&MAXROWS=150';
+  const url='https://api.gdeltproject.org/api/v2/geo/geo?query='+encodeURIComponent(query)+'&format=GeoJSON&TIMESPAN=24h&MAXROWS=150';
   intelFetch(url).then(txt=>{
     let gj;
     try{gj=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
@@ -1149,9 +1150,9 @@ function loadGdeltTheme(layerKey,query,labelColor,labelPrefix){
     updateMapStats();
   }).catch(()=>{});
 }
-function loadConflicts(){loadGdeltTheme('conflicts','sourcelang:eng (theme:MILITARY OR theme:ARMED_CONFLICT OR theme:TAX_WEAPONS)','#dc2626','Armed Conflict');}
-function loadProtests(){loadGdeltTheme('protests','sourcelang:eng (theme:PROTEST OR theme:CIVIL_UNREST)','#f59e0b','Protest/Unrest');}
-function loadTerror(){loadGdeltTheme('terror','sourcelang:eng (theme:TERROR OR theme:EXTREMISM)','#7c3aed','Terrorism/Security');}
+function loadConflicts(){loadGdeltTheme('conflicts','war OR conflict OR military OR airstrike','#dc2626','Armed Conflict');}
+function loadProtests(){loadGdeltTheme('protests','protest OR rally OR demonstration','#f59e0b','Protest/Unrest');}
+function loadTerror(){loadGdeltTheme('terror','terror OR attack OR bombing OR shooting','#7c3aed','Terrorism/Security');}
 
 /* -- NASA EONET: natural events (wildfires, volcanoes, storms, floods) -- */
 const EONET_CATS={

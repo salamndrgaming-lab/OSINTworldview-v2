@@ -614,7 +614,13 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 <!-- Livestreams expand -->
 <div class="pill-expand" id="pill-streams">
   <div class="wgt">
-    <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent2)"></span>News Livestreams</span></div>
+    <div class="wgt-head">
+      <span class="wgt-title"><span class="wdot" style="background:var(--accent2)"></span>News Livestreams</span>
+      <form id="addStreamForm" style="display:flex;gap:6px;margin-left:auto" onsubmit="return false">
+        <input type="text" id="addStreamUrl" placeholder="Paste YouTube link…" style="width:200px;padding:3px 8px;font-size:11px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text)"/>
+        <button type="submit" class="wc-btn" id="addStreamBtn" style="white-space:nowrap">+ Add Stream</button>
+      </form>
+    </div>
     <div class="ls-grid" id="streamGrid"></div>
   </div>
 </div>
@@ -780,7 +786,9 @@ if(wxToggleBtn){
     } else {
       const rect=wxToggleBtn.getBoundingClientRect();
       fc.style.top=(rect.bottom+4)+'px';
-      fc.style.right=(window.innerWidth-rect.right)+'px';
+      // Anchor the right edge of the forecast near the right side of the
+      // viewport (with a small gutter) so it sits under the weather area.
+      fc.style.right='20px';
       fc.style.left='auto';
       fc.style.display='flex';
     }
@@ -908,7 +916,7 @@ function initLeafletMap(){
     if(osintLayers[key].active)osintLayers[key].layer.addTo(osintMap);
   });
   osintLayers.events.loader=loadNewsEvents;
-  osintLayers.conflicts.loader=loadConflicts;
+  osintLayers.conflicts.loader=loadConflictZones;
   osintLayers.protests.loader=loadProtests;
   osintLayers.terror.loader=loadTerror;
   osintLayers.quakes.loader=loadEarthquakes;
@@ -926,7 +934,7 @@ function initLeafletMap(){
   });
   // Periodic refresh — ReliefWeb is rate-limited so we keep these gentle.
   setInterval(()=>{if(osintLayers.events.active)loadNewsEvents();},10*60*1000);
-  setInterval(()=>{if(osintLayers.conflicts.active)loadConflicts();},10*60*1000);
+  setInterval(()=>{if(osintLayers.conflicts.active)loadConflictZones();},10*60*1000);
   setInterval(()=>{if(osintLayers.protests.active)loadProtests();},10*60*1000);
   setInterval(()=>{if(osintLayers.terror.active)loadTerror();},10*60*1000);
   setInterval(loadEarthquakes,5*60*1000);
@@ -1073,6 +1081,124 @@ function loadReliefWebReports(layerKey, opts){
     updateMapStats();
     console.log('[reliefweb]',layerKey,count,'reports of',data.data.length);
   }).catch(e=>{console.warn('[reliefweb] error for',layerKey,e);});
+}
+
+// Country boundaries GeoJSON for conflict zone polygons. Fetched once,
+// then reused. The dataset is the 110m Natural Earth admin-0 countries
+// (~780KB), served via jsDelivr from the well-known johan/world.geo.json
+// repo. It includes an ISO A3 code in `properties.name` (matched by
+// country name) that we use to highlight conflict countries.
+let _countryGeoJSON=null;
+function getCountryGeoJSON(){
+  if(_countryGeoJSON)return Promise.resolve(_countryGeoJSON);
+  return intelFetch('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json').then(txt=>{
+    const topo=typeof txt==='string'?JSON.parse(txt):txt;
+    // Convert TopoJSON → GeoJSON manually (avoid requiring topojson-client).
+    // world-atlas stores countries in topo.objects.countries.
+    const obj=topo.objects&&topo.objects.countries;
+    if(!obj||!topo.arcs)return null;
+    // Minimal TopoJSON→GeoJSON decoder for Polygon and MultiPolygon.
+    function decodeArc(arcs,transform,idx){
+      const arc=arcs[idx<0?~idx:idx];
+      const coords=[];
+      let x=0,y=0;
+      const tx=transform?transform.translate[0]:0,ty=transform?transform.translate[1]:0;
+      const sx=transform?transform.scale[0]:1,sy=transform?transform.scale[1]:1;
+      for(let i=0;i<arc.length;i++){
+        x+=arc[i][0];y+=arc[i][1];
+        coords.push([x*sx+tx,y*sy+ty]);
+      }
+      if(idx<0)coords.reverse();
+      return coords;
+    }
+    function decodeRing(arcs,transform,ring){
+      let coords=[];
+      ring.forEach(idx=>{coords=coords.concat(decodeArc(arcs,transform,idx));});
+      return coords;
+    }
+    const tf=topo.transform||null;
+    const features=obj.geometries.map(g=>{
+      let geometry=null;
+      if(g.type==='Polygon'){
+        geometry={type:'Polygon',coordinates:g.arcs.map(r=>decodeRing(topo.arcs,tf,r))};
+      } else if(g.type==='MultiPolygon'){
+        geometry={type:'MultiPolygon',coordinates:g.arcs.map(poly=>poly.map(r=>decodeRing(topo.arcs,tf,r)))};
+      }
+      return {type:'Feature',properties:g.properties||{},id:g.id,geometry};
+    }).filter(f=>f.geometry);
+    _countryGeoJSON={type:'FeatureCollection',features};
+    console.log('[map] country boundaries loaded:',features.length,'countries');
+    return _countryGeoJSON;
+  }).catch(e=>{console.warn('[map] failed to load country boundaries',e);return null;});
+}
+
+// Render conflict zone polygons. Takes ReliefWeb data and highlights
+// countries mentioned in reports as shaded polygons.
+function loadConflictZones(){
+  const info=osintLayers.conflicts;
+  if(!info||!info.layer)return;
+  const sinceDate=new Date(Date.now()-30*24*60*60*1000).toISOString().split('T')[0];
+  const rwUrl='https://api.reliefweb.int/v1/reports?appname=monitorbrowser'+
+    '&query[value]=conflict+OR+war+OR+military+OR+airstrike+OR+offensive+OR+clashes'+
+    '&fields[include][]=primary_country.name&fields[include][]=primary_country.iso3'+
+    '&fields[include][]=title&fields[include][]=url&fields[include][]=date'+
+    '&sort[]=date.created:desc&limit=200'+
+    '&filter[field]=date.created&filter[value][from]='+sinceDate;
+  Promise.all([intelFetch(rwUrl).then(t=>{try{return JSON.parse(t);}catch{return null;}}),getCountryGeoJSON()])
+    .then(([rwData,geo])=>{
+      if(!rwData||!rwData.data||!geo)return;
+      info.layer.clearLayers();
+      // Count reports per country name
+      const countryCounts={};
+      const countryTitles={};
+      rwData.data.forEach(item=>{
+        const f=item.fields||{};
+        const cn=f.primary_country?.name;
+        if(!cn)return;
+        countryCounts[cn]=(countryCounts[cn]||0)+1;
+        if(!countryTitles[cn])countryTitles[cn]=[];
+        if(countryTitles[cn].length<4)countryTitles[cn].push(f.title||'');
+      });
+      // Match country names to GeoJSON features and add polygons
+      const conflictNames=new Set(Object.keys(countryCounts));
+      let drawn=0;
+      geo.features.forEach(feature=>{
+        const props=feature.properties||{};
+        // world-atlas numeric IDs don't carry names; try the name property
+        // which is added by the CDN build. Fall back to checking all country
+        // report names against a manual lookup (numeric ISO → name).
+        const featureName=props.name||'';
+        let matchedName=null;
+        for(const cn of conflictNames){
+          if(cn===featureName||featureName.includes(cn)||cn.includes(featureName)){
+            matchedName=cn;break;
+          }
+        }
+        if(!matchedName)return;
+        const count=countryCounts[matchedName]||0;
+        const opacity=Math.min(0.6,0.15+count*0.03);
+        const layer=L.geoJSON(feature,{
+          style:{
+            fillColor:'#dc2626',
+            fillOpacity:opacity,
+            color:'#dc2626',
+            weight:1.5,
+            opacity:0.7,
+          },
+        });
+        const titles=countryTitles[matchedName]||[];
+        let popup='<div style="max-width:280px;font-size:11px;line-height:1.4">'+
+          '<strong style="color:#dc2626">Conflict Zone — '+matchedName+'</strong>'+
+          '<br><span style="color:#9ca3af">'+count+' reports in last 30 days</span>';
+        titles.slice(0,3).forEach(t=>{popup+='<br><span style="font-size:10px">• '+t.substring(0,120)+'</span>';});
+        popup+='</div>';
+        layer.bindPopup(popup);
+        layer.addTo(info.layer);
+        drawn++;
+      });
+      updateMapStats();
+      console.log('[conflicts]',drawn,'conflict zone polygons from',Object.keys(countryCounts).length,'countries');
+    }).catch(e=>{console.warn('[conflicts] polygon load error',e);});
 }
 
 function loadNewsEvents(){
@@ -1795,21 +1921,56 @@ const THREAT_BARS=[
 })();
 
 /* ── NEWS LIVESTREAMS (2×2 YouTube embeds) ────── */
-const STREAMS=[
+let STREAMS=[
   {name:'CNN',           id:'h3MuIUNCCzI'},
   {name:'BBC World',     id:'_3AaFkeMvhI'},
   {name:'Al Jazeera',    id:'F-POY4Q0QSI'},
   {name:'Bloomberg',     id:'dp8PhLsUcFE'},
 ];
+// Persist any user-added streams to localStorage
+function saveStreams(){try{localStorage.setItem('mb-streams',JSON.stringify(STREAMS));}catch(e){}}
+function loadSavedStreams(){try{const s=localStorage.getItem('mb-streams');if(s){STREAMS=JSON.parse(s);}}catch(e){}}
+loadSavedStreams();
+
+function extractYouTubeId(input){
+  if(!input)return null;
+  const m=input.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|live\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if(m)return m[1];
+  if(/^[a-zA-Z0-9_-]{11}$/.test(input.trim()))return input.trim();
+  return null;
+}
 function renderStreams(){
   const g=document.getElementById('streamGrid');if(!g)return;
   g.innerHTML='';
-  STREAMS.forEach(s=>{
+  STREAMS.forEach((s,idx)=>{
     const d=document.createElement('div');d.className='ls-card';
-    d.innerHTML=`<iframe src="https://www.youtube.com/embed/${s.id}?autoplay=0&mute=1" allow="autoplay;encrypted-media" allowfullscreen loading="lazy"></iframe><div class="ls-bar"><span class="ls-name">${s.name}</span><span class="ls-live">LIVE</span></div>`;
+    d.style.position='relative';
+    // youtube-nocookie.com works better for embeds (privacy-enhanced mode).
+    d.innerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${s.id}?autoplay=0&mute=1" allow="autoplay;encrypted-media" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe><div class="ls-bar"><span class="ls-name">${s.name}</span><span class="ls-live">LIVE</span>${idx>=4?'<button class="ls-remove" data-idx="'+idx+'" title="Remove" style="margin-left:auto;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px">&times;</button>':''}</div>`;
     g.appendChild(d);
   });
+  g.querySelectorAll('.ls-remove').forEach(btn=>{
+    btn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      const i=parseInt(btn.dataset.idx);
+      STREAMS.splice(i,1);saveStreams();renderStreams();
+    });
+  });
 }
+// Add-stream form handler
+document.getElementById('addStreamForm')?.addEventListener('submit',()=>{
+  const input=document.getElementById('addStreamUrl');
+  if(!input)return;
+  const id=extractYouTubeId(input.value);
+  if(!id){input.style.borderColor='#ff4757';setTimeout(()=>input.style.borderColor='',1500);return;}
+  const name=input.value.match(/youtube\.com\/live\//)?'Live Stream':'Custom Stream';
+  STREAMS.push({name,id});
+  saveStreams();renderStreams();
+  input.value='';
+});
+document.getElementById('addStreamBtn')?.addEventListener('click',()=>{
+  document.getElementById('addStreamForm')?.dispatchEvent(new Event('submit'));
+});
 
 /* ── PREDICTION MARKETS (live Metaculus API) ──── */
 const PREDICTIONS_FALLBACK=[

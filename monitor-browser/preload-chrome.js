@@ -86,6 +86,10 @@ contextBridge.exposeInMainWorld('browser', {
     return () => ipcRenderer.off('settings:changed', listener);
   },
 
+  // Profile avatar
+  pickAvatar: () => ipcRenderer.invoke('profile:pick-avatar'),
+  clearAvatar: () => ipcRenderer.invoke('profile:clear-avatar'),
+
   // Session & page features
   sessionExport: () => ipcRenderer.invoke('session:export'),
   pageArchive: () => ipcRenderer.invoke('page:archive'),

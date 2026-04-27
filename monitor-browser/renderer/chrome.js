@@ -633,16 +633,38 @@
     if (typeof refreshBookmarksBar === 'function') refreshBookmarksBar();
   });
 
-  // Apply the operator's initials + color to the chrome's profile button.
+  // Apply the operator's initials/avatar to the chrome's profile button.
   function applyProfileBadge(s) {
     const btn = document.getElementById('action-profile');
     if (!btn) return;
     const name = (s && s.profileName) || 'Analyst';
-    const initials = name.trim().split(/\s+/).map((p) => p[0] || '').join('').slice(0, 2).toUpperCase() || 'A';
-    btn.textContent = initials;
+    const avatarUrl = (s && s.profileAvatar) || '';
     const color = (s && s.profileAvatarColor) || '#00d4ff';
-    btn.style.background = 'linear-gradient(135deg,' + color + '99,' + color + ')';
     btn.title = 'Profile — ' + name;
+
+    if (avatarUrl) {
+      // Show a tiny circular profile picture in the toolbar
+      btn.textContent = '';
+      btn.style.background = 'none';
+      btn.style.padding = '0';
+      btn.style.overflow = 'hidden';
+      let img = btn.querySelector('img');
+      if (!img) {
+        img = document.createElement('img');
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+        btn.appendChild(img);
+      }
+      img.src = avatarUrl;
+    } else {
+      // Fall back to initials + color gradient
+      const existing = btn.querySelector('img');
+      if (existing) existing.remove();
+      const initials = name.trim().split(/\s+/).map((p) => p[0] || '').join('').slice(0, 2).toUpperCase() || 'A';
+      btn.textContent = initials;
+      btn.style.background = 'linear-gradient(135deg,' + color + '99,' + color + ')';
+      btn.style.padding = '';
+      btn.style.overflow = '';
+    }
   }
   // Run once on first load too.
   browser.getSettings().then((r) => applyProfileBadge(r && r.settings)).catch(() => {});
@@ -1419,6 +1441,7 @@
     const loc = s.profileLocation || '';
     const bio = s.profileBio || '';
     const badge = s.profileBadge || 'OSINT';
+    const avatar = s.profileAvatar || '';
     const initials = name.trim().split(/\s+/).map((p) => p[0] || '').join('').slice(0, 2).toUpperCase() || 'A';
     let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (_) {}
     const sessionStartMs = SESSION_STARTED_AT;
@@ -1436,7 +1459,13 @@
 
       // --- Identity card ---
       '    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">' +
-      '      <div id="prof-avatar" style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,' + color + '99,' + color + ');display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-size:26px;font-weight:700;color:#0a0c10;flex-shrink:0;box-shadow:0 0 0 3px rgba(255,255,255,0.04)">' + esc(initials) + '</div>' +
+      '      <div id="prof-avatar-wrap" style="position:relative;flex-shrink:0;cursor:pointer" title="Click to change photo">' +
+      (avatar
+        ? '        <img id="prof-avatar" src="' + escapeAttr(avatar) + '" style="width:72px;height:72px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 3px rgba(255,255,255,0.04)"/>'
+        : '        <div id="prof-avatar" style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,' + color + '99,' + color + ');display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-size:26px;font-weight:700;color:#0a0c10;box-shadow:0 0 0 3px rgba(255,255,255,0.04)">' + esc(initials) + '</div>'
+      ) +
+      '        <div style="position:absolute;bottom:0;right:0;width:22px;height:22px;border-radius:50%;background:var(--surface-1);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px">📷</div>' +
+      '      </div>' +
       '      <div style="flex:1;min-width:0">' +
       '        <div id="prof-display-name" style="font-size:16px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(name) + '</div>' +
       '        <div id="prof-display-handle" style="font-size:12px;color:var(--text-secondary);font-family:var(--font-data)">' + esc(handle ? '@' + handle.replace(/^@/, '') : '@anon') + '</div>' +
@@ -1539,7 +1568,8 @@
       document.getElementById('prof-display-role').textContent = r || 'No role set';
       const badgeEl = document.getElementById('prof-display-badge');
       if (badgeEl) badgeEl.textContent = b;
-      document.getElementById('prof-avatar').textContent = initialsNow;
+      const avatarEl = document.getElementById('prof-avatar');
+      if (avatarEl && avatarEl.tagName !== 'IMG') avatarEl.textContent = initialsNow;
     }
 
     function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
@@ -1561,6 +1591,28 @@
       if (el) el.addEventListener('input', () => { refreshHeader(); saveSoon(); });
     });
     document.getElementById('prof-badge').addEventListener('change', () => { refreshHeader(); saveSoon(); });
+
+    // Avatar image pick — click the avatar area to select a photo
+    const avatarWrap = document.getElementById('prof-avatar-wrap');
+    if (avatarWrap && typeof browser.pickAvatar === 'function') {
+      avatarWrap.addEventListener('click', async () => {
+        const result = await browser.pickAvatar();
+        if (!result) return;
+        if (result.error) { console.warn('[profile] avatar error', result.error); return; }
+        if (result.dataUrl) {
+          // Replace the avatar element with an <img>
+          const wrap = document.getElementById('prof-avatar-wrap');
+          const oldAv = document.getElementById('prof-avatar');
+          if (oldAv) oldAv.remove();
+          const img = document.createElement('img');
+          img.id = 'prof-avatar';
+          img.src = result.dataUrl;
+          img.style.cssText = 'width:72px;height:72px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 3px rgba(255,255,255,0.04)';
+          wrap.insertBefore(img, wrap.firstChild);
+          applyProfileBadge({ ...currentSettings, profileAvatar: result.dataUrl });
+        }
+      });
+    }
 
     container.querySelectorAll('#prof-color-row .prof-color-sw').forEach((sw) => {
       sw.addEventListener('click', () => {
@@ -1609,11 +1661,13 @@
     });
 
     document.getElementById('prof-reset').addEventListener('click', () => {
+      if (typeof browser.clearAvatar === 'function') browser.clearAvatar();
       browser.setSettings({
         profileName: 'Analyst',
         profileHandle: '',
         profileEmail: '',
         profileAvatarColor: '#00d4ff',
+        profileAvatar: '',
         profileRole: '',
         profileOrg: '',
         profileLocation: '',

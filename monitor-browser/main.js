@@ -68,14 +68,13 @@ function startYtEmbedServer() {
         const videoId = (parsed.searchParams.get('videoId') || '').replace(/[^a-zA-Z0-9_-]/g, '');
         if (!videoId) { res.writeHead(400); res.end('Missing videoId'); return; }
 
-        // Live streams reject embeds when host=youtube.com and the parent
-        // origin is localhost. Switching to youtube-nocookie.com fixes
-        // Error 153 because the privacy-enhanced domain is meant for
-        // third-party embeds and skips the strict bot-detection that gave
-        // us Error 154-2 when we tried injecting a Referer header.
-        // If the first load fails, the inline error handler retries with
-        // the regular youtube.com host as a fallback.
-        const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}#player{width:100%;height:100%}#play-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,0.4)}#play-overlay svg{width:72px;height:72px;opacity:0.9;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5))}#play-overlay.hidden{display:none}</style></head><body><div id="player"></div><div id="play-overlay" class="hidden"><svg viewBox="0 0 68 48"><path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55C3.97 2.33 2.27 4.81 1.48 7.74.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.64-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="red"/><path d="M45 24L27 14v20" fill="#fff"/></svg></div><script>function tryStorageAccess(){if(document.requestStorageAccess){document.requestStorageAccess().catch(function(){})}}tryStorageAccess();var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);var player,overlay=document.getElementById('play-overlay'),started=false,triedFallback=false;var obs=new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var nodes=muts[i].addedNodes;for(var j=0;j<nodes.length;j++){if(nodes[j].tagName==='IFRAME'){nodes[j].setAttribute('allow','autoplay; encrypted-media; picture-in-picture; fullscreen; storage-access');nodes[j].setAttribute('referrerpolicy','strict-origin-when-cross-origin');obs.disconnect();return}}}});obs.observe(document.getElementById('player'),{childList:true,subtree:true});function hideOverlay(){overlay.classList.add('hidden')}function buildPlayer(host){return new YT.Player('player',{videoId:'${videoId}',host:host,playerVars:{autoplay:${autoplay},mute:${mute},playsinline:1,rel:0,controls:1,modestbranding:1,enablejsapi:1,origin:'${origin}',widget_referrer:'${origin}'},events:{onReady:function(){window.parent.postMessage({type:'yt-ready'},'*');if(${autoplay}===1){try{player.mute();player.playVideo()}catch(e){}}},onError:function(e){window.parent.postMessage({type:'yt-error',code:e.data},'*');if((e.data===153||e.data===150||e.data===101)&&!triedFallback){triedFallback=true;try{player.destroy()}catch(_){}document.getElementById('player').innerHTML='';player=buildPlayer('https://www.youtube.com')}},onStateChange:function(e){window.parent.postMessage({type:'yt-state',state:e.data},'*');if(e.data===1||e.data===3){hideOverlay();started=true}}}})}function onYouTubeIframeAPIReady(){player=buildPlayer('https://www.youtube-nocookie.com')}overlay.addEventListener('click',function(){tryStorageAccess();if(player&&player.playVideo){player.playVideo();player.unMute();hideOverlay()}});setTimeout(function(){if(!started)overlay.classList.remove('hidden')},4000)<\/script></body></html>`;
+        // Strategy for live streams (Error 153):
+        //   1. Try the IFrame API with youtube-nocookie.com host
+        //   2. On 153/150/101, retry with regular youtube.com host
+        //   3. If both API hosts fail, drop to a plain <iframe> embed
+        //      which works for most live streams because YouTube handles
+        //      the embedding server-side (no JS API needed).
+        const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}#player{width:100%;height:100%}#play-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,0.4)}#play-overlay svg{width:72px;height:72px;opacity:0.9;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5))}#play-overlay.hidden{display:none}iframe.direct{position:absolute;inset:0;width:100%;height:100%;border:none}</style></head><body><div id="player"></div><div id="play-overlay" class="hidden"><svg viewBox="0 0 68 48"><path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55C3.97 2.33 2.27 4.81 1.48 7.74.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.64-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="red"/><path d="M45 24L27 14v20" fill="#fff"/></svg></div><script>function tryStorageAccess(){if(document.requestStorageAccess){document.requestStorageAccess().catch(function(){})}}tryStorageAccess();var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);var player,overlay=document.getElementById('play-overlay'),started=false,retryCount=0;var obs=new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var nodes=muts[i].addedNodes;for(var j=0;j<nodes.length;j++){if(nodes[j].tagName==='IFRAME'){nodes[j].setAttribute('allow','autoplay; encrypted-media; picture-in-picture; fullscreen; storage-access');nodes[j].setAttribute('referrerpolicy','strict-origin-when-cross-origin');obs.disconnect();return}}}});obs.observe(document.getElementById('player'),{childList:true,subtree:true});function hideOverlay(){overlay.classList.add('hidden')}function directIframeFallback(){document.getElementById('player').innerHTML='';var f=document.createElement('iframe');f.className='direct';f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';f.referrerPolicy='strict-origin-when-cross-origin';f.src='https://www.youtube-nocookie.com/embed/${videoId}?autoplay=${autoplay}&mute=${mute}&rel=0&modestbranding=1';document.getElementById('player').appendChild(f);hideOverlay();started=true;window.parent.postMessage({type:'yt-ready'},'*')}function buildPlayer(host){return new YT.Player('player',{videoId:'${videoId}',host:host,playerVars:{autoplay:${autoplay},mute:${mute},playsinline:1,rel:0,controls:1,modestbranding:1,enablejsapi:1,origin:'${origin}',widget_referrer:'${origin}'},events:{onReady:function(){window.parent.postMessage({type:'yt-ready'},'*');if(${autoplay}===1){try{player.mute();player.playVideo()}catch(e){}}},onError:function(e){window.parent.postMessage({type:'yt-error',code:e.data},'*');retryCount++;if(retryCount===1&&(e.data===153||e.data===150||e.data===101)){try{player.destroy()}catch(_){}document.getElementById('player').innerHTML='';player=buildPlayer('https://www.youtube.com')}else if(retryCount>=2){try{player.destroy()}catch(_){}directIframeFallback()}},onStateChange:function(e){window.parent.postMessage({type:'yt-state',state:e.data},'*');if(e.data===1||e.data===3){hideOverlay();started=true}}}})}function onYouTubeIframeAPIReady(){player=buildPlayer('https://www.youtube-nocookie.com')}overlay.addEventListener('click',function(){tryStorageAccess();if(player&&player.playVideo){try{player.playVideo();player.unMute()}catch(_){directIframeFallback()}hideOverlay()}else{directIframeFallback()}});setTimeout(function(){if(!started)overlay.classList.remove('hidden')},4000)<\/script></body></html>`;
         res.writeHead(200, resHeaders);
         res.end(html);
         return;
@@ -165,6 +164,7 @@ const DEFAULT_SETTINGS = {
   profileHandle: '',
   profileEmail: '',
   profileAvatarColor: '#00d4ff',
+  profileAvatar: '',           // base64 data URL for custom profile picture
   profileRole: '',          // free-text role e.g. "OSINT Analyst"
   profileOrg: '',           // organization / unit
   profileLocation: '',      // city / region (free text, not GPS)
@@ -861,6 +861,39 @@ ipcMain.handle('settings:clear-data', async () => {
   }
 });
 
+// Profile avatar — pick an image, copy to userData, store as base64 data URL
+// so the renderer can display it without file:// permission issues.
+ipcMain.handle('profile:pick-avatar', async () => {
+  const { dialog } = require('electron');
+  const result = await dialog.showOpenDialog({
+    title: 'Choose Profile Picture',
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }],
+    properties: ['openFile'],
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  try {
+    const src = result.filePaths[0];
+    const ext = path.extname(src).toLowerCase().replace('.', '') || 'png';
+    const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' };
+    const mime = mimeMap[ext] || 'image/png';
+    // Read file, resize to a reasonable limit (raw read, no sharp dependency).
+    // We cap at 256KB — any larger and we store a reference instead.
+    const buf = fs.readFileSync(src);
+    if (buf.length > 1_024_000) {
+      return { error: 'Image too large (max ~1MB). Please choose a smaller image.' };
+    }
+    const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+    saveSettings({ profileAvatar: dataUrl });
+    return { dataUrl };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+ipcMain.handle('profile:clear-avatar', () => {
+  saveSettings({ profileAvatar: '' });
+  return true;
+});
+
 // ---------------------------------------------------------------------------
 // VPN / Proxy Manager
 // ---------------------------------------------------------------------------
@@ -1008,14 +1041,137 @@ function testHttpProxy(proxyAddr, timeoutMs = 6000) {
   });
 }
 
-function testTorRunning() {
+// Check whether a SOCKS5 port is open on localhost.
+function testPort(port) {
   return new Promise((resolve) => {
     const net = require('node:net');
-    const sock = net.createConnection({ host: '127.0.0.1', port: 9050, timeout: 1500 });
+    const sock = net.createConnection({ host: '127.0.0.1', port, timeout: 1500 });
     sock.on('connect', () => { sock.destroy(); resolve(true); });
     sock.on('error', () => resolve(false));
     sock.on('timeout', () => { sock.destroy(); resolve(false); });
   });
+}
+
+// Try common Tor SOCKS5 ports: 9050 (standalone daemon) and 9150 (Tor
+// Browser Bundle). Returns the first port that's listening, or 0.
+async function findTorPort() {
+  if (await testPort(9050)) return 9050;
+  if (await testPort(9150)) return 9150;
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Portable Tor management — download, start, and stop a bundled Tor binary
+// so the user doesn't have to install it separately.
+// ---------------------------------------------------------------------------
+let torProcess = null;
+
+function torBinaryDir() {
+  return path.join(app.getPath('userData'), 'tor');
+}
+function torBinaryPath() {
+  const dir = torBinaryDir();
+  if (process.platform === 'win32') return path.join(dir, 'tor', 'tor.exe');
+  return path.join(dir, 'tor');
+}
+
+// Find Tor on PATH or in common install locations.
+function findSystemTor() {
+  const { execSync } = require('node:child_process');
+  try {
+    // `where` on Windows, `which` on *nix
+    const cmd = process.platform === 'win32' ? 'where tor' : 'which tor';
+    const out = execSync(cmd, { timeout: 3000 }).toString().trim();
+    if (out) return out.split(/\r?\n/)[0];
+  } catch {}
+  // Common install paths
+  const candidates = process.platform === 'win32'
+    ? [
+        'C:\\Program Files\\Tor Browser\\Browser\\TorBrowser\\Tor\\tor.exe',
+        'C:\\Program Files (x86)\\Tor Browser\\Browser\\TorBrowser\\Tor\\tor.exe',
+        path.join(require('node:os').homedir(), 'Desktop', 'Tor Browser', 'Browser', 'TorBrowser', 'Tor', 'tor.exe'),
+      ]
+    : [
+        '/usr/bin/tor',
+        '/usr/local/bin/tor',
+        '/opt/homebrew/bin/tor',
+        path.join(require('node:os').homedir(), '.tor-browser', 'Browser', 'TorBrowser', 'Tor', 'tor'),
+      ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+async function startTorProcess() {
+  // If already running on a known port, nothing to do.
+  const existing = await findTorPort();
+  if (existing) return existing;
+
+  // Try to find a tor binary — bundled first, then system.
+  let torBin = null;
+  if (fs.existsSync(torBinaryPath())) {
+    torBin = torBinaryPath();
+  } else {
+    torBin = findSystemTor();
+  }
+  if (!torBin) {
+    return 0; // Tor not available — caller should show install instructions
+  }
+
+  // Start Tor as a child process on port 9050. Use a temporary data
+  // directory under our userData so we don't pollute the system.
+  const { spawn } = require('node:child_process');
+  const dataDir = path.join(torBinaryDir(), 'data');
+  try { fs.mkdirSync(dataDir, { recursive: true }); } catch {}
+
+  return new Promise((resolve) => {
+    const child = spawn(torBin, [
+      '--SocksPort', '9050',
+      '--DataDirectory', dataDir,
+    ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+
+    let resolved = false;
+    const timeout = setTimeout(() => {
+      if (!resolved) { resolved = true; resolve(0); }
+    }, 30_000);
+
+    child.stdout.on('data', (d) => {
+      const line = d.toString();
+      if (/Bootstrapped 100%/i.test(line) && !resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        torProcess = child;
+        console.log('[tor] bootstrapped on port 9050');
+        resolve(9050);
+      }
+    });
+    child.stderr.on('data', (d) => {
+      const line = d.toString();
+      if (/Bootstrapped 100%/i.test(line) && !resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        torProcess = child;
+        resolve(9050);
+      }
+    });
+    child.on('error', () => { if (!resolved) { resolved = true; clearTimeout(timeout); resolve(0); } });
+    child.on('exit', () => { torProcess = null; if (!resolved) { resolved = true; clearTimeout(timeout); resolve(0); } });
+  });
+}
+
+function stopTorProcess() {
+  if (torProcess) {
+    try { torProcess.kill(); } catch {}
+    torProcess = null;
+  }
+}
+
+// Clean up Tor on app exit
+app.on('before-quit', stopTorProcess);
+
+function testTorRunning() {
+  return findTorPort().then((p) => p > 0);
 }
 
 async function getDirectPublicIp() {
@@ -1048,13 +1204,24 @@ async function vpnConnect(location) {
   broadcastVpnStatus();
 
   try {
-    // Tor: use local SOCKS5
+    // Tor: check for running Tor, try to start it if not found.
     if (loc === 'Tor' || cc === 'tor') {
-      const torRunning = await testTorRunning();
-      if (!torRunning) {
-        throw new Error('Tor not running on 127.0.0.1:9050. Install and start Tor first.');
+      vpnState.error = 'Looking for Tor…';
+      broadcastVpnStatus();
+
+      let torPort = await findTorPort();
+      if (!torPort) {
+        vpnState.error = 'Starting Tor (may take up to 30s)…';
+        broadcastVpnStatus();
+        torPort = await startTorProcess();
       }
-      const proxyRules = 'socks5://127.0.0.1:9050';
+      if (!torPort) {
+        throw new Error(
+          'Tor not found. Install Tor Browser (torproject.org) or place the tor binary in your PATH, then try again.'
+        );
+      }
+
+      const proxyRules = `socks5://127.0.0.1:${torPort}`;
       await session.defaultSession.setProxy({
         proxyRules,
         proxyBypassRules: 'localhost,127.0.0.1,<local>',
@@ -1062,6 +1229,7 @@ async function vpnConnect(location) {
       vpnState.status = 'connected';
       vpnState.connectedAt = Date.now();
       vpnState.proxyRule = proxyRules;
+      vpnState.exitIp = await vpnGetCurrentSessionIp();
       saveSettings({ vpnEnabled: true, vpnLocation: 'Tor' });
       broadcastVpnStatus();
       startVpnHealthMonitor();

@@ -74,7 +74,7 @@ function startYtEmbedServer() {
         //   3. If both API hosts fail, drop to a plain <iframe> embed
         //      which works for most live streams because YouTube handles
         //      the embedding server-side (no JS API needed).
-        const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}#player{width:100%;height:100%}#play-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,0.4)}#play-overlay svg{width:72px;height:72px;opacity:0.9;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5))}#play-overlay.hidden{display:none}iframe.direct{position:absolute;inset:0;width:100%;height:100%;border:none}</style></head><body><div id="player"></div><div id="play-overlay" class="hidden"><svg viewBox="0 0 68 48"><path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55C3.97 2.33 2.27 4.81 1.48 7.74.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.64-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="red"/><path d="M45 24L27 14v20" fill="#fff"/></svg></div><script>function tryStorageAccess(){if(document.requestStorageAccess){document.requestStorageAccess().catch(function(){})}}tryStorageAccess();var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);var player,overlay=document.getElementById('play-overlay'),started=false,retryCount=0;var obs=new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var nodes=muts[i].addedNodes;for(var j=0;j<nodes.length;j++){if(nodes[j].tagName==='IFRAME'){nodes[j].setAttribute('allow','autoplay; encrypted-media; picture-in-picture; fullscreen; storage-access');nodes[j].setAttribute('referrerpolicy','strict-origin-when-cross-origin');obs.disconnect();return}}}});obs.observe(document.getElementById('player'),{childList:true,subtree:true});function hideOverlay(){overlay.classList.add('hidden')}function directIframeFallback(){document.getElementById('player').innerHTML='';var f=document.createElement('iframe');f.className='direct';f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';f.referrerPolicy='strict-origin-when-cross-origin';f.src='https://www.youtube-nocookie.com/embed/${videoId}?autoplay=${autoplay}&mute=${mute}&rel=0&modestbranding=1';document.getElementById('player').appendChild(f);hideOverlay();started=true;window.parent.postMessage({type:'yt-ready'},'*')}function buildPlayer(host){return new YT.Player('player',{videoId:'${videoId}',host:host,playerVars:{autoplay:${autoplay},mute:${mute},playsinline:1,rel:0,controls:1,modestbranding:1,enablejsapi:1,origin:'${origin}',widget_referrer:'${origin}'},events:{onReady:function(){window.parent.postMessage({type:'yt-ready'},'*');if(${autoplay}===1){try{player.mute();player.playVideo()}catch(e){}}},onError:function(e){window.parent.postMessage({type:'yt-error',code:e.data},'*');retryCount++;if(retryCount===1&&(e.data===153||e.data===150||e.data===101)){try{player.destroy()}catch(_){}document.getElementById('player').innerHTML='';player=buildPlayer('https://www.youtube.com')}else if(retryCount>=2){try{player.destroy()}catch(_){}directIframeFallback()}},onStateChange:function(e){window.parent.postMessage({type:'yt-state',state:e.data},'*');if(e.data===1||e.data===3){hideOverlay();started=true}}}})}function onYouTubeIframeAPIReady(){player=buildPlayer('https://www.youtube-nocookie.com')}overlay.addEventListener('click',function(){tryStorageAccess();if(player&&player.playVideo){try{player.playVideo();player.unMute()}catch(_){directIframeFallback()}hideOverlay()}else{directIframeFallback()}});setTimeout(function(){if(!started)overlay.classList.remove('hidden')},4000)<\/script></body></html>`;
+        const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}#player{width:100%;height:100%}#play-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,0.4)}#play-overlay svg{width:72px;height:72px;opacity:0.9;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5))}#play-overlay.hidden{display:none}iframe.direct{position:absolute;inset:0;width:100%;height:100%;border:none}</style></head><body><div id="player"></div><div id="play-overlay" class="hidden"><svg viewBox="0 0 68 48"><path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55C3.97 2.33 2.27 4.81 1.48 7.74.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.64-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="red"/><path d="M45 24L27 14v20" fill="#fff"/></svg></div><script>function tryStorageAccess(){if(document.requestStorageAccess){document.requestStorageAccess().catch(function(){})}}tryStorageAccess();var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);var player,overlay=document.getElementById('play-overlay'),started=false,retryCount=0;var obs=new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var nodes=muts[i].addedNodes;for(var j=0;j<nodes.length;j++){if(nodes[j].tagName==='IFRAME'){nodes[j].setAttribute('allow','autoplay; encrypted-media; picture-in-picture; fullscreen; storage-access');nodes[j].setAttribute('referrerpolicy','strict-origin-when-cross-origin');obs.disconnect();return}}}});obs.observe(document.getElementById('player'),{childList:true,subtree:true});function hideOverlay(){overlay.classList.add('hidden')}function directIframeFallback(){document.getElementById('player').innerHTML='';var f=document.createElement('iframe');f.className='direct';f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';f.referrerPolicy='strict-origin-when-cross-origin';f.src='https://www.youtube.com/embed/${videoId}?autoplay=${autoplay}&mute=${mute}&rel=0&modestbranding=1';document.getElementById('player').appendChild(f);hideOverlay();started=true;window.parent.postMessage({type:'yt-ready'},'*')}function buildPlayer(host){return new YT.Player('player',{videoId:'${videoId}',host:host,playerVars:{autoplay:${autoplay},mute:${mute},playsinline:1,rel:0,controls:1,modestbranding:1,enablejsapi:1,origin:'${origin}',widget_referrer:'${origin}'},events:{onReady:function(){window.parent.postMessage({type:'yt-ready'},'*');if(${autoplay}===1){try{player.mute();player.playVideo()}catch(e){}}},onError:function(e){window.parent.postMessage({type:'yt-error',code:e.data},'*');retryCount++;if(retryCount===1&&(e.data===153||e.data===150||e.data===101)){try{player.destroy()}catch(_){}document.getElementById('player').innerHTML='';player=buildPlayer('https://www.youtube.com')}else if(retryCount>=2){try{player.destroy()}catch(_){}directIframeFallback()}},onStateChange:function(e){window.parent.postMessage({type:'yt-state',state:e.data},'*');if(e.data===1||e.data===3){hideOverlay();started=true}}}})}function onYouTubeIframeAPIReady(){player=buildPlayer('https://www.youtube.com')}overlay.addEventListener('click',function(){tryStorageAccess();if(player&&player.playVideo){try{player.playVideo();player.unMute()}catch(_){directIframeFallback()}hideOverlay()}else{directIframeFallback()}});setTimeout(function(){if(!started)overlay.classList.remove('hidden')},4000)<\/script></body></html>`;
         res.writeHead(200, resHeaders);
         res.end(html);
         return;
@@ -1079,9 +1079,8 @@ function torBinaryPath() {
 function findSystemTor() {
   const { execSync } = require('node:child_process');
   try {
-    // `where` on Windows, `which` on *nix
-    const cmd = process.platform === 'win32' ? 'where tor' : 'which tor';
-    const out = execSync(cmd, { timeout: 3000 }).toString().trim();
+    const cmd = process.platform === 'win32' ? 'where tor 2>nul' : 'which tor 2>/dev/null';
+    const out = execSync(cmd, { timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim();
     if (out) return out.split(/\r?\n/)[0];
   } catch {}
   // Common install paths
@@ -3006,6 +3005,13 @@ app.whenReady().then(() => {
   loadOperations();
   loadAllExtensions().catch((err) => console.warn('[monitor] extension load failed', err));
 
+  // Always reset proxy to direct on startup so a stale/broken proxy from a
+  // previous session doesn't block all network traffic (including homepage
+  // intel feeds, extension updates, etc.).
+  session.defaultSession
+    .setProxy({ proxyRules: 'direct://' })
+    .catch((err) => console.warn('[vpn] startup proxy reset failed', err));
+
   // Restore VPN state if it was enabled in last session
   const initSettings = loadSettings();
   if (initSettings.vpnEnabled) {
@@ -3033,5 +3039,29 @@ app.on('web-contents-created', (_e, contents) => {
     if (contents === chromeView?.webContents) return { action: 'deny' };
     newTab(url);
     return { action: 'deny' };
+  });
+
+  // Stub missing chrome.* APIs that Electron doesn't implement so extensions
+  // like uBlock Lite don't crash on chrome.windows.onRemoved etc.
+  contents.on('dom-ready', () => {
+    try {
+      const u = contents.getURL();
+      if (!u.startsWith('chrome-extension://')) return;
+      contents.executeJavaScript(`
+        if(typeof chrome!=='undefined'){
+          if(!chrome.windows){
+            const noop=()=>{};
+            const fakeEvent={addListener:noop,removeListener:noop,hasListener:()=>false};
+            chrome.windows={
+              onRemoved:fakeEvent,onCreated:fakeEvent,onFocusChanged:fakeEvent,
+              getAll:(q,cb)=>{if(cb)cb([]);else return Promise.resolve([]);},
+              get:(id,q,cb)=>{const f=cb||q;if(typeof f==='function')f(undefined);else return Promise.resolve(undefined);},
+              getCurrent:(q,cb)=>{const f=cb||q;if(typeof f==='function')f({id:1,focused:true,type:'normal'});else return Promise.resolve({id:1,focused:true,type:'normal'});},
+              WINDOW_ID_NONE:-1,WINDOW_ID_CURRENT:-2,
+            };
+          }
+        }
+      `).catch(() => {});
+    } catch {}
   });
 });

@@ -32,6 +32,13 @@ const { randomUUID } = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const http = require('node:http');
 
+process.on('uncaughtException', (err) => {
+  console.error('[monitor] uncaughtException:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[monitor] unhandledRejection:', reason);
+});
+
 // ---------------------------------------------------------------------------
 // Local YouTube embed server
 // ---------------------------------------------------------------------------
@@ -396,7 +403,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload-chrome.js'),
       contextIsolation: true,
-      sandbox: false,
+      sandbox: true,
       nodeIntegration: false,
     },
   });
@@ -443,6 +450,8 @@ function createWindow() {
       newTab(resolveHomepageUrl());
     }
     try { chromeView.webContents.send('settings:changed', settings); } catch {}
+
+    setInterval(() => { try { saveSession(); } catch {} }, 30000);
   });
 
   // Surface chrome devtools on F12 / Ctrl+Shift+I in dev.
@@ -489,7 +498,7 @@ function newTab(rawUrl) {
     webPreferences: {
       preload: path.join(__dirname, homepage ? 'preload-content.js' : 'preload-content.js'),
       contextIsolation: true,
-      sandbox: !homepage,
+      sandbox: true,
       nodeIntegration: false,
       webviewTag: false,
       spellcheck: true,
@@ -620,7 +629,7 @@ function wireTabEvents(id, tab) {
 }
 
 function switchTab(id) {
-  if (!tabs.has(id) || !mainWindow) return;
+  if (!tabs.has(id) || !mainWindow || id === activeTabId) return;
   if (activeTabId && tabs.has(activeTabId)) {
     const prev = tabs.get(activeTabId);
     prev.dwellTime += Date.now() - prev.dwellStart;
@@ -656,6 +665,7 @@ function closeTab(id) {
   } catch {
     /* view may already be removed */
   }
+  try { tab.view.webContents.removeAllListeners(); } catch {}
   try {
     tab.view.webContents.close();
   } catch {
@@ -711,9 +721,12 @@ function normalizeUrl(raw) {
   // Special shortcut: "monitor:home" navigates to the built-in homepage.
   if (/^monitor:\s*home$/i.test(trimmed)) return HOMEPAGE_URL;
 
+  // Block dangerous schemes.
+  if (/^(javascript|data|vbscript):/i.test(trimmed)) return resolveHomepageUrl();
+
   // Already-absolute URL.
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
-  if (/^(about|data|javascript|file|monitor):/i.test(trimmed)) return trimmed;
+  if (/^(about|file|monitor):/i.test(trimmed)) return trimmed;
 
   // Localhost shortcuts.
   if (/^localhost(:\d+)?(\/.*)?$/i.test(trimmed)) return `http://${trimmed}`;
@@ -799,37 +812,44 @@ function broadcastTabs() {
   });
 }
 
+function getTabWc(id) {
+  const tab = tabs.get(id ?? activeTabId);
+  if (!tab) return null;
+  try { if (tab.view.webContents.isDestroyed()) return null; } catch { return null; }
+  return tab.view.webContents;
+}
+
 ipcMain.handle('tab:new', (_e, url) => newTab(url || resolveHomepageUrl()));
 ipcMain.handle('tab:close', (_e, id) => closeTab(id));
 ipcMain.handle('tab:switch', (_e, id) => switchTab(id));
 ipcMain.handle('tab:navigate', (_e, id, url) => navigateActiveOr(id, url));
 
 ipcMain.handle('tab:back', (_e, id) => {
-  const tab = tabs.get(id ?? activeTabId);
-  if (!tab) return;
-  const hist = tab.view.webContents.navigationHistory ?? tab.view.webContents;
+  const wc = getTabWc(id);
+  if (!wc) return;
+  const hist = wc.navigationHistory ?? wc;
   if (typeof hist.canGoBack === 'function' && hist.canGoBack()) {
     hist.goBack();
   }
 });
 
 ipcMain.handle('tab:forward', (_e, id) => {
-  const tab = tabs.get(id ?? activeTabId);
-  if (!tab) return;
-  const hist = tab.view.webContents.navigationHistory ?? tab.view.webContents;
+  const wc = getTabWc(id);
+  if (!wc) return;
+  const hist = wc.navigationHistory ?? wc;
   if (typeof hist.canGoForward === 'function' && hist.canGoForward()) {
     hist.goForward();
   }
 });
 
 ipcMain.handle('tab:reload', (_e, id) => {
-  const tab = tabs.get(id ?? activeTabId);
-  if (tab) tab.view.webContents.reload();
+  const wc = getTabWc(id);
+  if (wc) wc.reload();
 });
 
 ipcMain.handle('tab:stop', (_e, id) => {
-  const tab = tabs.get(id ?? activeTabId);
-  if (tab) tab.view.webContents.stop();
+  const wc = getTabWc(id);
+  if (wc) wc.stop();
 });
 
 ipcMain.handle('tab:home', (_e, id) => {
@@ -1160,14 +1180,21 @@ async function startTorProcess() {
 }
 
 function stopTorProcess() {
-  if (torProcess) {
-    try { torProcess.kill(); } catch {}
-    torProcess = null;
-  }
+  if (!torProcess) return;
+  const child = torProcess;
+  torProcess = null;
+  try { child.kill('SIGTERM'); } catch {}
+  setTimeout(() => {
+    try { if (!child.killed) child.kill('SIGKILL'); } catch {}
+  }, 3000);
 }
 
-// Clean up Tor on app exit
-app.on('before-quit', stopTorProcess);
+app.on('before-quit', () => {
+  stopVpnHealthMonitor();
+  stopTorProcess();
+  try { saveSession(); } catch {}
+});
+app.on('will-quit', stopTorProcess);
 
 function testTorRunning() {
   return findTorPort().then((p) => p > 0);
@@ -1394,6 +1421,10 @@ function startVpnHealthMonitor() {
       await vpnConnect(loc);
     } catch (err) {
       console.warn('[vpn] auto-reconnect failed', err);
+      vpnState.status = 'disconnected';
+      vpnState.error = 'Auto-reconnect failed: ' + (err.message || err);
+      broadcastVpnStatus();
+      stopVpnHealthMonitor();
     } finally {
       vpnReconnecting = false;
       vpnHealthFailures = 0;
@@ -1471,9 +1502,8 @@ ipcMain.handle('vpn:set-proxy', async (_e, proxyUrl) => {
 });
 
 ipcMain.handle('tab:devtools', (_e, id) => {
-  const tab = tabs.get(id ?? activeTabId);
-  if (!tab) return;
-  const wc = tab.view.webContents;
+  const wc = getTabWc(id);
+  if (!wc) return;
   if (wc.isDevToolsOpened()) wc.closeDevTools();
   else wc.openDevTools({ mode: 'detach' });
 });
@@ -1518,7 +1548,7 @@ function createIncognitoWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload-chrome.js'),
       contextIsolation: true,
-      sandbox: false,
+      sandbox: true,
       nodeIntegration: false,
       partition: partitionName,
     },
@@ -1706,9 +1736,9 @@ ipcMain.handle('tab:reopen', () => {
 });
 
 ipcMain.handle('tab:mute', (_e, id) => {
+  const wc = getTabWc(id);
   const tab = tabs.get(id ?? activeTabId);
-  if (tab) {
-    const wc = tab.view.webContents;
+  if (wc && tab) {
     const muted = !wc.isAudioMuted();
     wc.setAudioMuted(muted);
     tab.muted = muted;
@@ -2535,7 +2565,10 @@ ipcMain.handle('history:clear', (_e, since) => {
 // ---------------------------------------------------------------------------
 const activeDownloads = new Map();
 
+let _dlListenerSet = false;
 function setupDownloadListener() {
+  if (_dlListenerSet) return;
+  _dlListenerSet = true;
   session.defaultSession.on('will-download', (_e, item) => {
     const id = randomUUID();
     const entry = {
@@ -2626,7 +2659,7 @@ async function loadAllExtensions() {
     const manifestPath = path.join(extPath, 'manifest.json');
     if (!fs.existsSync(manifestPath)) continue;
     try {
-      const ext = await extApi().loadExtension(extPath, { allowFileAccess: true });
+      const ext = await extApi().loadExtension(extPath, { allowFileAccess: false });
       loadedExtensions.set(ext.id, { ext, path: extPath });
       console.log('[monitor] loaded extension:', ext.name);
     } catch (err) {
@@ -2646,7 +2679,7 @@ async function installExtensionFromPath(extPath) {
       fs.rmSync(destDir, { recursive: true, force: true });
     }
     copyDirSync(extPath, destDir);
-    const ext = await extApi().loadExtension(destDir, { allowFileAccess: true });
+    const ext = await extApi().loadExtension(destDir, { allowFileAccess: false });
     loadedExtensions.set(ext.id, { ext, path: destDir });
     return { id: ext.id, name: ext.name };
   } catch (err) {
@@ -2657,6 +2690,7 @@ async function installExtensionFromPath(extPath) {
 function copyDirSync(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) continue;
     const s = path.join(src, entry.name);
     const d = path.join(dest, entry.name);
     if (entry.isDirectory()) copyDirSync(s, d);

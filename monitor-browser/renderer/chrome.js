@@ -639,7 +639,7 @@
     if (!btn) return;
     const name = (s && s.profileName) || 'Analyst';
     const avatarUrl = (s && s.profileAvatar) || '';
-    const color = (s && s.profileAvatarColor) || '#00d4ff';
+    const color = validColor((s && s.profileAvatarColor) || '#00d4ff');
     btn.title = 'Profile — ' + name;
 
     if (avatarUrl) {
@@ -1165,7 +1165,7 @@
       '    <div class="reader-meta">' + esc(shortUrl(data.url)) + '</div>' +
       '    <button class="settings-close reader-close" id="reader-close">&times;</button>' +
       '  </header>' +
-      '  <article class="reader-body">' + data.content + '</article>' +
+      '  <article class="reader-body">' + sanitizeHtml(data.content) + '</article>' +
       '</div>';
 
     document.getElementById('reader-close').addEventListener('click', closeReaderMode);
@@ -1435,7 +1435,7 @@
     const name = s.profileName || 'Analyst';
     const handle = s.profileHandle || '';
     const email = s.profileEmail || '';
-    const color = s.profileAvatarColor || '#00d4ff';
+    const color = validColor(s.profileAvatarColor || '#00d4ff');
     const role = s.profileRole || '';
     const org = s.profileOrg || '';
     const loc = s.profileLocation || '';
@@ -1538,7 +1538,7 @@
       '    <h3 style="' + sectionLabelStyle + '">OSINT Toolbox</h3>' +
       '    <div id="prof-toolbox" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">' +
       OSINT_TOOLBOX.map((t) =>
-        '<button class="prof-tool-btn" data-url="' + escapeAttr(t.url) + '" style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ' + t.color + ';border-radius:6px;padding:7px 8px;font-size:11px;color:var(--text-primary);cursor:pointer;text-align:left;transition:border-color .15s,background .15s">' + esc(t.name) + '</button>'
+        '<button class="prof-tool-btn" data-url="' + escapeAttr(t.url) + '" style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ' + validColor(t.color) + ';border-radius:6px;padding:7px 8px;font-size:11px;color:var(--text-primary);cursor:pointer;text-align:left;transition:border-color .15s,background .15s">' + esc(t.name) + '</button>'
       ).join('') +
       '    </div>' +
 
@@ -2192,7 +2192,7 @@
       html += '<div class="tab-search-list">';
       for (const op of ops) {
         html += '<div class="tab-search-row ops-row" data-id="' + op.id + '">' +
-          '<span class="ops-color-dot" style="background:' + (op.color || '#d4a843') + '"></span>' +
+          '<span class="ops-color-dot" style="background:' + validColor(op.color || '#d4a843') + '"></span>' +
           '<span class="tab-search-title">' + esc(op.name) + '</span>' +
           '<span class="tab-search-url">' + op.tabCount + ' tabs · ' + op.annotationCount + ' notes</span>' +
           '<button class="row-del ops-del" data-id="' + op.id + '">&times;</button>' +
@@ -2475,6 +2475,28 @@
   function shortUrl(url) {
     try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
   }
+
+  const UNSAFE_TAGS = new Set(['script','iframe','object','embed','form','link','meta','base','applet','style']);
+  function sanitizeHtml(html) {
+    if (!html) return '';
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const walk = (node) => {
+        for (const child of Array.from(node.childNodes)) {
+          if (child.nodeType === 1) {
+            if (UNSAFE_TAGS.has(child.tagName.toLowerCase())) { child.remove(); continue; }
+            for (const attr of Array.from(child.attributes)) {
+              if (attr.name.startsWith('on') || /^javascript:/i.test(attr.value)) child.removeAttribute(attr.name);
+            }
+            walk(child);
+          }
+        }
+      };
+      walk(doc.body);
+      return doc.body.innerHTML;
+    } catch { return esc(html); }
+  }
+  function validColor(c) { return /^#[0-9a-f]{3,8}$/i.test(c) ? c : '#888'; }
   function timeAgo(ts) {
     const d = (Date.now() - ts) / 1000;
     if (d < 60) return 'just now';

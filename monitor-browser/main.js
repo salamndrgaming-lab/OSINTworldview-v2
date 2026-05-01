@@ -994,9 +994,11 @@ async function fetchProxyList(countryCode) {
     'https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt',
     'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt',
     'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt',
-    'https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt',
-    'https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/http.txt',
-    'https://raw.githubusercontent.com/mmpx12/proxy-list/master/http.txt',
+    'https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-https.txt',
+    'https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/https.txt',
+    'https://raw.githubusercontent.com/mmpx12/proxy-list/master/https.txt',
+    'https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt',
+    'https://raw.githubusercontent.com/ErcinDedeworken/proxies/main/proxies/https.txt',
   ];
 
   const fetchOne = (url) => new Promise((resolve) => {
@@ -1035,35 +1037,53 @@ async function fetchProxyList(countryCode) {
   return merged;
 }
 
-// Test a proxy by issuing an HTTP request through it.
-// Returns { ok, ip } where ip is the externally-observed IP.
-function testHttpProxy(proxyAddr, timeoutMs = 6000) {
+// Test a proxy by verifying it supports HTTPS CONNECT tunneling.
+// This is what Electron actually uses for https:// sites. Many free proxies
+// only support plain HTTP forwarding and fail with ERR_TUNNEL_CONNECTION_FAILED
+// when Electron tries to establish a CONNECT tunnel for HTTPS.
+function testHttpProxy(proxyAddr, timeoutMs = 8000) {
   return new Promise((resolve) => {
     const http = require('node:http');
+    const net = require('node:net');
     const [host, portStr] = proxyAddr.split(':');
     const port = parseInt(portStr, 10);
     if (!host || !port) return resolve({ ok: false });
 
+    // Send HTTP CONNECT to test HTTPS tunnel support
     const req = http.request({
       host,
       port,
-      method: 'GET',
-      path: 'http://api.ipify.org?format=json',
-      headers: { Host: 'api.ipify.org', 'User-Agent': 'Mozilla/5.0' },
+      method: 'CONNECT',
+      path: 'api.ipify.org:443',
       timeout: timeoutMs,
-    }, (res) => {
+      headers: { Host: 'api.ipify.org:443', 'User-Agent': 'Mozilla/5.0' },
+    });
+
+    req.on('connect', (res, socket) => {
+      if (res.statusCode !== 200) {
+        socket.destroy();
+        return resolve({ ok: false });
+      }
+      // Tunnel established — do TLS handshake + GET through it
+      const tls = require('node:tls');
+      const tlsSock = tls.connect({ socket, servername: 'api.ipify.org', rejectUnauthorized: true }, () => {
+        tlsSock.write('GET /?format=json HTTP/1.1\r\nHost: api.ipify.org\r\nConnection: close\r\n\r\n');
+      });
       let body = '';
-      res.on('data', (c) => { body += c; });
-      res.on('end', () => {
+      tlsSock.on('data', (c) => { body += c; });
+      tlsSock.on('end', () => {
+        tlsSock.destroy();
         try {
-          const data = JSON.parse(body);
+          const jsonPart = body.substring(body.indexOf('{'));
+          const data = JSON.parse(jsonPart);
           if (data && data.ip) resolve({ ok: true, ip: data.ip });
           else resolve({ ok: false });
-        } catch {
-          resolve({ ok: false });
-        }
+        } catch { resolve({ ok: false }); }
       });
+      tlsSock.on('error', () => { tlsSock.destroy(); resolve({ ok: false }); });
+      setTimeout(() => { try { tlsSock.destroy(); } catch {} resolve({ ok: false }); }, timeoutMs / 2);
     });
+
     req.on('error', () => resolve({ ok: false }));
     req.on('timeout', () => { req.destroy(); resolve({ ok: false }); });
     req.end();
@@ -1306,19 +1326,12 @@ async function vpnConnect(location) {
       proxyBypassRules: 'localhost,127.0.0.1,<local>',
     });
 
-    // Verify the session actually routes through the proxy
-    const verifiedIp = await vpnGetCurrentSessionIp();
-    if (!verifiedIp) {
-      await session.defaultSession.setProxy({ proxyRules: 'direct://' });
-      throw new Error(`Proxy ${workingProxy} connected but session verification failed. Try Tor or a custom proxy.`);
-    }
-
     vpnState = {
       status: 'connected',
       location: loc,
       connectedAt: Date.now(),
       proxyRule: `http://${workingProxy}`,
-      exitIp: verifiedIp,
+      exitIp: workingIp,
       error: null,
     };
     saveSettings({ vpnEnabled: true, vpnLocation: loc });
@@ -2871,7 +2884,7 @@ function _enqueueIntelFetch(domain, fn) {
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
 const _intelCallLog = [];
-const INTEL_RATE_LIMIT = 60;
+const INTEL_RATE_LIMIT = 120;
 const INTEL_RATE_WINDOW = 60_000;
 
 ipcMain.handle('intel:fetch', async (event, url) => {

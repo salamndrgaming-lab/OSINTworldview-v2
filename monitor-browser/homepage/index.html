@@ -617,9 +617,9 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
   <div class="wgt">
     <div class="wgt-head">
       <span class="wgt-title"><span class="wdot" style="background:var(--accent2)"></span>News Livestreams</span>
-      <form id="addStreamForm" style="display:flex;gap:6px;margin-left:auto" onsubmit="return false">
+      <form id="addStreamForm" style="display:flex;gap:6px;margin-left:auto">
         <input type="text" id="addStreamUrl" placeholder="Paste YouTube link…" style="width:200px;padding:3px 8px;font-size:11px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text)"/>
-        <button type="submit" class="wc-btn" id="addStreamBtn" style="white-space:nowrap">+ Add Stream</button>
+        <button type="button" class="wc-btn" id="addStreamBtn" style="white-space:nowrap">+ Add Stream</button>
       </form>
     </div>
     <div class="ls-grid" id="streamGrid"></div>
@@ -1087,9 +1087,8 @@ function loadReliefWebReports(layerKey, opts){
   }).catch(e=>{console.warn('[reliefweb] error for',layerKey,e);});
 }
 
-// Country boundaries GeoJSON for conflict zone polygons. Fetched once,
-// then reused. Uses johan/world.geo.json which is already GeoJSON with
-// properties.name matching country names from ReliefWeb.
+// Country boundaries for conflict zone polygons. Uses world-atlas 110m
+// TopoJSON (~300KB) with an inline decoder — no external library needed.
 let _countryGeoJSON=null;
 const COUNTRY_NAME_ALIASES={
   'United States of America':'United States','US':'United States',
@@ -1102,13 +1101,50 @@ const COUNTRY_NAME_ALIASES={
   'S. Korea':'South Korea','Dominican Rep.':'Dominican Republic',
   'Eq. Guinea':'Equatorial Guinea','W. Sahara':'Western Sahara',
   'Lao PDR':'Laos','Myanmar':'Myanmar (Burma)',
+  'eSwatini':'Eswatini','Czechia':'Czech Republic',
+  'North Macedonia':'Macedonia','Timor-Leste':'East Timor',
 };
 function normalizeCountryName(n){return COUNTRY_NAME_ALIASES[n]||n;}
+
+function topoToGeo(topo){
+  const obj=topo.objects&&topo.objects.countries;
+  if(!obj||!topo.arcs)return null;
+  const tf=topo.transform||null;
+  function decodeArc(idx){
+    const arc=topo.arcs[idx<0?~idx:idx];
+    const coords=[];
+    let x=0,y=0;
+    for(let i=0;i<arc.length;i++){
+      x+=arc[i][0];y+=arc[i][1];
+      coords.push(tf?[x*tf.scale[0]+tf.translate[0],y*tf.scale[1]+tf.translate[1]]:[x,y]);
+    }
+    if(idx<0)coords.reverse();
+    return coords;
+  }
+  function decodeRing(ring){
+    let coords=[];
+    for(const idx of ring){
+      const a=decodeArc(idx);
+      coords=coords.length>0?coords.concat(a.slice(1)):a;
+    }
+    return coords;
+  }
+  const features=(obj.geometries||[]).map(g=>{
+    let geom=null;
+    if(g.type==='Polygon')geom={type:'Polygon',coordinates:g.arcs.map(r=>decodeRing(r))};
+    else if(g.type==='MultiPolygon')geom={type:'MultiPolygon',coordinates:g.arcs.map(p=>p.map(r=>decodeRing(r)))};
+    return {type:'Feature',properties:g.properties||{},id:g.id,geometry:geom};
+  }).filter(f=>f.geometry);
+  return {type:'FeatureCollection',features};
+}
+
 function getCountryGeoJSON(){
   if(_countryGeoJSON)return Promise.resolve(_countryGeoJSON);
-  return intelFetch('https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json').then(txt=>{
-    const geo=typeof txt==='string'?JSON.parse(txt):txt;
-    if(!geo||!geo.features)return null;
+  return intelFetch('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json').then(txt=>{
+    const topo=typeof txt==='string'?JSON.parse(txt):txt;
+    if(!topo||!topo.objects)return null;
+    const geo=topoToGeo(topo);
+    if(!geo||!geo.features||geo.features.length===0){console.warn('[map] TopoJSON decoded but no features');return null;}
     _countryGeoJSON=geo;
     console.log('[map] country boundaries loaded:',geo.features.length,'countries');
     return _countryGeoJSON;
@@ -1941,20 +1977,21 @@ function renderStreams(){
     });
   });
 }
-// Add-stream form handler
-document.getElementById('addStreamForm')?.addEventListener('submit',()=>{
+// Add-stream handler
+function addStreamFromInput(){
   const input=document.getElementById('addStreamUrl');
-  if(!input)return;
+  if(!input||!input.value.trim())return;
   const id=extractYouTubeId(input.value);
-  if(!id){input.style.borderColor='#ff4757';setTimeout(()=>input.style.borderColor='',1500);return;}
+  if(!id){input.style.borderColor='#ff4757';input.placeholder='Invalid YouTube link';setTimeout(()=>{input.style.borderColor='';input.placeholder='Paste YouTube link…';},2000);return;}
   const name=input.value.match(/youtube\.com\/live\//)?'Live Stream':'Custom Stream';
   STREAMS.push({name,id});
   saveStreams();renderStreams();
-  input.value='';
-});
-document.getElementById('addStreamBtn')?.addEventListener('click',()=>{
-  document.getElementById('addStreamForm')?.dispatchEvent(new Event('submit'));
-});
+  input.value='';input.placeholder='Added! Paste another…';
+  setTimeout(()=>{input.placeholder='Paste YouTube link…';},2000);
+}
+document.getElementById('addStreamBtn')?.addEventListener('click',addStreamFromInput);
+document.getElementById('addStreamUrl')?.addEventListener('keydown',(e)=>{if(e.key==='Enter'){e.preventDefault();addStreamFromInput();}});
+document.getElementById('addStreamForm')?.addEventListener('submit',(e)=>{e.preventDefault();addStreamFromInput();});
 
 /* ── PREDICTION MARKETS (live Metaculus API) ──── */
 const PREDICTIONS_FALLBACK=[

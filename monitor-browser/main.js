@@ -592,6 +592,15 @@ function wireTabEvents(id, tab) {
     wc.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
   });
 
+  wc.on('certificate-error', (e, certUrl, error, _cert, callback) => {
+    e.preventDefault();
+    callback(false);
+    const escaped = escapeHtml('Certificate Error: ' + (error || 'unknown'));
+    const escapedUrl = escapeHtml(certUrl || '');
+    const html = renderErrorPage(escaped, escapedUrl, 'CERT_ERROR');
+    wc.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  });
+
   // Route popups into new tabs.
   wc.setWindowOpenHandler(({ url: openUrl, disposition }) => {
     if (disposition === 'foreground-tab' || disposition === 'background-tab' ||
@@ -2861,11 +2870,22 @@ function _enqueueIntelFetch(domain, fn) {
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
+const _intelCallLog = [];
+const INTEL_RATE_LIMIT = 60;
+const INTEL_RATE_WINDOW = 60_000;
+
 ipcMain.handle('intel:fetch', async (event, url) => {
   const senderUrl = event.sender.getURL();
   if (!senderUrl.startsWith('file://')) {
     throw new Error('intel:fetch is not available on this origin');
   }
+
+  const now = Date.now();
+  while (_intelCallLog.length && _intelCallLog[0] < now - INTEL_RATE_WINDOW) _intelCallLog.shift();
+  if (_intelCallLog.length >= INTEL_RATE_LIMIT) {
+    throw new Error('intel:fetch rate limit exceeded (max ' + INTEL_RATE_LIMIT + '/min)');
+  }
+  _intelCallLog.push(now);
 
   let parsed;
   try {
@@ -3022,7 +3042,7 @@ app.whenReady().then(() => {
       for (const key of Object.keys(headers)) {
         if (key.toLowerCase() === 'content-security-policy') {
           headers[key] = headers[key].map(
-            (v) => v.replace(/frame-ancestors[^;]*(;|$)/gi, 'frame-ancestors * $1')
+            (v) => v.replace(/frame-ancestors[^;]*(;|$)/gi, "frame-ancestors 'self' http://localhost:* $1")
           );
         }
       }

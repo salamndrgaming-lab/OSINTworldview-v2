@@ -1,0 +1,49 @@
+name: Monitor Browser CI
+
+on:
+  push:
+    branches: [main, 'claude/**']
+    paths:
+      - 'monitor-browser/**'
+      - '.github/workflows/monitor-browser.yml'
+  pull_request:
+    paths:
+      - 'monitor-browser/**'
+
+defaults:
+  run:
+    working-directory: monitor-browser
+
+jobs:
+  lint-and-build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: monitor-browser/package-lock.json
+
+      - run: npm ci
+
+      - name: Syntax check
+        run: node -c main.js && node -c preload-chrome.js && node -c preload-content.js
+
+      - name: Build (${{ matrix.os }})
+        run: npx electron-builder --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitor-browser-${{ matrix.os }}
+          path: monitor-browser/dist/*
+          retention-days: 7
+          if-no-files-found: warn

@@ -1941,16 +1941,41 @@ const THREAT_BARS=[
 })();
 
 /* ── NEWS LIVESTREAMS (2×2 YouTube embeds) ────── */
+// Use channel IDs instead of stale video IDs — YouTube renders whatever
+// is currently live on each channel via /embed/live_stream?channel=...
 let STREAMS=[
-  {name:'CNN',           id:'h3MuIUNCCzI'},
-  {name:'BBC World',     id:'_3AaFkeMvhI'},
-  {name:'Al Jazeera',    id:'F-POY4Q0QSI'},
-  {name:'Bloomberg',     id:'dp8PhLsUcFE'},
+  {name:'BBC News',       channelId:'UC16niRr50-MSBwiO3YDb3RA'},
+  {name:'Sky News',       channelId:'UCoMdktPbSTixAyNGwb-UYkQ'},
+  {name:'Al Jazeera',     channelId:'UCNye-wNBqNL5ZzHSJj3l8Bg'},
+  {name:'DW News',        channelId:'UCknLrEdhRCp1aegoMqRaCZg'},
 ];
 // Persist any user-added streams to localStorage
 function saveStreams(){try{localStorage.setItem('mb-streams',JSON.stringify(STREAMS));}catch(e){}}
-function loadSavedStreams(){try{const s=localStorage.getItem('mb-streams');if(s){STREAMS=JSON.parse(s);}}catch(e){}}
+function loadSavedStreams(){
+  try{
+    const s=localStorage.getItem('mb-streams');
+    if(s){
+      const parsed=JSON.parse(s);
+      // Only use saved streams if they have valid structure
+      if(Array.isArray(parsed)&&parsed.every(x=>x&&(x.id||x.channelId)))STREAMS=parsed;
+    }
+  }catch(e){}
+}
 loadSavedStreams();
+
+// Get the localhost YouTube embed server port. Routes embeds through
+// http://localhost:PORT/youtube-embed?... so the parent origin is HTTP
+// rather than file:// (which YouTube rejects with error 153/154-2).
+let _ytEmbedPort=0;
+async function getYtEmbedPort(){
+  if(_ytEmbedPort)return _ytEmbedPort;
+  try{
+    if(window.monitorApi&&typeof window.monitorApi.getYtEmbedPort==='function'){
+      _ytEmbedPort=await window.monitorApi.getYtEmbedPort();
+    }
+  }catch{}
+  return _ytEmbedPort;
+}
 
 function extractYouTubeId(input){
   if(!input)return null;
@@ -1959,14 +1984,26 @@ function extractYouTubeId(input){
   if(/^[a-zA-Z0-9_-]{11}$/.test(input.trim()))return input.trim();
   return null;
 }
-function renderStreams(){
+
+function streamEmbedUrl(s,port){
+  if(!port){
+    // Fallback: direct YouTube embed (works when server isn't ready yet)
+    if(s.channelId)return `https://www.youtube.com/embed/live_stream?channel=${s.channelId}&autoplay=0&mute=1`;
+    return `https://www.youtube.com/embed/${s.id}?autoplay=0&mute=1`;
+  }
+  if(s.channelId)return `http://localhost:${port}/youtube-embed?channelId=${s.channelId}&autoplay=0&mute=1`;
+  return `http://localhost:${port}/youtube-embed?videoId=${s.id}&autoplay=0&mute=1`;
+}
+
+async function renderStreams(){
   const g=document.getElementById('streamGrid');if(!g)return;
+  const port=await getYtEmbedPort();
   g.innerHTML='';
   STREAMS.forEach((s,idx)=>{
     const d=document.createElement('div');d.className='ls-card';
     d.style.position='relative';
-    // youtube-nocookie.com works better for embeds (privacy-enhanced mode).
-    d.innerHTML=`<iframe src="https://www.youtube.com/embed/${s.id}?autoplay=0&mute=1" allow="autoplay;encrypted-media" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe><div class="ls-bar"><span class="ls-name">${s.name}</span><span class="ls-live">LIVE</span>${idx>=4?'<button class="ls-remove" data-idx="'+idx+'" title="Remove" style="margin-left:auto;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px">&times;</button>':''}</div>`;
+    const src=streamEmbedUrl(s,port);
+    d.innerHTML=`<iframe src="${src}" allow="autoplay;encrypted-media;picture-in-picture;fullscreen" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe><div class="ls-bar"><span class="ls-name">${escFeed(s.name)}</span><span class="ls-live">LIVE</span><button class="ls-remove" data-idx="${idx}" title="Remove" style="margin-left:auto;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px">&times;</button></div>`;
     g.appendChild(d);
   });
   g.querySelectorAll('.ls-remove').forEach(btn=>{
@@ -1977,21 +2014,31 @@ function renderStreams(){
     });
   });
 }
-// Add-stream handler
+
+// Add-stream handler — uses event delegation so it works regardless of
+// when the pill expands or whether the form/button is currently visible.
 function addStreamFromInput(){
   const input=document.getElementById('addStreamUrl');
-  if(!input||!input.value.trim())return;
-  const id=extractYouTubeId(input.value);
+  if(!input)return;
+  const val=(input.value||'').trim();
+  if(!val)return;
+  const id=extractYouTubeId(val);
   if(!id){input.style.borderColor='#ff4757';input.placeholder='Invalid YouTube link';setTimeout(()=>{input.style.borderColor='';input.placeholder='Paste YouTube link…';},2000);return;}
-  const name=input.value.match(/youtube\.com\/live\//)?'Live Stream':'Custom Stream';
+  const name=val.match(/youtube\.com\/live\//)?'Live Stream':'Custom Stream';
   STREAMS.push({name,id});
   saveStreams();renderStreams();
   input.value='';input.placeholder='Added! Paste another…';
   setTimeout(()=>{input.placeholder='Paste YouTube link…';},2000);
 }
-document.getElementById('addStreamBtn')?.addEventListener('click',addStreamFromInput);
-document.getElementById('addStreamUrl')?.addEventListener('keydown',(e)=>{if(e.key==='Enter'){e.preventDefault();addStreamFromInput();}});
-document.getElementById('addStreamForm')?.addEventListener('submit',(e)=>{e.preventDefault();addStreamFromInput();});
+document.addEventListener('click',(e)=>{
+  if(e.target&&e.target.id==='addStreamBtn'){e.preventDefault();addStreamFromInput();}
+});
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='Enter'&&e.target&&e.target.id==='addStreamUrl'){e.preventDefault();addStreamFromInput();}
+});
+document.addEventListener('submit',(e)=>{
+  if(e.target&&e.target.id==='addStreamForm'){e.preventDefault();addStreamFromInput();}
+});
 
 /* ── PREDICTION MARKETS (live Metaculus API) ──── */
 const PREDICTIONS_FALLBACK=[

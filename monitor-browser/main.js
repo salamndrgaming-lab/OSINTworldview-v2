@@ -73,7 +73,19 @@ function startYtEmbedServer() {
 
       if (parsed.pathname === '/youtube-embed') {
         const videoId = (parsed.searchParams.get('videoId') || '').replace(/[^a-zA-Z0-9_-]/g, '');
-        if (!videoId) { res.writeHead(400); res.end('Missing videoId'); return; }
+        const channelId = (parsed.searchParams.get('channelId') || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!videoId && !channelId) { res.writeHead(400); res.end('Missing videoId or channelId'); return; }
+
+        // Channel-based live streams: YouTube renders whatever is currently
+        // live on a channel via /embed/live_stream?channel=CHANNEL_ID. Used
+        // for the homepage's preloaded news outlet panels so the embed never
+        // goes stale even when the live stream URL/ID changes.
+        if (channelId) {
+          const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="strict-origin-when-cross-origin"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}iframe{width:100%;height:100%;border:none}</style></head><body><iframe src="https://www.youtube.com/embed/live_stream?channel=${channelId}&autoplay=${autoplay}&mute=${mute}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></body></html>`;
+          res.writeHead(200, resHeaders);
+          res.end(html);
+          return;
+        }
 
         // Strategy for live streams (Error 153):
         //   1. Try the IFrame API with youtube-nocookie.com host

@@ -690,9 +690,12 @@ tick();_intervals.push(setInterval(tick,1000));
    Fall back to allorigins when the page is opened outside the browser (dev/testing). */
 const HAS_INTEL=!!(window.monitorApi&&typeof window.monitorApi.fetchIntel==='function');
 const PROXY=u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`;
-function intelFetch(url){
-  if(HAS_INTEL)return window.monitorApi.fetchIntel(url);
+function intelFetch(url,opts){
+  if(HAS_INTEL)return window.monitorApi.fetchIntel(url,opts);
   return fetch(PROXY(url)).then(r=>r.json()).then(d=>d.contents||'');
+}
+function intelPost(url,body){
+  return intelFetch(url,{method:'POST',body:typeof body==='string'?body:JSON.stringify(body)});
 }
 function intelFetchJSON(url){
   return intelFetch(url).then(txt=>{try{return JSON.parse(txt);}catch{return null;}});
@@ -1011,11 +1014,78 @@ function updateMapStats(){
   if(el3)el3.textContent=infraCount.toLocaleString();
 }
 
-// Intel layers are powered by the ReliefWeb v1 reports API. GDELT was the
-// original source but its hosts (api.gdeltproject.org) are unreachable from
-// most networks (ConnectTimeoutError). ReliefWeb is geocoded at the country
-// level so we add a small jitter so multiple reports in the same country
-// don't perfectly stack on top of each other.
+// Intel layers use ReliefWeb reports API (POST) with GDELT GEO API fallback.
+function renderReliefWebMarkers(info,data,markerColor,popupLabel,layerKey){
+  info.layer.clearLayers();
+  let count=0;
+  const seen={};
+  data.data.forEach(item=>{
+    const f=item.fields||{};
+    const loc=f.primary_country?.location;
+    if(!loc||loc.lat==null||loc.lon==null)return;
+    const lat0=parseFloat(loc.lat),lon0=parseFloat(loc.lon);
+    if(isNaN(lat0)||isNaN(lon0))return;
+    const iso=f.primary_country?.iso3||'';
+    const idx=seen[iso]=(seen[iso]||0)+1;
+    const ang=idx*2.4;const rad=Math.min(idx*0.35,3.5);
+    const lat=lat0+Math.cos(ang)*rad;
+    const lon=lon0+Math.sin(ang)*rad;
+    const marker=L.circleMarker([lat,lon],{
+      radius:4,fillColor:markerColor,color:'rgba(255,255,255,0.3)',weight:1,fillOpacity:0.8,
+    });
+    const title=f.title||'Report';
+    const country=f.primary_country?.name||'';
+    const sources=(f.source||[]).slice(0,2).map(s=>s.name).join(', ');
+    const date=f.date?.created?new Date(f.date.created).toLocaleDateString():'';
+    const link=f.url_alias||f.url||'';
+    let popup='<div style="max-width:260px;font-size:11px;line-height:1.4">'+
+      '<strong style="color:'+markerColor+'">'+popupLabel+'</strong><br>'+
+      '<span>'+String(title).substring(0,200)+'</span>';
+    if(country)popup+='<br><span style="color:#9ca3af;font-size:10px">'+country+'</span>';
+    if(sources)popup+='<br><span style="color:#9ca3af;font-size:10px">'+sources+'</span>';
+    if(date)popup+='<br><span style="color:#9ca3af;font-size:10px">'+date+'</span>';
+    if(link)popup+='<br><a href="'+link+'" target="_blank" style="color:#00d4ff">Read report</a>';
+    popup+='</div>';
+    marker.bindPopup(popup);
+    marker.addTo(info.layer);
+    count++;
+  });
+  updateMapStats();
+  console.log('[reliefweb]',layerKey,count,'reports of',data.data.length);
+}
+function loadGdeltFallback(info,markerColor,popupLabel,layerKey,query,days){
+  const url='https://api.gdeltproject.org/api/v2/geo/geo?query='+encodeURIComponent(query)+'&mode=PointData&format=GeoJSON&timespan='+days+'d&maxpoints=250';
+  intelFetch(url).then(txt=>{
+    let geo;try{geo=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
+    if(!geo)return;
+    info.layer.clearLayers();
+    let count=0;
+    const features=geo.features||geo;
+    if(!Array.isArray(features)){console.warn('[gdelt] unexpected format for',layerKey);return;}
+    features.forEach(f=>{
+      let lat,lon,name='';
+      if(f.geometry&&f.geometry.coordinates){
+        lon=f.geometry.coordinates[0];lat=f.geometry.coordinates[1];
+        name=(f.properties&&(f.properties.name||f.properties.html))||'';
+      }else if(f.lat!=null&&f.lon!=null){
+        lat=parseFloat(f.lat);lon=parseFloat(f.lon);name=f.name||'';
+      }else{return;}
+      if(typeof lat!=='number'||typeof lon!=='number'||isNaN(lat)||isNaN(lon))return;
+      const marker=L.circleMarker([lat,lon],{
+        radius:4,fillColor:markerColor,color:'rgba(255,255,255,0.3)',weight:1,fillOpacity:0.8,
+      });
+      let popup='<div style="max-width:260px;font-size:11px;line-height:1.4">'+
+        '<strong style="color:'+markerColor+'">'+popupLabel+'</strong>';
+      if(name)popup+='<br><span>'+String(name).substring(0,200)+'</span>';
+      popup+='</div>';
+      marker.bindPopup(popup);
+      marker.addTo(info.layer);
+      count++;
+    });
+    updateMapStats();
+    console.log('[gdelt]',layerKey,count,'points');
+  }).catch(e=>{console.warn('[gdelt] fallback also failed for',layerKey,e);});
+}
 function loadReliefWebReports(layerKey, opts){
   const info=osintLayers[layerKey];
   if(!info||!info.layer)return;
@@ -1023,68 +1093,25 @@ function loadReliefWebReports(layerKey, opts){
   const popupLabel=opts.label;
   const sinceDays=opts.sinceDays||7;
   const sinceDate=new Date(Date.now()-sinceDays*24*60*60*1000).toISOString().split('T')[0];
-  const params=[
-    'appname=monitorbrowser',
-    'fields[include][]=title',
-    'fields[include][]=primary_country.location',
-    'fields[include][]=primary_country.name',
-    'fields[include][]=primary_country.iso3',
-    'fields[include][]=source',
-    'fields[include][]=url',
-    'fields[include][]=url_alias',
-    'fields[include][]=date',
-    'fields[include][]=theme',
-    'fields[include][]=disaster_type',
-    'sort[]=date.created:desc',
-    'limit='+(opts.limit||100),
-    'filter[field]=date.created',
-    'filter[value][from]='+sinceDate,
-  ];
-  if(opts.query)params.unshift('query[value]='+encodeURIComponent(opts.query));
-  const url='https://api.reliefweb.int/v1/reports?'+params.join('&');
-  intelFetch(url).then(txt=>{
-    let data;
-    try{data=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
-    if(!data||!data.data){console.warn('[reliefweb] no data for',layerKey);return;}
-    info.layer.clearLayers();
-    let count=0;
-    const seen={}; // track per-country count for jitter spread
-    data.data.forEach(item=>{
-      const f=item.fields||{};
-      const loc=f.primary_country?.location;
-      if(!loc||loc.lat==null||loc.lon==null)return;
-      const lat0=parseFloat(loc.lat),lon0=parseFloat(loc.lon);
-      if(isNaN(lat0)||isNaN(lon0))return;
-      const iso=f.primary_country?.iso3||'';
-      const idx=seen[iso]=(seen[iso]||0)+1;
-      // Spiral jitter: each subsequent point in same country gets pushed out
-      const ang=idx*2.4;
-      const rad=Math.min(idx*0.35,3.5);
-      const lat=lat0+Math.cos(ang)*rad;
-      const lon=lon0+Math.sin(ang)*rad;
-      const marker=L.circleMarker([lat,lon],{
-        radius:4,fillColor:markerColor,color:'rgba(255,255,255,0.3)',weight:1,fillOpacity:0.8,
-      });
-      const title=f.title||'Report';
-      const country=f.primary_country?.name||'';
-      const sources=(f.source||[]).slice(0,2).map(s=>s.name).join(', ');
-      const date=f.date?.created?new Date(f.date.created).toLocaleDateString():'';
-      const link=f.url_alias||f.url||'';
-      let popup='<div style="max-width:260px;font-size:11px;line-height:1.4">'+
-        '<strong style="color:'+markerColor+'">'+popupLabel+'</strong><br>'+
-        '<span>'+String(title).substring(0,200)+'</span>';
-      if(country)popup+='<br><span style="color:#9ca3af;font-size:10px">'+country+'</span>';
-      if(sources)popup+='<br><span style="color:#9ca3af;font-size:10px">'+sources+'</span>';
-      if(date)popup+='<br><span style="color:#9ca3af;font-size:10px">'+date+'</span>';
-      if(link)popup+='<br><a href="'+link+'" target="_blank" style="color:#00d4ff">Read report</a>';
-      popup+='</div>';
-      marker.bindPopup(popup);
-      marker.addTo(info.layer);
-      count++;
-    });
-    updateMapStats();
-    console.log('[reliefweb]',layerKey,count,'reports of',data.data.length);
-  }).catch(e=>{console.warn('[reliefweb] error for',layerKey,e);});
+  const body={
+    appname:'monitorbrowser',
+    fields:{include:['title','primary_country.location','primary_country.name','primary_country.iso3','source','url','url_alias','date','theme','disaster_type']},
+    filter:{field:'date.created',value:{from:sinceDate}},
+    sort:['date.created:desc'],
+    limit:opts.limit||100,
+  };
+  if(opts.query)body.query={value:opts.query};
+  intelPost('https://api.reliefweb.int/v1/reports',body).then(txt=>{
+    let data;try{data=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
+    if(!data||!data.data){
+      console.warn('[reliefweb] no data for',layerKey,', trying GDELT');
+      loadGdeltFallback(info,markerColor,popupLabel,layerKey,opts.query||layerKey,sinceDays);return;
+    }
+    renderReliefWebMarkers(info,data,markerColor,popupLabel,layerKey);
+  }).catch(e=>{
+    console.warn('[reliefweb] POST failed for',layerKey,e.message||e,', trying GDELT');
+    loadGdeltFallback(info,markerColor,popupLabel,layerKey,opts.query||layerKey,sinceDays);
+  });
 }
 
 // Country boundaries for conflict zone polygons. Uses world-atlas 110m
@@ -1151,21 +1178,30 @@ function getCountryGeoJSON(){
   }).catch(e=>{console.warn('[map] failed to load country boundaries',e);return null;});
 }
 
-// Render conflict zone polygons. Takes ReliefWeb data and highlights
-// countries mentioned in reports as shaded polygons.
+// Render conflict zone polygons using POST API with GDELT fallback.
 function loadConflictZones(){
   const info=osintLayers.conflicts;
   if(!info||!info.layer)return;
   const sinceDate=new Date(Date.now()-30*24*60*60*1000).toISOString().split('T')[0];
-  const rwUrl='https://api.reliefweb.int/v1/reports?appname=monitorbrowser'+
-    '&query[value]=conflict+OR+war+OR+military+OR+airstrike+OR+offensive+OR+clashes'+
-    '&fields[include][]=primary_country.name&fields[include][]=primary_country.iso3'+
-    '&fields[include][]=title&fields[include][]=url&fields[include][]=date'+
-    '&sort[]=date.created:desc&limit=200'+
-    '&filter[field]=date.created&filter[value][from]='+sinceDate;
-  Promise.all([intelFetch(rwUrl).then(t=>{try{return JSON.parse(t);}catch{return null;}}),getCountryGeoJSON()])
+  const rwBody={
+    appname:'monitorbrowser',
+    query:{value:'conflict OR war OR military OR airstrike OR offensive OR clashes'},
+    fields:{include:['primary_country.name','primary_country.iso3','title','url','date']},
+    sort:['date.created:desc'],
+    limit:200,
+    filter:{field:'date.created',value:{from:sinceDate}},
+  };
+  const rwPromise=intelPost('https://api.reliefweb.int/v1/reports',rwBody)
+    .then(t=>{try{return JSON.parse(t);}catch{return null;}})
+    .catch(()=>null);
+  Promise.all([rwPromise,getCountryGeoJSON()])
     .then(([rwData,geo])=>{
-      if(!rwData||!rwData.data||!geo)return;
+      if(!geo)return;
+      if(!rwData||!rwData.data){
+        console.warn('[conflicts] ReliefWeb unavailable, using GDELT fallback for conflict markers');
+        loadGdeltFallback(info,'#dc2626','Armed Conflict','conflicts','conflict OR war OR military OR airstrike',30);
+        return;
+      }
       info.layer.clearLayers();
       // Count reports per country name
       const countryCounts={};
@@ -1220,7 +1256,10 @@ function loadConflictZones(){
       });
       updateMapStats();
       console.log('[conflicts]',drawn,'conflict zone polygons from',Object.keys(countryCounts).length,'countries');
-    }).catch(e=>{console.warn('[conflicts] polygon load error',e);});
+    }).catch(e=>{
+      console.warn('[conflicts] polygon load error',e);
+      loadGdeltFallback(info,'#dc2626','Armed Conflict','conflicts','conflict OR war OR military OR airstrike',30);
+    });
 }
 
 function loadNewsEvents(){

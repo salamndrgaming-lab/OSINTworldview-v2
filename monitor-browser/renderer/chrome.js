@@ -241,6 +241,7 @@
   pipBtn.addEventListener('click', () => browser.pip());
 
   document.getElementById('action-intel').addEventListener('click', () => toggleIntelSidebar());
+  document.getElementById('action-bookmark-add').addEventListener('click', () => bookmarkCurrentPage());
   document.getElementById('action-bookmarks').addEventListener('click', () => togglePanel('bookmarks'));
   document.getElementById('action-history').addEventListener('click', () => togglePanel('history'));
   document.getElementById('action-downloads').addEventListener('click', () => togglePanel('downloads'));
@@ -1394,7 +1395,7 @@
     bmBar.classList.remove('hidden');
     browser.bookmarksList().then((bm) => {
       if (!bm || bm.length === 0) {
-        bmBar.innerHTML = '<span class="bm-bar-empty">No bookmarks yet — press Ctrl+D to add one</span>';
+        bmBar.innerHTML = '<span class="bm-bar-empty">No bookmarks yet — click ★ or press Ctrl+D to add one</span>';
         return;
       }
       bmBar.innerHTML = bm.slice(0, 20).map((b) =>

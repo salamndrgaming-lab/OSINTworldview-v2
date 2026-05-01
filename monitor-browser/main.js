@@ -978,7 +978,7 @@ ipcMain.handle('settings:clear-data', async () => {
 // so the renderer can display it without file:// permission issues.
 ipcMain.handle('profile:pick-avatar', async () => {
   const { dialog } = require('electron');
-  const result = await dialog.showOpenDialog({
+  const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Choose Profile Picture',
     filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }],
     properties: ['openFile'],
@@ -2975,7 +2975,7 @@ const _intelCallLog = [];
 const INTEL_RATE_LIMIT = 120;
 const INTEL_RATE_WINDOW = 60_000;
 
-ipcMain.handle('intel:fetch', async (event, url) => {
+ipcMain.handle('intel:fetch', async (event, url, opts) => {
   const senderUrl = event.sender.getURL();
   if (!senderUrl.startsWith('file://')) {
     throw new Error('intel:fetch is not available on this origin');
@@ -3017,12 +3017,18 @@ ipcMain.handle('intel:fetch', async (event, url) => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 15_000);
       try {
+        const fetchMethod = (opts && opts.method) || 'GET';
+        const fetchBody = (opts && opts.body) || undefined;
+        const fetchHeaders = {
+          'Accept': accept,
+          'User-Agent': BROWSER_UA,
+          'Accept-Language': 'en-US,en;q=0.9',
+        };
+        if (fetchBody) fetchHeaders['Content-Type'] = 'application/json';
         const res = await fetch(parsed.toString(), {
-          headers: {
-            'Accept': accept,
-            'User-Agent': BROWSER_UA,
-            'Accept-Language': 'en-US,en;q=0.9',
-          },
+          method: fetchMethod,
+          headers: fetchHeaders,
+          ...(fetchBody ? { body: fetchBody } : {}),
           signal: controller.signal,
           redirect: 'follow',
         });

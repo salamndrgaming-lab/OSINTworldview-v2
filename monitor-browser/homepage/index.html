@@ -1986,24 +1986,36 @@ function extractYouTubeId(input){
 }
 
 function streamEmbedUrl(s,port){
-  if(!port){
-    // Fallback: direct YouTube embed (works when server isn't ready yet)
-    if(s.channelId)return `https://www.youtube.com/embed/live_stream?channel=${s.channelId}&autoplay=0&mute=1`;
-    return `https://www.youtube.com/embed/${s.id}?autoplay=0&mute=1`;
-  }
-  if(s.channelId)return `http://localhost:${port}/youtube-embed?channelId=${s.channelId}&autoplay=0&mute=1`;
-  return `http://localhost:${port}/youtube-embed?videoId=${s.id}&autoplay=0&mute=1`;
+  const vid=s.resolvedId||s.id;
+  if(!vid)return null;
+  if(!port)return `https://www.youtube.com/embed/${vid}?autoplay=0&mute=1`;
+  return `http://localhost:${port}/youtube-embed?videoId=${vid}&autoplay=0&mute=1`;
 }
 
 async function renderStreams(){
   const g=document.getElementById('streamGrid');if(!g)return;
   const port=await getYtEmbedPort();
   g.innerHTML='';
+
+  // Resolve channel-based streams to their current live video IDs
+  const resolveApi=window.monitorApi&&typeof window.monitorApi.resolveChannelLive==='function';
+  await Promise.all(STREAMS.map(async(s)=>{
+    if(s.channelId&&!s.id){
+      if(resolveApi){
+        try{s.resolvedId=await window.monitorApi.resolveChannelLive(s.channelId);}catch(e){s.resolvedId=null;}
+      }else{s.resolvedId=null;}
+    }
+  }));
+
   STREAMS.forEach((s,idx)=>{
     const d=document.createElement('div');d.className='ls-card';
     d.style.position='relative';
     const src=streamEmbedUrl(s,port);
-    d.innerHTML=`<iframe src="${src}" allow="autoplay;encrypted-media;picture-in-picture;fullscreen" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe><div class="ls-bar"><span class="ls-name">${escFeed(s.name)}</span><span class="ls-live">LIVE</span><button class="ls-remove" data-idx="${idx}" title="Remove" style="margin-left:auto;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px">&times;</button></div>`;
+    if(src){
+      d.innerHTML=`<iframe src="${src}" allow="autoplay;encrypted-media;picture-in-picture;fullscreen" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe><div class="ls-bar"><span class="ls-name">${escFeed(s.name)}</span><span class="ls-live">LIVE</span><button class="ls-remove" data-idx="${idx}" title="Remove" style="margin-left:auto;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px">&times;</button></div>`;
+    }else{
+      d.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:100%;background:#1a1a2e;color:#8892b0;font-family:system-ui,sans-serif;flex-direction:column"><span style="font-size:14px;color:#ccd6f6">${escFeed(s.name)}</span><span style="font-size:12px;margin-top:4px;opacity:.7">Not streaming right now</span></div><div class="ls-bar"><span class="ls-name">${escFeed(s.name)}</span><button class="ls-remove" data-idx="${idx}" title="Remove" style="margin-left:auto;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px">&times;</button></div>`;
+    }
     g.appendChild(d);
   });
   g.querySelectorAll('.ls-remove').forEach(btn=>{

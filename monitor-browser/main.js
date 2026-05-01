@@ -49,9 +49,51 @@ process.on('unhandledRejection', (reason) => {
 
 let ytEmbedPort = 0;
 
+const _channelLiveCache = new Map();
+const _CHANNEL_CACHE_TTL = 5 * 60 * 1000;
+
+function resolveChannelLiveVideoId(channelId) {
+  return new Promise((resolve) => {
+    const cached = _channelLiveCache.get(channelId);
+    if (cached && Date.now() - cached.ts < _CHANNEL_CACHE_TTL) {
+      return resolve(cached.videoId);
+    }
+    const https = require('node:https');
+    const req = https.get({
+      hostname: 'www.youtube.com',
+      path: `/channel/${channelId}/live`,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      timeout: 10000,
+    }, (resp) => {
+      if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
+        const m = resp.headers.location.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+        if (m) { _channelLiveCache.set(channelId, { videoId: m[1], ts: Date.now() }); resp.resume(); return resolve(m[1]); }
+      }
+      let body = '';
+      resp.setEncoding('utf8');
+      resp.on('data', (chunk) => { body += chunk; if (body.length > 500000) resp.destroy(); });
+      resp.on('end', () => {
+        let vid = null;
+        const c = body.match(/<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})"/);
+        if (c) vid = c[1];
+        if (!vid) { const o = body.match(/<meta property="og:url" content="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})"/); if (o) vid = o[1]; }
+        if (!vid) { const j = body.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/); if (j) vid = j[1]; }
+        if (vid) _channelLiveCache.set(channelId, { videoId: vid, ts: Date.now() });
+        resolve(vid);
+      });
+      resp.on('error', () => resolve(null));
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+
 function startYtEmbedServer() {
   return new Promise((resolve) => {
-    const server = http.createServer((req, res) => {
+    const server = http.createServer(async (req, res) => {
       const parsed = new URL(req.url, 'http://localhost');
       const autoplay = parsed.searchParams.get('autoplay') === '0' ? '0' : '1';
       const mute = parsed.searchParams.get('mute') === '0' ? '0' : '1';
@@ -72,19 +114,19 @@ function startYtEmbedServer() {
       };
 
       if (parsed.pathname === '/youtube-embed') {
-        const videoId = (parsed.searchParams.get('videoId') || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        let videoId = (parsed.searchParams.get('videoId') || '').replace(/[^a-zA-Z0-9_-]/g, '');
         const channelId = (parsed.searchParams.get('channelId') || '').replace(/[^a-zA-Z0-9_-]/g, '');
         if (!videoId && !channelId) { res.writeHead(400); res.end('Missing videoId or channelId'); return; }
 
-        // Channel-based live streams: YouTube renders whatever is currently
-        // live on a channel via /embed/live_stream?channel=CHANNEL_ID. Used
-        // for the homepage's preloaded news outlet panels so the embed never
-        // goes stale even when the live stream URL/ID changes.
-        if (channelId) {
-          const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="strict-origin-when-cross-origin"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}iframe{width:100%;height:100%;border:none}</style></head><body><iframe src="https://www.youtube.com/embed/live_stream?channel=${channelId}&autoplay=${autoplay}&mute=${mute}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></body></html>`;
-          res.writeHead(200, resHeaders);
-          res.end(html);
-          return;
+        if (channelId && !videoId) {
+          const liveId = await resolveChannelLiveVideoId(channelId);
+          if (!liveId) {
+            const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#1a1a2e;overflow:hidden;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;color:#8892b0}div{text-align:center}h3{margin:0 0 8px;color:#ccd6f6;font-size:15px}p{margin:0;font-size:12px;opacity:.7}</style></head><body><div><h3>No live stream</h3><p>This channel isn’t streaming right now.</p></div></body></html>`;
+            res.writeHead(200, resHeaders);
+            res.end(html);
+            return;
+          }
+          videoId = liveId;
         }
 
         // Strategy for live streams (Error 153):
@@ -2869,6 +2911,10 @@ ipcMain.handle('shell:open-external', (_e, url) => {
 // ---------------------------------------------------------------------------
 
 ipcMain.handle('yt:embed-port', () => ytEmbedPort);
+ipcMain.handle('yt:resolve-live', (_e, channelId) => {
+  if (!channelId || typeof channelId !== 'string') return null;
+  return resolveChannelLiveVideoId(channelId.replace(/[^a-zA-Z0-9_-]/g, ''));
+});
 
 // ---------------------------------------------------------------------------
 // intel:fetch — per-domain rate limiter + response cache + retry

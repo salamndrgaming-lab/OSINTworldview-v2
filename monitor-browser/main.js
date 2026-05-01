@@ -59,35 +59,65 @@ function resolveChannelLiveVideoId(channelId) {
       return resolve(cached.videoId);
     }
     const https = require('node:https');
-    const req = https.get({
-      hostname: 'www.youtube.com',
-      path: `/channel/${channelId}/live`,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      timeout: 10000,
-    }, (resp) => {
-      if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
-        const m = resp.headers.location.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
-        if (m) { _channelLiveCache.set(channelId, { videoId: m[1], ts: Date.now() }); resp.resume(); return resolve(m[1]); }
-      }
-      let body = '';
-      resp.setEncoding('utf8');
-      resp.on('data', (chunk) => { body += chunk; if (body.length > 500000) resp.destroy(); });
-      resp.on('end', () => {
-        let vid = null;
-        const c = body.match(/<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})"/);
-        if (c) vid = c[1];
-        if (!vid) { const o = body.match(/<meta property="og:url" content="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})"/); if (o) vid = o[1]; }
-        if (!vid) { const j = body.match(/"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/); if (j) vid = j[1]; }
-        if (vid) _channelLiveCache.set(channelId, { videoId: vid, ts: Date.now() });
-        resolve(vid);
+    const tryGet = (path, redirectsLeft) => {
+      const req = https.get({
+        hostname: 'www.youtube.com',
+        path,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          // Bypass YouTube's EU cookie consent interstitial (which would
+          // otherwise return a consent page instead of the live stream).
+          'Cookie': 'SOCS=CAISNQgDEitib3FfaWRlbnRpdHlmcm9udGVuZHVpc2VydmVyXzIwMjMwOTI2LjA1X3AwGgJlbiACGgYIgIvBmAY; CONSENT=YES+',
+        },
+        timeout: 10000,
+      }, (resp) => {
+        if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location && redirectsLeft > 0) {
+          const loc = resp.headers.location;
+          const m = loc.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+          if (m) { _channelLiveCache.set(channelId, { videoId: m[1], ts: Date.now() }); resp.resume(); return resolve(m[1]); }
+          resp.resume();
+          // Follow same-origin redirects (e.g. /channel/ID/live → /watch?v=...)
+          try {
+            const u = new URL(loc, 'https://www.youtube.com');
+            if (u.hostname === 'www.youtube.com' || u.hostname === 'youtube.com') {
+              return tryGet(u.pathname + u.search, redirectsLeft - 1);
+            }
+          } catch {}
+          return resolve(null);
+        }
+        let body = '';
+        resp.setEncoding('utf8');
+        resp.on('data', (chunk) => { body += chunk; if (body.length > 800000) resp.destroy(); });
+        resp.on('end', () => {
+          let vid = null;
+          const patterns = [
+            /<link[^>]*rel="canonical"[^>]*href="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+            /<meta[^>]*property="og:url"[^>]*content="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+            /<meta[^>]*itemprop="videoId"[^>]*content="([a-zA-Z0-9_-]{11})"/,
+            /"videoDetails"\s*:\s*\{[^}]*"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/,
+            /"liveStreamabilityRenderer"[^}]*?"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/,
+            /\\?"videoId\\?"\s*:\s*\\?"([a-zA-Z0-9_-]{11})\\?"/,
+          ];
+          for (const p of patterns) {
+            const m = body.match(p);
+            if (m) { vid = m[1]; break; }
+          }
+          if (vid) {
+            _channelLiveCache.set(channelId, { videoId: vid, ts: Date.now() });
+            console.log(`[monitor] resolved channel ${channelId} → ${vid}`);
+          } else {
+            console.log(`[monitor] no live video found for channel ${channelId} (status ${resp.statusCode}, body ${body.length}b)`);
+          }
+          resolve(vid);
+        });
+        resp.on('error', () => resolve(null));
       });
-      resp.on('error', () => resolve(null));
-    });
-    req.on('error', () => resolve(null));
-    req.on('timeout', () => { req.destroy(); resolve(null); });
+      req.on('error', (err) => { console.log(`[monitor] channel resolve error for ${channelId}:`, err.message); resolve(null); });
+      req.on('timeout', () => { req.destroy(); resolve(null); });
+    };
+    tryGet(`/channel/${channelId}/live`, 3);
   });
 }
 
@@ -3104,10 +3134,18 @@ app.whenReady().then(() => {
     };
     session.defaultSession.webRequest.onHeadersReceived(embedFilter, (details, cb) => {
       const headers = { ...details.responseHeaders };
-      // Remove all frame-blocking headers
-      const keysToRemove = Object.keys(headers).filter(
-        (k) => k.toLowerCase() === 'x-frame-options'
-      );
+      // Remove all frame-blocking and cross-origin isolation headers that
+      // prevent YouTube embeds + their cookie-rotation iframe from loading
+      // (ERR_BLOCKED_BY_RESPONSE on accounts.youtube.com/RotateCookiesPage).
+      const drop = new Set([
+        'x-frame-options',
+        'cross-origin-opener-policy',
+        'cross-origin-opener-policy-report-only',
+        'cross-origin-embedder-policy',
+        'cross-origin-embedder-policy-report-only',
+        'cross-origin-resource-policy',
+      ]);
+      const keysToRemove = Object.keys(headers).filter((k) => drop.has(k.toLowerCase()));
       for (const k of keysToRemove) delete headers[k];
       // Rewrite all CSP headers to allow any embedder
       for (const key of Object.keys(headers)) {

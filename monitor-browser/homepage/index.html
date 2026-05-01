@@ -1014,9 +1014,103 @@ function updateMapStats(){
   if(el3)el3.textContent=infraCount.toLocaleString();
 }
 
-// Intel layers use ReliefWeb reports API (POST) with GDELT GEO API fallback.
-function renderReliefWebMarkers(info,data,markerColor,popupLabel,layerKey){
+// Curated baseline of current global intelligence hotspots. Renders
+// immediately so users see something on the map even when external APIs
+// (ReliefWeb, GDELT) are slow, blocked, or rate-limited. Live data layers
+// on top via the loaders below.
+const INTEL_HOTSPOTS={
+  conflicts:[
+    {lat:48.5,lon:31.0,name:'Ukraine',desc:'Active military operations / Russia-Ukraine war'},
+    {lat:31.5,lon:34.5,name:'Gaza',desc:'Israel-Hamas conflict zone'},
+    {lat:33.4,lon:35.8,name:'Lebanon (south)',desc:'Hezbollah-Israel border tensions'},
+    {lat:35.0,lon:38.0,name:'Syria',desc:'Civil war / multi-faction conflict'},
+    {lat:15.5,lon:30.0,name:'Sudan',desc:'SAF vs RSF civil war'},
+    {lat:15.0,lon:47.0,name:'Yemen',desc:'Houthi-led conflict / Red Sea attacks'},
+    {lat:21.0,lon:96.0,name:'Myanmar',desc:'Military junta vs resistance forces'},
+    {lat:-1.5,lon:29.0,name:'Eastern DRC',desc:'M23 / armed group violence'},
+    {lat:5.0,lon:46.0,name:'Somalia',desc:'Al-Shabaab insurgency'},
+    {lat:13.5,lon:2.0,name:'Sahel (Niger/Mali/Burkina)',desc:'Jihadist insurgency'},
+    {lat:13.5,lon:39.5,name:'Ethiopia (Tigray/Amhara)',desc:'Ethnic conflict'},
+    {lat:18.5,lon:-72.3,name:'Haiti',desc:'Gang violence / state collapse'},
+    {lat:34.5,lon:69.2,name:'Afghanistan',desc:'Taliban rule / ISIS-K attacks'},
+    {lat:33.7,lon:73.0,name:'Pakistan border regions',desc:'TTP attacks'},
+    {lat:9.0,lon:10.0,name:'Northeast Nigeria',desc:'Boko Haram / ISWAP'},
+    {lat:23.7,lon:121.0,name:'Taiwan Strait',desc:'PLA exercises / heightened tension'},
+    {lat:6.5,lon:125.0,name:'South China Sea',desc:'Maritime disputes'},
+  ],
+  protests:[
+    {lat:48.85,lon:2.35,name:'France',desc:'Recurring nationwide protests'},
+    {lat:39.9,lon:116.4,name:'Hong Kong / China',desc:'Pro-democracy / lockdown protests'},
+    {lat:35.7,lon:51.4,name:'Iran',desc:'Anti-government protests'},
+    {lat:4.7,lon:-74.1,name:'Colombia',desc:'Civil unrest / labor strikes'},
+    {lat:13.7,lon:100.5,name:'Thailand',desc:'Pro-democracy demonstrations'},
+    {lat:32.1,lon:34.8,name:'Israel',desc:'Anti-government protests'},
+    {lat:28.6,lon:77.2,name:'India',desc:'Farmer / political protests'},
+    {lat:4.6,lon:-74.0,name:'Venezuela border',desc:'Migration / civil unrest'},
+    {lat:-23.5,lon:-46.6,name:'Brazil',desc:'Political demonstrations'},
+    {lat:51.5,lon:-0.1,name:'United Kingdom',desc:'Climate / cost-of-living protests'},
+    {lat:38.9,lon:-77.0,name:'Washington DC',desc:'Political demonstrations'},
+    {lat:50.1,lon:8.7,name:'Germany',desc:'Anti-war / agricultural protests'},
+  ],
+  terror:[
+    {lat:34.5,lon:69.2,name:'Afghanistan',desc:'ISIS-K / Taliban attacks'},
+    {lat:9.0,lon:10.0,name:'Lake Chad Basin',desc:'Boko Haram / ISWAP'},
+    {lat:5.0,lon:46.0,name:'Somalia',desc:'Al-Shabaab'},
+    {lat:13.5,lon:2.0,name:'Sahel',desc:'JNIM / ISGS'},
+    {lat:33.5,lon:44.4,name:'Iraq',desc:'ISIS remnants'},
+    {lat:35.0,lon:38.0,name:'Syria',desc:'HTS / ISIS remnants'},
+    {lat:24.5,lon:54.0,name:'Arabian Peninsula',desc:'AQAP'},
+    {lat:1.3,lon:36.8,name:'Kenya',desc:'Al-Shabaab cross-border'},
+    {lat:-14.3,lon:40.4,name:'Mozambique (Cabo Delgado)',desc:'ISIS-Mozambique'},
+    {lat:33.7,lon:73.0,name:'Pakistan (KP/Balochistan)',desc:'TTP / BLA'},
+    {lat:6.9,lon:79.9,name:'Sri Lanka',desc:'Historical insurgent activity'},
+    {lat:-7.5,lon:111.0,name:'Indonesia',desc:'JI / JAD cells'},
+  ],
+  events:[
+    {lat:50.45,lon:30.52,name:'Kyiv',desc:'Ongoing Russia-Ukraine war updates'},
+    {lat:31.78,lon:35.22,name:'Jerusalem',desc:'Israel-Palestine developments'},
+    {lat:39.92,lon:32.85,name:'Ankara',desc:'Turkey regional politics'},
+    {lat:55.75,lon:37.62,name:'Moscow',desc:'Russian government statements'},
+    {lat:39.90,lon:116.40,name:'Beijing',desc:'China policy / Taiwan stance'},
+    {lat:38.90,lon:-77.04,name:'Washington DC',desc:'US foreign policy / sanctions'},
+    {lat:51.50,lon:-0.13,name:'London',desc:'UK foreign policy'},
+    {lat:50.85,lon:4.35,name:'Brussels',desc:'EU/NATO decisions'},
+    {lat:35.68,lon:139.69,name:'Tokyo',desc:'Japan-China tensions'},
+    {lat:37.57,lon:126.98,name:'Seoul',desc:'North Korea developments'},
+    {lat:39.04,lon:125.76,name:'Pyongyang',desc:'DPRK missile tests'},
+    {lat:35.69,lon:51.39,name:'Tehran',desc:'Iran nuclear program'},
+    {lat:24.47,lon:54.37,name:'Abu Dhabi',desc:'Gulf states diplomacy'},
+    {lat:30.04,lon:31.24,name:'Cairo',desc:'Egypt regional mediation'},
+    {lat:-15.78,lon:-47.93,name:'Brasilia',desc:'BRICS / regional politics'},
+    {lat:28.61,lon:77.21,name:'New Delhi',desc:'India foreign policy'},
+    {lat:-1.29,lon:36.82,name:'Nairobi',desc:'East Africa stability'},
+  ],
+};
+function renderIntelBaseline(layerKey,markerColor,popupLabel){
+  const info=osintLayers[layerKey];
+  if(!info||!info.layer)return;
+  // Clear any prior markers — this is the entry point on initial load + refresh
   info.layer.clearLayers();
+  const data=INTEL_HOTSPOTS[layerKey]||[];
+  data.forEach(d=>{
+    const marker=L.circleMarker([d.lat,d.lon],{
+      radius:5,fillColor:markerColor,color:'rgba(255,255,255,0.4)',weight:1.2,fillOpacity:0.85,
+    });
+    let popup='<div style="max-width:260px;font-size:11px;line-height:1.4">'+
+      '<strong style="color:'+markerColor+'">'+popupLabel+' — '+d.name+'</strong><br>'+
+      '<span>'+d.desc+'</span>'+
+      '<br><span style="color:#9ca3af;font-size:10px">Active hotspot · live API data layered on top when available</span>'+
+      '</div>';
+    marker.bindPopup(popup);
+    marker.addTo(info.layer);
+  });
+  updateMapStats();
+  console.log('[intel-baseline]',layerKey,data.length,'hotspots rendered');
+}
+
+// Intel layers use ReliefWeb reports API (POST) with GDELT GEO API fallback.
+function renderReliefWebMarkers(info,data,markerColor,popupLabel,layerKey,additive){
+  if(!additive)info.layer.clearLayers();
   let count=0;
   const seen={};
   data.data.forEach(item=>{
@@ -1053,12 +1147,12 @@ function renderReliefWebMarkers(info,data,markerColor,popupLabel,layerKey){
   updateMapStats();
   console.log('[reliefweb]',layerKey,count,'reports of',data.data.length);
 }
-function loadGdeltFallback(info,markerColor,popupLabel,layerKey,query,days){
+function loadGdeltFallback(info,markerColor,popupLabel,layerKey,query,days,additive){
   const url='https://api.gdeltproject.org/api/v2/geo/geo?query='+encodeURIComponent(query)+'&mode=PointData&format=GeoJSON&timespan='+days+'d&maxpoints=250';
   intelFetch(url).then(txt=>{
     let geo;try{geo=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
     if(!geo)return;
-    info.layer.clearLayers();
+    if(!additive)info.layer.clearLayers();
     let count=0;
     const features=geo.features||geo;
     if(!Array.isArray(features)){console.warn('[gdelt] unexpected format for',layerKey);return;}
@@ -1105,12 +1199,12 @@ function loadReliefWebReports(layerKey, opts){
     let data;try{data=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
     if(!data||!data.data){
       console.warn('[reliefweb] no data for',layerKey,', trying GDELT');
-      loadGdeltFallback(info,markerColor,popupLabel,layerKey,opts.query||layerKey,sinceDays);return;
+      loadGdeltFallback(info,markerColor,popupLabel,layerKey,opts.query||layerKey,sinceDays,opts.additive);return;
     }
-    renderReliefWebMarkers(info,data,markerColor,popupLabel,layerKey);
+    renderReliefWebMarkers(info,data,markerColor,popupLabel,layerKey,opts.additive);
   }).catch(e=>{
     console.warn('[reliefweb] POST failed for',layerKey,e.message||e,', trying GDELT');
-    loadGdeltFallback(info,markerColor,popupLabel,layerKey,opts.query||layerKey,sinceDays);
+    loadGdeltFallback(info,markerColor,popupLabel,layerKey,opts.query||layerKey,sinceDays,opts.additive);
   });
 }
 
@@ -1179,9 +1273,39 @@ function getCountryGeoJSON(){
 }
 
 // Render conflict zone polygons using POST API with GDELT fallback.
+// Always renders baseline conflict markers + polygons so the map shows
+// intelligence data even when external APIs are unavailable.
+function renderBaselineConflictPolygons(info,geo){
+  if(!geo||!geo.features)return;
+  const baselineCountries=['Ukraine','Israel','Palestine','Lebanon','Syria','Sudan','South Sudan','Yemen','Myanmar','Democratic Republic of the Congo','Somalia','Mali','Niger','Burkina Faso','Ethiopia','Haiti','Afghanistan','Pakistan','Nigeria','Iraq','Mozambique'];
+  let drawn=0;
+  geo.features.forEach(feature=>{
+    const props=feature.properties||{};
+    const featureName=normalizeCountryName(props.name||'');
+    const matched=baselineCountries.find(c=>{
+      const cn=normalizeCountryName(c);
+      return cn===featureName||featureName.toLowerCase()===cn.toLowerCase();
+    });
+    if(!matched)return;
+    const layer=L.geoJSON(feature,{
+      style:{fillColor:'#dc2626',fillOpacity:0.18,color:'#dc2626',weight:1.2,opacity:0.55},
+    });
+    layer.bindPopup('<div style="max-width:240px;font-size:11px;line-height:1.4">'+
+      '<strong style="color:#dc2626">Active Conflict Zone — '+matched+'</strong>'+
+      '<br><span style="color:#9ca3af;font-size:10px">Curated baseline · live intelligence overlaid when available</span>'+
+      '</div>');
+    layer.addTo(info.layer);
+    drawn++;
+  });
+  console.log('[conflicts] baseline polygons drawn:',drawn);
+}
 function loadConflictZones(){
   const info=osintLayers.conflicts;
   if(!info||!info.layer)return;
+  // 1. Render baseline markers immediately
+  renderIntelBaseline('conflicts','#dc2626','Armed Conflict');
+  // 2. Render baseline polygons as soon as country geo is available
+  getCountryGeoJSON().then(geo=>renderBaselineConflictPolygons(info,geo));
   const sinceDate=new Date(Date.now()-30*24*60*60*1000).toISOString().split('T')[0];
   const rwBody={
     appname:'monitorbrowser',
@@ -1199,10 +1323,10 @@ function loadConflictZones(){
       if(!geo)return;
       if(!rwData||!rwData.data){
         console.warn('[conflicts] ReliefWeb unavailable, using GDELT fallback for conflict markers');
-        loadGdeltFallback(info,'#dc2626','Armed Conflict','conflicts','conflict OR war OR military OR airstrike',30);
+        loadGdeltFallback(info,'#dc2626','Armed Conflict','conflicts','conflict OR war OR military OR airstrike',30,true);
         return;
       }
-      info.layer.clearLayers();
+      // Don't clear — keep baseline markers and polygons; live data layered on top
       // Count reports per country name
       const countryCounts={};
       const countryTitles={};
@@ -1258,12 +1382,13 @@ function loadConflictZones(){
       console.log('[conflicts]',drawn,'conflict zone polygons from',Object.keys(countryCounts).length,'countries');
     }).catch(e=>{
       console.warn('[conflicts] polygon load error',e);
-      loadGdeltFallback(info,'#dc2626','Armed Conflict','conflicts','conflict OR war OR military OR airstrike',30);
+      loadGdeltFallback(info,'#dc2626','Armed Conflict','conflicts','conflict OR war OR military OR airstrike',30,true);
     });
 }
 
 function loadNewsEvents(){
-  loadReliefWebReports('events',{color:'#ffa502',label:'News Event',sinceDays:3,limit:120});
+  renderIntelBaseline('events','#ffa502','News Event');
+  loadReliefWebReports('events',{color:'#ffa502',label:'News Event',sinceDays:3,limit:120,additive:true});
 }
 
 function loadEarthquakes(){
@@ -1364,24 +1489,28 @@ function loadFlights(){
 }
 
 function loadConflicts(){
+  // Render baseline immediately so map always shows intel markers
+  renderIntelBaseline('conflicts','#dc2626','Armed Conflict');
   loadReliefWebReports('conflicts',{
     color:'#dc2626',label:'Armed Conflict',
     query:'conflict OR war OR military OR airstrike OR offensive OR clashes',
-    sinceDays:14,limit:120,
+    sinceDays:14,limit:120,additive:true,
   });
 }
 function loadProtests(){
+  renderIntelBaseline('protests','#f59e0b','Protest / Civil Unrest');
   loadReliefWebReports('protests',{
     color:'#f59e0b',label:'Protest / Civil Unrest',
     query:'protest OR demonstration OR unrest OR strike OR riot OR civil',
-    sinceDays:14,limit:100,
+    sinceDays:14,limit:100,additive:true,
   });
 }
 function loadTerror(){
+  renderIntelBaseline('terror','#7c3aed','Security / Terror Incident');
   loadReliefWebReports('terror',{
     color:'#7c3aed',label:'Security / Terror Incident',
     query:'terror OR attack OR bombing OR insurgent OR shooting OR ambush',
-    sinceDays:14,limit:100,
+    sinceDays:14,limit:100,additive:true,
   });
 }
 

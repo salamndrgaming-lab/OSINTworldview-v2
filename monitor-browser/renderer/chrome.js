@@ -726,6 +726,7 @@
     { id: 'diplo',   label: 'Diplomatic Tracker' },
   ];
 
+  let _settingsOverlayHandler = null;
   function openSettings() {
     browser.settingsExpand();
     settingsOverlay.classList.remove('hidden');
@@ -876,9 +877,9 @@
     requestAnimationFrame(() => settingsOverlay.classList.add('visible'));
 
     document.getElementById('settings-close').addEventListener('click', closeSettings);
-    settingsOverlay.addEventListener('click', (e) => {
-      if (e.target === settingsOverlay) closeSettings();
-    });
+    if (_settingsOverlayHandler) settingsOverlay.removeEventListener('click', _settingsOverlayHandler);
+    _settingsOverlayHandler = (e) => { if (e.target === settingsOverlay) closeSettings(); };
+    settingsOverlay.addEventListener('click', _settingsOverlayHandler);
 
     document.querySelectorAll('#theme-grid .theme-swatch').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -1314,14 +1315,14 @@
     removeContextMenu();
     const ops = await browser.opsList();
     if (ops.length === 0) {
-      const name = prompt('No operations yet. Create one:');
+      const name = await showInputDialog('No operations yet. Create one:', 'Operation name');
       if (!name) return;
       const opId = await browser.opsCreate(name, '#d4a843');
       browser.opsAssignTab(tabId, opId);
       return;
     }
     const names = ops.map((o, i) => (i + 1) + '. ' + o.name).join('\n');
-    const choice = prompt('Assign to operation:\n' + names + '\n\nEnter number:');
+    const choice = await showInputDialog('Assign to operation:\n' + names + '\n\nEnter number:', '#');
     if (!choice) return;
     const idx = parseInt(choice, 10) - 1;
     if (idx >= 0 && idx < ops.length) {
@@ -1398,9 +1399,12 @@
       }
       bmBar.innerHTML = bm.slice(0, 20).map((b) =>
         '<button class="bm-bar-item" data-url="' + escapeAttr(b.url) + '" title="' + escapeAttr(b.url) + '">' +
-        (b.favicon ? '<img class="bm-bar-icon" src="' + escapeAttr(b.favicon) + '" onerror="this.style.display=\'none\'" />' : '') +
+        (b.favicon ? '<img class="bm-bar-icon" src="' + escapeAttr(b.favicon) + '" />' : '') +
         '<span>' + esc(b.title || shortUrl(b.url)) + '</span></button>'
       ).join('');
+      bmBar.querySelectorAll('.bm-bar-icon').forEach((img) => {
+        img.addEventListener('error', () => { img.style.display = 'none'; });
+      });
       bmBar.querySelectorAll('.bm-bar-item').forEach((btn) => {
         btn.addEventListener('click', () => browser.navigate(null, btn.dataset.url));
       });
@@ -2207,8 +2211,8 @@
       if (e.target === opsSwitcherEl) closeOperationSwitcher();
     });
 
-    document.getElementById('ops-new').addEventListener('click', () => {
-      const name = prompt('Operation name:');
+    document.getElementById('ops-new').addEventListener('click', async () => {
+      const name = await showInputDialog('Operation name:', 'e.g. OSINT Case 42');
       if (!name) return;
       const colors = ['#d4a843', '#4a90e2', '#2ecc71', '#ff4e4e', '#a78bfa', '#fb923c', '#22d3ee'];
       const color = colors[Math.floor(Math.random() * colors.length)];
@@ -2360,12 +2364,15 @@
       listEl.innerHTML = matches.map((t) =>
         '<button class="tab-search-row' + (t.id === activeId ? ' is-active' : '') + '" data-id="' + t.id + '">' +
         '<span class="tab-search-favicon">' +
-          (t.favicon ? '<img src="' + escapeAttr(t.favicon) + '" onerror="this.parentElement.textContent=\'○\'" />' : (t.isHomepage ? '◉' : '○')) +
+          (t.favicon ? '<img src="' + escapeAttr(t.favicon) + '" />' : (t.isHomepage ? '◉' : '○')) +
         '</span>' +
         '<span class="tab-search-title">' + esc(t.title || 'New Tab') + '</span>' +
         '<span class="tab-search-url">' + esc(shortUrl(t.url)) + '</span>' +
         '</button>'
       ).join('');
+      listEl.querySelectorAll('.tab-search-favicon img').forEach((img) => {
+        img.addEventListener('error', () => { img.parentElement.textContent = '○'; });
+      });
 
       listEl.querySelectorAll('.tab-search-row').forEach((row) => {
         row.addEventListener('click', () => {
@@ -2497,6 +2504,41 @@
     } catch { return esc(html); }
   }
   function validColor(c) { return /^#[0-9a-f]{3,8}$/i.test(c) ? c : '#888'; }
+
+  function showInputDialog(title, placeholder) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center';
+      const card = document.createElement('div');
+      card.style.cssText = 'background:var(--panel,#111520);border:1px solid var(--border,rgba(255,255,255,0.08));border-radius:10px;padding:18px 20px;min-width:300px;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,0.5)';
+      const label = document.createElement('div');
+      label.textContent = title;
+      label.style.cssText = 'color:var(--text-primary,#e8eaed);font-size:13px;font-weight:600;margin-bottom:10px;white-space:pre-line';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = placeholder || '';
+      input.style.cssText = 'width:100%;box-sizing:border-box;padding:8px 10px;background:var(--bg2,#0f1219);border:1px solid var(--border,rgba(255,255,255,0.08));border-radius:6px;color:var(--text-primary,#e8eaed);font-size:12px;outline:none';
+      const btns = document.createElement('div');
+      btns.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:12px';
+      const cancel = document.createElement('button');
+      cancel.textContent = 'Cancel';
+      cancel.style.cssText = 'padding:6px 14px;font-size:11px;border:1px solid var(--border,rgba(255,255,255,0.08));border-radius:5px;background:transparent;color:var(--text-secondary,#9ca3af);cursor:pointer';
+      const ok = document.createElement('button');
+      ok.textContent = 'OK';
+      ok.style.cssText = 'padding:6px 14px;font-size:11px;border:none;border-radius:5px;background:var(--accent,#00d4ff);color:#0a0c10;font-weight:600;cursor:pointer';
+      btns.append(cancel, ok);
+      card.append(label, input, btns);
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+      input.focus();
+      const done = (val) => { overlay.remove(); resolve(val); };
+      cancel.addEventListener('click', () => done(null));
+      ok.addEventListener('click', () => done(input.value || null));
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(input.value || null); if (e.key === 'Escape') done(null); });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) done(null); });
+    });
+  }
+
   function timeAgo(ts) {
     const d = (Date.now() - ts) / 1000;
     if (d < 60) return 'just now';

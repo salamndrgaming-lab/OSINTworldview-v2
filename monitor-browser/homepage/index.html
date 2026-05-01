@@ -1647,12 +1647,13 @@ function renderNewsInto(items,badge,container,local){
     a.href=item.link;a.target='_blank';a.rel='noopener noreferrer';
     if(local){
       a.className='ln';
-      a.innerHTML=`<div class="ln-thumb">${item.thumb?`<img src="${escFeed(safeImgUrl(item.thumb))}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:'<div style="width:100%;height:100%;background:var(--surface3)"></div>'}</div><div class="ln-title">${escFeed(item.title)}</div><div class="ln-time">${relTime(item.pubDate)}</div>`;
+      a.innerHTML=`<div class="ln-thumb">${item.thumb?`<img src="${escFeed(safeImgUrl(item.thumb))}" alt="" loading="lazy"/>`:'<div style="width:100%;height:100%;background:var(--surface3)"></div>'}</div><div class="ln-title">${escFeed(item.title)}</div><div class="ln-time">${relTime(item.pubDate)}</div>`;
     }else{
       a.className='ni';
       const thumbPH=`<div class="ni-ph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--border2)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`;
-      a.innerHTML=`<div class="ni-thumb">${item.thumb?`<img src="${escFeed(safeImgUrl(item.thumb))}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:thumbPH}<div class="ni-sev" style="background:${escFeed(badge.color||'var(--accent)')}"></div></div><div class="ni-body"><span class="badge ${badge.cls||'b-amb'} ni-cat">${escFeed(badge.label||'NEWS')}</span><div class="ni-title">${escFeed(item.title)}</div><div class="ni-meta"><span class="ni-src">${escFeed(item.source)}</span><span class="ni-sep"></span><span class="ni-time">${relTime(item.pubDate)}</span></div></div>`;
+      a.innerHTML=`<div class="ni-thumb">${item.thumb?`<img src="${escFeed(safeImgUrl(item.thumb))}" alt="" loading="lazy"/>`:thumbPH}<div class="ni-sev" style="background:${escFeed(badge.color||'var(--accent)')}"></div></div><div class="ni-body"><span class="badge ${badge.cls||'b-amb'} ni-cat">${escFeed(badge.label||'NEWS')}</span><div class="ni-title">${escFeed(item.title)}</div><div class="ni-meta"><span class="ni-src">${escFeed(item.source)}</span><span class="ni-sep"></span><span class="ni-time">${relTime(item.pubDate)}</span></div></div>`;
     }
+    a.querySelectorAll('img').forEach(img=>{img.addEventListener('error',()=>{img.style.display='none';});});
     container.appendChild(a);
   });
 }

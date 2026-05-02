@@ -1037,6 +1037,7 @@ const INTEL_HOTSPOTS={
     {lat:9.0,lon:10.0,name:'Northeast Nigeria',desc:'Boko Haram / ISWAP'},
     {lat:23.7,lon:121.0,name:'Taiwan Strait',desc:'PLA exercises / heightened tension'},
     {lat:6.5,lon:125.0,name:'South China Sea',desc:'Maritime disputes'},
+    {lat:32.4,lon:53.7,name:'Iran',desc:'Regional proxy conflicts / nuclear tensions / IRGC operations'},
   ],
   protests:[
     {lat:48.85,lon:2.35,name:'France',desc:'Recurring nationwide protests'},
@@ -1148,19 +1149,20 @@ function renderReliefWebMarkers(info,data,markerColor,popupLabel,layerKey,additi
   console.log('[reliefweb]',layerKey,count,'reports of',data.data.length);
 }
 function loadGdeltFallback(info,markerColor,popupLabel,layerKey,query,days,additive){
-  const url='https://api.gdeltproject.org/api/v2/geo/geo?query='+encodeURIComponent(query)+'&mode=PointData&format=GeoJSON&timespan='+days+'d&maxpoints=250';
-  intelFetch(url).then(txt=>{
-    let geo;try{geo=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
-    if(!geo)return;
+  const geoUrl='https://api.gdeltproject.org/api/v2/geo/geo?query='+encodeURIComponent(query)+'&mode=PointData&format=GeoJSON&timespan='+days+'d&maxpoints=250';
+  const docUrl='https://api.gdeltproject.org/api/v2/doc/doc?query='+encodeURIComponent(query)+'&mode=ArtGeo&format=GeoJSON&timespan='+days+'d&maxrecords=250';
+  function renderGdeltGeoJSON(txt,source){
+    let geo;try{geo=typeof txt==='string'?JSON.parse(txt):txt;}catch(pe){console.warn('[gdelt]',source,'parse error',pe);return false;}
+    if(!geo){console.warn('[gdelt]',source,'empty response for',layerKey);return false;}
     if(!additive)info.layer.clearLayers();
     let count=0;
     const features=geo.features||geo;
-    if(!Array.isArray(features)){console.warn('[gdelt] unexpected format for',layerKey);return;}
+    if(!Array.isArray(features)){console.warn('[gdelt]',source,'unexpected format for',layerKey,typeof geo);return false;}
     features.forEach(f=>{
       let lat,lon,name='';
       if(f.geometry&&f.geometry.coordinates){
         lon=f.geometry.coordinates[0];lat=f.geometry.coordinates[1];
-        name=(f.properties&&(f.properties.name||f.properties.html))||'';
+        name=(f.properties&&(f.properties.name||f.properties.html||f.properties.urlpubtimeseq))||'';
       }else if(f.lat!=null&&f.lon!=null){
         lat=parseFloat(f.lat);lon=parseFloat(f.lon);name=f.name||'';
       }else{return;}
@@ -1170,15 +1172,29 @@ function loadGdeltFallback(info,markerColor,popupLabel,layerKey,query,days,addit
       });
       let popup='<div style="max-width:260px;font-size:11px;line-height:1.4">'+
         '<strong style="color:'+markerColor+'">'+popupLabel+'</strong>';
-      if(name)popup+='<br><span>'+String(name).substring(0,200)+'</span>';
+      if(name){
+        const clean=String(name).replace(/<[^>]*>/g,'').substring(0,200);
+        popup+='<br><span>'+clean+'</span>';
+      }
       popup+='</div>';
       marker.bindPopup(popup);
       marker.addTo(info.layer);
       count++;
     });
     updateMapStats();
-    console.log('[gdelt]',layerKey,count,'points');
-  }).catch(e=>{console.warn('[gdelt] fallback also failed for',layerKey,e);});
+    console.log('[gdelt]',source,layerKey,count,'points');
+    return count>0;
+  }
+  intelFetch(geoUrl).then(txt=>{
+    if(!renderGdeltGeoJSON(txt,'geo-api')){
+      console.log('[gdelt] geo-api returned no points for',layerKey,', trying doc-api');
+      return intelFetch(docUrl).then(txt2=>renderGdeltGeoJSON(txt2,'doc-api'));
+    }
+  }).catch(e=>{
+    console.warn('[gdelt] geo-api failed for',layerKey,e.message||e,', trying doc-api');
+    intelFetch(docUrl).then(txt=>renderGdeltGeoJSON(txt,'doc-api'))
+      .catch(e2=>{console.warn('[gdelt] both APIs failed for',layerKey,e2.message||e2);});
+  });
 }
 function loadReliefWebReports(layerKey, opts){
   const info=osintLayers[layerKey];
@@ -1277,7 +1293,7 @@ function getCountryGeoJSON(){
 // intelligence data even when external APIs are unavailable.
 function renderBaselineConflictPolygons(info,geo){
   if(!geo||!geo.features)return;
-  const baselineCountries=['Ukraine','Israel','Palestine','Lebanon','Syria','Sudan','South Sudan','Yemen','Myanmar','Democratic Republic of the Congo','Somalia','Mali','Niger','Burkina Faso','Ethiopia','Haiti','Afghanistan','Pakistan','Nigeria','Iraq','Mozambique'];
+  const baselineCountries=['Ukraine','Israel','Palestine','Lebanon','Syria','Sudan','South Sudan','Yemen','Myanmar','Democratic Republic of the Congo','Somalia','Mali','Niger','Burkina Faso','Ethiopia','Haiti','Afghanistan','Pakistan','Nigeria','Iraq','Mozambique','Iran'];
   let drawn=0;
   geo.features.forEach(feature=>{
     const props=feature.properties||{};

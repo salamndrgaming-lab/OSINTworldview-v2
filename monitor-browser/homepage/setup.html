@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; script-src 'self' 'unsafe-inline'" />
+<title>Welcome to Monitor Browser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060608; --panel:#0c0c12; --panel-elev:#13131c;
+  --fg:#e8e8f0; --fg-dim:#9ca3af; --border:rgba(255,255,255,0.08);
+  --accent:#d4a843; --accent-2:#f59e0b; --accent-glow:rgba(212,168,67,0.18);
+  --green:#22c55e; --red:#ef4444; --blue:#00d4ff;
+}
+html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'DM Sans',system-ui,sans-serif;overflow:hidden}
+body{display:flex;flex-direction:column}
+.bg-grid{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(212,168,67,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(212,168,67,0.04) 1px,transparent 1px);
+  background-size:40px 40px;mask-image:radial-gradient(ellipse 70% 60% at 50% 40%,black,transparent 80%);
+}
+.bg-glow{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(circle at 30% 20%,rgba(212,168,67,0.10),transparent 50%),
+             radial-gradient(circle at 70% 80%,rgba(0,212,255,0.06),transparent 60%);
+}
+.shell{position:relative;z-index:1;flex:1;display:flex;align-items:center;justify-content:center;padding:32px}
+.wizard{
+  width:100%;max-width:780px;background:rgba(12,12,18,0.92);border:1px solid var(--border);
+  border-radius:16px;backdrop-filter:blur(24px);box-shadow:0 24px 80px rgba(0,0,0,0.65),0 0 0 1px rgba(255,255,255,0.04) inset;
+  display:flex;flex-direction:column;max-height:90vh;overflow:hidden;
+}
+.brand{padding:28px 36px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.brand-left{display:flex;align-items:center;gap:14px}
+.brand-mark{
+  width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#0a0a10;font-family:'Syne',sans-serif;
+  font-weight:800;font-size:20px;letter-spacing:-1px;box-shadow:0 4px 18px var(--accent-glow);
+}
+.wordmark{font-family:'Syne',sans-serif;font-weight:700;letter-spacing:0.18em;font-size:14px;color:var(--fg)}
+.tagline{font-family:'Space Mono',monospace;font-size:10px;color:var(--fg-dim);text-transform:uppercase;letter-spacing:0.2em;margin-top:2px}
+.steps-pill{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);background:rgba(212,168,67,0.08);
+  padding:6px 12px;border-radius:20px;border:1px solid rgba(212,168,67,0.25)}
+.progress{height:3px;background:rgba(255,255,255,0.04);position:relative}
+.progress-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width 0.4s cubic-bezier(0.16,1,0.3,1);width:0}
+.body{flex:1;overflow-y:auto;padding:36px}
+.step{display:none;animation:fadeIn 0.35s cubic-bezier(0.16,1,0.3,1)}
+.step.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+h1{font-family:'Syne',sans-serif;font-weight:700;font-size:28px;letter-spacing:-0.02em;margin-bottom:8px}
+.subtitle{color:var(--fg-dim);font-size:14px;margin-bottom:28px;line-height:1.55}
+.field{margin-bottom:20px}
+.field-label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.12em;color:var(--fg-dim);margin-bottom:8px;font-family:'Space Mono',monospace}
+input[type=text],input[type=email],select{
+  width:100%;background:var(--panel-elev);border:1px solid var(--border);color:var(--fg);
+  padding:12px 14px;border-radius:8px;font-family:inherit;font-size:14px;outline:none;transition:border 0.15s,box-shadow 0.15s;
+}
+input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+.choice-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.choice{
+  position:relative;background:var(--panel-elev);border:1px solid var(--border);border-radius:10px;
+  padding:16px;cursor:pointer;transition:all 0.18s;display:flex;flex-direction:column;gap:6px;text-align:left;
+}
+.choice:hover{border-color:rgba(212,168,67,0.45);transform:translateY(-1px)}
+.choice.selected{border-color:var(--accent);background:rgba(212,168,67,0.08);box-shadow:0 0 0 1px var(--accent) inset}
+.choice-title{font-weight:600;font-size:14px;color:var(--fg)}
+.choice-desc{font-size:12px;color:var(--fg-dim);line-height:1.4}
+.choice-swatch{width:18px;height:18px;border-radius:50%;border:2px solid rgba(255,255,255,0.15)}
+.theme-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.checklist{display:flex;flex-direction:column;gap:8px}
+.check-item{
+  display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:var(--panel-elev);border:1px solid var(--border);
+  border-radius:8px;cursor:pointer;transition:border 0.15s,background 0.15s;
+}
+.check-item:hover{border-color:rgba(212,168,67,0.35)}
+.check-item.checked{border-color:var(--accent);background:rgba(212,168,67,0.06)}
+.check-item input{margin-top:3px;accent-color:var(--accent)}
+.check-text{flex:1}
+.check-title{font-weight:500;font-size:13px}
+.check-desc{font-size:11px;color:var(--fg-dim);line-height:1.4;margin-top:2px}
+.feature-list{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:16px}
+.feature{display:flex;align-items:flex-start;gap:10px}
+.feature-icon{
+  width:32px;height:32px;border-radius:8px;background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.2);
+  color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'Space Mono',monospace;font-weight:700;
+}
+.feature-text{flex:1}
+.feature-title{font-size:13px;font-weight:600;margin-bottom:2px}
+.feature-desc{font-size:11px;color:var(--fg-dim);line-height:1.4}
+.success-mark{
+  width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  margin:0 auto 18px;display:flex;align-items:center;justify-content:center;color:#0a0a10;font-size:32px;
+  box-shadow:0 8px 32px var(--accent-glow);
+}
+.summary{background:var(--panel-elev);border:1px solid var(--border);border-radius:10px;padding:18px;margin-top:20px}
+.summary-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:13px}
+.summary-row:last-child{border-bottom:none}
+.summary-key{color:var(--fg-dim);font-family:'Space Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em}
+.summary-val{color:var(--fg);font-weight:500;text-align:right;max-width:60%}
+.footer{
+  padding:20px 36px;border-top:1px solid var(--border);background:rgba(8,8,12,0.5);
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+}
+.btn{
+  padding:10px 22px;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;
+  border:1px solid var(--border);background:var(--panel-elev);color:var(--fg);transition:all 0.15s;
+  display:inline-flex;align-items:center;gap:8px;
+}
+.btn:hover{border-color:rgba(255,255,255,0.18);background:#1a1a26}
+.btn:disabled{opacity:0.4;cursor:not-allowed}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#0a0a10;border-color:transparent;box-shadow:0 2px 12px var(--accent-glow)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 18px var(--accent-glow);background:linear-gradient(135deg,var(--accent-2),var(--accent))}
+.btn-ghost{background:transparent}
+.beta-tag{
+  font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.15em;color:#0a0a10;background:var(--accent);
+  padding:2px 7px;border-radius:4px;font-weight:700;margin-left:8px;text-transform:uppercase;
+}
+.warning{background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:12px 14px;font-size:12px;color:#fca5a5;margin-top:14px}
+.info{background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.2);border-radius:8px;padding:12px 14px;font-size:12px;color:#7dd3fc;margin-top:14px}
+</style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+
+  <div class="shell">
+    <div class="wizard">
+      <div class="brand">
+        <div class="brand-left">
+          <div class="brand-mark">M</div>
+          <div>
+            <div class="wordmark">MONITOR<span class="beta-tag">BETA</span></div>
+            <div class="tagline">Browser for Intelligence Analysts</div>
+          </div>
+        </div>
+        <div class="steps-pill" id="stepsPill">Step 1 / 6</div>
+      </div>
+      <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+
+      <div class="body" id="body">
+
+        <div class="step active" data-step="0">
+          <h1>Welcome to Monitor Browser</h1>
+          <p class="subtitle">A Chromium-based browser whose new-tab page is a live OSINT intelligence dashboard. This quick setup gets you running in under a minute.</p>
+          <div class="feature-list">
+            <div class="feature"><div class="feature-icon">M</div><div class="feature-text"><div class="feature-title">Live Intel Map</div><div class="feature-desc">Conflicts, protests, terror, natural disasters, flight tracking</div></div></div>
+            <div class="feature"><div class="feature-icon">N</div><div class="feature-text"><div class="feature-title">News Feeds</div><div class="feature-desc">Multi-source RSS aggregation with reader mode</div></div></div>
+            <div class="feature"><div class="feature-icon">L</div><div class="feature-text"><div class="feature-title">Livestreams</div><div class="feature-desc">Embedded news channels and weather radar</div></div></div>
+            <div class="feature"><div class="feature-icon">V</div><div class="feature-text"><div class="feature-title">Built-in VPN</div><div class="feature-desc">Tor or custom SOCKS proxy with one click</div></div></div>
+            <div class="feature"><div class="feature-icon">O</div><div class="feature-text"><div class="feature-title">Operations</div><div class="feature-desc">Investigation compartments isolate your tabs and notes</div></div></div>
+            <div class="feature"><div class="feature-icon">I</div><div class="feature-text"><div class="feature-title">Intel Sidebar</div><div class="feature-desc">Toolbox of OSINT lookups, IOCs, and quick searches</div></div></div>
+          </div>
+          <div class="info">This is a beta build. Telemetry is disabled. Settings stay on your machine.</div>
+        </div>
+
+        <div class="step" data-step="1">
+          <h1>Operator Profile</h1>
+          <p class="subtitle">Optional. Stays local on your machine, never transmitted. Used as the display label in the toolbar and operations.</p>
+          <div class="field">
+            <label class="field-label" for="profileName">Display Name</label>
+            <input type="text" id="profileName" placeholder="Analyst" maxlength="40" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="profileRole">Role</label>
+            <input type="text" id="profileRole" placeholder="OSINT Analyst, Researcher, Journalist..." maxlength="60" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="profileOrg">Organization</label>
+            <input type="text" id="profileOrg" placeholder="Independent, Acme Threat Intel..." maxlength="60" />
+          </div>
+        </div>
+
+        <div class="step" data-step="2">
+          <h1>Theme</h1>
+          <p class="subtitle">Pick your accent color. You can change this later from Settings.</p>
+          <div class="choice-grid" id="themeGrid"></div>
+        </div>
+
+        <div class="step" data-step="3">
+          <h1>Default Search Engine</h1>
+          <p class="subtitle">Used when you type into the address bar. We default to a privacy-respecting option.</p>
+          <div class="choice-grid" id="searchGrid"></div>
+        </div>
+
+        <div class="step" data-step="4">
+          <h1>Privacy &amp; Security</h1>
+          <p class="subtitle">Toggle the privacy features you want enabled by default. All can be changed later.</p>
+          <div class="checklist">
+            <label class="check-item checked" id="optAdblock">
+              <input type="checkbox" checked />
+              <div class="check-text">
+                <div class="check-title">Ad &amp; Tracker Blocking</div>
+                <div class="check-desc">Blocks known ad servers and trackers at the network level. Faster pages, fewer beacons.</div>
+              </div>
+            </label>
+            <label class="check-item" id="optHttps">
+              <input type="checkbox" />
+              <div class="check-text">
+                <div class="check-title">HTTPS-Only Mode</div>
+                <div class="check-desc">Refuses unencrypted connections. Some legacy sites may break.</div>
+              </div>
+            </label>
+            <label class="check-item" id="optStealth">
+              <input type="checkbox" />
+              <div class="check-text">
+                <div class="check-title">Stealth UA</div>
+                <div class="check-desc">Reports a generic Chrome user agent — sites won't see "Monitor Browser".</div>
+              </div>
+            </label>
+            <label class="check-item" id="optBookmarks">
+              <input type="checkbox" />
+              <div class="check-text">
+                <div class="check-title">Show Bookmarks Bar</div>
+                <div class="check-desc">Always-visible bookmarks below the address bar.</div>
+              </div>
+            </label>
+          </div>
+          <div class="warning">VPN is configured separately. Open the VPN badge in the toolbar to enable Tor or a custom proxy.</div>
+        </div>
+
+        <div class="step" data-step="5">
+          <h1>You're set</h1>
+          <p class="subtitle">Review your choices. Click <strong>Launch</strong> to open the OSINT dashboard.</p>
+          <div class="success-mark">&#10003;</div>
+          <div class="summary" id="summary"></div>
+          <div class="info">Tip: press <strong>Ctrl+B</strong> to open the Intel Sidebar, <strong>Ctrl+T</strong> for a new tab, and <strong>Ctrl+,</strong> for Settings.</div>
+        </div>
+
+      </div>
+
+      <div class="footer">
+        <button class="btn btn-ghost" id="btnSkip">Skip setup</button>
+        <div style="display:flex;gap:10px">
+          <button class="btn" id="btnBack" disabled>&larr; Back</button>
+          <button class="btn btn-primary" id="btnNext">Next &rarr;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+'use strict';
+
+const THEMES=[
+  {id:'amber',title:'Amber',desc:'Default analyst accent',color:'#d4a843'},
+  {id:'cyan',title:'Cyan',desc:'Cool, technical',color:'#00d4ff'},
+  {id:'green',title:'Phosphor',desc:'Terminal green',color:'#22c55e'},
+  {id:'magenta',title:'Magenta',desc:'High-contrast vivid',color:'#ec4899'},
+  {id:'mono',title:'Monochrome',desc:'Low-distraction grayscale',color:'#a3a3a3'},
+];
+const SEARCH=[
+  {id:'duckduckgo',title:'DuckDuckGo',desc:'No tracking, no profile'},
+  {id:'startpage',title:'Startpage',desc:'Google results, anonymized'},
+  {id:'brave',title:'Brave Search',desc:'Independent index'},
+  {id:'google',title:'Google',desc:'Familiar, full-feature'},
+  {id:'bing',title:'Bing',desc:'Microsoft search'},
+];
+
+const state={
+  step:0,
+  profileName:'',
+  profileRole:'',
+  profileOrg:'',
+  theme:'amber',
+  searchEngine:'duckduckgo',
+  adBlock:true,
+  httpsOnly:false,
+  showBranding:true,
+  showBookmarksBar:false,
+};
+const TOTAL=6;
+
+const $=id=>document.getElementById(id);
+const stepsPill=$('stepsPill');
+const progressBar=$('progressBar');
+const btnNext=$('btnNext');
+const btnBack=$('btnBack');
+const btnSkip=$('btnSkip');
+
+function renderThemes(){
+  const grid=$('themeGrid');
+  grid.innerHTML='';
+  THEMES.forEach(t=>{
+    const div=document.createElement('div');
+    div.className='choice'+(state.theme===t.id?' selected':'');
+    div.innerHTML='<div class="theme-row"><div class="choice-swatch" style="background:'+t.color+'"></div><div class="choice-title">'+t.title+'</div></div><div class="choice-desc">'+t.desc+'</div>';
+    div.onclick=()=>{state.theme=t.id;renderThemes();};
+    grid.appendChild(div);
+  });
+}
+function renderSearch(){
+  const grid=$('searchGrid');
+  grid.innerHTML='';
+  SEARCH.forEach(s=>{
+    const div=document.createElement('div');
+    div.className='choice'+(state.searchEngine===s.id?' selected':'');
+    div.innerHTML='<div class="choice-title">'+s.title+'</div><div class="choice-desc">'+s.desc+'</div>';
+    div.onclick=()=>{state.searchEngine=s.id;renderSearch();};
+    grid.appendChild(div);
+  });
+}
+function bindCheck(elId,key,invert){
+  const el=$(elId);
+  const cb=el.querySelector('input');
+  cb.checked=invert?!state[key]:!!state[key];
+  el.classList.toggle('checked',cb.checked);
+  el.addEventListener('click',e=>{
+    if(e.target!==cb)cb.checked=!cb.checked;
+    el.classList.toggle('checked',cb.checked);
+    state[key]=invert?!cb.checked:cb.checked;
+  });
+}
+function renderSummary(){
+  const s=$('summary');
+  const themeLabel=THEMES.find(t=>t.id===state.theme)?.title||state.theme;
+  const searchLabel=SEARCH.find(x=>x.id===state.searchEngine)?.title||state.searchEngine;
+  const rows=[
+    ['Display Name',state.profileName||'Analyst'],
+    ['Role',state.profileRole||'—'],
+    ['Organization',state.profileOrg||'—'],
+    ['Theme',themeLabel],
+    ['Search',searchLabel],
+    ['Ad Block',state.adBlock?'On':'Off'],
+    ['HTTPS-Only',state.httpsOnly?'On':'Off'],
+    ['Stealth UA',state.showBranding?'Off':'On'],
+    ['Bookmarks Bar',state.showBookmarksBar?'On':'Off'],
+  ];
+  s.innerHTML=rows.map(r=>'<div class="summary-row"><span class="summary-key">'+r[0]+'</span><span class="summary-val">'+r[1]+'</span></div>').join('');
+}
+function showStep(n){
+  state.step=Math.max(0,Math.min(TOTAL-1,n));
+  document.querySelectorAll('.step').forEach(el=>{
+    el.classList.toggle('active',Number(el.dataset.step)===state.step);
+  });
+  stepsPill.textContent='Step '+(state.step+1)+' / '+TOTAL;
+  progressBar.style.width=(((state.step+1)/TOTAL)*100)+'%';
+  btnBack.disabled=state.step===0;
+  btnSkip.style.visibility=state.step===TOTAL-1?'hidden':'visible';
+  btnNext.textContent=state.step===TOTAL-1?'Launch Monitor →':'Next →';
+  btnNext.classList.toggle('btn-primary',true);
+  if(state.step===5)renderSummary();
+}
+function captureProfile(){
+  state.profileName=$('profileName').value.trim();
+  state.profileRole=$('profileRole').value.trim();
+  state.profileOrg=$('profileOrg').value.trim();
+}
+async function commitAndLaunch(){
+  if(state.step===1)captureProfile();
+  const patch={
+    setupCompleted:true,
+    theme:state.theme,
+    searchEngine:state.searchEngine,
+    adBlock:!!state.adBlock,
+    httpsOnly:!!state.httpsOnly,
+    showBranding:!!state.showBranding,
+    showBookmarksBar:!!state.showBookmarksBar,
+  };
+  if(state.profileName)patch.profileName=state.profileName;
+  if(state.profileRole)patch.profileRole=state.profileRole;
+  if(state.profileOrg)patch.profileOrg=state.profileOrg;
+  try{
+    if(window.monitorApi&&window.monitorApi.setSettings){
+      await window.monitorApi.setSettings(patch);
+    }else{
+      try{localStorage.setItem('monitor_setup_pending',JSON.stringify(patch));}catch{}
+    }
+  }catch(err){console.error('[setup] save failed',err);}
+  // Tell the main process the setup is done; it will navigate this tab to the homepage.
+  if(window.monitorApi&&window.monitorApi.completeSetup){
+    window.monitorApi.completeSetup();
+  }else{
+    // Standalone fallback — try to navigate to the bundled homepage.
+    location.href='./index.html';
+  }
+}
+btnNext.addEventListener('click',async()=>{
+  if(state.step===1)captureProfile();
+  if(state.step===TOTAL-1){await commitAndLaunch();return;}
+  showStep(state.step+1);
+});
+btnBack.addEventListener('click',()=>showStep(state.step-1));
+btnSkip.addEventListener('click',async()=>{await commitAndLaunch();});
+
+renderThemes();
+renderSearch();
+bindCheck('optAdblock','adBlock',false);
+bindCheck('optHttps','httpsOnly',false);
+bindCheck('optStealth','showBranding',true);
+bindCheck('optBookmarks','showBookmarksBar',false);
+showStep(0);
+
+// Pre-fill from existing settings when re-opened.
+if(window.monitorApi&&window.monitorApi.getSettings){
+  window.monitorApi.getSettings().then(res=>{
+    const s=res&&res.settings?res.settings:res;
+    if(!s)return;
+    if(s.profileName)$('profileName').value=s.profileName==='Analyst'?'':s.profileName;
+    if(s.profileRole)$('profileRole').value=s.profileRole;
+    if(s.profileOrg)$('profileOrg').value=s.profileOrg;
+    if(s.theme){state.theme=s.theme;renderThemes();}
+    if(s.searchEngine){state.searchEngine=s.searchEngine;renderSearch();}
+    state.adBlock=!!s.adBlock;state.httpsOnly=!!s.httpsOnly;
+    state.showBranding=s.showBranding!==false;state.showBookmarksBar=!!s.showBookmarksBar;
+    bindCheck('optAdblock','adBlock',false);
+    bindCheck('optHttps','httpsOnly',false);
+    bindCheck('optStealth','showBranding',true);
+    bindCheck('optBookmarks','showBookmarksBar',false);
+  }).catch(()=>{});
+}
+</script>
+</body>
+</html>

@@ -197,6 +197,8 @@ const CHROME_HEIGHT = 76; // titlebar (32) + toolbar (44)
 const HOMEPAGE_PATH = path.join(__dirname, 'homepage', 'index.html');
 const HOMEPAGE_URL = pathToFileURL(HOMEPAGE_PATH).toString();
 const HOMEPAGE_FALLBACK_URL = HOMEPAGE_URL; // kept for compatibility
+const SETUP_PATH = path.join(__dirname, 'homepage', 'setup.html');
+const SETUP_URL = pathToFileURL(SETUP_PATH).toString();
 const CHROME_HTML = path.join(__dirname, 'renderer', 'index.html');
 
 function isHomepageUrl(url) {
@@ -261,6 +263,7 @@ const DEFAULT_SETTINGS = {
   profileLocation: '',      // city / region (free text, not GPS)
   profileBio: '',           // free-text notes / scratchpad
   profileBadge: 'OSINT',    // small badge under avatar
+  setupCompleted: false,    // flips true after first-run wizard finishes
 };
 
 let settingsCache = null;
@@ -516,22 +519,28 @@ function createWindow() {
   chromeView.webContents.once('did-finish-load', () => {
     mainWindow?.show();
     const settings = loadSettings();
-    const sess = settings.startupBehavior === 'restore' ? loadSession() : null;
-    if (sess && sess.tabs && sess.tabs.length > 0) {
-      for (const entry of sess.tabs) {
-        const id = newTab(entry.url);
-        if (entry.pinned && id) {
-          const tab = tabs.get(id);
-          if (tab) tab.pinned = true;
-        }
-      }
-      if (sess.activeIdx >= 0 && sess.activeIdx < tabOrder.length) {
-        switchTab(tabOrder[sess.activeIdx]);
-      }
-    } else if (settings.startupBehavior === 'blank') {
-      newTab('about:blank');
+    if (!settings.setupCompleted) {
+      // First launch — open the setup wizard. The wizard finishes by calling
+      // setup:complete, which navigates this tab to the homepage.
+      newTab(SETUP_URL);
     } else {
-      newTab(resolveHomepageUrl());
+      const sess = settings.startupBehavior === 'restore' ? loadSession() : null;
+      if (sess && sess.tabs && sess.tabs.length > 0) {
+        for (const entry of sess.tabs) {
+          const id = newTab(entry.url);
+          if (entry.pinned && id) {
+            const tab = tabs.get(id);
+            if (tab) tab.pinned = true;
+          }
+        }
+        if (sess.activeIdx >= 0 && sess.activeIdx < tabOrder.length) {
+          switchTab(tabOrder[sess.activeIdx]);
+        }
+      } else if (settings.startupBehavior === 'blank') {
+        newTab('about:blank');
+      } else {
+        newTab(resolveHomepageUrl());
+      }
     }
     try { chromeView.webContents.send('settings:changed', settings); } catch {}
 
@@ -961,6 +970,27 @@ ipcMain.handle('settings:get', () => ({
 }));
 ipcMain.handle('settings:set', (_e, patch) => saveSettings(patch || {}));
 ipcMain.handle('settings:reset', () => saveSettings({ ...DEFAULT_SETTINGS }));
+
+// First-run setup wizard: marks setup complete and navigates the calling
+// tab to the configured homepage. Triggered from setup.html.
+ipcMain.handle('setup:complete', (e) => {
+  saveSettings({ setupCompleted: true });
+  try {
+    const wc = e.sender;
+    // Find which tab owns this webContents and navigate it to the homepage.
+    for (const [, tab] of tabs) {
+      if (tab.view && tab.view.webContents === wc) {
+        tab.view.webContents.loadURL(resolveHomepageUrl());
+        return { ok: true };
+      }
+    }
+    // Fallback: just load the homepage in whatever sender invoked.
+    wc.loadURL(resolveHomepageUrl());
+  } catch (err) {
+    console.warn('[monitor] setup:complete navigation failed', err);
+  }
+  return { ok: true };
+});
 ipcMain.handle('settings:clear-data', async () => {
   try {
     await session.defaultSession.clearCache();

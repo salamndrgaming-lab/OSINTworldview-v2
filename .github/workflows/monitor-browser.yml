@@ -99,6 +99,7 @@ jobs:
           path: artifacts
 
       - name: Flatten artifacts
+        working-directory: ${{ github.workspace }}
         run: |
           mkdir -p release
           find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release/ \; || true
@@ -111,6 +112,7 @@ jobs:
 
       - name: Compute release tag
         id: tag
+        working-directory: ${{ github.workspace }}
         shell: bash
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
@@ -131,7 +133,7 @@ jobs:
           draft: false
           prerelease: true
           generate_release_notes: true
-          files: release/*
+          files: ${{ github.workspace }}/release/*
           body: |
             ## Monitor Browser — Beta Download
 

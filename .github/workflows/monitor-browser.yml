@@ -1,0 +1,135 @@
+name: Monitor Browser CI
+
+on:
+  push:
+    branches: [main, 'claude/**']
+    tags: ['monitor-browser-v*']
+    paths:
+      - 'monitor-browser/**'
+      - '.github/workflows/monitor-browser.yml'
+  pull_request:
+    paths:
+      - 'monitor-browser/**'
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Create a draft release with the built artifacts'
+        type: boolean
+        default: false
+
+defaults:
+  run:
+    working-directory: monitor-browser
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install --no-audit --no-fund
+
+      - name: Syntax check
+        run: node -c main.js && node -c preload-chrome.js && node -c preload-content.js
+
+      - name: Build (${{ matrix.os }})
+        run: npx electron-builder --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List build output
+        shell: bash
+        run: ls -la dist/ || true
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitor-browser-${{ matrix.os }}
+          path: |
+            monitor-browser/dist/*.exe
+            monitor-browser/dist/*.dmg
+            monitor-browser/dist/*.AppImage
+            monitor-browser/dist/*.deb
+            monitor-browser/dist/*.rpm
+            monitor-browser/dist/*.tar.gz
+            monitor-browser/dist/*.zip
+            monitor-browser/dist/*.blockmap
+            monitor-browser/dist/latest*.yml
+          retention-days: 14
+          if-no-files-found: warn
+
+  release:
+    name: Publish Release
+    needs: build
+    # Always publish a release on push to main / claude/** / tags / manual dispatch.
+    # PRs do NOT publish (would spam releases) — only the per-platform artifacts
+    # are produced for download from the workflow run page.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Compute release tag
+        id: tag
+        shell: bash
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "name=Monitor Browser ${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            # Auto-tag every push so we always have a downloadable release.
+            short=$(echo "${{ github.sha }}" | cut -c1-7)
+            echo "tag=monitor-browser-beta-${{ github.run_number }}-${short}" >> "$GITHUB_OUTPUT"
+            echo "name=Monitor Browser Beta build ${{ github.run_number }} (${short})" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.name }}
+          draft: false
+          prerelease: true
+          generate_release_notes: true
+          files: release/*
+          body: |
+            ## Monitor Browser — Beta Download
+
+            **Pick the right file for your platform and double-click it to install.**
+
+            | Platform | File | How to install |
+            |----------|------|----------------|
+            | Windows 10/11 | `monitor-browser-*-win-x64.exe` | Double-click → SmartScreen "More info → Run anyway" → installs silently → launches |
+            | Windows portable | `monitor-browser-*-portable.exe` | No install — just double-click to run |
+            | macOS Intel | `monitor-browser-*-mac-x64.dmg` | Open DMG → drag to Applications → right-click → Open (first time) |
+            | macOS Apple Silicon | `monitor-browser-*-mac-arm64.dmg` | Same as above |
+            | Linux Debian/Ubuntu | `monitor-browser-*-linux-amd64.deb` | Double-click → system installer handles it |
+            | Linux universal | `monitor-browser-*-linux-x86_64.AppImage` | Right-click → Properties → Make executable → double-click |
+            | Linux Fedora/RHEL | `monitor-browser-*-linux-x86_64.rpm` | Double-click → system installer handles it |
+
+            On first launch a 6-step setup wizard walks you through theme,
+            search engine, profile, and privacy settings.
+
+            See `BETA-INSTALL.md` in the repo for full install instructions.

@@ -23,6 +23,10 @@
   },
   "license": "AGPL-3.0-or-later",
   "homepage": "https://osintview.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/salamndrgaming-lab/osintworldview-v2.git"
+  },
   "devDependencies": {
     "electron": "32.3.3",
     "electron-builder": "25.1.8"
@@ -32,6 +36,7 @@
     "productName": "Monitor Browser",
     "copyright": "Copyright (c) 2026 OSINT Worldview",
     "asar": true,
+    "publish": null,
     "artifactName": "monitor-browser-${version}-${os}-${arch}.${ext}",
     "files": [
       "main.js",
@@ -56,7 +61,9 @@
         { "target": "portable", "arch": ["x64"] }
       ],
       "icon": "assets/icon.png",
-      "publisherName": "OSINT Worldview"
+      "signtoolOptions": {
+        "publisherName": "OSINT Worldview"
+      }
     },
     "nsis": {
       "oneClick": true,

@@ -1,83 +1,89 @@
 # Monitor Browser — Beta Install Guide
 
-Thank you for testing **Monitor Browser Beta** — a Chromium-based browser whose
-new-tab page is a live OSINT intelligence dashboard.
+Welcome! Installation is **download → double-click → done**. No terminal, no
+commands. The browser walks you through a quick setup wizard the first time
+you open it.
 
-## Download
+## Pick Your Platform
 
-Download the artifact for your platform from the GitHub Releases page or the
-build output in `dist/` after running the build commands below.
+### Windows 10 / 11
 
-| Platform | File | Notes |
-|----------|------|-------|
-| Windows 10/11 (x64) | `monitor-browser-1.0.0-beta.1-win-x64.exe` | NSIS installer with shortcuts |
-| Windows 10/11 (x64) | `monitor-browser-1.0.0-beta.1-portable.exe` | No-install portable build |
-| Linux (x64) | `monitor-browser-1.0.0-beta.1-linux-x86_64.AppImage` | Universal — runs on most distros |
-| Linux (x64) | `monitor-browser-1.0.0-beta.1-linux-amd64.deb` | Debian / Ubuntu / Mint |
-| Linux (x64) | `monitor-browser-1.0.0-beta.1-linux-x86_64.rpm` | Fedora / RHEL / openSUSE |
-| Linux (x64) | `monitor-browser-1.0.0-beta.1-linux-x64.tar.gz` | Manual extract |
-| macOS (x64/arm64) | `monitor-browser-1.0.0-beta.1-mac-x64.dmg` | Drag-to-Applications |
+1. Download **`monitor-browser-1.0.0-beta.1-win-x64.exe`**.
+2. Double-click the file.
+3. Windows SmartScreen may say *"Windows protected your PC"* — click
+   **More info → Run anyway**. (Beta builds aren't code-signed yet.)
+4. The installer runs silently for ~15 seconds, places a desktop shortcut and
+   a Start menu entry, and **launches the browser automatically**.
+5. The setup wizard appears in the new window. Pick a theme, search engine,
+   and privacy options — about 30 seconds. Done.
 
-## Installation
+To uninstall later: **Settings → Apps → Monitor Browser → Uninstall**.
 
-### Windows
+> Prefer no install at all? Download the **portable** EXE instead — it runs
+> from anywhere (USB stick, Desktop, etc.) without writing to Program Files.
 
-**Installer (recommended)**
-1. Download `monitor-browser-1.0.0-beta.1-win-x64.exe`.
-2. Double-click. Windows SmartScreen may warn — click **More info → Run anyway**
-   (the build is unsigned during beta).
-3. Pick an install directory or accept the default.
-4. Launch from the Start menu or desktop shortcut.
+### macOS (Intel or Apple Silicon)
 
-**Portable**
-1. Download `monitor-browser-1.0.0-beta.1-portable.exe`.
-2. Move it anywhere — USB stick, Downloads folder, etc.
-3. Double-click to run. No install, no admin rights needed.
+1. Download **`monitor-browser-1.0.0-beta.1-mac-x64.dmg`** (Intel) or
+   **`-mac-arm64.dmg`** (M1/M2/M3/M4).
+2. Double-click the DMG to open it.
+3. Drag the **Monitor Browser** icon onto the **Applications** folder shortcut.
+4. Open Launchpad or Applications and click **Monitor Browser**.
+5. macOS Gatekeeper will say *"unidentified developer"* — close that, then
+   right-click the app icon → **Open** → **Open**. (Beta builds aren't
+   notarized yet. You only have to do this once.)
+6. The setup wizard appears. Configure and you're in.
 
-### Linux — AppImage (recommended)
+### Linux — Ubuntu / Debian / Mint / Pop!_OS (recommended)
 
-```bash
-chmod +x monitor-browser-1.0.0-beta.1-linux-x86_64.AppImage
-./monitor-browser-1.0.0-beta.1-linux-x86_64.AppImage
-```
+The cleanest path on Linux is the **`.deb`** package — it works just like
+double-clicking an installer on Windows.
 
-Optional — integrate with your menu using
-[AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher).
+1. Download **`monitor-browser-1.0.0-beta.1-linux-amd64.deb`**.
+2. Double-click the downloaded file.
+3. Your system's software installer opens (GNOME Software / KDE Discover /
+   Ubuntu Software Center). Click **Install**, enter your password.
+4. **Monitor Browser** now appears in your Applications menu. Click to launch.
+5. The setup wizard appears. Configure and you're in.
 
-### Linux — Debian / Ubuntu
+To uninstall: open the same software-installer app and click Remove.
 
-```bash
-sudo dpkg -i monitor-browser-1.0.0-beta.1-linux-amd64.deb
-sudo apt-get install -f   # if any deps missing
-```
+### Linux — AppImage (any distro)
 
-Launch from your application menu or run `monitor-browser` from a terminal.
+Use this if your distro doesn't accept `.deb` files (Fedora, Arch, openSUSE,
+NixOS, etc.).
 
-### Linux — Fedora / RHEL / openSUSE
+1. Download **`monitor-browser-1.0.0-beta.1-linux-x86_64.AppImage`**.
+2. Right-click the file → **Properties** → **Permissions** tab → check
+   **Allow executing file as program** (wording varies by file manager).
+3. Double-click the AppImage. The browser opens.
+4. The setup wizard appears.
 
-```bash
-sudo rpm -i monitor-browser-1.0.0-beta.1-linux-x86_64.rpm
-```
+> Tip — install [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher)
+> first and step 2 is automatic: AppImageLauncher offers to integrate the
+> AppImage into your menu the first time you run it.
 
-### macOS
+### Linux — Fedora / RHEL / openSUSE (`.rpm`)
 
-1. Open the `.dmg`.
-2. Drag **Monitor Browser** to your **Applications** folder.
-3. First launch: right-click → **Open** → confirm (Gatekeeper prompt — beta is unsigned).
+1. Download **`monitor-browser-1.0.0-beta.1-linux-x86_64.rpm`**.
+2. Double-click — your software installer opens and offers to install.
+3. Launch from your Applications menu.
 
-## First Run
+## First Run — Setup Wizard
 
-On first launch you'll see a **6-step setup wizard**:
+Whichever platform you installed on, the **first launch** opens a 6-step
+wizard:
 
-1. **Welcome** — feature overview
-2. **Operator Profile** — optional name, role, organization (stays local)
-3. **Theme** — Amber / Cyan / Phosphor / Magenta / Monochrome
-4. **Search Engine** — DuckDuckGo / Startpage / Brave / Google / Bing
-5. **Privacy** — Ad block, HTTPS-only, Stealth UA, Bookmarks bar
-6. **Confirm & Launch** — review and open the dashboard
+1. **Welcome** — quick tour of features
+2. **Operator Profile** — optional name / role / org (stored locally)
+3. **Theme** — Amber, Cyan, Phosphor, Magenta, or Monochrome
+4. **Search Engine** — DuckDuckGo, Startpage, Brave, Google, or Bing
+5. **Privacy** — ad blocking, HTTPS-only, stealth UA, bookmarks bar
+6. **Confirm** — review and launch the dashboard
 
-You can skip the wizard at any time. All choices can be changed later from
-Settings (`Ctrl+,`).
+You can hit **Skip setup** at any step. All choices can be changed later in
+**Settings** (`Ctrl+,` or the gear icon). To rerun the wizard, type
+**`monitor:setup`** in the address bar.
 
 ## Quick Reference
 
@@ -93,43 +99,31 @@ Settings (`Ctrl+,`).
 | Intel Sidebar | `Ctrl+B` |
 | Settings | `Ctrl+,` |
 | DevTools | `F12` |
-
-## Building From Source
-
-```bash
-git clone https://github.com/salamndrgaming-lab/osintworldview-v2.git
-cd osintworldview-v2/monitor-browser
-npm install
-npm start                 # run in dev
-npm run build:win         # Windows installer + portable
-npm run build:linux       # AppImage + deb + rpm + tar.gz
-npm run build:mac         # macOS DMG
-npm run build:all         # everything (requires platform support)
-npm run pack              # unpacked dir (test packaging without installer)
-```
-
-Output appears in `dist/`.
+| Rerun setup wizard | type `monitor:setup` |
 
 ## Reporting Issues
 
-Beta feedback welcome — file issues at
+Beta feedback welcome:
 <https://github.com/salamndrgaming-lab/osintworldview-v2/issues>.
 
-When reporting, please include:
-- OS + version
-- Build artifact name
-- Steps to reproduce
-- DevTools console output (`F12 → Console` tab)
-- Whether the issue persists with the VPN on/off
+Please include OS + version, the exact filename you installed, what you did,
+what you expected, what actually happened. Screenshots help.
 
 ## Privacy
 
-- No telemetry. Settings, history, bookmarks, and operations stay on your machine.
+- No telemetry. Settings, history, bookmarks, and operations stay on your
+  device.
 - Live OSINT data is fetched directly from public APIs (USGS, NASA EONET,
-  ReliefWeb, GDELT, OpenSky, etc.) routed through the main process to bypass
-  CORS — no third-party intermediary.
+  ReliefWeb, GDELT, OpenSky, …) routed through the browser's main process —
+  no third-party intermediary.
 - VPN feature uses Tor (bundled or system) or a SOCKS5 proxy of your choice.
 
 ## License
 
 AGPL-3.0-or-later. See `LICENSE`.
+
+---
+
+### Building From Source (developers only)
+
+If you want to build the installers yourself, see `README.md`.

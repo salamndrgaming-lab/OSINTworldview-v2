@@ -822,6 +822,8 @@ function normalizeUrl(raw) {
 
   // Special shortcut: "monitor:home" navigates to the built-in homepage.
   if (/^monitor:\s*home$/i.test(trimmed)) return HOMEPAGE_URL;
+  // "monitor:setup" opens the optional onboarding wizard.
+  if (/^monitor:\s*setup$/i.test(trimmed)) return SETUP_URL;
 
   // Block dangerous schemes.
   if (/^(javascript|data|vbscript):/i.test(trimmed)) return resolveHomepageUrl();

@@ -70,7 +70,10 @@ jobs:
   release:
     name: Publish Release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/monitor-browser-v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'true')
+    # Always publish a release on push to main / claude/** / tags / manual dispatch.
+    # PRs do NOT publish (would spam releases) — only the per-platform artifacts
+    # are produced for download from the workflow run page.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -88,12 +91,26 @@ jobs:
           find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release/ \;
           ls -la release/
 
+      - name: Compute release tag
+        id: tag
+        shell: bash
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "name=Monitor Browser ${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            # Auto-tag every push so we always have a downloadable release.
+            short=$(echo "${{ github.sha }}" | cut -c1-7)
+            echo "tag=monitor-browser-beta-${{ github.run_number }}-${short}" >> "$GITHUB_OUTPUT"
+            echo "name=Monitor Browser Beta build ${{ github.run_number }} (${short})" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create or update release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('monitor-browser-v{0}', github.run_number) }}
-          name: Monitor Browser ${{ github.ref_type == 'tag' && github.ref_name || format('Beta build {0}', github.run_number) }}
-          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.name }}
+          draft: false
           prerelease: true
           generate_release_notes: true
           files: release/*

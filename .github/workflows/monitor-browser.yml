@@ -41,16 +41,30 @@ jobs:
       - name: Syntax check
         run: node -c main.js && node -c preload-chrome.js && node -c preload-content.js
 
+      - name: Show toolchain versions
+        shell: bash
+        run: |
+          node --version
+          npm --version
+          npx electron --version || true
+          npx electron-builder --version || true
+
       - name: Build (${{ matrix.os }})
         run: npx electron-builder --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Disable code signing on macOS since we don't have a cert in CI.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # Avoid retry storms on download failures.
+          ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/electron-builder-cache
 
       - name: List build output
+        if: always()
         shell: bash
         run: ls -la dist/ || true
 
       - name: Upload installers
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: monitor-browser-${{ matrix.os }}
@@ -70,10 +84,9 @@ jobs:
   release:
     name: Publish Release
     needs: build
-    # Always publish a release on push to main / claude/** / tags / manual dispatch.
-    # PRs do NOT publish (would spam releases) — only the per-platform artifacts
-    # are produced for download from the workflow run page.
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # Always publish a release on push / dispatch — even if one platform's build
+    # failed, ship installers for the platforms that succeeded.
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -88,8 +101,13 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release/ \;
-          ls -la release/
+          find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release/ \; || true
+          echo "--- artifacts ready for release ---"
+          ls -la release/ || true
+          if [ -z "$(ls -A release/ 2>/dev/null)" ]; then
+            echo "ERROR: no artifacts produced — every platform build failed"
+            exit 1
+          fi
 
       - name: Compute release tag
         id: tag

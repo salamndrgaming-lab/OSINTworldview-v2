@@ -24,8 +24,8 @@
   "license": "AGPL-3.0-or-later",
   "homepage": "https://osintview.app",
   "devDependencies": {
-    "electron": "^41.2.1",
-    "electron-builder": "^26.8.1"
+    "electron": "32.3.3",
+    "electron-builder": "25.1.8"
   },
   "build": {
     "appId": "com.osint.monitor-browser",
@@ -90,7 +90,6 @@
       "target": [
         { "target": "AppImage", "arch": ["x64"] },
         { "target": "deb", "arch": ["x64"] },
-        { "target": "rpm", "arch": ["x64"] },
         { "target": "tar.gz", "arch": ["x64"] }
       ],
       "icon": "assets/icon.png",
@@ -110,9 +109,6 @@
           "MimeType": "text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;"
         }
       }
-    },
-    "appImage": {
-      "license": "LICENSE"
     },
     "deb": {
       "depends": ["libgtk-3-0", "libnotify4", "libnss3", "libxss1", "libxtst6", "xdg-utils", "libatspi2.0-0", "libdrm2", "libgbm1", "libxcb-dri3-0"]

@@ -5,6 +5,9 @@
 'use strict';
 
 (function () {
+  // Captured once when the chrome renderer loads, so the profile panel can
+  // show how long the operator has been working in the current launch.
+  const SESSION_STARTED_AT = Date.now();
   const browser = window.browser;
   if (!browser) {
     // Preload didn't attach — dev surface the error so it's obvious.
@@ -238,6 +241,7 @@
   pipBtn.addEventListener('click', () => browser.pip());
 
   document.getElementById('action-intel').addEventListener('click', () => toggleIntelSidebar());
+  document.getElementById('action-bookmark-add').addEventListener('click', () => bookmarkCurrentPage());
   document.getElementById('action-bookmarks').addEventListener('click', () => togglePanel('bookmarks'));
   document.getElementById('action-history').addEventListener('click', () => togglePanel('history'));
   document.getElementById('action-downloads').addEventListener('click', () => togglePanel('downloads'));
@@ -630,16 +634,38 @@
     if (typeof refreshBookmarksBar === 'function') refreshBookmarksBar();
   });
 
-  // Apply the operator's initials + color to the chrome's profile button.
+  // Apply the operator's initials/avatar to the chrome's profile button.
   function applyProfileBadge(s) {
     const btn = document.getElementById('action-profile');
     if (!btn) return;
     const name = (s && s.profileName) || 'Analyst';
-    const initials = name.trim().split(/\s+/).map((p) => p[0] || '').join('').slice(0, 2).toUpperCase() || 'A';
-    btn.textContent = initials;
-    const color = (s && s.profileAvatarColor) || '#00d4ff';
-    btn.style.background = 'linear-gradient(135deg,' + color + '99,' + color + ')';
+    const avatarUrl = (s && s.profileAvatar) || '';
+    const color = validColor((s && s.profileAvatarColor) || '#00d4ff');
     btn.title = 'Profile — ' + name;
+
+    if (avatarUrl) {
+      // Show a tiny circular profile picture in the toolbar
+      btn.textContent = '';
+      btn.style.background = 'none';
+      btn.style.padding = '0';
+      btn.style.overflow = 'hidden';
+      let img = btn.querySelector('img');
+      if (!img) {
+        img = document.createElement('img');
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+        btn.appendChild(img);
+      }
+      img.src = avatarUrl;
+    } else {
+      // Fall back to initials + color gradient
+      const existing = btn.querySelector('img');
+      if (existing) existing.remove();
+      const initials = name.trim().split(/\s+/).map((p) => p[0] || '').join('').slice(0, 2).toUpperCase() || 'A';
+      btn.textContent = initials;
+      btn.style.background = 'linear-gradient(135deg,' + color + '99,' + color + ')';
+      btn.style.padding = '';
+      btn.style.overflow = '';
+    }
   }
   // Run once on first load too.
   browser.getSettings().then((r) => applyProfileBadge(r && r.settings)).catch(() => {});
@@ -701,6 +727,7 @@
     { id: 'diplo',   label: 'Diplomatic Tracker' },
   ];
 
+  let _settingsOverlayHandler = null;
   function openSettings() {
     browser.settingsExpand();
     settingsOverlay.classList.remove('hidden');
@@ -851,9 +878,9 @@
     requestAnimationFrame(() => settingsOverlay.classList.add('visible'));
 
     document.getElementById('settings-close').addEventListener('click', closeSettings);
-    settingsOverlay.addEventListener('click', (e) => {
-      if (e.target === settingsOverlay) closeSettings();
-    });
+    if (_settingsOverlayHandler) settingsOverlay.removeEventListener('click', _settingsOverlayHandler);
+    _settingsOverlayHandler = (e) => { if (e.target === settingsOverlay) closeSettings(); };
+    settingsOverlay.addEventListener('click', _settingsOverlayHandler);
 
     document.querySelectorAll('#theme-grid .theme-swatch').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -1140,7 +1167,7 @@
       '    <div class="reader-meta">' + esc(shortUrl(data.url)) + '</div>' +
       '    <button class="settings-close reader-close" id="reader-close">&times;</button>' +
       '  </header>' +
-      '  <article class="reader-body">' + data.content + '</article>' +
+      '  <article class="reader-body">' + sanitizeHtml(data.content) + '</article>' +
       '</div>';
 
     document.getElementById('reader-close').addEventListener('click', closeReaderMode);
@@ -1289,14 +1316,14 @@
     removeContextMenu();
     const ops = await browser.opsList();
     if (ops.length === 0) {
-      const name = prompt('No operations yet. Create one:');
+      const name = await showInputDialog('No operations yet. Create one:', 'Operation name');
       if (!name) return;
       const opId = await browser.opsCreate(name, '#d4a843');
       browser.opsAssignTab(tabId, opId);
       return;
     }
     const names = ops.map((o, i) => (i + 1) + '. ' + o.name).join('\n');
-    const choice = prompt('Assign to operation:\n' + names + '\n\nEnter number:');
+    const choice = await showInputDialog('Assign to operation:\n' + names + '\n\nEnter number:', '#');
     if (!choice) return;
     const idx = parseInt(choice, 10) - 1;
     if (idx >= 0 && idx < ops.length) {
@@ -1368,14 +1395,17 @@
     bmBar.classList.remove('hidden');
     browser.bookmarksList().then((bm) => {
       if (!bm || bm.length === 0) {
-        bmBar.innerHTML = '<span class="bm-bar-empty">No bookmarks yet — press Ctrl+D to add one</span>';
+        bmBar.innerHTML = '<span class="bm-bar-empty">No bookmarks yet — click ★ or press Ctrl+D to add one</span>';
         return;
       }
       bmBar.innerHTML = bm.slice(0, 20).map((b) =>
         '<button class="bm-bar-item" data-url="' + escapeAttr(b.url) + '" title="' + escapeAttr(b.url) + '">' +
-        (b.favicon ? '<img class="bm-bar-icon" src="' + escapeAttr(b.favicon) + '" onerror="this.style.display=\'none\'" />' : '') +
+        (b.favicon ? '<img class="bm-bar-icon" src="' + escapeAttr(b.favicon) + '" />' : '') +
         '<span>' + esc(b.title || shortUrl(b.url)) + '</span></button>'
       ).join('');
+      bmBar.querySelectorAll('.bm-bar-icon').forEach((img) => {
+        img.addEventListener('error', () => { img.style.display = 'none'; });
+      });
       bmBar.querySelectorAll('.bm-bar-item').forEach((btn) => {
         btn.addEventListener('click', () => browser.navigate(null, btn.dataset.url));
       });
@@ -1386,55 +1416,146 @@
 
   // --- Profile panel ---
   const PROFILE_COLORS = ['#00d4ff','#2ed573','#ff4757','#ffa502','#9f7aea','#4299e1','#d4a843','#e8eaf0'];
+  const PROFILE_BADGES = ['OSINT','RECON','SIGINT','HUMINT','GEOINT','CTI','RESEARCH','OFFLINE'];
+  // Curated set of OSINT investigation tools that open in a new tab
+  // when the operator clicks them. Kept small on purpose — analysts can
+  // pin more from the bookmarks bar.
+  const OSINT_TOOLBOX = [
+    { name: 'Shodan',         url: 'https://www.shodan.io/',                color: '#ff4757' },
+    { name: 'VirusTotal',     url: 'https://www.virustotal.com/',           color: '#3a86ff' },
+    { name: 'Censys',         url: 'https://search.censys.io/',             color: '#2ed573' },
+    { name: 'WhoisXML',       url: 'https://whois.whoisxmlapi.com/',        color: '#9f7aea' },
+    { name: 'Wayback',        url: 'https://web.archive.org/',              color: '#ffa502' },
+    { name: 'HIBP',           url: 'https://haveibeenpwned.com/',           color: '#ef4444' },
+    { name: 'IntelX',         url: 'https://intelx.io/',                    color: '#06b6d4' },
+    { name: 'crt.sh',         url: 'https://crt.sh/',                       color: '#84cc16' },
+    { name: 'GreyNoise',      url: 'https://www.greynoise.io/viz/',         color: '#a78bfa' },
+    { name: 'urlscan.io',     url: 'https://urlscan.io/',                   color: '#f97316' },
+    { name: 'OSINT Framework',url: 'https://osintframework.com/',           color: '#d4a843' },
+    { name: 'Maltego',        url: 'https://www.maltego.com/transform-hub/',color: '#22d3ee' },
+  ];
+
   function renderProfilePanel(container) {
     const s = currentSettings || {};
     const name = s.profileName || 'Analyst';
     const handle = s.profileHandle || '';
     const email = s.profileEmail || '';
-    const color = s.profileAvatarColor || '#00d4ff';
+    const color = validColor(s.profileAvatarColor || '#00d4ff');
+    const role = s.profileRole || '';
+    const org = s.profileOrg || '';
+    const loc = s.profileLocation || '';
+    const bio = s.profileBio || '';
+    const badge = s.profileBadge || 'OSINT';
+    const avatar = s.profileAvatar || '';
     const initials = name.trim().split(/\s+/).map((p) => p[0] || '').join('').slice(0, 2).toUpperCase() || 'A';
+    let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (_) {}
+    const sessionStartMs = SESSION_STARTED_AT;
+
+    const fieldStyle = 'width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text-primary);margin-bottom:10px';
+    const labelStyle = 'font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin:0 0 6px';
+    const sectionLabelStyle = 'font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin:14px 0 8px';
+    const statBoxStyle = 'background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:10px';
 
     container.innerHTML =
       '<div class="settings-card side-panel">' +
       '  <header class="settings-head"><h2>Operator Profile</h2>' +
       '    <button class="settings-close panel-close-btn">&times;</button></header>' +
-      '  <div style="padding:14px 18px">' +
+      '  <div style="padding:14px 18px;overflow-y:auto;max-height:calc(100vh - 60px)">' +
+
+      // --- Identity card ---
       '    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">' +
-      '      <div id="prof-avatar" style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,' + color + '99,' + color + ');display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-size:24px;font-weight:700;color:#0a0c10">' + esc(initials) + '</div>' +
-      '      <div style="flex:1">' +
-      '        <div id="prof-display-name" style="font-size:16px;font-weight:600;color:var(--text-primary)">' + esc(name) + '</div>' +
-      '        <div id="prof-display-handle" style="font-size:12px;color:var(--text-secondary)">' + esc(handle ? '@' + handle.replace(/^@/, '') : 'Set a handle below') + '</div>' +
+      '      <div id="prof-avatar-wrap" style="position:relative;flex-shrink:0;cursor:pointer" title="Click to change photo">' +
+      (avatar
+        ? '        <img id="prof-avatar" src="' + escapeAttr(avatar) + '" style="width:72px;height:72px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 3px rgba(255,255,255,0.04)"/>'
+        : '        <div id="prof-avatar" style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,' + color + '99,' + color + ');display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-size:26px;font-weight:700;color:#0a0c10;box-shadow:0 0 0 3px rgba(255,255,255,0.04)">' + esc(initials) + '</div>'
+      ) +
+      '        <div style="position:absolute;bottom:0;right:0;width:22px;height:22px;border-radius:50%;background:var(--surface-1);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px">📷</div>' +
+      '      </div>' +
+      '      <div style="flex:1;min-width:0">' +
+      '        <div id="prof-display-name" style="font-size:16px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(name) + '</div>' +
+      '        <div id="prof-display-handle" style="font-size:12px;color:var(--text-secondary);font-family:var(--font-data)">' + esc(handle ? '@' + handle.replace(/^@/, '') : '@anon') + '</div>' +
+      '        <div style="display:flex;align-items:center;gap:6px;margin-top:6px"><span id="prof-display-badge" style="display:inline-block;padding:2px 7px;font-size:9px;font-weight:700;letter-spacing:.08em;background:' + color + '22;color:' + color + ';border:1px solid ' + color + '55;border-radius:3px">' + esc(badge) + '</span><span id="prof-display-role" style="font-size:10px;color:var(--text-secondary)">' + esc(role || 'No role set') + '</span></div>' +
       '      </div>' +
       '    </div>' +
 
-      '    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin:0 0 6px">Display Name</h3>' +
-      '    <input type="text" id="prof-name" value="' + escapeAttr(name) + '" placeholder="Analyst" maxlength="40" style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text-primary);margin-bottom:10px"/>' +
+      // --- Identity ---
+      '    <h3 style="' + labelStyle + '">Display Name</h3>' +
+      '    <input type="text" id="prof-name" value="' + escapeAttr(name) + '" placeholder="Analyst" maxlength="40" style="' + fieldStyle + '"/>' +
 
-      '    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin:0 0 6px">Handle</h3>' +
-      '    <input type="text" id="prof-handle" value="' + escapeAttr(handle) + '" placeholder="op_analyst" maxlength="30" style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text-primary);font-family:var(--font-data);margin-bottom:10px"/>' +
+      '    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '      <div>' +
+      '        <h3 style="' + labelStyle + '">Handle</h3>' +
+      '        <input type="text" id="prof-handle" value="' + escapeAttr(handle) + '" placeholder="op_analyst" maxlength="30" style="' + fieldStyle + ';font-family:var(--font-data)"/>' +
+      '      </div>' +
+      '      <div>' +
+      '        <h3 style="' + labelStyle + '">Badge</h3>' +
+      '        <select id="prof-badge" style="' + fieldStyle + ';font-family:var(--font-data);cursor:pointer">' +
+      PROFILE_BADGES.map((b) => '<option value="' + b + '"' + (b === badge ? ' selected' : '') + '>' + b + '</option>').join('') +
+      '        </select>' +
+      '      </div>' +
+      '    </div>' +
 
-      '    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin:0 0 6px">Email (optional)</h3>' +
-      '    <input type="email" id="prof-email" value="' + escapeAttr(email) + '" placeholder="analyst@example.com" maxlength="120" style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text-primary);margin-bottom:14px"/>' +
+      '    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '      <div>' +
+      '        <h3 style="' + labelStyle + '">Role</h3>' +
+      '        <input type="text" id="prof-role" value="' + escapeAttr(role) + '" placeholder="OSINT Analyst" maxlength="40" style="' + fieldStyle + '"/>' +
+      '      </div>' +
+      '      <div>' +
+      '        <h3 style="' + labelStyle + '">Organization</h3>' +
+      '        <input type="text" id="prof-org" value="' + escapeAttr(org) + '" placeholder="Independent" maxlength="60" style="' + fieldStyle + '"/>' +
+      '      </div>' +
+      '    </div>' +
 
-      '    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin:0 0 6px">Avatar Color</h3>' +
-      '    <div id="prof-color-row" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">' +
+      '    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+      '      <div>' +
+      '        <h3 style="' + labelStyle + '">Location</h3>' +
+      '        <input type="text" id="prof-location" value="' + escapeAttr(loc) + '" placeholder="City / Region" maxlength="60" style="' + fieldStyle + '"/>' +
+      '      </div>' +
+      '      <div>' +
+      '        <h3 style="' + labelStyle + '">Email</h3>' +
+      '        <input type="email" id="prof-email" value="' + escapeAttr(email) + '" placeholder="analyst@example.com" maxlength="120" style="' + fieldStyle + '"/>' +
+      '      </div>' +
+      '    </div>' +
+
+      '    <h3 style="' + labelStyle + '">Notes / Scratchpad</h3>' +
+      '    <textarea id="prof-bio" maxlength="800" placeholder="Investigation notes, current focus, OPSEC reminders…" style="' + fieldStyle + ';min-height:70px;resize:vertical;font-family:var(--font);line-height:1.4">' + esc(bio) + '</textarea>' +
+
+      // --- Avatar color ---
+      '    <h3 style="' + labelStyle + '">Avatar Color</h3>' +
+      '    <div id="prof-color-row" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">' +
       PROFILE_COLORS.map((c) =>
-        '<div class="prof-color-sw' + (c === color ? ' is-active' : '') + '" data-color="' + c + '" style="width:22px;height:22px;border-radius:50%;background:' + c + ';cursor:pointer;border:2px solid ' + (c === color ? 'var(--text-primary)' : 'transparent') + ';transition:border-color .15s"></div>'
+        '<div class="prof-color-sw' + (c === color ? ' is-active' : '') + '" data-color="' + c + '" style="width:24px;height:24px;border-radius:50%;background:' + c + ';cursor:pointer;border:2px solid ' + (c === color ? 'var(--text-primary)' : 'transparent') + ';transition:border-color .15s"></div>'
       ).join('') +
       '    </div>' +
 
-      '    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);margin:0 0 8px">Operator Stats</h3>' +
-      '    <div id="prof-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px">' +
-      '      <div class="prof-stat" style="background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">Operations</div><div id="stat-ops" style="font-family:var(--font-data);font-size:20px;font-weight:700;color:var(--text-primary)">—</div></div>' +
-      '      <div class="prof-stat" style="background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">Bookmarks</div><div id="stat-bookmarks" style="font-family:var(--font-data);font-size:20px;font-weight:700;color:var(--text-primary)">—</div></div>' +
-      '      <div class="prof-stat" style="background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">History</div><div id="stat-history" style="font-family:var(--font-data);font-size:20px;font-weight:700;color:var(--text-primary)">—</div></div>' +
-      '      <div class="prof-stat" style="background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">Open Tabs</div><div id="stat-tabs" style="font-family:var(--font-data);font-size:20px;font-weight:700;color:var(--text-primary)">—</div></div>' +
+      // --- Stats ---
+      '    <h3 style="' + sectionLabelStyle + '">Operator Stats</h3>' +
+      '    <div id="prof-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+      '      <div style="' + statBoxStyle + '"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">Operations</div><div id="stat-ops" style="font-family:var(--font-data);font-size:20px;font-weight:700;color:var(--text-primary)">—</div></div>' +
+      '      <div style="' + statBoxStyle + '"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">Bookmarks</div><div id="stat-bookmarks" style="font-family:var(--font-data);font-size:20px;font-weight:700;color:var(--text-primary)">—</div></div>' +
+      '      <div style="' + statBoxStyle + '"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">History</div><div id="stat-history" style="font-family:var(--font-data);font-size:20px;font-weight:700;color:var(--text-primary)">—</div></div>' +
+      '      <div style="' + statBoxStyle + '"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">Open Tabs</div><div id="stat-tabs" style="font-family:var(--font-data);font-size:20px;font-weight:700;color:var(--text-primary)">—</div></div>' +
+      '      <div style="' + statBoxStyle + '"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">Session</div><div id="stat-uptime" style="font-family:var(--font-data);font-size:14px;font-weight:700;color:var(--text-primary);padding-top:3px">—</div></div>' +
+      '      <div style="' + statBoxStyle + '"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary)">Time Zone</div><div id="stat-tz" style="font-family:var(--font-data);font-size:11px;font-weight:600;color:var(--text-primary);padding-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(tz || 'Unknown') + '</div></div>' +
       '    </div>' +
 
-      '    <div style="display:flex;gap:6px">' +
-      '      <button class="settings-btn" id="prof-export" style="flex:1">Export Session</button>' +
-      '      <button class="settings-btn" id="prof-reset" style="flex:1;color:var(--accent-red,#ff4757)">Reset Profile</button>' +
+      // --- OSINT toolbox ---
+      '    <h3 style="' + sectionLabelStyle + '">OSINT Toolbox</h3>' +
+      '    <div id="prof-toolbox" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">' +
+      OSINT_TOOLBOX.map((t) =>
+        '<button class="prof-tool-btn" data-url="' + escapeAttr(t.url) + '" style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ' + validColor(t.color) + ';border-radius:6px;padding:7px 8px;font-size:11px;color:var(--text-primary);cursor:pointer;text-align:left;transition:border-color .15s,background .15s">' + esc(t.name) + '</button>'
+      ).join('') +
       '    </div>' +
+
+      // --- Actions ---
+      '    <h3 style="' + sectionLabelStyle + '">Actions</h3>' +
+      '    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
+      '      <button class="settings-btn" id="prof-export">Export Session</button>' +
+      '      <button class="settings-btn" id="prof-clear">Clear Browsing Data</button>' +
+      '      <button class="settings-btn" id="prof-incognito">Incognito Window</button>' +
+      '      <button class="settings-btn" id="prof-reset" style="color:var(--accent-red,#ff4757)">Reset Profile</button>' +
+      '    </div>' +
+      '    <div style="margin-top:10px;font-size:10px;color:var(--text-secondary);text-align:center">All profile data is stored locally on this machine.</div>' +
       '  </div>' +
       '</div>';
 
@@ -1444,24 +1565,59 @@
     function refreshHeader() {
       const n = document.getElementById('prof-name').value || 'Analyst';
       const h = document.getElementById('prof-handle').value;
+      const r = document.getElementById('prof-role').value;
+      const b = document.getElementById('prof-badge').value;
       const initialsNow = n.trim().split(/\s+/).map((p) => p[0] || '').join('').slice(0, 2).toUpperCase() || 'A';
       document.getElementById('prof-display-name').textContent = n;
-      document.getElementById('prof-display-handle').textContent = h ? '@' + h.replace(/^@/, '') : 'Set a handle below';
-      document.getElementById('prof-avatar').textContent = initialsNow;
+      document.getElementById('prof-display-handle').textContent = h ? '@' + h.replace(/^@/, '') : '@anon';
+      document.getElementById('prof-display-role').textContent = r || 'No role set';
+      const badgeEl = document.getElementById('prof-display-badge');
+      if (badgeEl) badgeEl.textContent = b;
+      const avatarEl = document.getElementById('prof-avatar');
+      if (avatarEl && avatarEl.tagName !== 'IMG') avatarEl.textContent = initialsNow;
     }
 
     function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
     const saveSoon = debounce(() => {
       browser.setSettings({
-        profileName: document.getElementById('prof-name').value.trim() || 'Analyst',
-        profileHandle: document.getElementById('prof-handle').value.trim().replace(/^@/, ''),
-        profileEmail: document.getElementById('prof-email').value.trim(),
+        profileName:    document.getElementById('prof-name').value.trim() || 'Analyst',
+        profileHandle:  document.getElementById('prof-handle').value.trim().replace(/^@/, ''),
+        profileEmail:   document.getElementById('prof-email').value.trim(),
+        profileRole:    document.getElementById('prof-role').value.trim(),
+        profileOrg:     document.getElementById('prof-org').value.trim(),
+        profileLocation:document.getElementById('prof-location').value.trim(),
+        profileBio:     document.getElementById('prof-bio').value,
+        profileBadge:   document.getElementById('prof-badge').value,
       });
     }, 400);
 
-    ['prof-name', 'prof-handle', 'prof-email'].forEach((id) => {
-      document.getElementById(id).addEventListener('input', () => { refreshHeader(); saveSoon(); });
+    ['prof-name','prof-handle','prof-email','prof-role','prof-org','prof-location','prof-bio'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', () => { refreshHeader(); saveSoon(); });
     });
+    document.getElementById('prof-badge').addEventListener('change', () => { refreshHeader(); saveSoon(); });
+
+    // Avatar image pick — click the avatar area to select a photo
+    const avatarWrap = document.getElementById('prof-avatar-wrap');
+    if (avatarWrap && typeof browser.pickAvatar === 'function') {
+      avatarWrap.addEventListener('click', async () => {
+        const result = await browser.pickAvatar();
+        if (!result) return;
+        if (result.error) { console.warn('[profile] avatar error', result.error); return; }
+        if (result.dataUrl) {
+          // Replace the avatar element with an <img>
+          const wrap = document.getElementById('prof-avatar-wrap');
+          const oldAv = document.getElementById('prof-avatar');
+          if (oldAv) oldAv.remove();
+          const img = document.createElement('img');
+          img.id = 'prof-avatar';
+          img.src = result.dataUrl;
+          img.style.cssText = 'width:72px;height:72px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 3px rgba(255,255,255,0.04)';
+          wrap.insertBefore(img, wrap.firstChild);
+          applyProfileBadge({ ...currentSettings, profileAvatar: result.dataUrl });
+        }
+      });
+    }
 
     container.querySelectorAll('#prof-color-row .prof-color-sw').forEach((sw) => {
       sw.addEventListener('click', () => {
@@ -1473,7 +1629,20 @@
         sw.style.borderColor = 'var(--text-primary)';
         const c = sw.dataset.color;
         document.getElementById('prof-avatar').style.background = 'linear-gradient(135deg,' + c + '99,' + c + ')';
+        const badgeEl = document.getElementById('prof-display-badge');
+        if (badgeEl) {
+          badgeEl.style.background = c + '22';
+          badgeEl.style.color = c;
+          badgeEl.style.borderColor = c + '55';
+        }
         browser.setSettings({ profileAvatarColor: c });
+      });
+    });
+
+    container.querySelectorAll('.prof-tool-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        browser.navigate(null, btn.dataset.url);
+        closePanel();
       });
     });
 
@@ -1483,12 +1652,32 @@
       }
     });
 
+    document.getElementById('prof-clear').addEventListener('click', () => {
+      if (typeof browser.clearBrowsingData === 'function') {
+        browser.clearBrowsingData().catch(() => {});
+      }
+    });
+
+    document.getElementById('prof-incognito').addEventListener('click', () => {
+      if (typeof browser.incognito === 'function') {
+        browser.incognito();
+        closePanel();
+      }
+    });
+
     document.getElementById('prof-reset').addEventListener('click', () => {
+      if (typeof browser.clearAvatar === 'function') browser.clearAvatar();
       browser.setSettings({
         profileName: 'Analyst',
         profileHandle: '',
         profileEmail: '',
         profileAvatarColor: '#00d4ff',
+        profileAvatar: '',
+        profileRole: '',
+        profileOrg: '',
+        profileLocation: '',
+        profileBio: '',
+        profileBadge: 'OSINT',
       }).then(() => renderProfilePanel(container));
     });
 
@@ -1503,6 +1692,22 @@
       document.getElementById('stat-history').textContent = (hist || []).length.toLocaleString();
       document.getElementById('stat-tabs').textContent = (typeof tabs !== 'undefined' ? tabs.length : 0).toLocaleString();
     });
+
+    // Live session uptime — ticks every second while the panel is open.
+    const uptimeEl = document.getElementById('stat-uptime');
+    function fmtUptime(ms) {
+      const sec = Math.max(0, Math.floor(ms / 1000));
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const ss = sec % 60;
+      return (h > 0 ? h + 'h ' : '') + (h > 0 || m > 0 ? m + 'm ' : '') + ss + 's';
+    }
+    function tick() { if (uptimeEl && document.body.contains(uptimeEl)) uptimeEl.textContent = fmtUptime(Date.now() - sessionStartMs); }
+    tick();
+    const uptimeTimer = setInterval(() => {
+      if (!document.body.contains(uptimeEl)) { clearInterval(uptimeTimer); return; }
+      tick();
+    }, 1000);
   }
 
   // --- Bookmarks panel ---
@@ -1992,7 +2197,7 @@
       html += '<div class="tab-search-list">';
       for (const op of ops) {
         html += '<div class="tab-search-row ops-row" data-id="' + op.id + '">' +
-          '<span class="ops-color-dot" style="background:' + (op.color || '#d4a843') + '"></span>' +
+          '<span class="ops-color-dot" style="background:' + validColor(op.color || '#d4a843') + '"></span>' +
           '<span class="tab-search-title">' + esc(op.name) + '</span>' +
           '<span class="tab-search-url">' + op.tabCount + ' tabs · ' + op.annotationCount + ' notes</span>' +
           '<button class="row-del ops-del" data-id="' + op.id + '">&times;</button>' +
@@ -2007,8 +2212,8 @@
       if (e.target === opsSwitcherEl) closeOperationSwitcher();
     });
 
-    document.getElementById('ops-new').addEventListener('click', () => {
-      const name = prompt('Operation name:');
+    document.getElementById('ops-new').addEventListener('click', async () => {
+      const name = await showInputDialog('Operation name:', 'e.g. OSINT Case 42');
       if (!name) return;
       const colors = ['#d4a843', '#4a90e2', '#2ecc71', '#ff4e4e', '#a78bfa', '#fb923c', '#22d3ee'];
       const color = colors[Math.floor(Math.random() * colors.length)];
@@ -2160,12 +2365,15 @@
       listEl.innerHTML = matches.map((t) =>
         '<button class="tab-search-row' + (t.id === activeId ? ' is-active' : '') + '" data-id="' + t.id + '">' +
         '<span class="tab-search-favicon">' +
-          (t.favicon ? '<img src="' + escapeAttr(t.favicon) + '" onerror="this.parentElement.textContent=\'○\'" />' : (t.isHomepage ? '◉' : '○')) +
+          (t.favicon ? '<img src="' + escapeAttr(t.favicon) + '" />' : (t.isHomepage ? '◉' : '○')) +
         '</span>' +
         '<span class="tab-search-title">' + esc(t.title || 'New Tab') + '</span>' +
         '<span class="tab-search-url">' + esc(shortUrl(t.url)) + '</span>' +
         '</button>'
       ).join('');
+      listEl.querySelectorAll('.tab-search-favicon img').forEach((img) => {
+        img.addEventListener('error', () => { img.parentElement.textContent = '○'; });
+      });
 
       listEl.querySelectorAll('.tab-search-row').forEach((row) => {
         row.addEventListener('click', () => {
@@ -2275,6 +2483,63 @@
   function shortUrl(url) {
     try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
   }
+
+  const UNSAFE_TAGS = new Set(['script','iframe','object','embed','form','link','meta','base','applet','style']);
+  function sanitizeHtml(html) {
+    if (!html) return '';
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const walk = (node) => {
+        for (const child of Array.from(node.childNodes)) {
+          if (child.nodeType === 1) {
+            if (UNSAFE_TAGS.has(child.tagName.toLowerCase())) { child.remove(); continue; }
+            for (const attr of Array.from(child.attributes)) {
+              if (attr.name.startsWith('on') || /^javascript:/i.test(attr.value)) child.removeAttribute(attr.name);
+            }
+            walk(child);
+          }
+        }
+      };
+      walk(doc.body);
+      return doc.body.innerHTML;
+    } catch { return esc(html); }
+  }
+  function validColor(c) { return /^#[0-9a-f]{3,8}$/i.test(c) ? c : '#888'; }
+
+  function showInputDialog(title, placeholder) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center';
+      const card = document.createElement('div');
+      card.style.cssText = 'background:var(--panel,#111520);border:1px solid var(--border,rgba(255,255,255,0.08));border-radius:10px;padding:18px 20px;min-width:300px;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,0.5)';
+      const label = document.createElement('div');
+      label.textContent = title;
+      label.style.cssText = 'color:var(--text-primary,#e8eaed);font-size:13px;font-weight:600;margin-bottom:10px;white-space:pre-line';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = placeholder || '';
+      input.style.cssText = 'width:100%;box-sizing:border-box;padding:8px 10px;background:var(--bg2,#0f1219);border:1px solid var(--border,rgba(255,255,255,0.08));border-radius:6px;color:var(--text-primary,#e8eaed);font-size:12px;outline:none';
+      const btns = document.createElement('div');
+      btns.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:12px';
+      const cancel = document.createElement('button');
+      cancel.textContent = 'Cancel';
+      cancel.style.cssText = 'padding:6px 14px;font-size:11px;border:1px solid var(--border,rgba(255,255,255,0.08));border-radius:5px;background:transparent;color:var(--text-secondary,#9ca3af);cursor:pointer';
+      const ok = document.createElement('button');
+      ok.textContent = 'OK';
+      ok.style.cssText = 'padding:6px 14px;font-size:11px;border:none;border-radius:5px;background:var(--accent,#00d4ff);color:#0a0c10;font-weight:600;cursor:pointer';
+      btns.append(cancel, ok);
+      card.append(label, input, btns);
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+      input.focus();
+      const done = (val) => { overlay.remove(); resolve(val); };
+      cancel.addEventListener('click', () => done(null));
+      ok.addEventListener('click', () => done(input.value || null));
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(input.value || null); if (e.key === 'Escape') done(null); });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) done(null); });
+    });
+  }
+
   function timeAgo(ts) {
     const d = (Date.now() - ts) / 1000;
     if (d < 60) return 'just now';

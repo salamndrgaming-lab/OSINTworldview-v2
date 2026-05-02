@@ -4,10 +4,11 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Monitor Browser — New Tab</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://www.youtube.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src https: http://localhost:*; frame-src http://localhost:* https://www.youtube.com;" />
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <style>
 :root {
   /* Spec tokens */
@@ -614,7 +615,13 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 <!-- Livestreams expand -->
 <div class="pill-expand" id="pill-streams">
   <div class="wgt">
-    <div class="wgt-head"><span class="wgt-title"><span class="wdot" style="background:var(--accent2)"></span>News Livestreams</span></div>
+    <div class="wgt-head">
+      <span class="wgt-title"><span class="wdot" style="background:var(--accent2)"></span>News Livestreams</span>
+      <form id="addStreamForm" style="display:flex;gap:6px;margin-left:auto">
+        <input type="text" id="addStreamUrl" placeholder="Paste YouTube link…" style="width:200px;padding:3px 8px;font-size:11px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text)"/>
+        <button type="button" class="wc-btn" id="addStreamBtn" style="white-space:nowrap">+ Add Stream</button>
+      </form>
+    </div>
     <div class="ls-grid" id="streamGrid"></div>
   </div>
 </div>
@@ -658,8 +665,11 @@ a{text-decoration:none;color:inherit}input{font-family:var(--font)}svg{display:b
 
 /* ── SETTINGS ─────────────────────────────────── */
 function loadCfg(){try{return JSON.parse(localStorage.getItem('mb-cfg')||'{}')}catch{return{}}}
-function saveCfg(c){localStorage.setItem('mb-cfg',JSON.stringify(c))}
+function saveCfg(c){try{localStorage.setItem('mb-cfg',JSON.stringify(c))}catch{}}
 let cfg=loadCfg();
+
+const _intervals=[];
+window.addEventListener('beforeunload',()=>{_intervals.forEach(clearInterval);_intervals.length=0;});
 
 /* ── CLOCK (hero + topbar) ─────────────────────── */
 function tick(){
@@ -674,15 +684,18 @@ function tick(){
   el('greet').textContent=g+', Analyst';
   el('fDate').textContent=n.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
 }
-tick();setInterval(tick,1000);
+tick();_intervals.push(setInterval(tick,1000));
 
 /* Prefer the Electron main-process fetch proxy (bypasses CORS, serialises per-domain, caches).
    Fall back to allorigins when the page is opened outside the browser (dev/testing). */
 const HAS_INTEL=!!(window.monitorApi&&typeof window.monitorApi.fetchIntel==='function');
 const PROXY=u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`;
-function intelFetch(url){
-  if(HAS_INTEL)return window.monitorApi.fetchIntel(url);
+function intelFetch(url,opts){
+  if(HAS_INTEL)return window.monitorApi.fetchIntel(url,opts);
   return fetch(PROXY(url)).then(r=>r.json()).then(d=>d.contents||'');
+}
+function intelPost(url,body){
+  return intelFetch(url,{method:'POST',body:typeof body==='string'?body:JSON.stringify(body)});
 }
 function intelFetchJSON(url){
   return intelFetch(url).then(txt=>{try{return JSON.parse(txt);}catch{return null;}});
@@ -780,7 +793,9 @@ if(wxToggleBtn){
     } else {
       const rect=wxToggleBtn.getBoundingClientRect();
       fc.style.top=(rect.bottom+4)+'px';
-      fc.style.right=(window.innerWidth-rect.right)+'px';
+      // Anchor the right edge of the forecast near the right side of the
+      // viewport (with a small gutter) so it sits under the weather area.
+      fc.style.right='-2px';
       fc.style.left='auto';
       fc.style.display='flex';
     }
@@ -907,8 +922,8 @@ function initLeafletMap(){
     osintLayers[key].layer=L.layerGroup();
     if(osintLayers[key].active)osintLayers[key].layer.addTo(osintMap);
   });
-  osintLayers.events.loader=loadGdeltEvents;
-  osintLayers.conflicts.loader=loadConflicts;
+  osintLayers.events.loader=loadNewsEvents;
+  osintLayers.conflicts.loader=loadConflictZones;
   osintLayers.protests.loader=loadProtests;
   osintLayers.terror.loader=loadTerror;
   osintLayers.quakes.loader=loadEarthquakes;
@@ -924,13 +939,14 @@ function initLeafletMap(){
   Object.entries(osintLayers).forEach(([key,info])=>{
     if(info.active&&info.loader)info.loader();
   });
-  // Periodic refresh
-  setInterval(loadGdeltEvents,5*60*1000);
-  setInterval(loadConflicts,5*60*1000);
-  setInterval(loadProtests,5*60*1000);
-  setInterval(loadEarthquakes,5*60*1000);
-  setInterval(()=>{loadEonet('wildfires');loadEonet('volcanoes');loadEonet('severeStorms');loadEonet('floods');},10*60*1000);
-  setInterval(loadDisasters,15*60*1000);
+  // Periodic refresh — ReliefWeb is rate-limited so we keep these gentle.
+  _intervals.push(setInterval(()=>{if(osintLayers.events.active)loadNewsEvents();},10*60*1000));
+  _intervals.push(setInterval(()=>{if(osintLayers.conflicts.active)loadConflictZones();},10*60*1000));
+  _intervals.push(setInterval(()=>{if(osintLayers.protests.active)loadProtests();},10*60*1000));
+  _intervals.push(setInterval(()=>{if(osintLayers.terror.active)loadTerror();},10*60*1000));
+  _intervals.push(setInterval(loadEarthquakes,5*60*1000));
+  _intervals.push(setInterval(()=>{loadEonet('wildfires');loadEonet('volcanoes');loadEonet('severeStorms');loadEonet('floods');},10*60*1000));
+  _intervals.push(setInterval(loadDisasters,15*60*1000));
 
   // Layer panel control (top-right) — grouped by category
   const groups={intel:'Intelligence',natural:'Natural Events',infra:'Infrastructure'};
@@ -938,7 +954,10 @@ function initLeafletMap(){
     options:{position:'topright'},
     onAdd:function(){
       const div=L.DomUtil.create('div','leaflet-bar osint-layer-panel');
-      div.style.cssText='background:var(--panel,#111520);border:1px solid var(--border,rgba(255,255,255,0.06));border-radius:6px;padding:6px 8px;font-size:11px;color:var(--text,#e8eaf0);min-width:150px;max-height:80vh;overflow-y:auto;scrollbar-width:thin';
+      // The map widget is 300px tall, so cap the panel at ~225px to fit the
+      // visible viewport. overscroll-behavior:contain stops the dashboard
+      // from scrolling once the layer list reaches its end.
+      div.style.cssText='background:var(--panel,#111520);border:1px solid var(--border,rgba(255,255,255,0.06));border-radius:6px;padding:6px 8px;font-size:11px;color:var(--text,#e8eaf0);min-width:160px;max-height:225px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;-webkit-overflow-scrolling:touch';
       // Weather radar is pinned at the top so it's always visible.
       let html='<div style="font-weight:600;margin:0 0 3px;color:var(--text-mid,#9ca3af);font-size:9px;text-transform:uppercase;letter-spacing:.06em">Weather</div>'+
         '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:1.5px 0">'+
@@ -995,69 +1014,398 @@ function updateMapStats(){
   if(el3)el3.textContent=infraCount.toLocaleString();
 }
 
-function _renderGdeltFeatures(info,geojson,markerColor,popupLabel,layerKey){
+// Curated baseline of current global intelligence hotspots. Renders
+// immediately so users see something on the map even when external APIs
+// (ReliefWeb, GDELT) are slow, blocked, or rate-limited. Live data layers
+// on top via the loaders below.
+const INTEL_HOTSPOTS={
+  conflicts:[
+    {lat:48.5,lon:31.0,name:'Ukraine',desc:'Active military operations / Russia-Ukraine war'},
+    {lat:31.5,lon:34.5,name:'Gaza',desc:'Israel-Hamas conflict zone'},
+    {lat:33.4,lon:35.8,name:'Lebanon (south)',desc:'Hezbollah-Israel border tensions'},
+    {lat:35.0,lon:38.0,name:'Syria',desc:'Civil war / multi-faction conflict'},
+    {lat:15.5,lon:30.0,name:'Sudan',desc:'SAF vs RSF civil war'},
+    {lat:15.0,lon:47.0,name:'Yemen',desc:'Houthi-led conflict / Red Sea attacks'},
+    {lat:21.0,lon:96.0,name:'Myanmar',desc:'Military junta vs resistance forces'},
+    {lat:-1.5,lon:29.0,name:'Eastern DRC',desc:'M23 / armed group violence'},
+    {lat:5.0,lon:46.0,name:'Somalia',desc:'Al-Shabaab insurgency'},
+    {lat:13.5,lon:2.0,name:'Sahel (Niger/Mali/Burkina)',desc:'Jihadist insurgency'},
+    {lat:13.5,lon:39.5,name:'Ethiopia (Tigray/Amhara)',desc:'Ethnic conflict'},
+    {lat:18.5,lon:-72.3,name:'Haiti',desc:'Gang violence / state collapse'},
+    {lat:34.5,lon:69.2,name:'Afghanistan',desc:'Taliban rule / ISIS-K attacks'},
+    {lat:33.7,lon:73.0,name:'Pakistan border regions',desc:'TTP attacks'},
+    {lat:9.0,lon:10.0,name:'Northeast Nigeria',desc:'Boko Haram / ISWAP'},
+    {lat:23.7,lon:121.0,name:'Taiwan Strait',desc:'PLA exercises / heightened tension'},
+    {lat:6.5,lon:125.0,name:'South China Sea',desc:'Maritime disputes'},
+    {lat:32.4,lon:53.7,name:'Iran',desc:'Regional proxy conflicts / nuclear tensions / IRGC operations'},
+  ],
+  protests:[
+    {lat:48.85,lon:2.35,name:'France',desc:'Recurring nationwide protests'},
+    {lat:39.9,lon:116.4,name:'Hong Kong / China',desc:'Pro-democracy / lockdown protests'},
+    {lat:35.7,lon:51.4,name:'Iran',desc:'Anti-government protests'},
+    {lat:4.7,lon:-74.1,name:'Colombia',desc:'Civil unrest / labor strikes'},
+    {lat:13.7,lon:100.5,name:'Thailand',desc:'Pro-democracy demonstrations'},
+    {lat:32.1,lon:34.8,name:'Israel',desc:'Anti-government protests'},
+    {lat:28.6,lon:77.2,name:'India',desc:'Farmer / political protests'},
+    {lat:4.6,lon:-74.0,name:'Venezuela border',desc:'Migration / civil unrest'},
+    {lat:-23.5,lon:-46.6,name:'Brazil',desc:'Political demonstrations'},
+    {lat:51.5,lon:-0.1,name:'United Kingdom',desc:'Climate / cost-of-living protests'},
+    {lat:38.9,lon:-77.0,name:'Washington DC',desc:'Political demonstrations'},
+    {lat:50.1,lon:8.7,name:'Germany',desc:'Anti-war / agricultural protests'},
+  ],
+  terror:[
+    {lat:34.5,lon:69.2,name:'Afghanistan',desc:'ISIS-K / Taliban attacks'},
+    {lat:9.0,lon:10.0,name:'Lake Chad Basin',desc:'Boko Haram / ISWAP'},
+    {lat:5.0,lon:46.0,name:'Somalia',desc:'Al-Shabaab'},
+    {lat:13.5,lon:2.0,name:'Sahel',desc:'JNIM / ISGS'},
+    {lat:33.5,lon:44.4,name:'Iraq',desc:'ISIS remnants'},
+    {lat:35.0,lon:38.0,name:'Syria',desc:'HTS / ISIS remnants'},
+    {lat:24.5,lon:54.0,name:'Arabian Peninsula',desc:'AQAP'},
+    {lat:1.3,lon:36.8,name:'Kenya',desc:'Al-Shabaab cross-border'},
+    {lat:-14.3,lon:40.4,name:'Mozambique (Cabo Delgado)',desc:'ISIS-Mozambique'},
+    {lat:33.7,lon:73.0,name:'Pakistan (KP/Balochistan)',desc:'TTP / BLA'},
+    {lat:6.9,lon:79.9,name:'Sri Lanka',desc:'Historical insurgent activity'},
+    {lat:-7.5,lon:111.0,name:'Indonesia',desc:'JI / JAD cells'},
+  ],
+  events:[
+    {lat:50.45,lon:30.52,name:'Kyiv',desc:'Ongoing Russia-Ukraine war updates'},
+    {lat:31.78,lon:35.22,name:'Jerusalem',desc:'Israel-Palestine developments'},
+    {lat:39.92,lon:32.85,name:'Ankara',desc:'Turkey regional politics'},
+    {lat:55.75,lon:37.62,name:'Moscow',desc:'Russian government statements'},
+    {lat:39.90,lon:116.40,name:'Beijing',desc:'China policy / Taiwan stance'},
+    {lat:38.90,lon:-77.04,name:'Washington DC',desc:'US foreign policy / sanctions'},
+    {lat:51.50,lon:-0.13,name:'London',desc:'UK foreign policy'},
+    {lat:50.85,lon:4.35,name:'Brussels',desc:'EU/NATO decisions'},
+    {lat:35.68,lon:139.69,name:'Tokyo',desc:'Japan-China tensions'},
+    {lat:37.57,lon:126.98,name:'Seoul',desc:'North Korea developments'},
+    {lat:39.04,lon:125.76,name:'Pyongyang',desc:'DPRK missile tests'},
+    {lat:35.69,lon:51.39,name:'Tehran',desc:'Iran nuclear program'},
+    {lat:24.47,lon:54.37,name:'Abu Dhabi',desc:'Gulf states diplomacy'},
+    {lat:30.04,lon:31.24,name:'Cairo',desc:'Egypt regional mediation'},
+    {lat:-15.78,lon:-47.93,name:'Brasilia',desc:'BRICS / regional politics'},
+    {lat:28.61,lon:77.21,name:'New Delhi',desc:'India foreign policy'},
+    {lat:-1.29,lon:36.82,name:'Nairobi',desc:'East Africa stability'},
+  ],
+};
+function renderIntelBaseline(layerKey,markerColor,popupLabel){
+  const info=osintLayers[layerKey];
+  if(!info||!info.layer)return;
+  // Clear any prior markers — this is the entry point on initial load + refresh
   info.layer.clearLayers();
-  let count=0;
-  geojson.features.forEach(f=>{
-    if(!f.geometry||!f.geometry.coordinates)return;
-    const [lon,lat]=f.geometry.coordinates;
-    if(lat===0&&lon===0)return;
-    const props=f.properties||{};
-    const name=props.name||props.html||props.urlpubtimeseq||'Event';
-    const link=props.url||props.shareimage||'';
-    const tone=parseFloat(props.urltone||props.tone)||0;
-    const color=tone<-3?'#ef4444':tone>3?'#22c55e':markerColor;
-    const marker=L.circleMarker([lat,lon],{
-      radius:4,fillColor:color,color:'rgba(255,255,255,0.3)',weight:1,fillOpacity:0.8,
+  const data=INTEL_HOTSPOTS[layerKey]||[];
+  data.forEach(d=>{
+    const marker=L.circleMarker([d.lat,d.lon],{
+      radius:5,fillColor:markerColor,color:'rgba(255,255,255,0.4)',weight:1.2,fillOpacity:0.85,
     });
-    let popup='<div style="max-width:240px;font-size:11px;line-height:1.4">'+
+    let popup='<div style="max-width:260px;font-size:11px;line-height:1.4">'+
+      '<strong style="color:'+markerColor+'">'+popupLabel+' — '+d.name+'</strong><br>'+
+      '<span>'+d.desc+'</span>'+
+      '<br><span style="color:#9ca3af;font-size:10px">Active hotspot · live API data layered on top when available</span>'+
+      '</div>';
+    marker.bindPopup(popup);
+    marker.addTo(info.layer);
+  });
+  updateMapStats();
+  console.log('[intel-baseline]',layerKey,data.length,'hotspots rendered');
+}
+
+// Intel layers use ReliefWeb reports API (POST) with GDELT GEO API fallback.
+function renderReliefWebMarkers(info,data,markerColor,popupLabel,layerKey,additive){
+  if(!additive)info.layer.clearLayers();
+  let count=0;
+  const seen={};
+  data.data.forEach(item=>{
+    const f=item.fields||{};
+    const loc=f.primary_country?.location;
+    if(!loc||loc.lat==null||loc.lon==null)return;
+    const lat0=parseFloat(loc.lat),lon0=parseFloat(loc.lon);
+    if(isNaN(lat0)||isNaN(lon0))return;
+    const iso=f.primary_country?.iso3||'';
+    const idx=seen[iso]=(seen[iso]||0)+1;
+    const ang=idx*2.4;const rad=Math.min(idx*0.35,3.5);
+    const lat=lat0+Math.cos(ang)*rad;
+    const lon=lon0+Math.sin(ang)*rad;
+    const marker=L.circleMarker([lat,lon],{
+      radius:4,fillColor:markerColor,color:'rgba(255,255,255,0.3)',weight:1,fillOpacity:0.8,
+    });
+    const title=f.title||'Report';
+    const country=f.primary_country?.name||'';
+    const sources=(f.source||[]).slice(0,2).map(s=>s.name).join(', ');
+    const date=f.date?.created?new Date(f.date.created).toLocaleDateString():'';
+    const link=f.url_alias||f.url||'';
+    let popup='<div style="max-width:260px;font-size:11px;line-height:1.4">'+
       '<strong style="color:'+markerColor+'">'+popupLabel+'</strong><br>'+
-      '<span>'+String(name).substring(0,180)+'</span>';
-    if(tone)popup+='<br><span style="color:'+color+';font-size:10px">Tone: '+(+tone).toFixed(1)+'</span>';
-    if(link)popup+='<br><a href="'+link+'" target="_blank" style="color:#00d4ff">Read source</a>';
+      '<span>'+String(title).substring(0,200)+'</span>';
+    if(country)popup+='<br><span style="color:#9ca3af;font-size:10px">'+country+'</span>';
+    if(sources)popup+='<br><span style="color:#9ca3af;font-size:10px">'+sources+'</span>';
+    if(date)popup+='<br><span style="color:#9ca3af;font-size:10px">'+date+'</span>';
+    if(link)popup+='<br><a href="'+link+'" target="_blank" style="color:#00d4ff">Read report</a>';
     popup+='</div>';
     marker.bindPopup(popup);
     marker.addTo(info.layer);
     count++;
   });
   updateMapStats();
-  console.log('[gdelt]',layerKey,count,'features from',geojson.features.length);
+  console.log('[reliefweb]',layerKey,count,'reports of',data.data.length);
 }
-function loadGdeltGeoJSON(layerKey, query, markerColor, popupLabel){
-  const info=osintLayers[layerKey];
-  if(!info||!info.layer)return;
-  // Try v1 GKG GeoJSON first (proven in seed scripts), fall back to v2 Geo API
-  const v1Url='https://api.gdeltproject.org/api/v1/gkg_geojson?query='+encodeURIComponent(query)+'&maxrecords=250&timespan=24h&format=geojson';
-  const v2Url='https://api.gdeltproject.org/api/v2/geo/geo?query='+encodeURIComponent(query)+'&mode=PointData&format=GeoJSON&TIMESPAN=24h&MAXROWS=250';
-  function tryParse(txt){try{return typeof txt==='string'?JSON.parse(txt):txt;}catch{return null;}}
-  intelFetch(v1Url).then(txt=>{
-    const gj=tryParse(txt);
-    if(gj&&gj.features&&gj.features.length>0){
-      _renderGdeltFeatures(info,gj,markerColor,popupLabel,layerKey);
-    } else {
-      console.warn('[gdelt] v1 returned 0 for',layerKey,'— trying v2');
-      return intelFetch(v2Url).then(txt2=>{
-        const gj2=tryParse(txt2);
-        if(gj2&&gj2.features&&gj2.features.length>0){
-          _renderGdeltFeatures(info,gj2,markerColor,popupLabel,layerKey);
-        } else {
-          console.warn('[gdelt] v2 also returned 0 for',layerKey);
-        }
+function loadGdeltFallback(info,markerColor,popupLabel,layerKey,query,days,additive){
+  const geoUrl='https://api.gdeltproject.org/api/v2/geo/geo?query='+encodeURIComponent(query)+'&mode=PointData&format=GeoJSON&timespan='+days+'d&maxpoints=250';
+  const docUrl='https://api.gdeltproject.org/api/v2/doc/doc?query='+encodeURIComponent(query)+'&mode=ArtGeo&format=GeoJSON&timespan='+days+'d&maxrecords=250';
+  function renderGdeltGeoJSON(txt,source){
+    let geo;try{geo=typeof txt==='string'?JSON.parse(txt):txt;}catch(pe){console.warn('[gdelt]',source,'parse error',pe);return false;}
+    if(!geo){console.warn('[gdelt]',source,'empty response for',layerKey);return false;}
+    if(!additive)info.layer.clearLayers();
+    let count=0;
+    const features=geo.features||geo;
+    if(!Array.isArray(features)){console.warn('[gdelt]',source,'unexpected format for',layerKey,typeof geo);return false;}
+    features.forEach(f=>{
+      let lat,lon,name='';
+      if(f.geometry&&f.geometry.coordinates){
+        lon=f.geometry.coordinates[0];lat=f.geometry.coordinates[1];
+        name=(f.properties&&(f.properties.name||f.properties.html||f.properties.urlpubtimeseq))||'';
+      }else if(f.lat!=null&&f.lon!=null){
+        lat=parseFloat(f.lat);lon=parseFloat(f.lon);name=f.name||'';
+      }else{return;}
+      if(typeof lat!=='number'||typeof lon!=='number'||isNaN(lat)||isNaN(lon))return;
+      const marker=L.circleMarker([lat,lon],{
+        radius:4,fillColor:markerColor,color:'rgba(255,255,255,0.3)',weight:1,fillOpacity:0.8,
       });
+      let popup='<div style="max-width:260px;font-size:11px;line-height:1.4">'+
+        '<strong style="color:'+markerColor+'">'+popupLabel+'</strong>';
+      if(name){
+        const clean=String(name).replace(/<[^>]*>/g,'').substring(0,200);
+        popup+='<br><span>'+clean+'</span>';
+      }
+      popup+='</div>';
+      marker.bindPopup(popup);
+      marker.addTo(info.layer);
+      count++;
+    });
+    updateMapStats();
+    console.log('[gdelt]',source,layerKey,count,'points');
+    return count>0;
+  }
+  intelFetch(geoUrl).then(txt=>{
+    if(!renderGdeltGeoJSON(txt,'geo-api')){
+      console.log('[gdelt] geo-api returned no points for',layerKey,', trying doc-api');
+      return intelFetch(docUrl).then(txt2=>renderGdeltGeoJSON(txt2,'doc-api'));
     }
   }).catch(e=>{
-    console.warn('[gdelt] v1 error for',layerKey,e,'— trying v2');
-    intelFetch(v2Url).then(txt=>{
-      const gj=tryParse(txt);
-      if(gj&&gj.features&&gj.features.length>0){
-        _renderGdeltFeatures(info,gj,markerColor,popupLabel,layerKey);
-      } else {
-        console.warn('[gdelt] v2 also failed for',layerKey);
-      }
-    }).catch(e2=>{console.warn('[gdelt] both APIs failed for',layerKey,e2);});
+    console.warn('[gdelt] geo-api failed for',layerKey,e.message||e,', trying doc-api');
+    intelFetch(docUrl).then(txt=>renderGdeltGeoJSON(txt,'doc-api'))
+      .catch(e2=>{console.warn('[gdelt] both APIs failed for',layerKey,e2.message||e2);});
   });
 }
-function loadGdeltEvents(){loadGdeltGeoJSON('events','news breaking world','#ffa502','GDELT Event');}
+function loadReliefWebReports(layerKey, opts){
+  const info=osintLayers[layerKey];
+  if(!info||!info.layer)return;
+  const markerColor=opts.color;
+  const popupLabel=opts.label;
+  const sinceDays=opts.sinceDays||7;
+  const sinceDate=new Date(Date.now()-sinceDays*24*60*60*1000).toISOString().split('T')[0];
+  const body={
+    appname:'monitorbrowser',
+    fields:{include:['title','primary_country.location','primary_country.name','primary_country.iso3','source','url','url_alias','date','theme','disaster_type']},
+    filter:{field:'date.created',value:{from:sinceDate}},
+    sort:['date.created:desc'],
+    limit:opts.limit||100,
+  };
+  if(opts.query)body.query={value:opts.query};
+  intelPost('https://api.reliefweb.int/v1/reports',body).then(txt=>{
+    let data;try{data=typeof txt==='string'?JSON.parse(txt):txt;}catch{return;}
+    if(!data||!data.data){
+      console.warn('[reliefweb] no data for',layerKey,', trying GDELT');
+      loadGdeltFallback(info,markerColor,popupLabel,layerKey,opts.query||layerKey,sinceDays,opts.additive);return;
+    }
+    renderReliefWebMarkers(info,data,markerColor,popupLabel,layerKey,opts.additive);
+  }).catch(e=>{
+    console.warn('[reliefweb] POST failed for',layerKey,e.message||e,', trying GDELT');
+    loadGdeltFallback(info,markerColor,popupLabel,layerKey,opts.query||layerKey,sinceDays,opts.additive);
+  });
+}
+
+// Country boundaries for conflict zone polygons. Uses world-atlas 110m
+// TopoJSON (~300KB) with an inline decoder — no external library needed.
+let _countryGeoJSON=null;
+const COUNTRY_NAME_ALIASES={
+  'United States of America':'United States','US':'United States',
+  'Russian Federation':'Russia','Dem. Rep. Congo':'Democratic Republic of the Congo',
+  'Congo':'Republic of the Congo','Rep. Congo':'Republic of the Congo',
+  'Central African Rep.':'Central African Republic',
+  "Côte d'Ivoire":'Ivory Coast','Czech Rep.':'Czech Republic',
+  'Bosnia and Herz.':'Bosnia and Herzegovina','S. Sudan':'South Sudan',
+  'Solomon Is.':'Solomon Islands','N. Korea':'North Korea',
+  'S. Korea':'South Korea','Dominican Rep.':'Dominican Republic',
+  'Eq. Guinea':'Equatorial Guinea','W. Sahara':'Western Sahara',
+  'Lao PDR':'Laos','Myanmar':'Myanmar (Burma)',
+  'eSwatini':'Eswatini','Czechia':'Czech Republic',
+  'North Macedonia':'Macedonia','Timor-Leste':'East Timor',
+};
+function normalizeCountryName(n){return COUNTRY_NAME_ALIASES[n]||n;}
+
+function topoToGeo(topo){
+  const obj=topo.objects&&topo.objects.countries;
+  if(!obj||!topo.arcs)return null;
+  const tf=topo.transform||null;
+  function decodeArc(idx){
+    const arc=topo.arcs[idx<0?~idx:idx];
+    const coords=[];
+    let x=0,y=0;
+    for(let i=0;i<arc.length;i++){
+      x+=arc[i][0];y+=arc[i][1];
+      coords.push(tf?[x*tf.scale[0]+tf.translate[0],y*tf.scale[1]+tf.translate[1]]:[x,y]);
+    }
+    if(idx<0)coords.reverse();
+    return coords;
+  }
+  function decodeRing(ring){
+    let coords=[];
+    for(const idx of ring){
+      const a=decodeArc(idx);
+      coords=coords.length>0?coords.concat(a.slice(1)):a;
+    }
+    return coords;
+  }
+  const features=(obj.geometries||[]).map(g=>{
+    let geom=null;
+    if(g.type==='Polygon')geom={type:'Polygon',coordinates:g.arcs.map(r=>decodeRing(r))};
+    else if(g.type==='MultiPolygon')geom={type:'MultiPolygon',coordinates:g.arcs.map(p=>p.map(r=>decodeRing(r)))};
+    return {type:'Feature',properties:g.properties||{},id:g.id,geometry:geom};
+  }).filter(f=>f.geometry);
+  return {type:'FeatureCollection',features};
+}
+
+function getCountryGeoJSON(){
+  if(_countryGeoJSON)return Promise.resolve(_countryGeoJSON);
+  return intelFetch('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json').then(txt=>{
+    const topo=typeof txt==='string'?JSON.parse(txt):txt;
+    if(!topo||!topo.objects)return null;
+    const geo=topoToGeo(topo);
+    if(!geo||!geo.features||geo.features.length===0){console.warn('[map] TopoJSON decoded but no features');return null;}
+    _countryGeoJSON=geo;
+    console.log('[map] country boundaries loaded:',geo.features.length,'countries');
+    return _countryGeoJSON;
+  }).catch(e=>{console.warn('[map] failed to load country boundaries',e);return null;});
+}
+
+// Render conflict zone polygons using POST API with GDELT fallback.
+// Always renders baseline conflict markers + polygons so the map shows
+// intelligence data even when external APIs are unavailable.
+function renderBaselineConflictPolygons(info,geo){
+  if(!geo||!geo.features)return;
+  const baselineCountries=['Ukraine','Israel','Palestine','Lebanon','Syria','Sudan','South Sudan','Yemen','Myanmar','Democratic Republic of the Congo','Somalia','Mali','Niger','Burkina Faso','Ethiopia','Haiti','Afghanistan','Pakistan','Nigeria','Iraq','Mozambique','Iran'];
+  let drawn=0;
+  geo.features.forEach(feature=>{
+    const props=feature.properties||{};
+    const featureName=normalizeCountryName(props.name||'');
+    const matched=baselineCountries.find(c=>{
+      const cn=normalizeCountryName(c);
+      return cn===featureName||featureName.toLowerCase()===cn.toLowerCase();
+    });
+    if(!matched)return;
+    const layer=L.geoJSON(feature,{
+      style:{fillColor:'#dc2626',fillOpacity:0.18,color:'#dc2626',weight:1.2,opacity:0.55},
+    });
+    layer.bindPopup('<div style="max-width:240px;font-size:11px;line-height:1.4">'+
+      '<strong style="color:#dc2626">Active Conflict Zone — '+matched+'</strong>'+
+      '<br><span style="color:#9ca3af;font-size:10px">Curated baseline · live intelligence overlaid when available</span>'+
+      '</div>');
+    layer.addTo(info.layer);
+    drawn++;
+  });
+  console.log('[conflicts] baseline polygons drawn:',drawn);
+}
+function loadConflictZones(){
+  const info=osintLayers.conflicts;
+  if(!info||!info.layer)return;
+  // 1. Render baseline markers immediately
+  renderIntelBaseline('conflicts','#dc2626','Armed Conflict');
+  // 2. Render baseline polygons as soon as country geo is available
+  getCountryGeoJSON().then(geo=>renderBaselineConflictPolygons(info,geo));
+  const sinceDate=new Date(Date.now()-30*24*60*60*1000).toISOString().split('T')[0];
+  const rwBody={
+    appname:'monitorbrowser',
+    query:{value:'conflict OR war OR military OR airstrike OR offensive OR clashes'},
+    fields:{include:['primary_country.name','primary_country.iso3','title','url','date']},
+    sort:['date.created:desc'],
+    limit:200,
+    filter:{field:'date.created',value:{from:sinceDate}},
+  };
+  const rwPromise=intelPost('https://api.reliefweb.int/v1/reports',rwBody)
+    .then(t=>{try{return JSON.parse(t);}catch{return null;}})
+    .catch(()=>null);
+  Promise.all([rwPromise,getCountryGeoJSON()])
+    .then(([rwData,geo])=>{
+      if(!geo)return;
+      if(!rwData||!rwData.data){
+        console.warn('[conflicts] ReliefWeb unavailable, using GDELT fallback for conflict markers');
+        loadGdeltFallback(info,'#dc2626','Armed Conflict','conflicts','conflict OR war OR military OR airstrike',30,true);
+        return;
+      }
+      // Don't clear — keep baseline markers and polygons; live data layered on top
+      // Count reports per country name
+      const countryCounts={};
+      const countryTitles={};
+      rwData.data.forEach(item=>{
+        const f=item.fields||{};
+        const cn=f.primary_country?.name;
+        if(!cn)return;
+        countryCounts[cn]=(countryCounts[cn]||0)+1;
+        if(!countryTitles[cn])countryTitles[cn]=[];
+        if(countryTitles[cn].length<4)countryTitles[cn].push(f.title||'');
+      });
+      // Match country names to GeoJSON features and add polygons
+      const conflictNames=new Set(Object.keys(countryCounts));
+      let drawn=0;
+      geo.features.forEach(feature=>{
+        const props=feature.properties||{};
+        const featureName=props.name||'';
+        const normFeature=normalizeCountryName(featureName);
+        let matchedName=null;
+        for(const cn of conflictNames){
+          const normCn=normalizeCountryName(cn);
+          if(cn===featureName||normCn===normFeature||
+             featureName.toLowerCase().includes(cn.toLowerCase())||
+             cn.toLowerCase().includes(featureName.toLowerCase())||
+             normFeature.toLowerCase().includes(normCn.toLowerCase())||
+             normCn.toLowerCase().includes(normFeature.toLowerCase())){
+            matchedName=cn;break;
+          }
+        }
+        if(!matchedName)return;
+        const count=countryCounts[matchedName]||0;
+        const opacity=Math.min(0.6,0.15+count*0.03);
+        const layer=L.geoJSON(feature,{
+          style:{
+            fillColor:'#dc2626',
+            fillOpacity:opacity,
+            color:'#dc2626',
+            weight:1.5,
+            opacity:0.7,
+          },
+        });
+        const titles=countryTitles[matchedName]||[];
+        let popup='<div style="max-width:280px;font-size:11px;line-height:1.4">'+
+          '<strong style="color:#dc2626">Conflict Zone — '+matchedName+'</strong>'+
+          '<br><span style="color:#9ca3af">'+count+' reports in last 30 days</span>';
+        titles.slice(0,3).forEach(t=>{popup+='<br><span style="font-size:10px">• '+t.substring(0,120)+'</span>';});
+        popup+='</div>';
+        layer.bindPopup(popup);
+        layer.addTo(info.layer);
+        drawn++;
+      });
+      updateMapStats();
+      console.log('[conflicts]',drawn,'conflict zone polygons from',Object.keys(countryCounts).length,'countries');
+    }).catch(e=>{
+      console.warn('[conflicts] polygon load error',e);
+      loadGdeltFallback(info,'#dc2626','Armed Conflict','conflicts','conflict OR war OR military OR airstrike',30,true);
+    });
+}
+
+function loadNewsEvents(){
+  renderIntelBaseline('events','#ffa502','News Event');
+  loadReliefWebReports('events',{color:'#ffa502',label:'News Event',sinceDays:3,limit:120,additive:true});
+}
 
 function loadEarthquakes(){
   const info=osintLayers.quakes;
@@ -1156,9 +1504,31 @@ function loadFlights(){
   }).catch(()=>{});
 }
 
-function loadConflicts(){loadGdeltGeoJSON('conflicts','war conflict military airstrike','#dc2626','Armed Conflict');}
-function loadProtests(){loadGdeltGeoJSON('protests','protest riot demonstration strike','#f59e0b','Protest/Unrest');}
-function loadTerror(){loadGdeltGeoJSON('terror','terror attack bombing shooting','#7c3aed','Terrorism/Security');}
+function loadConflicts(){
+  // Render baseline immediately so map always shows intel markers
+  renderIntelBaseline('conflicts','#dc2626','Armed Conflict');
+  loadReliefWebReports('conflicts',{
+    color:'#dc2626',label:'Armed Conflict',
+    query:'conflict OR war OR military OR airstrike OR offensive OR clashes',
+    sinceDays:14,limit:120,additive:true,
+  });
+}
+function loadProtests(){
+  renderIntelBaseline('protests','#f59e0b','Protest / Civil Unrest');
+  loadReliefWebReports('protests',{
+    color:'#f59e0b',label:'Protest / Civil Unrest',
+    query:'protest OR demonstration OR unrest OR strike OR riot OR civil',
+    sinceDays:14,limit:100,additive:true,
+  });
+}
+function loadTerror(){
+  renderIntelBaseline('terror','#7c3aed','Security / Terror Incident');
+  loadReliefWebReports('terror',{
+    color:'#7c3aed',label:'Security / Terror Incident',
+    query:'terror OR attack OR bombing OR insurgent OR shooting OR ambush',
+    sinceDays:14,limit:100,additive:true,
+  });
+}
 
 /* -- NASA EONET: natural events (wildfires, volcanoes, storms, floods) -- */
 const EONET_CATS={
@@ -1380,27 +1750,27 @@ const FEEDS={
   intel:[
     'https://feeds.bbci.co.uk/news/world/rss.xml',
     'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=intelligence+security+military&mode=artlist&maxrecords=10&format=rss',
+    'https://www.reuters.com/rssFeed/worldNews',
   ],
   conflicts:[
     'https://www.aljazeera.com/xml/rss/all.xml',
     'https://feeds.bbci.co.uk/news/world/rss.xml',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=conflict+war+military+attack&mode=artlist&maxrecords=10&format=rss',
+    'https://rss.dw.com/xml/rss-en-world',
   ],
   markets:[
     'https://feeds.bbci.co.uk/news/business/rss.xml',
     'https://rss.nytimes.com/services/xml/rss/nyt/Business.xml',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=oil+market+commodity+trade+economy&mode=artlist&maxrecords=10&format=rss',
+    'https://www.reuters.com/rssFeed/businessNews',
   ],
   cyber:[
     'https://krebsonsecurity.com/feed/',
     'https://www.bleepingcomputer.com/feed/',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=cyberattack+malware+ransomware&mode=artlist&maxrecords=10&format=rss',
+    'https://thehackernews.com/feeds/posts/default?alt=rss',
   ],
   world:[
     'https://rss.dw.com/xml/rss-en-all',
     'https://feeds.bbci.co.uk/news/world/rss.xml',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=geopolitics+diplomacy+crisis&mode=artlist&maxrecords=10&format=rss',
+    'https://www.reuters.com/rssFeed/worldNews',
   ],
 };
 /* Local news: direct RSS from local stations/papers when available, GDELT as a
@@ -1409,35 +1779,30 @@ const LFEEDS={
   memphis:[
     'https://www.fox13memphis.com/feed/',
     'https://wreg.com/feed/',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=Memphis+Tennessee&mode=artlist&maxrecords=6&format=rss',
   ],
   nashville:[
     'https://fox17.com/news/local.rss',
     'https://www.wsmv.com/arcio/rss/category/news/',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=Nashville+Tennessee&mode=artlist&maxrecords=6&format=rss',
   ],
   chicago:[
     'https://chicago.suntimes.com/rss/news.xml',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=Chicago+Illinois&mode=artlist&maxrecords=6&format=rss',
+    'https://abc7chicago.com/feed/',
   ],
   newyork:[
     'https://rss.nytimes.com/services/xml/rss/nyt/NYRegion.xml',
     'https://nypost.com/metro/feed/',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=New+York+City&mode=artlist&maxrecords=6&format=rss',
   ],
   la:[
     'https://www.latimes.com/local/rss2.0.xml',
     'https://abc7.com/feed/',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=Los+Angeles+California&mode=artlist&maxrecords=6&format=rss',
   ],
   houston:[
     'https://www.khou.com/feeds/syndication/rss/news/local',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=Houston+Texas&mode=artlist&maxrecords=6&format=rss',
+    'https://abc13.com/feed/',
   ],
   atlanta:[
     'https://www.ajc.com/arc/outboundfeeds/rss/?outputType=xml',
     'https://www.11alive.com/feeds/syndication/rss/news/local',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=Atlanta+Georgia&mode=artlist&maxrecords=6&format=rss',
   ],
 };
 /* Geopolitics regional feeds — direct from major world broadcasters. */
@@ -1445,27 +1810,27 @@ const GEO_FEEDS={
   mideast:[
     'https://www.aljazeera.com/xml/rss/all.xml',
     'https://www.timesofisrael.com/feed/',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=Middle+East+Israel+Iran+Gaza&mode=artlist&maxrecords=10&format=rss',
+    'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml',
   ],
   europe:[
     'https://rss.dw.com/xml/rss-en-eu',
     'https://feeds.bbci.co.uk/news/world/europe/rss.xml',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=Europe+Ukraine+Russia+EU&mode=artlist&maxrecords=10&format=rss',
+    'https://www.reuters.com/rssFeed/worldNews',
   ],
   asia:[
     'https://www3.nhk.or.jp/nhkworld/en/news/feed/rss/',
     'https://feeds.bbci.co.uk/news/world/asia/rss.xml',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=China+Taiwan+Korea+Japan+India&mode=artlist&maxrecords=10&format=rss',
+    'https://rss.dw.com/xml/rss-en-asia',
   ],
   africa:[
     'https://feeds.bbci.co.uk/news/world/africa/rss.xml',
     'https://rss.dw.com/xml/rss-en-af',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=Africa+Sahel+Sudan+Nigeria+Ethiopia&mode=artlist&maxrecords=10&format=rss',
+    'https://www.reuters.com/rssFeed/worldNews',
   ],
   americas:[
     'https://feeds.bbci.co.uk/news/world/latin_america/rss.xml',
     'https://rss.nytimes.com/services/xml/rss/nyt/Americas.xml',
-    'https://api.gdeltproject.org/api/v2/doc/doc?query=Latin+America+Mexico+Brazil+Venezuela&mode=artlist&maxrecords=10&format=rss',
+    'https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
   ],
 };
 const TBADGE={
@@ -1475,6 +1840,8 @@ const TBADGE={
   cyber:{cls:'b-pur',label:'CYBER',color:'var(--purple)'},
   world:{cls:'b-org',label:'WORLD',color:'var(--orange)'},
 };
+function escFeed(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function safeImgUrl(u){try{const p=new URL(u);return/^https?:$/.test(p.protocol)?u:'';}catch{return '';}}
 function parseRSS(xml){
   const doc=new DOMParser().parseFromString(xml,'text/xml');
   return Array.from(doc.querySelectorAll('item')).map(it=>({
@@ -1500,12 +1867,13 @@ function renderNewsInto(items,badge,container,local){
     a.href=item.link;a.target='_blank';a.rel='noopener noreferrer';
     if(local){
       a.className='ln';
-      a.innerHTML=`<div class="ln-thumb">${item.thumb?`<img src="${item.thumb}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:'<div style="width:100%;height:100%;background:var(--surface3)"></div>'}</div><div class="ln-title">${item.title}</div><div class="ln-time">${relTime(item.pubDate)}</div>`;
+      a.innerHTML=`<div class="ln-thumb">${item.thumb?`<img src="${escFeed(safeImgUrl(item.thumb))}" alt="" loading="lazy"/>`:'<div style="width:100%;height:100%;background:var(--surface3)"></div>'}</div><div class="ln-title">${escFeed(item.title)}</div><div class="ln-time">${relTime(item.pubDate)}</div>`;
     }else{
       a.className='ni';
       const thumbPH=`<div class="ni-ph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--border2)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`;
-      a.innerHTML=`<div class="ni-thumb">${item.thumb?`<img src="${item.thumb}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:thumbPH}<div class="ni-sev" style="background:${badge.color||'var(--accent)'}"></div></div><div class="ni-body"><span class="badge ${badge.cls||'b-amb'} ni-cat">${badge.label||'NEWS'}</span><div class="ni-title">${item.title}</div><div class="ni-meta"><span class="ni-src">${item.source}</span><span class="ni-sep"></span><span class="ni-time">${relTime(item.pubDate)}</span></div></div>`;
+      a.innerHTML=`<div class="ni-thumb">${item.thumb?`<img src="${escFeed(safeImgUrl(item.thumb))}" alt="" loading="lazy"/>`:thumbPH}<div class="ni-sev" style="background:${escFeed(badge.color||'var(--accent)')}"></div></div><div class="ni-body"><span class="badge ${badge.cls||'b-amb'} ni-cat">${escFeed(badge.label||'NEWS')}</span><div class="ni-title">${escFeed(item.title)}</div><div class="ni-meta"><span class="ni-src">${escFeed(item.source)}</span><span class="ni-sep"></span><span class="ni-time">${relTime(item.pubDate)}</span></div></div>`;
     }
+    a.querySelectorAll('img').forEach(img=>{img.addEventListener('error',()=>{img.style.display='none';});});
     container.appendChild(a);
   });
 }
@@ -1637,7 +2005,7 @@ function loadMarkets(){
   });
 }
 loadMarkets();
-setInterval(loadMarkets,60000);
+_intervals.push(setInterval(loadMarkets,60000));
 
 /* ── ALERTS ───────────────────────────────────── */
 [{t:'OREF: Rocket alert — northern sector',r:'Israel/Lebanon',tm:'1m ago',c:'var(--red)'},
@@ -1659,7 +2027,7 @@ setInterval(loadMarkets,60000);
 const SPORTS_FEEDS=[
   'https://www.espn.com/espn/rss/news',
   'https://feeds.bbci.co.uk/sport/rss.xml',
-  'https://api.gdeltproject.org/api/v2/doc/doc?query=(NFL+OR+NBA+OR+MLB+OR+UFC+OR+Premier+League)&mode=artlist&maxrecords=8&format=rss',
+  'https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml',
 ];
 function loadSports(){
   const list=document.getElementById('sportsList');
@@ -1757,21 +2125,116 @@ const THREAT_BARS=[
 })();
 
 /* ── NEWS LIVESTREAMS (2×2 YouTube embeds) ────── */
-const STREAMS=[
-  {name:'CNN',           id:'h3MuIUNCCzI'},
-  {name:'BBC World',     id:'_3AaFkeMvhI'},
-  {name:'Al Jazeera',    id:'F-POY4Q0QSI'},
-  {name:'Bloomberg',     id:'dp8PhLsUcFE'},
+// Use channel IDs instead of stale video IDs — YouTube renders whatever
+// is currently live on each channel via /embed/live_stream?channel=...
+let STREAMS=[
+  {name:'BBC News',       channelId:'UC16niRr50-MSBwiO3YDb3RA'},
+  {name:'Sky News',       channelId:'UCoMdktPbSTixAyNGwb-UYkQ'},
+  {name:'Al Jazeera',     channelId:'UCNye-wNBqNL5ZzHSJj3l8Bg'},
+  {name:'DW News',        channelId:'UCknLrEdhRCp1aegoMqRaCZg'},
 ];
-function renderStreams(){
+// Persist any user-added streams to localStorage
+function saveStreams(){try{localStorage.setItem('mb-streams',JSON.stringify(STREAMS));}catch(e){}}
+function loadSavedStreams(){
+  try{
+    const s=localStorage.getItem('mb-streams');
+    if(s){
+      const parsed=JSON.parse(s);
+      // Only use saved streams if they have valid structure
+      if(Array.isArray(parsed)&&parsed.every(x=>x&&(x.id||x.channelId)))STREAMS=parsed;
+    }
+  }catch(e){}
+}
+loadSavedStreams();
+
+// Get the localhost YouTube embed server port. Routes embeds through
+// http://localhost:PORT/youtube-embed?... so the parent origin is HTTP
+// rather than file:// (which YouTube rejects with error 153/154-2).
+let _ytEmbedPort=0;
+async function getYtEmbedPort(){
+  if(_ytEmbedPort)return _ytEmbedPort;
+  try{
+    if(window.monitorApi&&typeof window.monitorApi.getYtEmbedPort==='function'){
+      _ytEmbedPort=await window.monitorApi.getYtEmbedPort();
+    }
+  }catch{}
+  return _ytEmbedPort;
+}
+
+function extractYouTubeId(input){
+  if(!input)return null;
+  const m=input.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|live\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if(m)return m[1];
+  if(/^[a-zA-Z0-9_-]{11}$/.test(input.trim()))return input.trim();
+  return null;
+}
+
+function streamEmbedUrl(s,port){
+  const vid=s.resolvedId||s.id;
+  if(!vid)return null;
+  if(!port)return `https://www.youtube.com/embed/${vid}?autoplay=0&mute=1`;
+  return `http://localhost:${port}/youtube-embed?videoId=${vid}&autoplay=0&mute=1`;
+}
+
+async function renderStreams(){
   const g=document.getElementById('streamGrid');if(!g)return;
+  const port=await getYtEmbedPort();
   g.innerHTML='';
-  STREAMS.forEach(s=>{
+
+  // Resolve channel-based streams to their current live video IDs
+  const resolveApi=window.monitorApi&&typeof window.monitorApi.resolveChannelLive==='function';
+  await Promise.all(STREAMS.map(async(s)=>{
+    if(s.channelId&&!s.id){
+      if(resolveApi){
+        try{s.resolvedId=await window.monitorApi.resolveChannelLive(s.channelId);}catch(e){s.resolvedId=null;}
+      }else{s.resolvedId=null;}
+    }
+  }));
+
+  STREAMS.forEach((s,idx)=>{
     const d=document.createElement('div');d.className='ls-card';
-    d.innerHTML=`<iframe src="https://www.youtube.com/embed/${s.id}?autoplay=0&mute=1" allow="autoplay;encrypted-media" allowfullscreen loading="lazy"></iframe><div class="ls-bar"><span class="ls-name">${s.name}</span><span class="ls-live">LIVE</span></div>`;
+    d.style.position='relative';
+    const src=streamEmbedUrl(s,port);
+    if(src){
+      d.innerHTML=`<iframe src="${src}" allow="autoplay;encrypted-media;picture-in-picture;fullscreen" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe><div class="ls-bar"><span class="ls-name">${escFeed(s.name)}</span><span class="ls-live">LIVE</span><button class="ls-remove" data-idx="${idx}" title="Remove" style="margin-left:auto;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px">&times;</button></div>`;
+    }else{
+      d.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:100%;background:#1a1a2e;color:#8892b0;font-family:system-ui,sans-serif;flex-direction:column"><span style="font-size:14px;color:#ccd6f6">${escFeed(s.name)}</span><span style="font-size:12px;margin-top:4px;opacity:.7">Not streaming right now</span></div><div class="ls-bar"><span class="ls-name">${escFeed(s.name)}</span><button class="ls-remove" data-idx="${idx}" title="Remove" style="margin-left:auto;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px">&times;</button></div>`;
+    }
     g.appendChild(d);
   });
+  g.querySelectorAll('.ls-remove').forEach(btn=>{
+    btn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      const i=parseInt(btn.dataset.idx);
+      STREAMS.splice(i,1);saveStreams();renderStreams();
+    });
+  });
 }
+
+// Add-stream handler — uses event delegation so it works regardless of
+// when the pill expands or whether the form/button is currently visible.
+function addStreamFromInput(){
+  const input=document.getElementById('addStreamUrl');
+  if(!input)return;
+  const val=(input.value||'').trim();
+  if(!val)return;
+  const id=extractYouTubeId(val);
+  if(!id){input.style.borderColor='#ff4757';input.placeholder='Invalid YouTube link';setTimeout(()=>{input.style.borderColor='';input.placeholder='Paste YouTube link…';},2000);return;}
+  const name=val.match(/youtube\.com\/live\//)?'Live Stream':'Custom Stream';
+  STREAMS.push({name,id});
+  saveStreams();renderStreams();
+  input.value='';input.placeholder='Added! Paste another…';
+  setTimeout(()=>{input.placeholder='Paste YouTube link…';},2000);
+}
+document.addEventListener('click',(e)=>{
+  if(e.target&&e.target.id==='addStreamBtn'){e.preventDefault();addStreamFromInput();}
+});
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='Enter'&&e.target&&e.target.id==='addStreamUrl'){e.preventDefault();addStreamFromInput();}
+});
+document.addEventListener('submit',(e)=>{
+  if(e.target&&e.target.id==='addStreamForm'){e.preventDefault();addStreamFromInput();}
+});
 
 /* ── PREDICTION MARKETS (live Metaculus API) ──── */
 const PREDICTIONS_FALLBACK=[
@@ -1838,7 +2301,7 @@ function loadDiplo(){
       if(!all.length){c.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Feeds unavailable</div>';return;}
       all.slice(0,12).forEach(item=>{
         const a=document.createElement('a');a.href=item.link;a.target='_blank';a.rel='noopener';a.className='dip-row';
-        a.innerHTML=`<div class="dip-bar" style="background:${item._color}"></div><div><div class="dip-ttl">${item.title}</div><div class="dip-src">${item.source} · ${relTime(item.pubDate)}</div></div>`;
+        a.innerHTML=`<div class="dip-bar" style="background:${escFeed(item._color)}"></div><div><div class="dip-ttl">${escFeed(item.title)}</div><div class="dip-src">${escFeed(item.source)} · ${relTime(item.pubDate)}</div></div>`;
         c.appendChild(a);
       });
     });

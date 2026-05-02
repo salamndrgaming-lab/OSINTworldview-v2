@@ -1,6 +1,6 @@
 {
   "name": "monitor-browser",
-  "version": "1.0.0",
+  "version": "1.0.0-beta.1",
   "private": true,
   "description": "The browser built for intelligence analysts. New-tab page IS the OSINT dashboard.",
   "main": "main.js",
@@ -9,11 +9,20 @@
     "dev": "electron .",
     "build": "electron-builder --publish never",
     "build:win": "electron-builder --win --publish never",
+    "build:win-portable": "electron-builder --win portable --publish never",
     "build:mac": "electron-builder --mac --publish never",
-    "build:linux": "electron-builder --linux --publish never"
+    "build:linux": "electron-builder --linux --publish never",
+    "build:linux-appimage": "electron-builder --linux AppImage --publish never",
+    "build:linux-deb": "electron-builder --linux deb --publish never",
+    "build:all": "electron-builder -mwl --publish never",
+    "pack": "electron-builder --dir --publish never"
   },
-  "author": "OSINT Worldview",
-  "license": "MIT",
+  "author": {
+    "name": "OSINT Worldview",
+    "email": "support@osintview.app"
+  },
+  "license": "AGPL-3.0-or-later",
+  "homepage": "https://osintview.app",
   "devDependencies": {
     "electron": "^41.2.1",
     "electron-builder": "^26.8.1"
@@ -21,7 +30,9 @@
   "build": {
     "appId": "com.osint.monitor-browser",
     "productName": "Monitor Browser",
+    "copyright": "Copyright (c) 2026 OSINT Worldview",
     "asar": true,
+    "artifactName": "monitor-browser-${version}-${os}-${arch}.${ext}",
     "files": [
       "main.js",
       "preload-chrome.js",
@@ -29,34 +40,63 @@
       "renderer/**/*",
       "homepage/**/*",
       "assets/**/*",
-      "package.json"
+      "package.json",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,readme.md,changelog.md}",
+      "!**/node_modules/*/{test,tests,__tests__,docs,doc,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/{.DS_Store,.git,.gitignore,.gitattributes,.editorconfig,.eslintrc*,.prettierrc*}"
     ],
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "assets"
     },
     "win": {
       "target": [
-        "nsis"
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
       ],
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "publisherName": "OSINT Worldview"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Monitor Browser",
+      "uninstallDisplayName": "Monitor Browser (Beta)",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    },
+    "portable": {
+      "artifactName": "monitor-browser-${version}-portable.${ext}"
     },
     "mac": {
       "target": [
-        "dmg"
+        { "target": "dmg", "arch": ["x64", "arm64"] }
       ],
       "icon": "assets/icon.png",
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "darkModeSupport": true,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "Monitor Browser ${version}",
+      "writeUpdateInfo": false
     },
     "linux": {
       "target": [
-        "AppImage",
-        "deb",
-        "rpm",
-        "tar.gz"
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "deb", "arch": ["x64"] },
+        { "target": "rpm", "arch": ["x64"] },
+        { "target": "tar.gz", "arch": ["x64"] }
       ],
       "icon": "assets/icon.png",
-      "category": "Network;Security;WebBrowser",
+      "category": "Network",
       "maintainer": "OSINT Worldview <support@osintview.app>",
+      "vendor": "OSINT Worldview",
       "synopsis": "Intelligence browser with OSINT home dashboard",
       "description": "Monitor Browser is a Chromium-based web browser whose new-tab page is a customizable OSINT intelligence dashboard with live news, world map, conflicts, markets, crypto, and analyst tools.",
       "desktop": {
@@ -64,13 +104,19 @@
           "Name": "Monitor Browser",
           "GenericName": "Web Browser",
           "Comment": "Chromium browser with OSINT home dashboard",
-          "Keywords": "osint;intelligence;browser;news;map;threat;"
+          "Keywords": "osint;intelligence;browser;news;map;threat;analyst;",
+          "Categories": "Network;WebBrowser;Security;",
+          "StartupWMClass": "monitor-browser",
+          "MimeType": "text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;"
         }
       }
+    },
+    "appImage": {
+      "license": "LICENSE"
+    },
+    "deb": {
+      "depends": ["libgtk-3-0", "libnotify4", "libnss3", "libxss1", "libxtst6", "xdg-utils", "libatspi2.0-0", "libdrm2", "libgbm1", "libxcb-dri3-0"]
     }
   },
-  "dependencies": {
-    "npm": "^11.12.1",
-    "start": "^5.1.0"
-  }
+  "dependencies": {}
 }

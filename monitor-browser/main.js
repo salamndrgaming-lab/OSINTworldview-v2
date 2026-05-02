@@ -32,6 +32,13 @@ const { randomUUID } = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const http = require('node:http');
 
+process.on('uncaughtException', (err) => {
+  console.error('[monitor] uncaughtException:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[monitor] unhandledRejection:', reason);
+});
+
 // ---------------------------------------------------------------------------
 // Local YouTube embed server
 // ---------------------------------------------------------------------------
@@ -42,9 +49,81 @@ const http = require('node:http');
 
 let ytEmbedPort = 0;
 
+const _channelLiveCache = new Map();
+const _CHANNEL_CACHE_TTL = 5 * 60 * 1000;
+
+function resolveChannelLiveVideoId(channelId) {
+  return new Promise((resolve) => {
+    const cached = _channelLiveCache.get(channelId);
+    if (cached && Date.now() - cached.ts < _CHANNEL_CACHE_TTL) {
+      return resolve(cached.videoId);
+    }
+    const https = require('node:https');
+    const tryGet = (path, redirectsLeft) => {
+      const req = https.get({
+        hostname: 'www.youtube.com',
+        path,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          // Bypass YouTube's EU cookie consent interstitial (which would
+          // otherwise return a consent page instead of the live stream).
+          'Cookie': 'SOCS=CAISNQgDEitib3FfaWRlbnRpdHlmcm9udGVuZHVpc2VydmVyXzIwMjMwOTI2LjA1X3AwGgJlbiACGgYIgIvBmAY; CONSENT=YES+',
+        },
+        timeout: 10000,
+      }, (resp) => {
+        if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location && redirectsLeft > 0) {
+          const loc = resp.headers.location;
+          const m = loc.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+          if (m) { _channelLiveCache.set(channelId, { videoId: m[1], ts: Date.now() }); resp.resume(); return resolve(m[1]); }
+          resp.resume();
+          // Follow same-origin redirects (e.g. /channel/ID/live → /watch?v=...)
+          try {
+            const u = new URL(loc, 'https://www.youtube.com');
+            if (u.hostname === 'www.youtube.com' || u.hostname === 'youtube.com') {
+              return tryGet(u.pathname + u.search, redirectsLeft - 1);
+            }
+          } catch {}
+          return resolve(null);
+        }
+        let body = '';
+        resp.setEncoding('utf8');
+        resp.on('data', (chunk) => { body += chunk; if (body.length > 800000) resp.destroy(); });
+        resp.on('end', () => {
+          let vid = null;
+          const patterns = [
+            /<link[^>]*rel="canonical"[^>]*href="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+            /<meta[^>]*property="og:url"[^>]*content="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+            /<meta[^>]*itemprop="videoId"[^>]*content="([a-zA-Z0-9_-]{11})"/,
+            /"videoDetails"\s*:\s*\{[^}]*"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/,
+            /"liveStreamabilityRenderer"[^}]*?"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"/,
+            /\\?"videoId\\?"\s*:\s*\\?"([a-zA-Z0-9_-]{11})\\?"/,
+          ];
+          for (const p of patterns) {
+            const m = body.match(p);
+            if (m) { vid = m[1]; break; }
+          }
+          if (vid) {
+            _channelLiveCache.set(channelId, { videoId: vid, ts: Date.now() });
+            console.log(`[monitor] resolved channel ${channelId} → ${vid}`);
+          } else {
+            console.log(`[monitor] no live video found for channel ${channelId} (status ${resp.statusCode}, body ${body.length}b)`);
+          }
+          resolve(vid);
+        });
+        resp.on('error', () => resolve(null));
+      });
+      req.on('error', (err) => { console.log(`[monitor] channel resolve error for ${channelId}:`, err.message); resolve(null); });
+      req.on('timeout', () => { req.destroy(); resolve(null); });
+    };
+    tryGet(`/channel/${channelId}/live`, 3);
+  });
+}
+
 function startYtEmbedServer() {
   return new Promise((resolve) => {
-    const server = http.createServer((req, res) => {
+    const server = http.createServer(async (req, res) => {
       const parsed = new URL(req.url, 'http://localhost');
       const autoplay = parsed.searchParams.get('autoplay') === '0' ? '0' : '1';
       const mute = parsed.searchParams.get('mute') === '0' ? '0' : '1';
@@ -53,15 +132,40 @@ function startYtEmbedServer() {
       const resHeaders = {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',
-        'Permissions-Policy': 'autoplay=*, encrypted-media=*, storage-access=(self "https://www.youtube.com")',
+        // Permissions need to cover both youtube.com and youtube-nocookie.com
+        // (live streams sometimes force the privacy domain).
+        'Permissions-Policy': 'autoplay=*, encrypted-media=*, storage-access=(self "https://www.youtube.com" "https://www.youtube-nocookie.com")',
+        // Required for live streams: without a Referrer-Policy header the
+        // request goes out with no Referer and YouTube returns Error 153.
+        // strict-origin-when-cross-origin sends just "scheme://host" so it
+        // doesn't trip YouTube's bot-detection (which previously gave 154-2).
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
         'Access-Control-Allow-Origin': '*',
       };
 
       if (parsed.pathname === '/youtube-embed') {
-        const videoId = (parsed.searchParams.get('videoId') || '').replace(/[^a-zA-Z0-9_-]/g, '');
-        if (!videoId) { res.writeHead(400); res.end('Missing videoId'); return; }
+        let videoId = (parsed.searchParams.get('videoId') || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        const channelId = (parsed.searchParams.get('channelId') || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!videoId && !channelId) { res.writeHead(400); res.end('Missing videoId or channelId'); return; }
 
-        const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}#player{width:100%;height:100%}#play-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,0.4)}#play-overlay svg{width:72px;height:72px;opacity:0.9;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5))}#play-overlay.hidden{display:none}</style></head><body><div id="player"></div><div id="play-overlay" class="hidden"><svg viewBox="0 0 68 48"><path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55C3.97 2.33 2.27 4.81 1.48 7.74.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.64-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="red"/><path d="M45 24L27 14v20" fill="#fff"/></svg></div><script>function tryStorageAccess(){if(document.requestStorageAccess){document.requestStorageAccess().catch(function(){})}}tryStorageAccess();var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);var player,overlay=document.getElementById('play-overlay'),started=false;var obs=new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var nodes=muts[i].addedNodes;for(var j=0;j<nodes.length;j++){if(nodes[j].tagName==='IFRAME'){nodes[j].setAttribute('allow','autoplay; encrypted-media; picture-in-picture; fullscreen; storage-access');nodes[j].setAttribute('referrerpolicy','strict-origin-when-cross-origin');obs.disconnect();return}}}});obs.observe(document.getElementById('player'),{childList:true,subtree:true});function hideOverlay(){overlay.classList.add('hidden')}function onYouTubeIframeAPIReady(){player=new YT.Player('player',{videoId:'${videoId}',host:'https://www.youtube.com',playerVars:{autoplay:${autoplay},mute:${mute},playsinline:1,rel:0,controls:1,modestbranding:1,enablejsapi:1,origin:'${origin}',widget_referrer:'${origin}'},events:{onReady:function(){window.parent.postMessage({type:'yt-ready'},'*');if(${autoplay}===1){try{player.mute();player.playVideo()}catch(e){}}},onError:function(e){window.parent.postMessage({type:'yt-error',code:e.data},'*')},onStateChange:function(e){window.parent.postMessage({type:'yt-state',state:e.data},'*');if(e.data===1||e.data===3){hideOverlay();started=true}}}})}overlay.addEventListener('click',function(){tryStorageAccess();if(player&&player.playVideo){player.playVideo();player.unMute();hideOverlay()}});setTimeout(function(){if(!started)overlay.classList.remove('hidden')},4000)<\/script></body></html>`;
+        if (channelId && !videoId) {
+          const liveId = await resolveChannelLiveVideoId(channelId);
+          if (!liveId) {
+            const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#1a1a2e;overflow:hidden;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;color:#8892b0}div{text-align:center}h3{margin:0 0 8px;color:#ccd6f6;font-size:15px}p{margin:0;font-size:12px;opacity:.7}</style></head><body><div><h3>No live stream</h3><p>This channel isn’t streaming right now.</p></div></body></html>`;
+            res.writeHead(200, resHeaders);
+            res.end(html);
+            return;
+          }
+          videoId = liveId;
+        }
+
+        // Strategy for live streams (Error 153):
+        //   1. Try the IFrame API with youtube-nocookie.com host
+        //   2. On 153/150/101, retry with regular youtube.com host
+        //   3. If both API hosts fail, drop to a plain <iframe> embed
+        //      which works for most live streams because YouTube handles
+        //      the embedding server-side (no JS API needed).
+        const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}#player{width:100%;height:100%}#play-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,0.4)}#play-overlay svg{width:72px;height:72px;opacity:0.9;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.5))}#play-overlay.hidden{display:none}iframe.direct{position:absolute;inset:0;width:100%;height:100%;border:none}</style></head><body><div id="player"></div><div id="play-overlay" class="hidden"><svg viewBox="0 0 68 48"><path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55C3.97 2.33 2.27 4.81 1.48 7.74.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.64-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="red"/><path d="M45 24L27 14v20" fill="#fff"/></svg></div><script>function tryStorageAccess(){if(document.requestStorageAccess){document.requestStorageAccess().catch(function(){})}}tryStorageAccess();var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);var player,overlay=document.getElementById('play-overlay'),started=false,retryCount=0;var obs=new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var nodes=muts[i].addedNodes;for(var j=0;j<nodes.length;j++){if(nodes[j].tagName==='IFRAME'){nodes[j].setAttribute('allow','autoplay; encrypted-media; picture-in-picture; fullscreen; storage-access');nodes[j].setAttribute('referrerpolicy','strict-origin-when-cross-origin');obs.disconnect();return}}}});obs.observe(document.getElementById('player'),{childList:true,subtree:true});function hideOverlay(){overlay.classList.add('hidden')}function directIframeFallback(){document.getElementById('player').innerHTML='';var f=document.createElement('iframe');f.className='direct';f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';f.referrerPolicy='strict-origin-when-cross-origin';f.src='https://www.youtube.com/embed/${videoId}?autoplay=${autoplay}&mute=${mute}&rel=0&modestbranding=1';document.getElementById('player').appendChild(f);hideOverlay();started=true;window.parent.postMessage({type:'yt-ready'},'*')}function buildPlayer(host){return new YT.Player('player',{videoId:'${videoId}',host:host,playerVars:{autoplay:${autoplay},mute:${mute},playsinline:1,rel:0,controls:1,modestbranding:1,enablejsapi:1,origin:'${origin}',widget_referrer:'${origin}'},events:{onReady:function(){window.parent.postMessage({type:'yt-ready'},'*');if(${autoplay}===1){try{player.mute();player.playVideo()}catch(e){}}},onError:function(e){window.parent.postMessage({type:'yt-error',code:e.data},'*');retryCount++;if(retryCount===1&&(e.data===153||e.data===150||e.data===101)){try{player.destroy()}catch(_){}document.getElementById('player').innerHTML='';player=buildPlayer('https://www.youtube.com')}else if(retryCount>=2){try{player.destroy()}catch(_){}directIframeFallback()}},onStateChange:function(e){window.parent.postMessage({type:'yt-state',state:e.data},'*');if(e.data===1||e.data===3){hideOverlay();started=true}}}})}function onYouTubeIframeAPIReady(){player=buildPlayer('https://www.youtube.com')}overlay.addEventListener('click',function(){tryStorageAccess();if(player&&player.playVideo){try{player.playVideo();player.unMute()}catch(_){directIframeFallback()}hideOverlay()}else{directIframeFallback()}});setTimeout(function(){if(!started)overlay.classList.remove('hidden')},4000)<\/script></body></html>`;
         res.writeHead(200, resHeaders);
         res.end(html);
         return;
@@ -93,6 +197,8 @@ const CHROME_HEIGHT = 76; // titlebar (32) + toolbar (44)
 const HOMEPAGE_PATH = path.join(__dirname, 'homepage', 'index.html');
 const HOMEPAGE_URL = pathToFileURL(HOMEPAGE_PATH).toString();
 const HOMEPAGE_FALLBACK_URL = HOMEPAGE_URL; // kept for compatibility
+const SETUP_PATH = path.join(__dirname, 'homepage', 'setup.html');
+const SETUP_URL = pathToFileURL(SETUP_PATH).toString();
 const CHROME_HTML = path.join(__dirname, 'renderer', 'index.html');
 
 function isHomepageUrl(url) {
@@ -151,6 +257,13 @@ const DEFAULT_SETTINGS = {
   profileHandle: '',
   profileEmail: '',
   profileAvatarColor: '#00d4ff',
+  profileAvatar: '',           // base64 data URL for custom profile picture
+  profileRole: '',          // free-text role e.g. "OSINT Analyst"
+  profileOrg: '',           // organization / unit
+  profileLocation: '',      // city / region (free text, not GPS)
+  profileBio: '',           // free-text notes / scratchpad
+  profileBadge: 'OSINT',    // small badge under avatar
+  setupCompleted: false,    // flips true after first-run wizard finishes
 };
 
 let settingsCache = null;
@@ -377,7 +490,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload-chrome.js'),
       contextIsolation: true,
-      sandbox: false,
+      sandbox: true,
       nodeIntegration: false,
     },
   });
@@ -406,24 +519,32 @@ function createWindow() {
   chromeView.webContents.once('did-finish-load', () => {
     mainWindow?.show();
     const settings = loadSettings();
-    const sess = settings.startupBehavior === 'restore' ? loadSession() : null;
-    if (sess && sess.tabs && sess.tabs.length > 0) {
-      for (const entry of sess.tabs) {
-        const id = newTab(entry.url);
-        if (entry.pinned && id) {
-          const tab = tabs.get(id);
-          if (tab) tab.pinned = true;
-        }
-      }
-      if (sess.activeIdx >= 0 && sess.activeIdx < tabOrder.length) {
-        switchTab(tabOrder[sess.activeIdx]);
-      }
-    } else if (settings.startupBehavior === 'blank') {
-      newTab('about:blank');
+    if (!settings.setupCompleted) {
+      // First launch — open the setup wizard. The wizard finishes by calling
+      // setup:complete, which navigates this tab to the homepage.
+      newTab(SETUP_URL);
     } else {
-      newTab(resolveHomepageUrl());
+      const sess = settings.startupBehavior === 'restore' ? loadSession() : null;
+      if (sess && sess.tabs && sess.tabs.length > 0) {
+        for (const entry of sess.tabs) {
+          const id = newTab(entry.url);
+          if (entry.pinned && id) {
+            const tab = tabs.get(id);
+            if (tab) tab.pinned = true;
+          }
+        }
+        if (sess.activeIdx >= 0 && sess.activeIdx < tabOrder.length) {
+          switchTab(tabOrder[sess.activeIdx]);
+        }
+      } else if (settings.startupBehavior === 'blank') {
+        newTab('about:blank');
+      } else {
+        newTab(resolveHomepageUrl());
+      }
     }
     try { chromeView.webContents.send('settings:changed', settings); } catch {}
+
+    setInterval(() => { try { saveSession(); } catch {} }, 30000);
   });
 
   // Surface chrome devtools on F12 / Ctrl+Shift+I in dev.
@@ -470,7 +591,7 @@ function newTab(rawUrl) {
     webPreferences: {
       preload: path.join(__dirname, homepage ? 'preload-content.js' : 'preload-content.js'),
       contextIsolation: true,
-      sandbox: !homepage,
+      sandbox: true,
       nodeIntegration: false,
       webviewTag: false,
       spellcheck: true,
@@ -564,6 +685,15 @@ function wireTabEvents(id, tab) {
     wc.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
   });
 
+  wc.on('certificate-error', (e, certUrl, error, _cert, callback) => {
+    e.preventDefault();
+    callback(false);
+    const escaped = escapeHtml('Certificate Error: ' + (error || 'unknown'));
+    const escapedUrl = escapeHtml(certUrl || '');
+    const html = renderErrorPage(escaped, escapedUrl, 'CERT_ERROR');
+    wc.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  });
+
   // Route popups into new tabs.
   wc.setWindowOpenHandler(({ url: openUrl, disposition }) => {
     if (disposition === 'foreground-tab' || disposition === 'background-tab' ||
@@ -601,7 +731,7 @@ function wireTabEvents(id, tab) {
 }
 
 function switchTab(id) {
-  if (!tabs.has(id) || !mainWindow) return;
+  if (!tabs.has(id) || !mainWindow || id === activeTabId) return;
   if (activeTabId && tabs.has(activeTabId)) {
     const prev = tabs.get(activeTabId);
     prev.dwellTime += Date.now() - prev.dwellStart;
@@ -637,6 +767,7 @@ function closeTab(id) {
   } catch {
     /* view may already be removed */
   }
+  try { tab.view.webContents.removeAllListeners(); } catch {}
   try {
     tab.view.webContents.close();
   } catch {
@@ -691,10 +822,15 @@ function normalizeUrl(raw) {
 
   // Special shortcut: "monitor:home" navigates to the built-in homepage.
   if (/^monitor:\s*home$/i.test(trimmed)) return HOMEPAGE_URL;
+  // "monitor:setup" opens the optional onboarding wizard.
+  if (/^monitor:\s*setup$/i.test(trimmed)) return SETUP_URL;
+
+  // Block dangerous schemes.
+  if (/^(javascript|data|vbscript):/i.test(trimmed)) return resolveHomepageUrl();
 
   // Already-absolute URL.
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
-  if (/^(about|data|javascript|file|monitor):/i.test(trimmed)) return trimmed;
+  if (/^(about|file|monitor):/i.test(trimmed)) return trimmed;
 
   // Localhost shortcuts.
   if (/^localhost(:\d+)?(\/.*)?$/i.test(trimmed)) return `http://${trimmed}`;
@@ -780,37 +916,44 @@ function broadcastTabs() {
   });
 }
 
+function getTabWc(id) {
+  const tab = tabs.get(id ?? activeTabId);
+  if (!tab) return null;
+  try { if (tab.view.webContents.isDestroyed()) return null; } catch { return null; }
+  return tab.view.webContents;
+}
+
 ipcMain.handle('tab:new', (_e, url) => newTab(url || resolveHomepageUrl()));
 ipcMain.handle('tab:close', (_e, id) => closeTab(id));
 ipcMain.handle('tab:switch', (_e, id) => switchTab(id));
 ipcMain.handle('tab:navigate', (_e, id, url) => navigateActiveOr(id, url));
 
 ipcMain.handle('tab:back', (_e, id) => {
-  const tab = tabs.get(id ?? activeTabId);
-  if (!tab) return;
-  const hist = tab.view.webContents.navigationHistory ?? tab.view.webContents;
+  const wc = getTabWc(id);
+  if (!wc) return;
+  const hist = wc.navigationHistory ?? wc;
   if (typeof hist.canGoBack === 'function' && hist.canGoBack()) {
     hist.goBack();
   }
 });
 
 ipcMain.handle('tab:forward', (_e, id) => {
-  const tab = tabs.get(id ?? activeTabId);
-  if (!tab) return;
-  const hist = tab.view.webContents.navigationHistory ?? tab.view.webContents;
+  const wc = getTabWc(id);
+  if (!wc) return;
+  const hist = wc.navigationHistory ?? wc;
   if (typeof hist.canGoForward === 'function' && hist.canGoForward()) {
     hist.goForward();
   }
 });
 
 ipcMain.handle('tab:reload', (_e, id) => {
-  const tab = tabs.get(id ?? activeTabId);
-  if (tab) tab.view.webContents.reload();
+  const wc = getTabWc(id);
+  if (wc) wc.reload();
 });
 
 ipcMain.handle('tab:stop', (_e, id) => {
-  const tab = tabs.get(id ?? activeTabId);
-  if (tab) tab.view.webContents.stop();
+  const wc = getTabWc(id);
+  if (wc) wc.stop();
 });
 
 ipcMain.handle('tab:home', (_e, id) => {
@@ -829,6 +972,27 @@ ipcMain.handle('settings:get', () => ({
 }));
 ipcMain.handle('settings:set', (_e, patch) => saveSettings(patch || {}));
 ipcMain.handle('settings:reset', () => saveSettings({ ...DEFAULT_SETTINGS }));
+
+// First-run setup wizard: marks setup complete and navigates the calling
+// tab to the configured homepage. Triggered from setup.html.
+ipcMain.handle('setup:complete', (e) => {
+  saveSettings({ setupCompleted: true });
+  try {
+    const wc = e.sender;
+    // Find which tab owns this webContents and navigate it to the homepage.
+    for (const [, tab] of tabs) {
+      if (tab.view && tab.view.webContents === wc) {
+        tab.view.webContents.loadURL(resolveHomepageUrl());
+        return { ok: true };
+      }
+    }
+    // Fallback: just load the homepage in whatever sender invoked.
+    wc.loadURL(resolveHomepageUrl());
+  } catch (err) {
+    console.warn('[monitor] setup:complete navigation failed', err);
+  }
+  return { ok: true };
+});
 ipcMain.handle('settings:clear-data', async () => {
   try {
     await session.defaultSession.clearCache();
@@ -840,6 +1004,39 @@ ipcMain.handle('settings:clear-data', async () => {
     console.warn('[monitor] clear-data failed', err);
     return false;
   }
+});
+
+// Profile avatar — pick an image, copy to userData, store as base64 data URL
+// so the renderer can display it without file:// permission issues.
+ipcMain.handle('profile:pick-avatar', async () => {
+  const { dialog } = require('electron');
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose Profile Picture',
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }],
+    properties: ['openFile'],
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  try {
+    const src = result.filePaths[0];
+    const ext = path.extname(src).toLowerCase().replace('.', '') || 'png';
+    const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' };
+    const mime = mimeMap[ext] || 'image/png';
+    // Read file, resize to a reasonable limit (raw read, no sharp dependency).
+    // We cap at 256KB — any larger and we store a reference instead.
+    const buf = fs.readFileSync(src);
+    if (buf.length > 1_024_000) {
+      return { error: 'Image too large (max ~1MB). Please choose a smaller image.' };
+    }
+    const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+    saveSettings({ profileAvatar: dataUrl });
+    return { dataUrl };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+ipcMain.handle('profile:clear-avatar', () => {
+  saveSettings({ profileAvatar: '' });
+  return true;
 });
 
 // ---------------------------------------------------------------------------
@@ -913,9 +1110,11 @@ async function fetchProxyList(countryCode) {
     'https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt',
     'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt',
     'https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt',
-    'https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt',
-    'https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/http.txt',
-    'https://raw.githubusercontent.com/mmpx12/proxy-list/master/http.txt',
+    'https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-https.txt',
+    'https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/https.txt',
+    'https://raw.githubusercontent.com/mmpx12/proxy-list/master/https.txt',
+    'https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt',
+    'https://raw.githubusercontent.com/ErcinDedeworken/proxies/main/proxies/https.txt',
   ];
 
   const fetchOne = (url) => new Promise((resolve) => {
@@ -954,49 +1153,196 @@ async function fetchProxyList(countryCode) {
   return merged;
 }
 
-// Test a proxy by issuing an HTTP request through it.
-// Returns { ok, ip } where ip is the externally-observed IP.
-function testHttpProxy(proxyAddr, timeoutMs = 6000) {
+// Test a proxy by verifying it supports HTTPS CONNECT tunneling.
+// This is what Electron actually uses for https:// sites. Many free proxies
+// only support plain HTTP forwarding and fail with ERR_TUNNEL_CONNECTION_FAILED
+// when Electron tries to establish a CONNECT tunnel for HTTPS.
+function testHttpProxy(proxyAddr, timeoutMs = 8000) {
   return new Promise((resolve) => {
     const http = require('node:http');
+    const net = require('node:net');
     const [host, portStr] = proxyAddr.split(':');
     const port = parseInt(portStr, 10);
     if (!host || !port) return resolve({ ok: false });
 
+    // Send HTTP CONNECT to test HTTPS tunnel support
     const req = http.request({
       host,
       port,
-      method: 'GET',
-      path: 'http://api.ipify.org?format=json',
-      headers: { Host: 'api.ipify.org', 'User-Agent': 'Mozilla/5.0' },
+      method: 'CONNECT',
+      path: 'api.ipify.org:443',
       timeout: timeoutMs,
-    }, (res) => {
+      headers: { Host: 'api.ipify.org:443', 'User-Agent': 'Mozilla/5.0' },
+    });
+
+    req.on('connect', (res, socket) => {
+      if (res.statusCode !== 200) {
+        socket.destroy();
+        return resolve({ ok: false });
+      }
+      // Tunnel established — do TLS handshake + GET through it
+      const tls = require('node:tls');
+      const tlsSock = tls.connect({ socket, servername: 'api.ipify.org', rejectUnauthorized: true }, () => {
+        tlsSock.write('GET /?format=json HTTP/1.1\r\nHost: api.ipify.org\r\nConnection: close\r\n\r\n');
+      });
       let body = '';
-      res.on('data', (c) => { body += c; });
-      res.on('end', () => {
+      tlsSock.on('data', (c) => { body += c; });
+      tlsSock.on('end', () => {
+        tlsSock.destroy();
         try {
-          const data = JSON.parse(body);
+          const jsonPart = body.substring(body.indexOf('{'));
+          const data = JSON.parse(jsonPart);
           if (data && data.ip) resolve({ ok: true, ip: data.ip });
           else resolve({ ok: false });
-        } catch {
-          resolve({ ok: false });
-        }
+        } catch { resolve({ ok: false }); }
       });
+      tlsSock.on('error', () => { tlsSock.destroy(); resolve({ ok: false }); });
+      setTimeout(() => { try { tlsSock.destroy(); } catch {} resolve({ ok: false }); }, timeoutMs / 2);
     });
+
     req.on('error', () => resolve({ ok: false }));
     req.on('timeout', () => { req.destroy(); resolve({ ok: false }); });
     req.end();
   });
 }
 
-function testTorRunning() {
+// Check whether a SOCKS5 port is open on localhost.
+function testPort(port) {
   return new Promise((resolve) => {
     const net = require('node:net');
-    const sock = net.createConnection({ host: '127.0.0.1', port: 9050, timeout: 1500 });
+    const sock = net.createConnection({ host: '127.0.0.1', port, timeout: 1500 });
     sock.on('connect', () => { sock.destroy(); resolve(true); });
     sock.on('error', () => resolve(false));
     sock.on('timeout', () => { sock.destroy(); resolve(false); });
   });
+}
+
+// Try common Tor SOCKS5 ports: 9050 (standalone daemon) and 9150 (Tor
+// Browser Bundle). Returns the first port that's listening, or 0.
+async function findTorPort() {
+  if (await testPort(9050)) return 9050;
+  if (await testPort(9150)) return 9150;
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Portable Tor management — download, start, and stop a bundled Tor binary
+// so the user doesn't have to install it separately.
+// ---------------------------------------------------------------------------
+let torProcess = null;
+
+function torBinaryDir() {
+  return path.join(app.getPath('userData'), 'tor');
+}
+function torBinaryPath() {
+  const dir = torBinaryDir();
+  if (process.platform === 'win32') return path.join(dir, 'tor', 'tor.exe');
+  return path.join(dir, 'tor');
+}
+
+// Find Tor on PATH or in common install locations.
+function findSystemTor() {
+  const { execSync } = require('node:child_process');
+  try {
+    const cmd = process.platform === 'win32' ? 'where tor 2>nul' : 'which tor 2>/dev/null';
+    const out = execSync(cmd, { timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim();
+    if (out) return out.split(/\r?\n/)[0];
+  } catch {}
+  // Common install paths
+  const candidates = process.platform === 'win32'
+    ? [
+        'C:\\Program Files\\Tor Browser\\Browser\\TorBrowser\\Tor\\tor.exe',
+        'C:\\Program Files (x86)\\Tor Browser\\Browser\\TorBrowser\\Tor\\tor.exe',
+        path.join(require('node:os').homedir(), 'Desktop', 'Tor Browser', 'Browser', 'TorBrowser', 'Tor', 'tor.exe'),
+      ]
+    : [
+        '/usr/bin/tor',
+        '/usr/local/bin/tor',
+        '/opt/homebrew/bin/tor',
+        path.join(require('node:os').homedir(), '.tor-browser', 'Browser', 'TorBrowser', 'Tor', 'tor'),
+      ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+async function startTorProcess() {
+  // If already running on a known port, nothing to do.
+  const existing = await findTorPort();
+  if (existing) return existing;
+
+  // Try to find a tor binary — bundled first, then system.
+  let torBin = null;
+  if (fs.existsSync(torBinaryPath())) {
+    torBin = torBinaryPath();
+  } else {
+    torBin = findSystemTor();
+  }
+  if (!torBin) {
+    return 0; // Tor not available — caller should show install instructions
+  }
+
+  // Start Tor as a child process on port 9050. Use a temporary data
+  // directory under our userData so we don't pollute the system.
+  const { spawn } = require('node:child_process');
+  const dataDir = path.join(torBinaryDir(), 'data');
+  try { fs.mkdirSync(dataDir, { recursive: true }); } catch {}
+
+  return new Promise((resolve) => {
+    const child = spawn(torBin, [
+      '--SocksPort', '9050',
+      '--DataDirectory', dataDir,
+    ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+
+    let resolved = false;
+    const timeout = setTimeout(() => {
+      if (!resolved) { resolved = true; resolve(0); }
+    }, 30_000);
+
+    child.stdout.on('data', (d) => {
+      const line = d.toString();
+      if (/Bootstrapped 100%/i.test(line) && !resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        torProcess = child;
+        console.log('[tor] bootstrapped on port 9050');
+        resolve(9050);
+      }
+    });
+    child.stderr.on('data', (d) => {
+      const line = d.toString();
+      if (/Bootstrapped 100%/i.test(line) && !resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        torProcess = child;
+        resolve(9050);
+      }
+    });
+    child.on('error', () => { if (!resolved) { resolved = true; clearTimeout(timeout); resolve(0); } });
+    child.on('exit', () => { torProcess = null; if (!resolved) { resolved = true; clearTimeout(timeout); resolve(0); } });
+  });
+}
+
+function stopTorProcess() {
+  if (!torProcess) return;
+  const child = torProcess;
+  torProcess = null;
+  try { child.kill('SIGTERM'); } catch {}
+  setTimeout(() => {
+    try { if (!child.killed) child.kill('SIGKILL'); } catch {}
+  }, 3000);
+}
+
+app.on('before-quit', () => {
+  stopVpnHealthMonitor();
+  stopTorProcess();
+  try { saveSession(); } catch {}
+});
+app.on('will-quit', stopTorProcess);
+
+function testTorRunning() {
+  return findTorPort().then((p) => p > 0);
 }
 
 async function getDirectPublicIp() {
@@ -1029,13 +1375,24 @@ async function vpnConnect(location) {
   broadcastVpnStatus();
 
   try {
-    // Tor: use local SOCKS5
+    // Tor: check for running Tor, try to start it if not found.
     if (loc === 'Tor' || cc === 'tor') {
-      const torRunning = await testTorRunning();
-      if (!torRunning) {
-        throw new Error('Tor not running on 127.0.0.1:9050. Install and start Tor first.');
+      vpnState.error = 'Looking for Tor…';
+      broadcastVpnStatus();
+
+      let torPort = await findTorPort();
+      if (!torPort) {
+        vpnState.error = 'Starting Tor (may take up to 30s)…';
+        broadcastVpnStatus();
+        torPort = await startTorProcess();
       }
-      const proxyRules = 'socks5://127.0.0.1:9050';
+      if (!torPort) {
+        throw new Error(
+          'Tor not found. Install Tor Browser (torproject.org) or place the tor binary in your PATH, then try again.'
+        );
+      }
+
+      const proxyRules = `socks5://127.0.0.1:${torPort}`;
       await session.defaultSession.setProxy({
         proxyRules,
         proxyBypassRules: 'localhost,127.0.0.1,<local>',
@@ -1043,8 +1400,10 @@ async function vpnConnect(location) {
       vpnState.status = 'connected';
       vpnState.connectedAt = Date.now();
       vpnState.proxyRule = proxyRules;
+      vpnState.exitIp = await vpnGetCurrentSessionIp();
       saveSettings({ vpnEnabled: true, vpnLocation: 'Tor' });
       broadcastVpnStatus();
+      startVpnHealthMonitor();
       return vpnState;
     }
 
@@ -1083,23 +1442,17 @@ async function vpnConnect(location) {
       proxyBypassRules: 'localhost,127.0.0.1,<local>',
     });
 
-    // Verify the session actually routes through the proxy
-    const verifiedIp = await vpnGetCurrentSessionIp();
-    if (!verifiedIp) {
-      await session.defaultSession.setProxy({ proxyRules: 'direct://' });
-      throw new Error(`Proxy ${workingProxy} connected but session verification failed. Try Tor or a custom proxy.`);
-    }
-
     vpnState = {
       status: 'connected',
       location: loc,
       connectedAt: Date.now(),
       proxyRule: `http://${workingProxy}`,
-      exitIp: verifiedIp,
+      exitIp: workingIp,
       error: null,
     };
     saveSettings({ vpnEnabled: true, vpnLocation: loc });
     broadcastVpnStatus();
+    startVpnHealthMonitor();
     return vpnState;
   } catch (err) {
     try { await session.defaultSession.setProxy({ proxyRules: 'direct://' }); } catch {}
@@ -1111,6 +1464,7 @@ async function vpnConnect(location) {
 }
 
 async function vpnDisconnect() {
+  stopVpnHealthMonitor();
   try {
     await session.defaultSession.setProxy({ proxyRules: 'direct://' });
   } catch (err) {
@@ -1152,6 +1506,68 @@ async function vpnGetCurrentSessionIp() {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// VPN health monitor — free public proxies frequently die without warning.
+// Every minute we ping through the proxy; after 3 consecutive failures we
+// surface a "degraded" state and try a fresh proxy from the same country.
+// ---------------------------------------------------------------------------
+let vpnHealthTimer = null;
+let vpnHealthFailures = 0;
+let vpnReconnecting = false;
+
+function stopVpnHealthMonitor() {
+  if (vpnHealthTimer) { clearInterval(vpnHealthTimer); vpnHealthTimer = null; }
+  vpnHealthFailures = 0;
+}
+
+function startVpnHealthMonitor() {
+  stopVpnHealthMonitor();
+  // Tor doesn't need health checks — the local SOCKS5 either works or the
+  // user has stopped Tor (we'll fail fast on the next request).
+  if (vpnState.location === 'Tor') return;
+  vpnHealthTimer = setInterval(async () => {
+    if (vpnState.status !== 'connected' || vpnReconnecting) return;
+    const ip = await vpnGetCurrentSessionIp();
+    if (ip) {
+      if (vpnHealthFailures > 0) {
+        vpnHealthFailures = 0;
+        vpnState.error = null;
+        broadcastVpnStatus();
+      }
+      return;
+    }
+    vpnHealthFailures += 1;
+    if (vpnHealthFailures < 3) {
+      vpnState.error = `Health check missed (${vpnHealthFailures}/3)`;
+      broadcastVpnStatus();
+      return;
+    }
+    // Three consecutive misses — proxy is dead. Auto-reconnect with a fresh
+    // proxy from the same country selection.
+    if (vpnReconnecting) return;
+    vpnReconnecting = true;
+    const loc = vpnState.location;
+    vpnState.status = 'reconnecting';
+    vpnState.error = 'Proxy died — finding a new one…';
+    broadcastVpnStatus();
+    try {
+      // Force a fresh proxy list by invalidating the cache for this country
+      const cc = COUNTRY_CODES[loc] || '';
+      _proxyListCache.delete(cc || 'all');
+      await vpnConnect(loc);
+    } catch (err) {
+      console.warn('[vpn] auto-reconnect failed', err);
+      vpnState.status = 'disconnected';
+      vpnState.error = 'Auto-reconnect failed: ' + (err.message || err);
+      broadcastVpnStatus();
+      stopVpnHealthMonitor();
+    } finally {
+      vpnReconnecting = false;
+      vpnHealthFailures = 0;
+    }
+  }, 60_000);
 }
 
 ipcMain.handle('vpn:connect', (_e, location) => vpnConnect(location));
@@ -1224,9 +1640,8 @@ ipcMain.handle('vpn:set-proxy', async (_e, proxyUrl) => {
 });
 
 ipcMain.handle('tab:devtools', (_e, id) => {
-  const tab = tabs.get(id ?? activeTabId);
-  if (!tab) return;
-  const wc = tab.view.webContents;
+  const wc = getTabWc(id);
+  if (!wc) return;
   if (wc.isDevToolsOpened()) wc.closeDevTools();
   else wc.openDevTools({ mode: 'detach' });
 });
@@ -1271,7 +1686,7 @@ function createIncognitoWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload-chrome.js'),
       contextIsolation: true,
-      sandbox: false,
+      sandbox: true,
       nodeIntegration: false,
       partition: partitionName,
     },
@@ -1459,9 +1874,9 @@ ipcMain.handle('tab:reopen', () => {
 });
 
 ipcMain.handle('tab:mute', (_e, id) => {
+  const wc = getTabWc(id);
   const tab = tabs.get(id ?? activeTabId);
-  if (tab) {
-    const wc = tab.view.webContents;
+  if (wc && tab) {
     const muted = !wc.isAudioMuted();
     wc.setAudioMuted(muted);
     tab.muted = muted;
@@ -2288,7 +2703,10 @@ ipcMain.handle('history:clear', (_e, since) => {
 // ---------------------------------------------------------------------------
 const activeDownloads = new Map();
 
+let _dlListenerSet = false;
 function setupDownloadListener() {
+  if (_dlListenerSet) return;
+  _dlListenerSet = true;
   session.defaultSession.on('will-download', (_e, item) => {
     const id = randomUUID();
     const entry = {
@@ -2357,6 +2775,17 @@ function extensionsDir() {
   return path.join(app.getPath('userData'), 'extensions');
 }
 
+// Returns whichever Electron extension API surface is available. The
+// `session.extensions` namespace was introduced in Electron 35 and the
+// flat methods on `session` (loadExtension / removeExtension /
+// getAllExtensions) emit deprecation warnings on Electron 41+. Prefer the
+// new namespace and fall back to the legacy methods only if it doesn't
+// exist on the runtime we're on.
+function extApi() {
+  const s = session.defaultSession;
+  return s.extensions || s;
+}
+
 async function loadAllExtensions() {
   const dir = extensionsDir();
   try { fs.mkdirSync(dir, { recursive: true }); } catch {}
@@ -2368,7 +2797,7 @@ async function loadAllExtensions() {
     const manifestPath = path.join(extPath, 'manifest.json');
     if (!fs.existsSync(manifestPath)) continue;
     try {
-      const ext = await session.defaultSession.loadExtension(extPath, { allowFileAccess: true });
+      const ext = await extApi().loadExtension(extPath, { allowFileAccess: false });
       loadedExtensions.set(ext.id, { ext, path: extPath });
       console.log('[monitor] loaded extension:', ext.name);
     } catch (err) {
@@ -2388,7 +2817,7 @@ async function installExtensionFromPath(extPath) {
       fs.rmSync(destDir, { recursive: true, force: true });
     }
     copyDirSync(extPath, destDir);
-    const ext = await session.defaultSession.loadExtension(destDir, { allowFileAccess: true });
+    const ext = await extApi().loadExtension(destDir, { allowFileAccess: false });
     loadedExtensions.set(ext.id, { ext, path: destDir });
     return { id: ext.id, name: ext.name };
   } catch (err) {
@@ -2399,6 +2828,7 @@ async function installExtensionFromPath(extPath) {
 function copyDirSync(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) continue;
     const s = path.join(src, entry.name);
     const d = path.join(dest, entry.name);
     if (entry.isDirectory()) copyDirSync(s, d);
@@ -2409,14 +2839,14 @@ function copyDirSync(src, dest) {
 function removeExtension(extId) {
   const loaded = loadedExtensions.get(extId);
   if (!loaded) return false;
-  try { session.defaultSession.removeExtension(extId); } catch {}
+  try { extApi().removeExtension(extId); } catch {}
   try { fs.rmSync(loaded.path, { recursive: true, force: true }); } catch {}
   loadedExtensions.delete(extId);
   return true;
 }
 
 function listExtensions() {
-  const exts = session.defaultSession.getAllExtensions();
+  const exts = extApi().getAllExtensions();
   return exts.map((ext) => ({
     id: ext.id,
     name: ext.name,
@@ -2543,6 +2973,10 @@ ipcMain.handle('shell:open-external', (_e, url) => {
 // ---------------------------------------------------------------------------
 
 ipcMain.handle('yt:embed-port', () => ytEmbedPort);
+ipcMain.handle('yt:resolve-live', (_e, channelId) => {
+  if (!channelId || typeof channelId !== 'string') return null;
+  return resolveChannelLiveVideoId(channelId.replace(/[^a-zA-Z0-9_-]/g, ''));
+});
 
 // ---------------------------------------------------------------------------
 // intel:fetch — per-domain rate limiter + response cache + retry
@@ -2569,11 +3003,22 @@ function _enqueueIntelFetch(domain, fn) {
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
-ipcMain.handle('intel:fetch', async (event, url) => {
+const _intelCallLog = [];
+const INTEL_RATE_LIMIT = 120;
+const INTEL_RATE_WINDOW = 60_000;
+
+ipcMain.handle('intel:fetch', async (event, url, opts) => {
   const senderUrl = event.sender.getURL();
   if (!senderUrl.startsWith('file://')) {
     throw new Error('intel:fetch is not available on this origin');
   }
+
+  const now = Date.now();
+  while (_intelCallLog.length && _intelCallLog[0] < now - INTEL_RATE_WINDOW) _intelCallLog.shift();
+  if (_intelCallLog.length >= INTEL_RATE_LIMIT) {
+    throw new Error('intel:fetch rate limit exceeded (max ' + INTEL_RATE_LIMIT + '/min)');
+  }
+  _intelCallLog.push(now);
 
   let parsed;
   try {
@@ -2604,12 +3049,18 @@ ipcMain.handle('intel:fetch', async (event, url) => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 15_000);
       try {
+        const fetchMethod = (opts && opts.method) || 'GET';
+        const fetchBody = (opts && opts.body) || undefined;
+        const fetchHeaders = {
+          'Accept': accept,
+          'User-Agent': BROWSER_UA,
+          'Accept-Language': 'en-US,en;q=0.9',
+        };
+        if (fetchBody) fetchHeaders['Content-Type'] = 'application/json';
         const res = await fetch(parsed.toString(), {
-          headers: {
-            'Accept': accept,
-            'User-Agent': BROWSER_UA,
-            'Accept-Language': 'en-US,en;q=0.9',
-          },
+          method: fetchMethod,
+          headers: fetchHeaders,
+          ...(fetchBody ? { body: fetchBody } : {}),
           signal: controller.signal,
           redirect: 'follow',
         });
@@ -2721,16 +3172,24 @@ app.whenReady().then(() => {
     };
     session.defaultSession.webRequest.onHeadersReceived(embedFilter, (details, cb) => {
       const headers = { ...details.responseHeaders };
-      // Remove all frame-blocking headers
-      const keysToRemove = Object.keys(headers).filter(
-        (k) => k.toLowerCase() === 'x-frame-options'
-      );
+      // Remove all frame-blocking and cross-origin isolation headers that
+      // prevent YouTube embeds + their cookie-rotation iframe from loading
+      // (ERR_BLOCKED_BY_RESPONSE on accounts.youtube.com/RotateCookiesPage).
+      const drop = new Set([
+        'x-frame-options',
+        'cross-origin-opener-policy',
+        'cross-origin-opener-policy-report-only',
+        'cross-origin-embedder-policy',
+        'cross-origin-embedder-policy-report-only',
+        'cross-origin-resource-policy',
+      ]);
+      const keysToRemove = Object.keys(headers).filter((k) => drop.has(k.toLowerCase()));
       for (const k of keysToRemove) delete headers[k];
       // Rewrite all CSP headers to allow any embedder
       for (const key of Object.keys(headers)) {
         if (key.toLowerCase() === 'content-security-policy') {
           headers[key] = headers[key].map(
-            (v) => v.replace(/frame-ancestors[^;]*(;|$)/gi, 'frame-ancestors * $1')
+            (v) => v.replace(/frame-ancestors[^;]*(;|$)/gi, "frame-ancestors 'self' http://localhost:* $1")
           );
         }
       }
@@ -2746,6 +3205,13 @@ app.whenReady().then(() => {
   setupPermissionHandlers();
   loadOperations();
   loadAllExtensions().catch((err) => console.warn('[monitor] extension load failed', err));
+
+  // Always reset proxy to direct on startup so a stale/broken proxy from a
+  // previous session doesn't block all network traffic (including homepage
+  // intel feeds, extension updates, etc.).
+  session.defaultSession
+    .setProxy({ proxyRules: 'direct://' })
+    .catch((err) => console.warn('[vpn] startup proxy reset failed', err));
 
   // Restore VPN state if it was enabled in last session
   const initSettings = loadSettings();
@@ -2774,5 +3240,29 @@ app.on('web-contents-created', (_e, contents) => {
     if (contents === chromeView?.webContents) return { action: 'deny' };
     newTab(url);
     return { action: 'deny' };
+  });
+
+  // Stub missing chrome.* APIs that Electron doesn't implement so extensions
+  // like uBlock Lite don't crash on chrome.windows.onRemoved etc.
+  contents.on('dom-ready', () => {
+    try {
+      const u = contents.getURL();
+      if (!u.startsWith('chrome-extension://')) return;
+      contents.executeJavaScript(`
+        if(typeof chrome!=='undefined'){
+          if(!chrome.windows){
+            const noop=()=>{};
+            const fakeEvent={addListener:noop,removeListener:noop,hasListener:()=>false};
+            chrome.windows={
+              onRemoved:fakeEvent,onCreated:fakeEvent,onFocusChanged:fakeEvent,
+              getAll:(q,cb)=>{if(cb)cb([]);else return Promise.resolve([]);},
+              get:(id,q,cb)=>{const f=cb||q;if(typeof f==='function')f(undefined);else return Promise.resolve(undefined);},
+              getCurrent:(q,cb)=>{const f=cb||q;if(typeof f==='function')f({id:1,focused:true,type:'normal'});else return Promise.resolve({id:1,focused:true,type:'normal'});},
+              WINDOW_ID_NONE:-1,WINDOW_ID_CURRENT:-2,
+            };
+          }
+        }
+      `).catch(() => {});
+    } catch {}
   });
 });

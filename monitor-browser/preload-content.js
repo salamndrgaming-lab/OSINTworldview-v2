@@ -10,10 +10,12 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('monitorApi', {
-  fetchIntel: (url) => ipcRenderer.invoke('intel:fetch', url),
+  fetchIntel: (url, opts) => ipcRenderer.invoke('intel:fetch', url, opts),
   getYtEmbedPort: () => ipcRenderer.invoke('yt:embed-port'),
+  resolveChannelLive: (channelId) => ipcRenderer.invoke('yt:resolve-live', channelId),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
+  completeSetup: () => ipcRenderer.invoke('setup:complete'),
   onSettingsChanged: (handler) => {
     const listener = (_e, payload) => { try { handler(payload); } catch (err) { console.error('[monitor] settings handler threw', err); } };
     ipcRenderer.on('settings:changed', listener);
